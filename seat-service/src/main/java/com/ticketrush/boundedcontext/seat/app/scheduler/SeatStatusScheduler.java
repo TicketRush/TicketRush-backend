@@ -19,7 +19,7 @@ public class SeatStatusScheduler {
   @SchedulerLock(
       name = "scheduleReleaseExpiredHoldsFallbackLock",
       lockAtLeastFor = "50s", // 서버 간 시계 오차(Clock Skew)로 인한 즉각적인 중복 실행 방지
-      lockAtMostFor = "5m" // 노드가 죽었을 때 락이 자동으로 풀리는 최대 시간 (충분히 길게 설정)
+      lockAtMostFor = "2m" // 노드가 죽었을 때 락이 자동으로 풀리는 최대 시간
       )
   public void scheduleReleaseExpiredHoldsFallback() {
     log.info("Fallback 스케줄러 동작: 유실된 만료 좌석 검사 시작");
