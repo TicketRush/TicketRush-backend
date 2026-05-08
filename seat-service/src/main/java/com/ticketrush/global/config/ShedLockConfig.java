@@ -6,24 +6,35 @@ import net.javacrumbs.shedlock.spring.annotation.EnableSchedulerLock;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.core.env.Environment;
 import org.springframework.data.redis.connection.RedisConnectionFactory;
 import org.springframework.scheduling.annotation.EnableScheduling;
 
 @Configuration
 @EnableScheduling
-@EnableSchedulerLock(defaultLockAtMostFor = "55s")
+@EnableSchedulerLock(defaultLockAtMostFor = "50s")
 public class ShedLockConfig {
 
   @Value("${spring.application.name:seat-service}")
   private String applicationName;
 
-  @Value("${spring.profiles.active:default}")
-  private String activeProfile;
+  private final Environment env;
+
+  // Environment Bean 주입
+  public ShedLockConfig(Environment env) {
+    this.env = env;
+  }
 
   @Bean
   public LockProvider lockProvider(RedisConnectionFactory connectionFactory) {
-    // 환경에 따라 키가 겹치지 않도록 동적으로 prefix 지정 (예: "seat-service-dev")
-    String keyPrefix = applicationName + "-" + activeProfile;
+    String[] activeProfiles = env.getActiveProfiles();
+
+    // 활성화된 프로파일이 있으면 첫 번째 값을, 없으면 "default"를 사용
+    String profile = activeProfiles.length > 0 ? activeProfiles[0] : "default";
+
+    // "seat-service-local" 형태로 조합됨
+    String keyPrefix = applicationName + "-" + profile;
+
     return new RedisLockProvider(connectionFactory, keyPrefix);
   }
 }
