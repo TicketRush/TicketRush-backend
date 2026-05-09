@@ -82,6 +82,7 @@ class BookingFacadeTest {
         .extracting(ex -> ((BusinessException) ex).getErrorStatus())
         .isEqualTo(USER_NOT_FOUND);
 
+    verifyNoInteractions(bookingValidateSeatAvailableUseCase);
     verifyNoInteractions(bookingIssueNumberUseCase, bookingCreateUseCase);
   }
 
