@@ -56,9 +56,15 @@ class PerformanceChangeStatusTest {
             .address("서울")
             .build();
 
-    // 기본 상태(UPCOMING)에서 원하는 상태로 강제 설정이 필요한 경우 직접 전환
-    if (status != PerformanceStatus.UPCOMING) {
-      performance.changeStatus(status);
+    // 실제 정책에 따라 단계적으로 전환
+    switch (status) {
+      case ON_SALE -> performance.changeStatus(PerformanceStatus.ON_SALE);
+      case CLOSED -> {
+        performance.changeStatus(PerformanceStatus.ON_SALE);
+        performance.changeStatus(PerformanceStatus.CLOSED);
+      }
+      case CANCELED -> performance.changeStatus(PerformanceStatus.CANCELED);
+      default -> {}
     }
 
     return performanceRepository.save(performance);

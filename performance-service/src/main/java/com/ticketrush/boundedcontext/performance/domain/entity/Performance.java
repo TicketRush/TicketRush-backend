@@ -2,7 +2,9 @@ package com.ticketrush.boundedcontext.performance.domain.entity;
 
 import com.ticketrush.boundedcontext.performance.domain.types.Genre;
 import com.ticketrush.boundedcontext.performance.domain.types.PerformanceStatus;
+import com.ticketrush.global.exception.BusinessException;
 import com.ticketrush.global.jpa.entity.AutoIdBaseEntity;
+import com.ticketrush.global.status.ErrorStatus;
 import jakarta.persistence.AttributeOverride;
 import jakarta.persistence.CollectionTable;
 import jakarta.persistence.Column;
@@ -124,6 +126,9 @@ public class Performance extends AutoIdBaseEntity {
   }
 
   public void changeStatus(PerformanceStatus newStatus) {
+    if (!canTransitionTo(newStatus)) {
+      throw new BusinessException(ErrorStatus.PERFORMANCE_INVALID_STATUS_TRANSITION);
+    }
     this.performanceStatus = newStatus;
   }
 }

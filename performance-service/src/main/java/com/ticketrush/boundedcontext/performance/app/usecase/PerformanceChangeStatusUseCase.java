@@ -2,7 +2,6 @@ package com.ticketrush.boundedcontext.performance.app.usecase;
 
 import com.ticketrush.boundedcontext.performance.app.dto.request.PerformanceChangeStatusRequest;
 import com.ticketrush.boundedcontext.performance.domain.entity.Performance;
-import com.ticketrush.boundedcontext.performance.domain.types.PerformanceStatus;
 import com.ticketrush.boundedcontext.performance.out.repository.PerformanceRepository;
 import com.ticketrush.global.exception.BusinessException;
 import com.ticketrush.global.status.ErrorStatus;
@@ -23,12 +22,6 @@ public class PerformanceChangeStatusUseCase {
             .findById(performanceId)
             .orElseThrow(() -> new BusinessException(ErrorStatus.PERFORMANCE_NOT_FOUND));
 
-    PerformanceStatus targetStatus = request.status();
-
-    if (!performance.canTransitionTo(targetStatus)) {
-      throw new BusinessException(ErrorStatus.PERFORMANCE_INVALID_STATUS_TRANSITION);
-    }
-
-    performance.changeStatus(targetStatus);
+    performance.changeStatus(request.status());
   }
 }
