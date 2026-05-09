@@ -3,6 +3,8 @@ package com.ticketrush.boundedcontext.booking.app.facade;
 import com.ticketrush.boundedcontext.booking.app.dto.request.BookingCreateRequest;
 import com.ticketrush.boundedcontext.booking.app.usecase.BookingCreateUseCase;
 import com.ticketrush.boundedcontext.booking.app.usecase.BookingIssueNumberUseCase;
+import com.ticketrush.boundedcontext.booking.app.usecase.BookingValidateReferencesUseCase;
+import com.ticketrush.boundedcontext.booking.app.usecase.BookingValidateSeatAvailableUseCase;
 import com.ticketrush.boundedcontext.booking.domain.entity.Booking;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -15,16 +17,18 @@ public class BookingFacade {
 
   private final BookingIssueNumberUseCase bookingIssueNumberUseCase;
   private final BookingCreateUseCase bookingCreateUseCase;
+  private final BookingValidateReferencesUseCase bookingValidateReferencesUseCase;
+  private final BookingValidateSeatAvailableUseCase bookingValidateSeatAvailableUseCase;
 
   public Booking createBooking(Long userId, Long performanceId, Long seatId) {
-    // TODO: 예매 생성 전, Performance 모듈을 호출하여 performanceId의 유효성과 예매 가능 상태 검증
-    // TODO: 유저 인증 로직 도입 후 userId 유효성 검증 추가
-    // TODO: 좌석 존재 여부 검증 로직 추가
+    // 참조 및 좌석 가용성 검증 실행
+    bookingValidateReferencesUseCase.execute(userId, performanceId, seatId);
+    bookingValidateSeatAvailableUseCase.execute(seatId, performanceId);
 
-    // 1. 고유 예약 번호 발급
+    // 고유 예약 번호 발급
     String bookingNumber = bookingIssueNumberUseCase.execute();
 
-    // 2. PENDING 상태로 예매 생성
+    // PENDING 상태로 예매 생성
     BookingCreateRequest request =
         new BookingCreateRequest(userId, performanceId, seatId, bookingNumber);
 
