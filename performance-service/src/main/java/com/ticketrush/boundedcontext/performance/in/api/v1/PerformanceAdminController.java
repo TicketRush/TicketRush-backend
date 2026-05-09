@@ -1,8 +1,10 @@
 package com.ticketrush.boundedcontext.performance.in.api.v1;
 
+import com.ticketrush.boundedcontext.performance.app.dto.request.PerformanceChangeStatusRequest;
 import com.ticketrush.boundedcontext.performance.app.dto.request.PerformanceCreateRequest;
 import com.ticketrush.boundedcontext.performance.app.dto.response.PerformanceCreateResponse;
 import com.ticketrush.boundedcontext.performance.app.facade.PerformanceFacade;
+import com.ticketrush.boundedcontext.performance.in.api.v1.swagger.PerformanceChangeStatusApiResponses;
 import com.ticketrush.boundedcontext.performance.in.api.v1.swagger.PerformanceCreateApiResponses;
 import com.ticketrush.boundedcontext.performance.in.api.v1.swagger.PerformanceCreateSwaggerBody;
 import com.ticketrush.global.dto.response.ApiResponse;
@@ -18,6 +20,8 @@ import java.util.List;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
+import org.springframework.web.bind.annotation.PatchMapping;
+import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestPart;
@@ -74,5 +78,18 @@ public class PerformanceAdminController {
         performanceFacade.createPerformance(request, mainImage, model3d, gallery);
 
     return ApiResponse.onSuccess(SuccessStatus.CREATED, response);
+  }
+
+  @Operation(summary = "공연 상태 변경", description = "공연의 상태를 변경합니다.")
+  @PerformanceChangeStatusApiResponses
+  @PatchMapping("/{id}/status")
+  public ResponseEntity<ApiResponse<Void>> changePerformanceStatus(
+      @PathVariable Long id,
+      @org.springframework.web.bind.annotation.RequestBody @Valid
+          PerformanceChangeStatusRequest request) {
+
+    performanceFacade.changePerformanceStatus(id, request);
+
+    return ApiResponse.onSuccess(SuccessStatus.OK);
   }
 }

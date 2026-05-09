@@ -118,4 +118,12 @@ public class Performance extends AutoIdBaseEntity {
     this.image3dUrl = model3dUrl;
     this.imageGalleryUrls = galleryUrls;
   }
+
+  public boolean canTransitionTo(PerformanceStatus target) {
+    return this.performanceStatus.canTransitionTo(target);
+  }
+
+  public void changeStatus(PerformanceStatus newStatus) {
+    this.performanceStatus = newStatus;
+  }
 }
