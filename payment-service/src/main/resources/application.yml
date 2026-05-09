@@ -19,3 +19,6 @@ springdoc:
     enabled: true
   swagger-ui:
     enabled: false
+
+gateway:
+  internal-token: ${GATEWAY_INTERNAL_TOKEN:test-token}

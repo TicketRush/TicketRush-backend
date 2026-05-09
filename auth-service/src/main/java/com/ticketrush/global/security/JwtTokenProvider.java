@@ -77,9 +77,13 @@ public class JwtTokenProvider {
     try {
       Jwts.parser().verifyWith(key).build().parseSignedClaims(token);
       return true;
+    } catch (ExpiredJwtException e) {
+
+      throw new BusinessException(ErrorStatus.AUTH_EXPIRED_TOKEN);
+
     } catch (JwtException | IllegalArgumentException e) {
       log.warn("JWT 검증 실패: {}", e.getClass().getSimpleName());
-      return false;
+      throw new BusinessException(ErrorStatus.AUTH_INVALID_TOKEN);
     }
   }
 

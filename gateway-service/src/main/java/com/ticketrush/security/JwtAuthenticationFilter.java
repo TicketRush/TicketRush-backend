@@ -1,11 +1,13 @@
 package com.ticketrush.security;
 
+import com.ticketrush.exception.BusinessException;
+import com.ticketrush.status.ErrorStatus;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.cloud.gateway.filter.GatewayFilterChain;
 import org.springframework.cloud.gateway.filter.GlobalFilter;
 import org.springframework.core.Ordered;
-import org.springframework.http.HttpStatus;
 import org.springframework.http.server.reactive.ServerHttpRequest;
 import org.springframework.stereotype.Component;
 import org.springframework.web.server.ServerWebExchange;
@@ -18,6 +20,9 @@ public class JwtAuthenticationFilter implements GlobalFilter, Ordered {
 
   private final JwtTokenProvider jwtTokenProvider;
 
+  @Value("${gateway.internal-token}")
+  private String internalToken;
+
   @Override
   public Mono<Void> filter(ServerWebExchange exchange, GatewayFilterChain chain) {
 
@@ -25,25 +30,19 @@ public class JwtAuthenticationFilter implements GlobalFilter, Ordered {
 
     String token = resolveToken(exchange);
 
-    // 토큰 없으면 그냥 통과 (로그인 API 등)
+    // 토큰 없으면 그냥 통과
     if (token == null) {
       return chain.filter(exchange);
     }
 
     // JWT 검증
-    if (!jwtTokenProvider.validateToken(token)) {
-
-      exchange.getResponse().setStatusCode(HttpStatus.UNAUTHORIZED);
-      return exchange.getResponse().setComplete();
-    }
+    jwtTokenProvider.validateToken(token);
 
     // AccessToken 여부 검증
     String type = jwtTokenProvider.getType(token);
 
     if (!"access".equals(type)) {
-
-      exchange.getResponse().setStatusCode(HttpStatus.UNAUTHORIZED);
-      return exchange.getResponse().setComplete();
+      throw new BusinessException(ErrorStatus.AUTH_INVALID_TOKEN_TYPE);
     }
 
     // 토큰에서 사용자 정보 추출
@@ -60,10 +59,16 @@ public class JwtAuthenticationFilter implements GlobalFilter, Ordered {
             .mutate()
             .headers(
                 headers -> {
+
+                  // 외부 헤더 제거
                   headers.remove("X-User-Id");
                   headers.remove("X-User-Role");
+                  headers.remove("X-Internal-Token");
+
+                  // Gateway가 다시 세팅
                   headers.set("X-User-Id", String.valueOf(userId));
                   headers.set("X-User-Role", role);
+                  headers.set("X-Internal-Token", internalToken);
                 })
             .build();
 
