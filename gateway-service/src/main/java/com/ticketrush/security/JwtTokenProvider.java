@@ -1,15 +1,13 @@
-package com.ticketrush.global.security;
+package com.ticketrush.security;
 
-import com.ticketrush.global.exception.BusinessException;
-import com.ticketrush.global.status.ErrorStatus;
 import io.jsonwebtoken.Claims;
 import io.jsonwebtoken.ExpiredJwtException;
 import io.jsonwebtoken.JwtException;
 import io.jsonwebtoken.Jwts;
 import io.jsonwebtoken.security.Keys;
 import java.nio.charset.StandardCharsets;
+import java.security.Key;
 import java.util.Date;
-import javax.crypto.SecretKey;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
@@ -18,7 +16,7 @@ import org.springframework.stereotype.Component;
 @Component
 public class JwtTokenProvider {
 
-  private final SecretKey key;
+  private final Key key;
   private final long accessTokenExpiration;
   private final long refreshTokenExpiration;
 
@@ -51,7 +49,7 @@ public class JwtTokenProvider {
         .compact();
   }
 
-  // refreshToken 생성
+  // RefreshToken 생성
   public String createRefreshToken(Long userId) {
     Date now = new Date();
     Date expiry = new Date(now.getTime() + refreshTokenExpiration);
@@ -73,47 +71,54 @@ public class JwtTokenProvider {
     return refreshTokenExpiration;
   }
 
+  // JWT 유효성 검증
   public boolean validateToken(String token) {
     try {
-      Jwts.parser().verifyWith(key).build().parseSignedClaims(token);
-      return true;
-    } catch (ExpiredJwtException e) {
+      Jwts.parser().verifyWith((javax.crypto.SecretKey) key).build().parseSignedClaims(token);
 
-      throw new BusinessException(ErrorStatus.AUTH_EXPIRED_TOKEN);
+      return true;
 
     } catch (JwtException | IllegalArgumentException e) {
       log.warn("JWT 검증 실패: {}", e.getClass().getSimpleName());
-      throw new BusinessException(ErrorStatus.AUTH_INVALID_TOKEN);
+      return false;
     }
   }
 
+  // Claims 추출
   public Claims getClaims(String token) {
-    return Jwts.parser().verifyWith(key).build().parseSignedClaims(token).getPayload();
+    return Jwts.parser()
+        .verifyWith((javax.crypto.SecretKey) key)
+        .build()
+        .parseSignedClaims(token)
+        .getPayload();
   }
 
+  // UserId 추출
   public Long getUserId(String token) {
-    try {
-      return Long.valueOf(getClaims(token).getSubject());
-    } catch (JwtException | IllegalArgumentException e) {
-      throw new BusinessException(ErrorStatus.UNAUTHORIZED);
-    }
+    return Long.valueOf(getClaims(token).getSubject());
   }
 
+  // Role 추출
   public String getRole(String token) {
     return getClaims(token).get("role", String.class);
   }
 
+  // 토큰 타입 추출
+  public String getType(String token) {
+    return getClaims(token).get("type", String.class);
+  }
+
+  // 남은 만료 시간(ms)
   public long getRemainingTime(String token) {
     try {
       Date expiration = getClaims(token).getExpiration();
       return expiration.getTime() - System.currentTimeMillis();
 
     } catch (ExpiredJwtException e) {
-      // 이미 만료 → 블랙리스트 의미 없음
       return 0L;
 
     } catch (JwtException | IllegalArgumentException e) {
-      throw new BusinessException(ErrorStatus.AUTH_INVALID_ACCESS_TOKEN);
+      return 0L;
     }
   }
 }

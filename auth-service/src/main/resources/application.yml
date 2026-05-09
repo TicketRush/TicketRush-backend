@@ -30,9 +30,11 @@ jwt:
   access-token-expiration: 3600000      # 1시간(ms)
   refresh-token-expiration: 1209600000  # 14일(ms)
 
-
 springdoc:
   api-docs:
     enabled: true
   swagger-ui:
     enabled: false
+
+gateway:
+  internal-token: ${GATEWAY_INTERNAL_TOKEN:test-token}

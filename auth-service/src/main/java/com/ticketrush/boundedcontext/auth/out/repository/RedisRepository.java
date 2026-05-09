@@ -38,15 +38,4 @@ public class RedisRepository {
 
     return saved != null && saved.equals(refreshToken);
   }
-
-  // 블랙리스트 등록
-  public void blacklistAccessToken(String accessToken, long expiration) {
-    String key = "BL:" + accessToken;
-    redisTemplate.opsForValue().set(key, "logout", Duration.ofMillis(expiration));
-  }
-
-  // 블랙리스트 확인
-  public boolean isBlacklisted(String accessToken) {
-    return Boolean.TRUE.equals(redisTemplate.hasKey("BL:" + accessToken));
-  }
 }

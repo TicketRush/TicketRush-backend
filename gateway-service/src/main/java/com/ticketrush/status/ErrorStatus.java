@@ -1,4 +1,4 @@
-package com.ticketrush.global.status;
+package com.ticketrush.status;
 
 import java.util.Optional;
 import java.util.function.Predicate;
