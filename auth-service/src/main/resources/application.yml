@@ -15,6 +15,11 @@ oauth:
     user-info-uri: https://kapi.kakao.com/v2/user/me
     user-name-attribute: id
 
+  google:
+    client-id: ${GOOGLE_CLIENT_ID}
+    client-secret: ${GOOGLE_CLIENT_SECRET}
+    redirect-uri: ${GOOGLE_REDIRECT_URI}
+
 custom:
   global:
     internalBackUrl: http://localhost:${server.port:8082}

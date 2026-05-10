@@ -1,7 +1,7 @@
 package com.ticketrush.boundedcontext.auth.out.oauth;
 
-import com.ticketrush.boundedcontext.auth.app.dto.response.KakaoTokenResponse;
 import com.ticketrush.boundedcontext.auth.app.dto.response.KakaoUserInfoResponse;
+import com.ticketrush.boundedcontext.auth.app.dto.response.OauthTokenResponse;
 import com.ticketrush.boundedcontext.auth.domain.types.SocialProvider;
 import com.ticketrush.boundedcontext.auth.domain.types.SocialUserInfo;
 import com.ticketrush.global.exception.BusinessException;
@@ -45,7 +45,7 @@ public class KakaoOauthService implements SocialOauthService {
   @Override
   public SocialUserInfo getUserInfo(String code) {
     try {
-      KakaoTokenResponse tokenResponse = getToken(code);
+      OauthTokenResponse tokenResponse = getToken(code);
 
       if (tokenResponse == null || tokenResponse.accessToken() == null) {
         throw new BusinessException(ErrorStatus.AUTH_KAKAO_TOKEN_FAILED);
@@ -83,7 +83,7 @@ public class KakaoOauthService implements SocialOauthService {
         + "&response_type=code";
   }
 
-  private KakaoTokenResponse getToken(String code) {
+  private OauthTokenResponse getToken(String code) {
 
     log.info("clientId = {}", clientId);
     log.info("clientSecret = {}", clientSecret);
@@ -102,7 +102,7 @@ public class KakaoOauthService implements SocialOauthService {
         .contentType(MediaType.APPLICATION_FORM_URLENCODED)
         .body(form)
         .retrieve()
-        .body(KakaoTokenResponse.class);
+        .body(OauthTokenResponse.class);
   }
 
   private KakaoUserInfoResponse getProfile(String accessToken) {
