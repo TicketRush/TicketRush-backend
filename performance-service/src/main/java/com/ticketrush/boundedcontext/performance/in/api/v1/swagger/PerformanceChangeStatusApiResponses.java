@@ -32,7 +32,7 @@ import java.lang.annotation.Target;
                         {
                           "isSuccess": false,
                           "code": "VALID_400_001",
-                          "message": "입력값이 올바르지 않습니다.",
+                          "message": "status: 변경할 상태는 필수입니다.",
                           "traceId": "trace-id-example"
                         }
                         """),
