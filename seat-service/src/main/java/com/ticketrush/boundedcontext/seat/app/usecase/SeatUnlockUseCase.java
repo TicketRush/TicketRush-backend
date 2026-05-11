@@ -32,4 +32,13 @@ public class SeatUnlockUseCase {
       log.warn("락 해제 스킵: 락을 소유하고 있지 않거나 이미 자동 만료되었습니다. seatId: {}", seatId);
     }
   }
+
+  public void forceRelease(Long seatId) {
+    String lockKey = SEAT_LOCK_PREFIX + seatId;
+    RLock lock = redissonClient.getLock(lockKey);
+
+    if (lock.forceUnlock()) {
+      log.debug("Redisson 락 강제 해제 완료. seatId: {}", seatId);
+    }
+  }
 }
