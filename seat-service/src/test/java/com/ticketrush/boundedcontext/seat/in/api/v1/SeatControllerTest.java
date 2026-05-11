@@ -23,6 +23,8 @@ import org.springframework.test.web.servlet.MockMvc;
 @WebMvcTest(SeatController.class)
 class SeatControllerTest {
 
+  private static final String INTERNAL_TOKEN = "test-token";
+
   @Autowired private MockMvc mockMvc;
 
   @MockitoBean private SeatFacade seatFacade;
@@ -68,11 +70,35 @@ class SeatControllerTest {
         .perform(
             post("/api/v1/seat/internal/sold")
                 .with(csrf())
+                .header("X-Internal-Token", INTERNAL_TOKEN)
                 .contentType(MediaType.APPLICATION_JSON)
                 .content(requestBody))
         .andExpect(status().isOk())
         .andExpect(jsonPath("$.isSuccess").value(true));
 
     verify(seatFacade).confirmSold("X7B29-KLPW1", 1L);
+  }
+
+  @Test
+  @WithMockUser
+  @DisplayName("좌석 판매 확정 요청에 내부 토큰이 없으면 403 Forbidden을 반환한다")
+  void confirmSold_fail_when_internal_token_missing() throws Exception {
+    // given
+    String requestBody =
+        """
+        {
+          "booking_number": "X7B29-KLPW1",
+          "seat_id": 1
+        }
+        """;
+
+    // when & then
+    mockMvc
+        .perform(
+            post("/api/v1/seat/internal/sold")
+                .with(csrf())
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(requestBody))
+        .andExpect(status().isForbidden());
   }
 }
