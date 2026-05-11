@@ -1,5 +1,6 @@
 package com.ticketrush.boundedcontext.performance.in.api.v1;
 
+import com.ticketrush.boundedcontext.performance.app.dto.response.PerformanceDetailResponse;
 import com.ticketrush.boundedcontext.performance.app.dto.response.PerformanceListResponse;
 import com.ticketrush.boundedcontext.performance.app.facade.PerformanceFacade;
 import com.ticketrush.boundedcontext.performance.domain.types.Genre;
@@ -17,6 +18,7 @@ import org.springframework.data.domain.Sort;
 import org.springframework.data.web.PageableDefault;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
@@ -59,5 +61,14 @@ public class PerformanceController {
     Page<PerformanceListResponse> performances = performanceFacade.getPerformances(genre, pageable);
 
     return ApiResponse.onSuccess(SuccessStatus.OK, performances);
+  }
+
+  @Operation(summary = "공연 상세 조회", description = "공연 ID로 상세 정보를 조회합니다. 인증 없이 누구나 접근 가능합니다.")
+  @PerformanceDetailApiResponses
+  @GetMapping("/{id}")
+  public ResponseEntity<ApiResponse<PerformanceDetailResponse>> getPerformanceDetail(
+      @Parameter(description = "공연 ID") @PathVariable Long id) {
+
+    return ApiResponse.onSuccess(SuccessStatus.OK, performanceFacade.getPerformanceDetail(id));
   }
 }
