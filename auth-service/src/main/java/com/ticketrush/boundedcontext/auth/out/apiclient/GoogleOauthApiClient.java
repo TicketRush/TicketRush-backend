@@ -1,10 +1,13 @@
-package com.ticketrush.boundedcontext.auth.out.oauth;
+package com.ticketrush.boundedcontext.auth.out.apiclient;
 
 import com.ticketrush.boundedcontext.auth.app.dto.response.GoogleUserInfoResponse;
 import com.ticketrush.boundedcontext.auth.app.dto.response.OauthTokenResponse;
 import com.ticketrush.boundedcontext.auth.domain.types.SocialProvider;
 import com.ticketrush.boundedcontext.auth.domain.types.SocialUserInfo;
+import com.ticketrush.global.exception.BusinessException;
+import com.ticketrush.global.status.ErrorStatus;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
@@ -12,9 +15,10 @@ import org.springframework.stereotype.Component;
 import org.springframework.web.client.RestClient;
 import org.springframework.web.util.UriComponentsBuilder;
 
+@Slf4j
 @Component
 @RequiredArgsConstructor
-public class GoogleOauthService implements SocialOauthService {
+public class GoogleOauthApiClient implements SocialOauthApiClient {
 
   private final RestClient restClient;
 
@@ -33,17 +37,40 @@ public class GoogleOauthService implements SocialOauthService {
   }
 
   @Override
-  public SocialUserInfo getUserInfo(String code) {
+  public SocialUserInfo getUserInfo(String code, String redirectUri) {
 
-    // 1. 인가 코드로 access token 요청
-    OauthTokenResponse tokenResponse = requestToken(code);
+    try {
 
-    // 2. access token으로 사용자 정보 요청
-    GoogleUserInfoResponse userInfoResponse = requestUserInfo(tokenResponse.accessToken());
+      // redirectUri가 없으면 기본값 사용
+      String uri = redirectUri != null ? redirectUri : defaultRedirectUri;
 
-    // 3. 공통 객체로 변환
-    return new SocialUserInfo(
-        userInfoResponse.id(), SocialProvider.GOOGLE, userInfoResponse.name());
+      // 1. 인가 코드로 access token 요청
+      OauthTokenResponse tokenResponse = requestToken(code, uri);
+
+      if (tokenResponse == null || tokenResponse.accessToken() == null) {
+        throw new BusinessException(ErrorStatus.AUTH_GOOGLE_TOKEN_FAILED);
+      }
+
+      // 2. access token으로 사용자 정보 요청
+      GoogleUserInfoResponse userInfoResponse = requestUserInfo(tokenResponse.accessToken());
+
+      if (userInfoResponse == null || userInfoResponse.id() == null) {
+        throw new BusinessException(ErrorStatus.AUTH_GOOGLE_INFO_FAILED);
+      }
+
+      // 3. 공통 객체로 변환
+      return new SocialUserInfo(
+          userInfoResponse.id(), SocialProvider.GOOGLE, userInfoResponse.name());
+
+    } catch (BusinessException e) {
+
+      throw e;
+
+    } catch (Exception e) {
+
+      log.error("Google OAuth 처리 중 에러 발생", e);
+      throw new BusinessException(ErrorStatus.AUTH_GOOGLE_INFO_FAILED);
+    }
   }
 
   @Override
@@ -65,7 +92,7 @@ public class GoogleOauthService implements SocialOauthService {
     return defaultRedirectUri;
   }
 
-  private OauthTokenResponse requestToken(String code) {
+  private OauthTokenResponse requestToken(String code, String redirectUri) {
 
     return restClient
         .post()
@@ -79,7 +106,7 @@ public class GoogleOauthService implements SocialOauthService {
                 + "&client_secret="
                 + clientSecret
                 + "&redirect_uri="
-                + defaultRedirectUri
+                + redirectUri
                 + "&grant_type=authorization_code")
         .retrieve()
         .body(OauthTokenResponse.class);
