@@ -6,7 +6,7 @@ import static org.assertj.core.api.Assertions.tuple;
 import com.ticketrush.boundedcontext.seat.app.dto.response.SeatLayoutResponse;
 import com.ticketrush.boundedcontext.seat.domain.entity.Seat;
 import com.ticketrush.boundedcontext.seat.domain.entity.SeatLayout;
-import com.ticketrush.boundedcontext.seat.domain.types.SeatStatus;
+import com.ticketrush.global.types.SeatStatus;
 import java.time.LocalDateTime;
 import java.util.List;
 import org.junit.jupiter.api.DisplayName;

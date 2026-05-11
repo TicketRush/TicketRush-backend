@@ -1,4 +1,4 @@
-package com.ticketrush.boundedcontext.seat.domain.types;
+package com.ticketrush.global.types;
 
 import lombok.AllArgsConstructor;
 import lombok.Getter;

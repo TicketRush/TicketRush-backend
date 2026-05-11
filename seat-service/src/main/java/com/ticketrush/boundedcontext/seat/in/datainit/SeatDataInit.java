@@ -1,10 +1,10 @@
-package com.ticketrush.boundedcontext.seat.app.init;
+package com.ticketrush.boundedcontext.seat.in.datainit;
 
 import com.ticketrush.boundedcontext.seat.domain.entity.Seat;
 import com.ticketrush.boundedcontext.seat.domain.entity.SeatLayout;
-import com.ticketrush.boundedcontext.seat.domain.types.SeatStatus;
 import com.ticketrush.boundedcontext.seat.out.repository.SeatLayoutRepository;
 import com.ticketrush.boundedcontext.seat.out.repository.SeatRepository;
+import com.ticketrush.global.types.SeatStatus;
 import java.util.ArrayList;
 import java.util.List;
 import lombok.RequiredArgsConstructor;
