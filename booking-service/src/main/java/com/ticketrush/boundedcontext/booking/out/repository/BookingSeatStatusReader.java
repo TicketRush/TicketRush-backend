@@ -1,6 +1,9 @@
 package com.ticketrush.boundedcontext.booking.out.repository;
 
+import com.ticketrush.global.types.SeatStatus;
+import java.util.Optional;
+
 public interface BookingSeatStatusReader {
 
-  String findSeatStatus(Long seatId, Long performanceId);
+  Optional<SeatStatus> findSeatStatus(Long seatId, Long performanceId);
 }

@@ -2,12 +2,15 @@ package com.ticketrush.boundedcontext.booking.app.usecase;
 
 import static com.ticketrush.global.status.ErrorStatus.SEAT_ALREADY_LOCKED;
 import static com.ticketrush.global.status.ErrorStatus.SEAT_NOT_AVAILABLE;
+import static com.ticketrush.global.status.ErrorStatus.SEAT_NOT_FOUND;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.BDDMockito.given;
 import static org.mockito.Mockito.verify;
 
 import com.ticketrush.boundedcontext.booking.out.repository.BookingSeatStatusReader;
 import com.ticketrush.global.exception.BusinessException;
+import com.ticketrush.global.types.SeatStatus;
+import java.util.Optional;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -29,7 +32,8 @@ class BookingValidateSeatAvailableUseCaseTest {
     Long seatId = 1L;
     Long performanceId = 2L;
 
-    given(bookingSeatStatusReader.findSeatStatus(seatId, performanceId)).willReturn("AVAILABLE");
+    given(bookingSeatStatusReader.findSeatStatus(seatId, performanceId))
+        .willReturn(Optional.of(SeatStatus.AVAILABLE));
 
     // when
     bookingValidateSeatAvailableUseCase.execute(seatId, performanceId);
@@ -45,7 +49,8 @@ class BookingValidateSeatAvailableUseCaseTest {
     Long seatId = 1L;
     Long performanceId = 2L;
 
-    given(bookingSeatStatusReader.findSeatStatus(seatId, performanceId)).willReturn("HOLD");
+    given(bookingSeatStatusReader.findSeatStatus(seatId, performanceId))
+        .willReturn(Optional.of(SeatStatus.HOLD));
 
     // when & then
     assertThatThrownBy(() -> bookingValidateSeatAvailableUseCase.execute(seatId, performanceId))
@@ -63,13 +68,33 @@ class BookingValidateSeatAvailableUseCaseTest {
     Long seatId = 1L;
     Long performanceId = 2L;
 
-    given(bookingSeatStatusReader.findSeatStatus(seatId, performanceId)).willReturn("SOLD");
+    given(bookingSeatStatusReader.findSeatStatus(seatId, performanceId))
+        .willReturn(Optional.of(SeatStatus.SOLD));
 
     // when & then
     assertThatThrownBy(() -> bookingValidateSeatAvailableUseCase.execute(seatId, performanceId))
         .isInstanceOf(BusinessException.class)
         .extracting(ex -> ((BusinessException) ex).getErrorStatus())
         .isEqualTo(SEAT_NOT_AVAILABLE);
+
+    verify(bookingSeatStatusReader).findSeatStatus(seatId, performanceId);
+  }
+
+  @Test
+  @DisplayName("실패: 좌석 상태 조회 결과가 없으면 SEAT_NOT_FOUND 예외가 발생한다")
+  void execute_fail_when_seat_status_not_found() {
+    // given
+    Long seatId = 1L;
+    Long performanceId = 2L;
+
+    given(bookingSeatStatusReader.findSeatStatus(seatId, performanceId))
+        .willReturn(Optional.empty());
+
+    // when & then
+    assertThatThrownBy(() -> bookingValidateSeatAvailableUseCase.execute(seatId, performanceId))
+        .isInstanceOf(BusinessException.class)
+        .extracting(ex -> ((BusinessException) ex).getErrorStatus())
+        .isEqualTo(SEAT_NOT_FOUND);
 
     verify(bookingSeatStatusReader).findSeatStatus(seatId, performanceId);
   }
