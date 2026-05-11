@@ -13,7 +13,7 @@ import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
-@Tag(name = "Performance Internal", description = "공연 내부 서비스 간 API")
+@Tag(name = "Performance", description = "공연 API")
 @RestController
 @RequestMapping("/api/v1/performance")
 @RequiredArgsConstructor
@@ -21,9 +21,7 @@ public class PerformanceInternalController {
 
   private final PerformanceFacade performanceFacade;
 
-  @Operation(
-      summary = "공연 유효성 검증",
-      description = "공연이 존재하고 예매 가능(ON_SALE) 상태인지 검증합니다. Booking 서비스 내부 호출용.")
+  @Operation(summary = "공연 유효성 검증", description = "공연이 존재하고 예매 가능(ON_SALE) 상태인지 검증합니다.")
   @PerformanceValidateApiResponses
   @GetMapping("/{id}/validate")
   public ResponseEntity<ApiResponse<Void>> validatePerformance(@PathVariable Long id) {
