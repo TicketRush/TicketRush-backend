@@ -7,6 +7,7 @@ import com.ticketrush.boundedcontext.performance.app.dto.response.PerformanceLis
 import com.ticketrush.boundedcontext.performance.app.usecase.PerformanceChangeStatusUseCase;
 import com.ticketrush.boundedcontext.performance.app.usecase.PerformanceCreateUseCase;
 import com.ticketrush.boundedcontext.performance.app.usecase.PerformanceGetListUseCase;
+import com.ticketrush.boundedcontext.performance.app.usecase.PerformanceValidateUseCase;
 import com.ticketrush.boundedcontext.performance.domain.types.Genre;
 import java.util.List;
 import lombok.RequiredArgsConstructor;
@@ -22,6 +23,7 @@ public class PerformanceFacade {
   private final PerformanceCreateUseCase performanceCreateUseCase;
   private final PerformanceGetListUseCase performanceGetListUseCase;
   private final PerformanceChangeStatusUseCase performanceChangeStatusUseCase;
+  private final PerformanceValidateUseCase performanceValidateUseCase;
 
   public PerformanceCreateResponse createPerformance(
       PerformanceCreateRequest request,
@@ -38,5 +40,9 @@ public class PerformanceFacade {
 
   public void changePerformanceStatus(Long performanceId, PerformanceChangeStatusRequest request) {
     performanceChangeStatusUseCase.execute(performanceId, request);
+  }
+
+  public void validatePerformance(Long performanceId) {
+    performanceValidateUseCase.execute(performanceId);
   }
 }
