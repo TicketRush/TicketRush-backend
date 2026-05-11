@@ -22,6 +22,7 @@ class SeatConfirmSoldUseCaseTest {
   @InjectMocks private SeatConfirmSoldUseCase seatConfirmSoldUseCase;
 
   @Mock private SeatRepository seatRepository;
+  @Mock private SeatUnlockUseCase seatUnlockUseCase;
 
   @Test
   @DisplayName("성공: HOLD 상태인 좌석을 SOLD 상태로 확정한다")
@@ -30,15 +31,14 @@ class SeatConfirmSoldUseCaseTest {
     String bookingNumber = "X7B29-KLPW1";
     Long seatId = 1L;
 
-    given(seatRepository.existsById(seatId)).willReturn(true);
     given(seatRepository.confirmSoldById(seatId, SeatStatus.HOLD, SeatStatus.SOLD)).willReturn(1);
 
     // when
     seatConfirmSoldUseCase.execute(bookingNumber, seatId);
 
     // then
-    verify(seatRepository).existsById(seatId);
     verify(seatRepository).confirmSoldById(seatId, SeatStatus.HOLD, SeatStatus.SOLD);
+    verify(seatUnlockUseCase).forceRelease(seatId);
   }
 
   @Test
@@ -47,6 +47,7 @@ class SeatConfirmSoldUseCaseTest {
     // given
     Long seatId = 1L;
 
+    given(seatRepository.confirmSoldById(seatId, SeatStatus.HOLD, SeatStatus.SOLD)).willReturn(0);
     given(seatRepository.existsById(seatId)).willReturn(false);
 
     // when & then
@@ -55,8 +56,9 @@ class SeatConfirmSoldUseCaseTest {
         .extracting("errorStatus")
         .isEqualTo(ErrorStatus.SEAT_NOT_FOUND);
 
+    verify(seatRepository).confirmSoldById(seatId, SeatStatus.HOLD, SeatStatus.SOLD);
     verify(seatRepository).existsById(seatId);
-    verifyNoMoreInteractions(seatRepository);
+    verifyNoMoreInteractions(seatRepository, seatUnlockUseCase);
   }
 
   @Test
@@ -65,13 +67,17 @@ class SeatConfirmSoldUseCaseTest {
     // given
     Long seatId = 1L;
 
-    given(seatRepository.existsById(seatId)).willReturn(true);
     given(seatRepository.confirmSoldById(seatId, SeatStatus.HOLD, SeatStatus.SOLD)).willReturn(0);
+    given(seatRepository.existsById(seatId)).willReturn(true);
 
     // when & then
     assertThatThrownBy(() -> seatConfirmSoldUseCase.execute("X7B29-KLPW1", seatId))
         .isInstanceOf(BusinessException.class)
         .extracting("errorStatus")
         .isEqualTo(ErrorStatus.SEAT_NOT_AVAILABLE);
+
+    verify(seatRepository).confirmSoldById(seatId, SeatStatus.HOLD, SeatStatus.SOLD);
+    verify(seatRepository).existsById(seatId);
+    verifyNoMoreInteractions(seatRepository, seatUnlockUseCase);
   }
 }
