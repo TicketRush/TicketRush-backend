@@ -105,6 +105,7 @@ class BookingFacadeTest {
         .isEqualTo(SEAT_ALREADY_LOCKED);
 
     verify(bookingValidateReferencesUseCase).execute(userId, performanceId, seatId);
+    verify(bookingValidateSeatAvailableUseCase).execute(seatId, performanceId);
     verifyNoInteractions(bookingIssueNumberUseCase, bookingCreateUseCase);
   }
 }
