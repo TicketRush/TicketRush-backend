@@ -1,4 +1,4 @@
-package com.ticketrush.boundedcontext.performance.in.api.v1.swagger;
+package com.ticketrush.boundedcontext.performance.in.api.v1;
 
 import io.swagger.v3.oas.annotations.media.Content;
 import io.swagger.v3.oas.annotations.media.ExampleObject;

@@ -1,4 +1,4 @@
-package com.ticketrush.boundedcontext.performance.in.api.v1.swagger;
+package com.ticketrush.boundedcontext.performance.in.api.v1;
 
 import com.ticketrush.boundedcontext.performance.app.dto.request.PerformanceCreateRequest;
 import io.swagger.v3.oas.annotations.media.Schema;

@@ -4,9 +4,6 @@ import com.ticketrush.boundedcontext.performance.app.dto.request.PerformanceChan
 import com.ticketrush.boundedcontext.performance.app.dto.request.PerformanceCreateRequest;
 import com.ticketrush.boundedcontext.performance.app.dto.response.PerformanceCreateResponse;
 import com.ticketrush.boundedcontext.performance.app.facade.PerformanceFacade;
-import com.ticketrush.boundedcontext.performance.in.api.v1.swagger.PerformanceChangeStatusApiResponses;
-import com.ticketrush.boundedcontext.performance.in.api.v1.swagger.PerformanceCreateApiResponses;
-import com.ticketrush.boundedcontext.performance.in.api.v1.swagger.PerformanceCreateSwaggerBody;
 import com.ticketrush.global.dto.response.ApiResponse;
 import com.ticketrush.global.status.SuccessStatus;
 import io.swagger.v3.oas.annotations.Operation;

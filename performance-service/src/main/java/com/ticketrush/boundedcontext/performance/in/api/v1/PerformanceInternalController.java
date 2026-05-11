@@ -1,7 +1,6 @@
 package com.ticketrush.boundedcontext.performance.in.api.v1;
 
 import com.ticketrush.boundedcontext.performance.app.facade.PerformanceFacade;
-import com.ticketrush.boundedcontext.performance.in.api.v1.swagger.PerformanceValidateApiResponses;
 import com.ticketrush.global.dto.response.ApiResponse;
 import com.ticketrush.global.status.SuccessStatus;
 import io.swagger.v3.oas.annotations.Operation;
