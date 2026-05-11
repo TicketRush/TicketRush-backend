@@ -77,6 +77,11 @@ public enum ErrorStatus {
   PERFORMANCE_MODEL_3D_MISSING(HttpStatus.BAD_REQUEST, "PERFORMANCE_400_002", "3D 모델 파일은 필수입니다."),
   PERFORMANCE_GALLERY_LIMIT_EXCEEDED(
       HttpStatus.BAD_REQUEST, "PERFORMANCE_400_003", "갤러리 이미지는 최대 3개까지 업로드할 수 있습니다."),
+  PERFORMANCE_INVALID_STATUS_TRANSITION(
+      HttpStatus.BAD_REQUEST, "PERFORMANCE_400_004", "유효하지 않은 공연 상태 전환입니다."),
+
+  // Performance 404
+  PERFORMANCE_NOT_FOUND(HttpStatus.NOT_FOUND, "PERFORMANCE_404_001", "공연이 존재하지 않습니다."),
 
   // Performance 404
   PERFORMANCE_NOT_FOUND(HttpStatus.NOT_FOUND, "PERFORMANCE_404_001", "해당 공연을 찾을 수 없습니다."),
