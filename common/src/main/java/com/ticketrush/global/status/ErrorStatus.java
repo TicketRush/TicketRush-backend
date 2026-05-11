@@ -30,6 +30,8 @@ public enum ErrorStatus {
   AUTH_USER_BAD_REQUEST(HttpStatus.BAD_REQUEST, "AUTH_400_003", "user-service 요청이 올바르지 않습니다."),
   AUTH_OAUTH_INVALID_REDIRECT_URI(
       HttpStatus.BAD_REQUEST, "AUTH_400_004", "유효하지 않은 Redirect URI입니다."),
+  AUTH_GOOGLE_TOKEN_FAILED(HttpStatus.BAD_REQUEST, "AUTH_400_005", "잘못된 구글 토큰입니다."),
+  AUTH_GOOGLE_INFO_FAILED(HttpStatus.BAD_REQUEST, "AUTH_400_006", "잘못된 구글 정보입니다."),
 
   // Auth 401
   AUTH_INVALID_REFRESH_TOKEN(HttpStatus.UNAUTHORIZED, "AUTH_401_001", "유효하지 않은 Refresh Token입니다."),

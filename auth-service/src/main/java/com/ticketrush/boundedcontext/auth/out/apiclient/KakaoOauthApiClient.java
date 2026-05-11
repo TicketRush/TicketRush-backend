@@ -1,7 +1,7 @@
-package com.ticketrush.boundedcontext.auth.out.oauth;
+package com.ticketrush.boundedcontext.auth.out.apiclient;
 
-import com.ticketrush.boundedcontext.auth.app.dto.response.KakaoTokenResponse;
 import com.ticketrush.boundedcontext.auth.app.dto.response.KakaoUserInfoResponse;
+import com.ticketrush.boundedcontext.auth.app.dto.response.OauthTokenResponse;
 import com.ticketrush.boundedcontext.auth.domain.types.SocialProvider;
 import com.ticketrush.boundedcontext.auth.domain.types.SocialUserInfo;
 import com.ticketrush.global.exception.BusinessException;
@@ -10,15 +10,15 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.MediaType;
-import org.springframework.stereotype.Service;
+import org.springframework.stereotype.Component;
 import org.springframework.util.LinkedMultiValueMap;
 import org.springframework.util.MultiValueMap;
 import org.springframework.web.client.RestClient;
 
 @Slf4j
-@Service
+@Component
 @RequiredArgsConstructor
-public class KakaoOauthService implements SocialOauthService {
+public class KakaoOauthApiClient implements SocialOauthApiClient {
 
   private final RestClient restClient;
 
@@ -29,7 +29,7 @@ public class KakaoOauthService implements SocialOauthService {
   private String clientSecret;
 
   @Value("${oauth.kakao.redirect-uri}")
-  private String redirectUri;
+  private String defaultRedirectUri;
 
   @Value("${oauth.kakao.token-uri}")
   private String tokenUri;
@@ -43,9 +43,14 @@ public class KakaoOauthService implements SocialOauthService {
   }
 
   @Override
-  public SocialUserInfo getUserInfo(String code) {
+  public SocialUserInfo getUserInfo(String code, String redirectUri) {
+
     try {
-      KakaoTokenResponse tokenResponse = getToken(code);
+
+      // redirectUri가 없으면 기본값 사용
+      String uri = redirectUri != null ? redirectUri : defaultRedirectUri;
+
+      OauthTokenResponse tokenResponse = getToken(code, uri);
 
       if (tokenResponse == null || tokenResponse.accessToken() == null) {
         throw new BusinessException(ErrorStatus.AUTH_KAKAO_TOKEN_FAILED);
@@ -58,6 +63,7 @@ public class KakaoOauthService implements SocialOauthService {
       }
 
       String socialId = String.valueOf(userInfoResponse.id());
+
       String nickname =
           userInfoResponse.properties() != null ? userInfoResponse.properties().nickname() : null;
 
@@ -66,7 +72,9 @@ public class KakaoOauthService implements SocialOauthService {
     } catch (BusinessException e) {
 
       throw e;
+
     } catch (Exception e) {
+
       log.error("Kakao OAuth 처리 중 에러 발생", e);
       throw new BusinessException(ErrorStatus.AUTH_KAKAO_INFO_FAILED);
     }
@@ -75,21 +83,24 @@ public class KakaoOauthService implements SocialOauthService {
   @Override
   public String generateOAuthUrl(String redirectUri) {
 
+    String uri = redirectUri != null ? redirectUri : defaultRedirectUri;
+
     return "https://kauth.kakao.com/oauth/authorize"
         + "?client_id="
         + clientId
         + "&redirect_uri="
-        + redirectUri
+        + uri
         + "&response_type=code";
   }
 
-  private KakaoTokenResponse getToken(String code) {
+  private OauthTokenResponse getToken(String code, String redirectUri) {
 
     log.info("clientId = {}", clientId);
     log.info("clientSecret = {}", clientSecret);
     log.info("redirectUri = {}", redirectUri);
 
     MultiValueMap<String, String> form = new LinkedMultiValueMap<>();
+
     form.add("grant_type", "authorization_code");
     form.add("client_id", clientId);
     form.add("client_secret", clientSecret);
@@ -102,10 +113,11 @@ public class KakaoOauthService implements SocialOauthService {
         .contentType(MediaType.APPLICATION_FORM_URLENCODED)
         .body(form)
         .retrieve()
-        .body(KakaoTokenResponse.class);
+        .body(OauthTokenResponse.class);
   }
 
   private KakaoUserInfoResponse getProfile(String accessToken) {
+
     return restClient
         .get()
         .uri(userInfoUri)
@@ -116,6 +128,6 @@ public class KakaoOauthService implements SocialOauthService {
 
   @Override
   public String getDefaultRedirectUri() {
-    return redirectUri;
+    return defaultRedirectUri;
   }
 }

@@ -1,8 +1,8 @@
 package com.ticketrush.boundedcontext.auth.app.usecase;
 
 import com.ticketrush.boundedcontext.auth.domain.types.SocialProvider;
-import com.ticketrush.boundedcontext.auth.out.oauth.SocialOauthService;
-import com.ticketrush.boundedcontext.auth.out.oauth.SocialOauthServiceFactory;
+import com.ticketrush.boundedcontext.auth.out.apiclient.SocialOauthApiClient;
+import com.ticketrush.boundedcontext.auth.out.apiclient.SocialOauthApiClientFactory;
 import com.ticketrush.global.exception.BusinessException;
 import com.ticketrush.global.security.AuthSecurityProperties;
 import com.ticketrush.global.status.ErrorStatus;
@@ -17,13 +17,13 @@ import org.springframework.transaction.annotation.Transactional;
 @Transactional(readOnly = true)
 @RequiredArgsConstructor
 public class OauthLoginUrlUseCase {
-  private final SocialOauthServiceFactory socialOauthServiceFactory;
+  private final SocialOauthApiClientFactory socialOauthApiClientFactory;
   private final AuthSecurityProperties securityProperties;
 
   // 어느 provider로 로그인할 지를 받아서 그 로그인에 필요한 OAuth 인증 URL을 만들어 반환
   public String generateOAuthUrl(SocialProvider provider, String redirectUri) {
 
-    SocialOauthService service = socialOauthServiceFactory.getService(provider);
+    SocialOauthApiClient service = socialOauthApiClientFactory.getClient(provider);
 
     if (redirectUri == null) {
       redirectUri = service.getDefaultRedirectUri();
@@ -31,7 +31,7 @@ public class OauthLoginUrlUseCase {
 
     validateRedirectUri(redirectUri);
 
-    return socialOauthServiceFactory.getService(provider).generateOAuthUrl(redirectUri);
+    return socialOauthApiClientFactory.getClient(provider).generateOAuthUrl(redirectUri);
   }
 
   private void validateRedirectUri(String redirectUri) {
