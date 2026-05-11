@@ -1,8 +1,10 @@
 package com.ticketrush.boundedcontext.performance.app.facade;
 
+import com.ticketrush.boundedcontext.performance.app.dto.request.PerformanceChangeStatusRequest;
 import com.ticketrush.boundedcontext.performance.app.dto.request.PerformanceCreateRequest;
 import com.ticketrush.boundedcontext.performance.app.dto.response.PerformanceCreateResponse;
 import com.ticketrush.boundedcontext.performance.app.dto.response.PerformanceListResponse;
+import com.ticketrush.boundedcontext.performance.app.usecase.PerformanceChangeStatusUseCase;
 import com.ticketrush.boundedcontext.performance.app.usecase.PerformanceCreateUseCase;
 import com.ticketrush.boundedcontext.performance.app.usecase.PerformanceGetListUseCase;
 import com.ticketrush.boundedcontext.performance.domain.types.Genre;
@@ -19,6 +21,7 @@ public class PerformanceFacade {
 
   private final PerformanceCreateUseCase performanceCreateUseCase;
   private final PerformanceGetListUseCase performanceGetListUseCase;
+  private final PerformanceChangeStatusUseCase performanceChangeStatusUseCase;
 
   public PerformanceCreateResponse createPerformance(
       PerformanceCreateRequest request,
@@ -31,5 +34,9 @@ public class PerformanceFacade {
 
   public Page<PerformanceListResponse> getPerformances(Genre genre, Pageable pageable) {
     return performanceGetListUseCase.execute(genre, pageable);
+  }
+
+  public void changePerformanceStatus(Long performanceId, PerformanceChangeStatusRequest request) {
+    performanceChangeStatusUseCase.execute(performanceId, request);
   }
 }

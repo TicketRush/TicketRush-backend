@@ -12,4 +12,13 @@ public enum PerformanceStatus {
   CANCELED("취소");
 
   private final String description;
+
+  public boolean canTransitionTo(PerformanceStatus target) {
+    return switch (this) {
+      case UPCOMING -> target == ON_SALE || target == CANCELED;
+      case ON_SALE -> target == CLOSED || target == CANCELED;
+      case CLOSED -> target == CANCELED;
+      case CANCELED -> false;
+    };
+  }
 }

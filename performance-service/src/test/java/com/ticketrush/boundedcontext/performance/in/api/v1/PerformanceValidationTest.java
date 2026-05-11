@@ -6,9 +6,11 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
+import com.ticketrush.boundedcontext.performance.app.dto.request.PerformanceChangeStatusRequest;
 import com.ticketrush.boundedcontext.performance.app.dto.request.PerformanceCreateRequest;
 import com.ticketrush.boundedcontext.performance.app.facade.PerformanceFacade;
 import com.ticketrush.boundedcontext.performance.domain.types.Genre;
+import com.ticketrush.boundedcontext.performance.domain.types.PerformanceStatus;
 import java.nio.charset.StandardCharsets;
 import java.time.LocalDate;
 import java.time.LocalTime;
@@ -22,6 +24,7 @@ import org.springframework.security.test.context.support.WithMockUser;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.ResultActions;
+import org.springframework.test.web.servlet.request.MockMvcRequestBuilders;
 import tools.jackson.databind.ObjectMapper;
 
 @WebMvcTest(PerformanceAdminController.class)
@@ -161,6 +164,37 @@ class PerformanceValidationTest {
 
     performMultipartRequest(request)
         .andExpect(status().isCreated())
+        .andExpect(jsonPath("$.isSuccess").value(true));
+  }
+
+  @Test
+  @WithMockUser
+  @DisplayName("status 필드가 누락되면 400 에러가 발생한다")
+  void changeStatusValidationFail() throws Exception {
+    mockMvc
+        .perform(
+            MockMvcRequestBuilders.patch(baseUrl + "/1/status")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("{}")
+                .with(csrf()))
+        .andExpect(status().isBadRequest())
+        .andExpect(jsonPath("$.code").value("VALID_400_001"));
+  }
+
+  @Test
+  @WithMockUser
+  @DisplayName("status 필드가 올바르면 200 응답을 반환한다")
+  void changeStatusSuccess() throws Exception {
+    PerformanceChangeStatusRequest request =
+        new PerformanceChangeStatusRequest(PerformanceStatus.ON_SALE);
+
+    mockMvc
+        .perform(
+            MockMvcRequestBuilders.patch(baseUrl + "/1/status")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(objectMapper.writeValueAsString(request))
+                .with(csrf()))
+        .andExpect(status().isOk())
         .andExpect(jsonPath("$.isSuccess").value(true));
   }
 }
