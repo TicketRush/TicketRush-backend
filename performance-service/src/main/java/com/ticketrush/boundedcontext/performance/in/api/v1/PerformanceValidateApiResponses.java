@@ -1,4 +1,4 @@
-package com.ticketrush.boundedcontext.performance.in.api.v1.swagger;
+package com.ticketrush.boundedcontext.performance.in.api.v1;
 
 import io.swagger.v3.oas.annotations.media.Content;
 import io.swagger.v3.oas.annotations.media.ExampleObject;
@@ -17,38 +17,25 @@ import java.lang.annotation.Target;
 @ApiResponses({
   @ApiResponse(
       responseCode = "400",
-      description = "잘못된 요청",
+      description = "예매 불가 상태",
       content =
           @Content(
               mediaType = "application/json",
               schema =
                   @Schema(implementation = com.ticketrush.global.dto.response.ApiResponse.class),
-              examples = {
-                @ExampleObject(
-                    name = "ValidationError",
-                    summary = "status 필드 누락",
-                    value =
-                        """
-                        {
-                          "isSuccess": false,
-                          "code": "VALID_400_001",
-                          "message": "status: 변경할 상태는 필수입니다.",
-                          "traceId": "trace-id-example"
-                        }
-                        """),
-                @ExampleObject(
-                    name = "InvalidStatusTransition",
-                    summary = "유효하지 않은 상태 전환",
-                    value =
-                        """
-                        {
-                          "isSuccess": false,
-                          "code": "PERFORMANCE_400_004",
-                          "message": "유효하지 않은 공연 상태 전환입니다.",
-                          "traceId": "trace-id-example"
-                        }
-                        """)
-              })),
+              examples =
+                  @ExampleObject(
+                      name = "PerformanceNotOnSale",
+                      summary = "예매 가능한 공연이 아님",
+                      value =
+                          """
+                          {
+                            "isSuccess": false,
+                            "code": "PERFORMANCE_400_005",
+                            "message": "예매 가능한 공연이 아닙니다.",
+                            "traceId": "trace-id-example"
+                          }
+                          """))),
   @ApiResponse(
       responseCode = "404",
       description = "공연 없음",
@@ -92,4 +79,4 @@ import java.lang.annotation.Target;
                           }
                           """)))
 })
-public @interface PerformanceChangeStatusApiResponses {}
+public @interface PerformanceValidateApiResponses {}
