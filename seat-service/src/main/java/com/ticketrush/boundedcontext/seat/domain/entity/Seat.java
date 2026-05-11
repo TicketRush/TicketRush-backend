@@ -1,9 +1,9 @@
 package com.ticketrush.boundedcontext.seat.domain.entity;
 
-import com.ticketrush.boundedcontext.seat.domain.types.SeatStatus;
 import com.ticketrush.global.exception.BusinessException;
 import com.ticketrush.global.jpa.entity.AutoIdBaseEntity;
 import com.ticketrush.global.status.ErrorStatus;
+import com.ticketrush.global.types.SeatStatus;
 import jakarta.persistence.AttributeOverride;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;

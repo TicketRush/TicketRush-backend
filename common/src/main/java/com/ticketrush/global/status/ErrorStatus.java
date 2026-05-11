@@ -92,7 +92,10 @@ public enum ErrorStatus {
   USER_SOCIAL_PROVIDER_REQUIRED(HttpStatus.BAD_REQUEST, "USER_400_001", "socialProvider는 필수입니다."),
   USER_SOCIAL_ID_REQUIRED(HttpStatus.BAD_REQUEST, "USER_400_002", "socialId는 필수입니다."),
   USER_SOCIAL_PROVIDER_INVALID(
-      HttpStatus.BAD_REQUEST, "USER_400_003", "socialProviderId가 유효하지 않습니다.");
+      HttpStatus.BAD_REQUEST, "USER_400_003", "socialProviderId가 유효하지 않습니다."),
+
+  // User 404
+  USER_NOT_FOUND(HttpStatus.NOT_FOUND, "USER_404_001", "해당 사용자를 찾을 수 없습니다.");
 
   private final HttpStatus httpStatus;
   private final String code;

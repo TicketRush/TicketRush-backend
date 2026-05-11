@@ -1,7 +1,7 @@
 package com.ticketrush.boundedcontext.seat.app.usecase;
 
-import com.ticketrush.boundedcontext.seat.domain.types.SeatStatus;
 import com.ticketrush.boundedcontext.seat.out.repository.SeatRepository;
+import com.ticketrush.global.types.SeatStatus;
 import java.time.LocalDateTime;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
