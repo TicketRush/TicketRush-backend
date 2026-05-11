@@ -37,7 +37,7 @@ public class SocialOauthLoginUseCase {
     // 1. OAuth 사용자 정보 조회
     SocialOauthApiClient oauthClient = socialOauthApiClientFactory.getClient(request.provider());
 
-    SocialUserInfo socialUserInfo = oauthClient.getUserInfo(request.code(), request.redirectUri());
+    SocialUserInfo socialUserInfo = oauthClient.getUserInfo(request.code());
 
     // 2. user-service 호출
     UserServiceSocialLoginResponse userResponse =

@@ -21,7 +21,6 @@ import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
-import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 @Slf4j
@@ -34,10 +33,9 @@ public class AuthController {
 
   @Operation(summary = "OAuth2 로그인 URL 조회", description = "OAuth2 로그인 URL을 반환합니다.")
   @GetMapping("/oauth/{provider}/url")
-  public ResponseEntity<ApiResponse<String>> getOAuthLoginUrl(
-      @PathVariable String provider, @RequestParam String redirectUri) {
+  public ResponseEntity<ApiResponse<String>> getOAuthLoginUrl(@PathVariable String provider) {
 
-    String url = authFacade.getOAuthLoginUrl(provider, redirectUri);
+    String url = authFacade.getOAuthLoginUrl(provider);
     return ApiResponse.onSuccess(SuccessStatus.OK, url);
   }
 

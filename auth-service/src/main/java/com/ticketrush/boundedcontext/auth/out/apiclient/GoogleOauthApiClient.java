@@ -37,15 +37,12 @@ public class GoogleOauthApiClient implements SocialOauthApiClient {
   }
 
   @Override
-  public SocialUserInfo getUserInfo(String code, String redirectUri) {
+  public SocialUserInfo getUserInfo(String code) {
 
     try {
 
-      // redirectUri가 없으면 기본값 사용
-      String uri = redirectUri != null ? redirectUri : defaultRedirectUri;
-
       // 1. 인가 코드로 access token 요청
-      OauthTokenResponse tokenResponse = requestToken(code, uri);
+      OauthTokenResponse tokenResponse = requestToken(code, defaultRedirectUri);
 
       if (tokenResponse == null || tokenResponse.accessToken() == null) {
         throw new BusinessException(ErrorStatus.AUTH_GOOGLE_TOKEN_FAILED);
@@ -59,8 +56,7 @@ public class GoogleOauthApiClient implements SocialOauthApiClient {
       }
 
       // 3. 공통 객체로 변환
-      return new SocialUserInfo(
-          userInfoResponse.id(), SocialProvider.GOOGLE, userInfoResponse.name());
+      return new SocialUserInfo(userInfoResponse.id(), getProvider(), userInfoResponse.name());
 
     } catch (BusinessException e) {
 
@@ -74,13 +70,11 @@ public class GoogleOauthApiClient implements SocialOauthApiClient {
   }
 
   @Override
-  public String generateOAuthUrl(String redirectUri) {
-
-    String uri = redirectUri != null ? redirectUri : defaultRedirectUri;
+  public String generateOAuthUrl() {
 
     return UriComponentsBuilder.fromUriString("https://accounts.google.com/o/oauth2/v2/auth")
         .queryParam("client_id", clientId)
-        .queryParam("redirect_uri", uri)
+        .queryParam("redirect_uri", defaultRedirectUri)
         .queryParam("response_type", "code")
         .queryParam("scope", "profile")
         .build()
