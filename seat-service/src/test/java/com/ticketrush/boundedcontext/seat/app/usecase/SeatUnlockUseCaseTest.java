@@ -65,4 +65,18 @@ class SeatUnlockUseCaseTest {
     // then
     verify(redissonLock, never()).unlock();
   }
+
+  @Test
+  @DisplayName("성공: 좌석 락을 소유 스레드와 무관하게 강제 해제한다")
+  void forceRelease_success() {
+    // given
+    given(redissonClient.getLock(anyString())).willReturn(redissonLock);
+    given(redissonLock.forceUnlock()).willReturn(true);
+
+    // when
+    seatUnlockUseCase.forceRelease(100L);
+
+    // then
+    verify(redissonLock).forceUnlock();
+  }
 }
