@@ -22,18 +22,19 @@ public class JdbcBookingReferenceReader implements BookingReferenceReader {
 
   @Override
   public boolean existsSeatByIdAndPerformanceId(Long seatId, Long performanceId) {
-    Long count =
-        jdbcTemplate.queryForObject(
-            "SELECT COUNT(*) FROM seat WHERE seat_id = ? AND performance_id = ?",
-            Long.class,
-            seatId,
-            performanceId);
-
-    return count != null && count > 0L;
+    return exists(
+        "SELECT COUNT(*) FROM seat WHERE seat_id = ? AND performance_id = ?",
+        seatId,
+        performanceId);
   }
 
   private boolean exists(String sql, Long id) {
     Long count = jdbcTemplate.queryForObject(sql, Long.class, id);
+    return count != null && count > 0L;
+  }
+
+  private boolean exists(String sql, Long firstId, Long secondId) {
+    Long count = jdbcTemplate.queryForObject(sql, Long.class, firstId, secondId);
     return count != null && count > 0L;
   }
 }
