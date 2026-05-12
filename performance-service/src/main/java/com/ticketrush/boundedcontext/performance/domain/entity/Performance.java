@@ -17,6 +17,7 @@ import jakarta.persistence.OrderColumn;
 import jakarta.persistence.Table;
 import java.time.LocalDate;
 import java.time.LocalTime;
+import java.util.ArrayList;
 import java.util.List;
 import lombok.AccessLevel;
 import lombok.Builder;
@@ -73,7 +74,7 @@ public class Performance extends AutoIdBaseEntity {
   @CollectionTable(name = "performance_images", joinColumns = @JoinColumn(name = "performance_id"))
   @Column(name = "image_url")
   @OrderColumn(name = "image_url_order")
-  private List<String> imageGalleryUrls;
+  private List<String> imageGalleryUrls = new ArrayList<>();
 
   @ElementCollection
   @CollectionTable(
@@ -81,7 +82,7 @@ public class Performance extends AutoIdBaseEntity {
       joinColumns = @JoinColumn(name = "performance_id"))
   @Column(name = "facility_name")
   @OrderColumn(name = "facility_order")
-  private List<String> facilities;
+  private List<String> facilities = new ArrayList<>();
 
   @Builder
   public Performance(
@@ -111,8 +112,8 @@ public class Performance extends AutoIdBaseEntity {
     this.address = address;
     this.image3dUrl = image3dUrl;
     this.imageMainUrl = imageMainUrl;
-    this.imageGalleryUrls = imageGalleryUrls;
-    this.facilities = facilities;
+    this.imageGalleryUrls = imageGalleryUrls != null ? imageGalleryUrls : new ArrayList<>();
+    this.facilities = facilities != null ? facilities : new ArrayList<>();
 
     // [비즈니스 로직] 생성 시점에는 항상 UPCOMING 상태로 고정 (안전성 확보)
     this.performanceStatus = PerformanceStatus.UPCOMING;
@@ -121,7 +122,7 @@ public class Performance extends AutoIdBaseEntity {
   public void updateUrls(String mainImageUrl, String model3dUrl, List<String> galleryUrls) {
     this.imageMainUrl = mainImageUrl;
     this.image3dUrl = model3dUrl;
-    this.imageGalleryUrls = galleryUrls;
+    this.imageGalleryUrls = galleryUrls != null ? galleryUrls : new ArrayList<>();
   }
 
   public boolean canTransitionTo(PerformanceStatus target) {
