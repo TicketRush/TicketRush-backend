@@ -1,0 +1,104 @@
+package com.ticketrush.boundedcontext.booking.in.api.v1;
+
+import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.BDDMockito.given;
+import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.verifyNoInteractions;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
+
+import com.ticketrush.boundedcontext.booking.app.facade.BookingFacade;
+import com.ticketrush.boundedcontext.booking.domain.entity.Booking;
+import com.ticketrush.boundedcontext.booking.domain.types.BookingStatus;
+import com.ticketrush.global.config.JacksonConfig;
+import com.ticketrush.global.config.SecurityConfig;
+import com.ticketrush.global.security.GatewayHeaderFilter;
+import org.junit.jupiter.api.DisplayName;
+import org.junit.jupiter.api.Test;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.boot.webmvc.test.autoconfigure.WebMvcTest;
+import org.springframework.context.annotation.Import;
+import org.springframework.http.MediaType;
+import org.springframework.test.context.TestPropertySource;
+import org.springframework.test.context.bean.override.mockito.MockitoBean;
+import org.springframework.test.util.ReflectionTestUtils;
+import org.springframework.test.web.servlet.MockMvc;
+
+@WebMvcTest(BookingController.class)
+@Import({JacksonConfig.class, SecurityConfig.class, GatewayHeaderFilter.class})
+@TestPropertySource(properties = "gateway.internal-token=test-token")
+class BookingControllerTest {
+
+  private static final String INTERNAL_TOKEN = "test-token";
+
+  @Autowired private MockMvc mockMvc;
+
+  @MockitoBean private BookingFacade bookingFacade;
+
+  @Test
+  @DisplayName("인증 principal의 userId로 예매 생성을 요청한다")
+  void createPendingBooking_uses_authenticated_user_id() throws Exception {
+    // given
+    Long userId = 1L;
+    Long performanceId = 2L;
+    Long seatId = 3L;
+    Booking booking =
+        Booking.builder()
+            .userId(userId)
+            .performanceId(performanceId)
+            .seatId(seatId)
+            .bookingNumber("BOOK-1234")
+            .bookingStatus(BookingStatus.PENDING)
+            .build();
+    ReflectionTestUtils.setField(booking, "id", 100L);
+
+    given(bookingFacade.createBooking(userId, performanceId, seatId)).willReturn(booking);
+
+    String requestBody =
+        """
+        {
+          "performance_id": 2,
+          "seat_id": 3
+        }
+        """;
+
+    // when & then
+    mockMvc
+        .perform(
+            post("/api/v1/booking")
+                .header("X-Internal-Token", INTERNAL_TOKEN)
+                .header("X-User-Id", userId)
+                .header("X-User-Role", "USER")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(requestBody))
+        .andExpect(status().isCreated())
+        .andExpect(jsonPath("$.is_success").value(true))
+        .andExpect(jsonPath("$.result.booking_number").value("BOOK-1234"));
+
+    verify(bookingFacade).createBooking(eq(userId), eq(performanceId), eq(seatId));
+  }
+
+  @Test
+  @DisplayName("인증 principal이 없으면 401 Unauthorized를 반환한다")
+  void createPendingBooking_fails_when_principal_missing() throws Exception {
+    // given
+    String requestBody =
+        """
+        {
+          "performance_id": 2,
+          "seat_id": 3
+        }
+        """;
+
+    // when & then
+    mockMvc
+        .perform(
+            post("/api/v1/booking").contentType(MediaType.APPLICATION_JSON).content(requestBody))
+        .andExpect(status().isUnauthorized())
+        .andExpect(jsonPath("$.is_success").value(false))
+        .andExpect(jsonPath("$.code").value("COMMON_401"));
+
+    verifyNoInteractions(bookingFacade);
+  }
+}
