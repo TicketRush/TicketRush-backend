@@ -148,4 +148,60 @@ class SeatRepositoryTest {
     assertThat(validSeat.getSeatStatus()).isEqualTo(SeatStatus.HOLD); // 변경되지 않음
     assertThat(updatedSoldSeat.getSeatStatus()).isEqualTo(SeatStatus.SOLD); // 변경되지 않음
   }
+
+  @Test
+  @DisplayName("공연 ID로 전체 좌석 수와 AVAILABLE 상태 좌석 수를 계산한다")
+  void countByPerformanceIdAndSeatStatus() {
+    // given
+    Long targetPerformanceId = 1L;
+    Long otherPerformanceId = 99L;
+
+    Seat availableSeat1 =
+        Seat.builder()
+            .seatLayoutId(1L)
+            .performanceId(targetPerformanceId)
+            .seatNumber("A1")
+            .seatStatus(SeatStatus.AVAILABLE)
+            .build();
+    Seat availableSeat2 =
+        Seat.builder()
+            .seatLayoutId(1L)
+            .performanceId(targetPerformanceId)
+            .seatNumber("A2")
+            .seatStatus(SeatStatus.AVAILABLE)
+            .build();
+    Seat holdSeat =
+        Seat.builder()
+            .seatLayoutId(1L)
+            .performanceId(targetPerformanceId)
+            .seatNumber("A3")
+            .seatStatus(SeatStatus.HOLD)
+            .build();
+    Seat soldSeat =
+        Seat.builder()
+            .seatLayoutId(1L)
+            .performanceId(targetPerformanceId)
+            .seatNumber("A4")
+            .seatStatus(SeatStatus.SOLD)
+            .build();
+    Seat otherPerformanceSeat =
+        Seat.builder()
+            .seatLayoutId(2L)
+            .performanceId(otherPerformanceId)
+            .seatNumber("A1")
+            .seatStatus(SeatStatus.AVAILABLE)
+            .build();
+
+    seatRepository.saveAll(
+        List.of(availableSeat1, availableSeat2, holdSeat, soldSeat, otherPerformanceSeat));
+
+    // when
+    Long availableCount =
+        seatRepository.countByPerformanceIdAndSeatStatus(targetPerformanceId, SeatStatus.AVAILABLE);
+    Long totalCount = seatRepository.countByPerformanceId(targetPerformanceId);
+
+    // then
+    assertThat(availableCount).isEqualTo(2L);
+    assertThat(totalCount).isEqualTo(4L);
+  }
 }
