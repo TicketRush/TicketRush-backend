@@ -9,6 +9,7 @@ import com.ticketrush.global.status.SuccessStatus;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.tags.Tag;
+import jakarta.validation.constraints.Positive;
 import java.util.List;
 import lombok.RequiredArgsConstructor;
 import org.springdoc.core.annotations.ParameterObject;
@@ -17,6 +18,7 @@ import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.Sort;
 import org.springframework.data.web.PageableDefault;
 import org.springframework.http.ResponseEntity;
+import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.RequestMapping;
@@ -24,6 +26,7 @@ import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 @Tag(name = "Performance", description = "공연 API")
+@Validated
 @RestController
 @RequestMapping("/api/v1/performance")
 @RequiredArgsConstructor
@@ -67,7 +70,7 @@ public class PerformanceController {
   @PerformanceDetailApiResponses
   @GetMapping("/{id}")
   public ResponseEntity<ApiResponse<PerformanceDetailResponse>> getPerformanceDetail(
-      @Parameter(description = "공연 ID") @PathVariable Long id) {
+      @Parameter(description = "공연 ID") @Positive @PathVariable Long id) {
 
     return ApiResponse.onSuccess(SuccessStatus.OK, performanceFacade.getPerformanceDetail(id));
   }
