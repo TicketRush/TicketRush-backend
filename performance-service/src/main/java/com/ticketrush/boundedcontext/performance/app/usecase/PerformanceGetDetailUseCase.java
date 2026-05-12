@@ -19,7 +19,7 @@ public class PerformanceGetDetailUseCase {
   @Transactional(readOnly = true)
   public PerformanceDetailResponse execute(Long performanceId) {
     return performanceRepository
-        .findById(performanceId)
+        .findWithCollectionsById(performanceId)
         .map(performanceMapper::toDetailResponse)
         .orElseThrow(() -> new BusinessException(ErrorStatus.PERFORMANCE_NOT_FOUND));
   }
