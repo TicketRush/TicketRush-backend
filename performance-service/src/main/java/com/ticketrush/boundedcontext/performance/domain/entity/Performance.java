@@ -13,6 +13,7 @@ import jakarta.persistence.Entity;
 import jakarta.persistence.EnumType;
 import jakarta.persistence.Enumerated;
 import jakarta.persistence.JoinColumn;
+import jakarta.persistence.OrderColumn;
 import jakarta.persistence.Table;
 import java.time.LocalDate;
 import java.time.LocalTime;
@@ -71,6 +72,7 @@ public class Performance extends AutoIdBaseEntity {
   @ElementCollection
   @CollectionTable(name = "performance_images", joinColumns = @JoinColumn(name = "performance_id"))
   @Column(name = "image_url")
+  @OrderColumn(name = "image_url_order")
   private List<String> imageGalleryUrls;
 
   @ElementCollection
@@ -78,6 +80,7 @@ public class Performance extends AutoIdBaseEntity {
       name = "performance_facilities",
       joinColumns = @JoinColumn(name = "performance_id"))
   @Column(name = "facility_name")
+  @OrderColumn(name = "facility_order")
   private List<String> facilities;
 
   @Builder
