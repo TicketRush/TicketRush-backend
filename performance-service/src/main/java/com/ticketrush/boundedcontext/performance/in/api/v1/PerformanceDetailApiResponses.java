@@ -27,25 +27,26 @@ import java.lang.annotation.Target;
                       value =
                           """
                           {
-                            "isSuccess": true,
+                            "is_success": true,
                             "code": "COMMON_200",
                             "message": "요청에 성공하였습니다.",
+                            "trace_id": "trace-id-example",
                             "result": {
-                              "performanceId": 1,
+                              "performance_id": 1,
                               "title": "레미제라블",
                               "performer": "홍길동",
                               "genre": "MUSICAL",
                               "description": "공연 안내 내용",
-                              "showDate": "2025-09-01",
-                              "showTime": "19:00:00",
-                              "durationMinutes": 150,
+                              "show_date": "2025-09-01",
+                              "show_time": "19:00:00",
+                              "duration_minutes": 150,
                               "price": 80000,
-                              "totalSeats": 500,
+                              "total_seats": 500,
                               "address": "서울특별시 중구 세종대로 110",
-                              "performanceStatus": "ON_SALE",
-                              "imageMainUrl": "https://s3.example.com/main.jpg",
-                              "image3dUrl": "https://s3.example.com/model.glb",
-                              "imageGalleryUrls": [
+                              "performance_status": "ON_SALE",
+                              "image_main_url": "https://s3.example.com/main.jpg",
+                              "image_3d_url": "https://s3.example.com/model.glb",
+                              "image_gallery_urls": [
                                 "https://s3.example.com/gallery1.jpg",
                                 "https://s3.example.com/gallery2.jpg"
                               ],
@@ -66,10 +67,10 @@ import java.lang.annotation.Target;
                       value =
                           """
                           {
-                            "isSuccess": false,
+                            "is_success": false,
                             "code": "PERFORMANCE_404_001",
                             "message": "공연이 존재하지 않습니다.",
-                            "traceId": "trace-id-example"
+                            "trace_id": "trace-id-example"
                           }
                           """)))
 })
