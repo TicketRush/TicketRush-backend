@@ -12,6 +12,10 @@ import org.springframework.data.repository.query.Param;
 
 public interface SeatRepository extends JpaRepository<Seat, Long> {
 
+  Long countByPerformanceId(Long performanceId);
+
+  Long countByPerformanceIdAndSeatStatus(Long performanceId, SeatStatus seatStatus);
+
   @Query(
       "SELECT new com.ticketrush.boundedcontext.seat.app.dto.response.SeatLayoutResponse("
           + "s.id, sl.id, s.seatNumber) "

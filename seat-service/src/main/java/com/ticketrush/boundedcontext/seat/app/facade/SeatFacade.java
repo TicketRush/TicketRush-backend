@@ -1,6 +1,8 @@
 package com.ticketrush.boundedcontext.seat.app.facade;
 
+import com.ticketrush.boundedcontext.seat.app.dto.response.SeatAvailabilityResponse;
 import com.ticketrush.boundedcontext.seat.app.dto.response.SeatLayoutResponse;
+import com.ticketrush.boundedcontext.seat.app.usecase.SeatGetAvailabilityUseCase;
 import com.ticketrush.boundedcontext.seat.app.usecase.SeatGetSeatLayoutsUseCase;
 import com.ticketrush.boundedcontext.seat.app.usecase.SeatHoldUseCase;
 import com.ticketrush.boundedcontext.seat.app.usecase.SeatLockUseCase;
@@ -19,6 +21,7 @@ import org.springframework.stereotype.Service;
 @RequiredArgsConstructor
 public class SeatFacade {
 
+  private final SeatGetAvailabilityUseCase seatGetAvailabilityUseCase;
   private final SeatGetSeatLayoutsUseCase seatGetSeatLayoutsUseCase;
   private final SeatHoldUseCase seatHoldUseCase;
   private final SeatLockUseCase seatLockUseCase;
@@ -27,6 +30,10 @@ public class SeatFacade {
 
   public List<SeatLayoutResponse> getPerformanceSeatLayouts(Long performanceId) {
     return seatGetSeatLayoutsUseCase.execute(performanceId);
+  }
+
+  public SeatAvailabilityResponse getPerformanceSeatAvailability(Long performanceId) {
+    return seatGetAvailabilityUseCase.execute(performanceId);
   }
 
   public void holdSeat(Long seatId, LocalDateTime holdExpiredAt) {
