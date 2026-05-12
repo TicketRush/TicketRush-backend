@@ -13,5 +13,5 @@ public interface PerformanceRepository extends JpaRepository<Performance, Long> 
   Page<Performance> findByGenre(Genre genre, Pageable pageable);
 
   @EntityGraph(attributePaths = {"imageGalleryUrls", "facilities"})
-  Optional<Performance> findWithCollectionsById(Long id);
+  Optional<Performance> findDetailById(Long id);
 }
