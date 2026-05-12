@@ -148,4 +148,46 @@ class SeatRepositoryTest {
     assertThat(validSeat.getSeatStatus()).isEqualTo(SeatStatus.HOLD); // 변경되지 않음
     assertThat(updatedSoldSeat.getSeatStatus()).isEqualTo(SeatStatus.SOLD); // 변경되지 않음
   }
+
+  @Test
+  @DisplayName("HOLD 상태인 좌석을 SOLD 상태로 변경하고 선점 만료 시간을 초기화한다")
+  void confirmSoldById_ChangesHoldSeatToSold() {
+    // given
+    LocalDateTime holdExpiredAt = LocalDateTime.now().plusMinutes(5);
+
+    Seat holdSeat1 =
+        Seat.builder()
+            .seatLayoutId(1L)
+            .performanceId(100L)
+            .seatNumber("A1")
+            .seatStatus(SeatStatus.HOLD)
+            .holdExpiredAt(holdExpiredAt)
+            .build();
+
+    Seat availableSeat =
+        Seat.builder()
+            .seatLayoutId(1L)
+            .performanceId(100L)
+            .seatNumber("A3")
+            .seatStatus(SeatStatus.AVAILABLE)
+            .build();
+
+    seatRepository.saveAll(List.of(holdSeat1, availableSeat));
+    entityManager.flush();
+    entityManager.clear();
+
+    // when
+    int updatedCount =
+        seatRepository.confirmSoldById(holdSeat1.getId(), SeatStatus.HOLD, SeatStatus.SOLD);
+
+    // then
+    assertThat(updatedCount).isEqualTo(1);
+
+    Seat updatedSeat1 = seatRepository.findById(holdSeat1.getId()).orElseThrow();
+    Seat notUpdatedSeat = seatRepository.findById(availableSeat.getId()).orElseThrow();
+
+    assertThat(updatedSeat1.getSeatStatus()).isEqualTo(SeatStatus.SOLD);
+    assertThat(updatedSeat1.getHoldExpiredAt()).isNull();
+    assertThat(notUpdatedSeat.getSeatStatus()).isEqualTo(SeatStatus.AVAILABLE);
+  }
 }
