@@ -61,8 +61,8 @@ public class NaverOauthApiClient implements SocialOauthApiClient {
       NaverUserInfoResponse userInfoResponse = getProfile(tokenResponse.accessToken());
 
       if (userInfoResponse == null
-        || userInfoResponse.response() == null
-        || userInfoResponse.response().id() == null) {
+          || userInfoResponse.response() == null
+          || userInfoResponse.response().id() == null) {
         throw new BusinessException(ErrorStatus.AUTH_NAVER_INFO_FAILED);
       }
 
@@ -84,13 +84,13 @@ public class NaverOauthApiClient implements SocialOauthApiClient {
   public String generateOAuthUrl() {
 
     return UriComponentsBuilder.fromUriString(authorizationUri)
-      .queryParam("response_type", "code")
-      .queryParam("client_id", clientId)
-      .queryParam("redirect_uri", defaultRedirectUri)
-      .queryParam("state", "test")
-      .build()
-      .encode()
-      .toUriString();
+        .queryParam("response_type", "code")
+        .queryParam("client_id", clientId)
+        .queryParam("redirect_uri", defaultRedirectUri)
+        .queryParam("state", "test")
+        .build()
+        .encode()
+        .toUriString();
   }
 
   private OauthTokenResponse getToken(String code, String redirectUri) {
@@ -105,54 +105,46 @@ public class NaverOauthApiClient implements SocialOauthApiClient {
     form.add("state", "test");
 
     return restClient
-      .post()
-      .uri(tokenUri)
-      .contentType(MediaType.APPLICATION_FORM_URLENCODED)
-      .body(form)
-      .retrieve()
-      .onStatus(
-        HttpStatusCode::is4xxClientError,
-        (request, response) -> {
-          log.warn(
-            "Naver OAuth 토큰 발급 요청 실패 - 클라이언트 오류. status={}",
-            response.getStatusCode());
-          throw new BusinessException(ErrorStatus.AUTH_NAVER_TOKEN_FAILED);
-        })
-      .onStatus(
-        HttpStatusCode::is5xxServerError,
-        (request, response) -> {
-          log.error(
-            "Naver OAuth 토큰 발급 요청 실패 - 서버 오류. status={}",
-            response.getStatusCode());
-          throw new BusinessException(ErrorStatus.AUTH_NAVER_TOKEN_FAILED);
-        })
-      .body(OauthTokenResponse.class);
+        .post()
+        .uri(tokenUri)
+        .contentType(MediaType.APPLICATION_FORM_URLENCODED)
+        .body(form)
+        .retrieve()
+        .onStatus(
+            HttpStatusCode::is4xxClientError,
+            (request, response) -> {
+              log.warn("Naver OAuth 토큰 발급 요청 실패 - 클라이언트 오류. status={}", response.getStatusCode());
+              throw new BusinessException(ErrorStatus.AUTH_NAVER_TOKEN_FAILED);
+            })
+        .onStatus(
+            HttpStatusCode::is5xxServerError,
+            (request, response) -> {
+              log.error("Naver OAuth 토큰 발급 요청 실패 - 서버 오류. status={}", response.getStatusCode());
+              throw new BusinessException(ErrorStatus.AUTH_NAVER_TOKEN_FAILED);
+            })
+        .body(OauthTokenResponse.class);
   }
 
   private NaverUserInfoResponse getProfile(String accessToken) {
 
     return restClient
-      .get()
-      .uri(userInfoUri)
-      .header(HttpHeaders.AUTHORIZATION, "Bearer " + accessToken)
-      .retrieve()
-      .onStatus(
-        HttpStatusCode::is4xxClientError,
-        (request, response) -> {
-          log.warn(
-            "Naver OAuth 사용자 정보 조회 실패 - 클라이언트 오류. status={}",
-            response.getStatusCode());
-          throw new BusinessException(ErrorStatus.AUTH_NAVER_INFO_FAILED);
-        })
-      .onStatus(
-        HttpStatusCode::is5xxServerError,
-        (request, response) -> {
-          log.error(
-            "Naver OAuth 사용자 정보 조회 실패 - 서버 오류. status={}",
-            response.getStatusCode());
-          throw new BusinessException(ErrorStatus.AUTH_NAVER_INFO_FAILED);
-        })
-      .body(NaverUserInfoResponse.class);
+        .get()
+        .uri(userInfoUri)
+        .header(HttpHeaders.AUTHORIZATION, "Bearer " + accessToken)
+        .retrieve()
+        .onStatus(
+            HttpStatusCode::is4xxClientError,
+            (request, response) -> {
+              log.warn("Naver OAuth 사용자 정보 조회 실패 - 클라이언트 오류. status={}", response.getStatusCode());
+              throw new BusinessException(ErrorStatus.AUTH_NAVER_INFO_FAILED);
+            })
+        .onStatus(
+            HttpStatusCode::is5xxServerError,
+            (request, response) -> {
+              log.error("Naver OAuth 사용자 정보 조회 실패 - 서버 오류. status={}", response.getStatusCode());
+              throw new BusinessException(ErrorStatus.AUTH_NAVER_INFO_FAILED);
+            })
+        .body(NaverUserInfoResponse.class);
   }
 
   @Override
