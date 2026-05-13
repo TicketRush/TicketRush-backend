@@ -1,6 +1,7 @@
 package com.ticketrush.boundedcontext.performance.app.dto.request;
 
 import com.fasterxml.jackson.annotation.JsonFormat;
+import com.ticketrush.boundedcontext.performance.app.support.NullOrNotBlank;
 import com.ticketrush.boundedcontext.performance.domain.types.Genre;
 import io.swagger.v3.oas.annotations.media.Schema;
 import jakarta.validation.constraints.Positive;
@@ -11,9 +12,11 @@ import java.time.LocalTime;
 @Schema(description = "공연 정보 수정 요청 (null 필드는 수정하지 않음)")
 public record PerformancePatchRequest(
     @Schema(description = "공연명", example = "BTS World Tour 2025")
+        @NullOrNotBlank
         @Size(max = 200, message = "공연명은 200자를 초과할 수 없습니다.")
         String title,
     @Schema(description = "출연진", example = "BTS")
+        @NullOrNotBlank
         @Size(max = 200, message = "출연진은 200자를 초과할 수 없습니다.")
         String performer,
     @Schema(
@@ -34,5 +37,6 @@ public record PerformancePatchRequest(
     @Schema(description = "총 좌석 수", example = "500") @Positive(message = "총 좌석 수는 1개 이상이어야 합니다.")
         Integer totalSeats,
     @Schema(description = "공연장 주소", example = "서울특별시 송파구 올림픽로 25 잠실종합운동장")
+        @NullOrNotBlank
         @Size(max = 255, message = "주소는 255자를 초과할 수 없습니다.")
         String address) {}
