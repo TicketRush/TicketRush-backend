@@ -2,6 +2,7 @@ package com.ticketrush.boundedcontext.performance.app.mapper;
 
 import com.ticketrush.boundedcontext.performance.app.dto.request.PerformanceCreateRequest;
 import com.ticketrush.boundedcontext.performance.app.dto.response.PerformanceCreateResponse;
+import com.ticketrush.boundedcontext.performance.app.dto.response.PerformanceDetailResponse;
 import com.ticketrush.boundedcontext.performance.app.dto.response.PerformanceListResponse;
 import com.ticketrush.boundedcontext.performance.domain.entity.Performance;
 import org.mapstruct.Mapper;
@@ -20,4 +21,7 @@ public interface PerformanceMapper {
 
   @Mapping(source = "id", target = "performanceId")
   PerformanceListResponse toListResponse(Performance performance);
+
+  @Mapping(source = "id", target = "performanceId")
+  PerformanceDetailResponse toDetailResponse(Performance performance);
 }
