@@ -12,6 +12,7 @@ import com.ticketrush.global.eventpublisher.EventPublisher;
 import com.ticketrush.global.exception.BusinessException;
 import com.ticketrush.global.status.ErrorStatus;
 import com.ticketrush.global.util.S3UploadUtils;
+import jakarta.persistence.EntityManager;
 import java.time.LocalDate;
 import java.time.LocalTime;
 import org.junit.jupiter.api.DisplayName;
@@ -38,6 +39,7 @@ class PerformancePatchTest {
 
   @Autowired private PerformancePatchUseCase performancePatchUseCase;
   @Autowired private PerformanceRepository performanceRepository;
+  @Autowired private EntityManager em;
 
   private Performance savePerformance() {
     return performanceRepository.save(
@@ -56,9 +58,11 @@ class PerformancePatchTest {
   }
 
   @Test
-  @DisplayName("전체 텍스트 필드를 수정하면 DB에 반영된다")
+  @DisplayName("전체 필드를 수정하면 DB에 반영된다")
   void patchAllFields_success() {
     Performance performance = savePerformance();
+    LocalDate newShowDate = LocalDate.now().plusDays(60);
+    LocalTime newShowTime = LocalTime.of(20, 0);
 
     performancePatchUseCase.execute(
         performance.getId(),
@@ -67,18 +71,23 @@ class PerformancePatchTest {
             "새로운 출연진",
             Genre.MUSICAL,
             "새로운 설명",
-            LocalDate.now().plusDays(60),
-            LocalTime.of(20, 0),
+            newShowDate,
+            newShowTime,
             150,
             80000L,
             200,
             "부산"));
+
+    em.flush();
+    em.clear();
 
     Performance updated = performanceRepository.findById(performance.getId()).orElseThrow();
     assertThat(updated.getTitle()).isEqualTo("새로운 공연명");
     assertThat(updated.getPerformer()).isEqualTo("새로운 출연진");
     assertThat(updated.getGenre()).isEqualTo(Genre.MUSICAL);
     assertThat(updated.getDescription()).isEqualTo("새로운 설명");
+    assertThat(updated.getShowDate()).isEqualTo(newShowDate);
+    assertThat(updated.getShowTime()).isEqualTo(newShowTime);
     assertThat(updated.getDurationMinutes()).isEqualTo(150);
     assertThat(updated.getPrice()).isEqualTo(80000L);
     assertThat(updated.getTotalSeats()).isEqualTo(200);
@@ -94,6 +103,9 @@ class PerformancePatchTest {
         performance.getId(),
         new PerformancePatchRequest(
             "새로운 공연명", null, null, null, null, null, null, null, null, null));
+
+    em.flush();
+    em.clear();
 
     Performance updated = performanceRepository.findById(performance.getId()).orElseThrow();
     assertThat(updated.getTitle()).isEqualTo("새로운 공연명");
