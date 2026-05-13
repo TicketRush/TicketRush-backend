@@ -14,6 +14,7 @@ import org.springframework.stereotype.Component;
 import org.springframework.util.LinkedMultiValueMap;
 import org.springframework.util.MultiValueMap;
 import org.springframework.web.client.RestClient;
+import org.springframework.web.util.UriComponentsBuilder;
 
 @Slf4j
 @Component
@@ -36,6 +37,9 @@ public class KakaoOauthApiClient implements SocialOauthApiClient {
 
   @Value("${oauth.kakao.user-info-uri}")
   private String userInfoUri;
+
+  @Value("${oauth.kakao.auth-uri}")
+  private String authUri;
 
   @Override
   public SocialProvider getProvider() {
@@ -75,12 +79,12 @@ public class KakaoOauthApiClient implements SocialOauthApiClient {
   @Override
   public String generateOAuthUrl() {
 
-    return "https://kauth.kakao.com/oauth/authorize"
-        + "?client_id="
-        + clientId
-        + "&redirect_uri="
-        + redirectUri
-        + "&response_type=code";
+    return UriComponentsBuilder.fromUriString(authUri)
+      .queryParam("client_id", clientId)
+      .queryParam("redirect_uri", redirectUri)
+      .queryParam("response_type", "code")
+      .build()
+      .toUriString();
   }
 
   private OauthTokenResponse getToken(String code) {
