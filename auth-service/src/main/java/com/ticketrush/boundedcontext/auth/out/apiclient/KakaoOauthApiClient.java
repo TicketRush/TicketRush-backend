@@ -80,11 +80,11 @@ public class KakaoOauthApiClient implements SocialOauthApiClient {
   public String generateOAuthUrl() {
 
     return UriComponentsBuilder.fromUriString(authUri)
-      .queryParam("client_id", clientId)
-      .queryParam("redirect_uri", redirectUri)
-      .queryParam("response_type", "code")
-      .build()
-      .toUriString();
+        .queryParam("client_id", clientId)
+        .queryParam("redirect_uri", redirectUri)
+        .queryParam("response_type", "code")
+        .build()
+        .toUriString();
   }
 
   private OauthTokenResponse getToken(String code) {
