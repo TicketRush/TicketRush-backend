@@ -203,7 +203,9 @@ class SeatRepositoryTest {
     // then
     assertThat(availableCount).isEqualTo(2L);
     assertThat(totalCount).isEqualTo(4L);
+  }
 
+  @Test
   @DisplayName("HOLD 상태인 좌석을 SOLD 상태로 변경하고 선점 만료 시간을 초기화한다")
   void confirmSoldById_ChangesHoldSeatToSold() {
     // given

@@ -2,8 +2,8 @@ package com.ticketrush.boundedcontext.seat.app.facade;
 
 import com.ticketrush.boundedcontext.seat.app.dto.response.SeatAvailabilityResponse;
 import com.ticketrush.boundedcontext.seat.app.dto.response.SeatLayoutResponse;
-import com.ticketrush.boundedcontext.seat.app.usecase.SeatGetAvailabilityUseCase;
 import com.ticketrush.boundedcontext.seat.app.usecase.SeatConfirmSoldUseCase;
+import com.ticketrush.boundedcontext.seat.app.usecase.SeatGetAvailabilityUseCase;
 import com.ticketrush.boundedcontext.seat.app.usecase.SeatGetSeatLayoutsUseCase;
 import com.ticketrush.boundedcontext.seat.app.usecase.SeatHoldUseCase;
 import com.ticketrush.boundedcontext.seat.app.usecase.SeatLockUseCase;

@@ -1,7 +1,7 @@
 package com.ticketrush.boundedcontext.seat.in.api.v1;
 
-import com.ticketrush.boundedcontext.seat.app.dto.response.SeatAvailabilityResponse;
 import com.ticketrush.boundedcontext.seat.app.dto.request.SeatSoldConfirmRequest;
+import com.ticketrush.boundedcontext.seat.app.dto.response.SeatAvailabilityResponse;
 import com.ticketrush.boundedcontext.seat.app.dto.response.SeatLayoutResponse;
 import com.ticketrush.boundedcontext.seat.app.facade.SeatFacade;
 import com.ticketrush.global.dto.response.ApiResponse;
@@ -45,6 +45,7 @@ public class SeatController {
       @PathVariable Long performanceId) {
     SeatAvailabilityResponse response = seatFacade.getPerformanceSeatAvailability(performanceId);
     return ApiResponse.onSuccess(SuccessStatus.OK, response);
+  }
 
   @PostMapping("/internal/sold")
   public ResponseEntity<ApiResponse<Void>> confirmSold(
