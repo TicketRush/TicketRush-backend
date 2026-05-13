@@ -33,4 +33,13 @@ public interface SeatRepository extends JpaRepository<Seat, Long> {
       @Param("availableStatus") SeatStatus availableStatus,
       @Param("holdStatus") SeatStatus holdStatus,
       @Param("now") LocalDateTime now);
+
+  @Modifying(clearAutomatically = true)
+  @Query(
+      "UPDATE Seat s SET s.seatStatus = :soldStatus, s.holdExpiredAt = null "
+          + "WHERE s.id = :seatId AND s.seatStatus = :holdStatus")
+  int confirmSoldById(
+      @Param("seatId") Long seatId,
+      @Param("holdStatus") SeatStatus holdStatus,
+      @Param("soldStatus") SeatStatus soldStatus);
 }

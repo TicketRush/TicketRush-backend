@@ -3,6 +3,7 @@ package com.ticketrush.boundedcontext.seat.app.facade;
 import com.ticketrush.boundedcontext.seat.app.dto.response.SeatAvailabilityResponse;
 import com.ticketrush.boundedcontext.seat.app.dto.response.SeatLayoutResponse;
 import com.ticketrush.boundedcontext.seat.app.usecase.SeatGetAvailabilityUseCase;
+import com.ticketrush.boundedcontext.seat.app.usecase.SeatConfirmSoldUseCase;
 import com.ticketrush.boundedcontext.seat.app.usecase.SeatGetSeatLayoutsUseCase;
 import com.ticketrush.boundedcontext.seat.app.usecase.SeatHoldUseCase;
 import com.ticketrush.boundedcontext.seat.app.usecase.SeatLockUseCase;
@@ -23,6 +24,7 @@ public class SeatFacade {
 
   private final SeatGetAvailabilityUseCase seatGetAvailabilityUseCase;
   private final SeatGetSeatLayoutsUseCase seatGetSeatLayoutsUseCase;
+  private final SeatConfirmSoldUseCase seatConfirmSoldUseCase;
   private final SeatHoldUseCase seatHoldUseCase;
   private final SeatLockUseCase seatLockUseCase;
   private final SeatUnlockUseCase seatUnlockUseCase;
@@ -38,6 +40,10 @@ public class SeatFacade {
 
   public void holdSeat(Long seatId, LocalDateTime holdExpiredAt) {
     seatHoldUseCase.execute(seatId, holdExpiredAt);
+  }
+
+  public void confirmSold(String bookingNumber, Long seatId) {
+    seatConfirmSoldUseCase.execute(bookingNumber, seatId);
   }
 
   public void tryLockSeat(Long bookingId, Long seatId, Long userId) {
