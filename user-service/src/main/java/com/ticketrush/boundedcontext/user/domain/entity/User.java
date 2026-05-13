@@ -29,7 +29,7 @@ public class User extends AutoIdBaseEntity {
   private UserRole userRole;
 
   @Builder
-  public User(String name, String email, String phone, UserRole userRole) {
+  public User(String name, String email, UserRole userRole) {
     this.name = name;
     this.email = email;
     this.userRole = userRole;

@@ -65,7 +65,7 @@ public class KakaoOauthApiClient implements SocialOauthApiClient {
       String nickname =
           userInfoResponse.properties() != null ? userInfoResponse.properties().nickname() : null;
 
-      return new SocialUserInfo(socialId, getProvider(), nickname);
+      return new SocialUserInfo(socialId, getProvider(), nickname, null);
 
     } catch (BusinessException e) {
 

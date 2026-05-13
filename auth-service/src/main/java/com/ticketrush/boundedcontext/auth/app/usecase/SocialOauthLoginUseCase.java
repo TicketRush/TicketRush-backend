@@ -43,7 +43,8 @@ public class SocialOauthLoginUseCase {
             new UserServiceSocialLoginRequest(
                 socialUserInfo.socialId(),
                 socialUserInfo.socialProvider().name(),
-                socialUserInfo.name()));
+                socialUserInfo.name(),
+                socialUserInfo.email()));
 
     Long userId = userResponse.userId();
 

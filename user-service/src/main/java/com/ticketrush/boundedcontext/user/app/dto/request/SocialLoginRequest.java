@@ -21,6 +21,9 @@ public class SocialLoginRequest {
   @JsonProperty("name")
   private String name;
 
+  @JsonProperty("email")
+  private String email;
+
   private String maskValue(String value) {
     if (value == null || value.isEmpty()) {
       return value;
@@ -39,6 +42,9 @@ public class SocialLoginRequest {
         + '\''
         + ", name='"
         + maskValue(name)
+        + '\''
+        + ", email='"
+        + maskValue(email)
         + '\''
         + '}';
   }

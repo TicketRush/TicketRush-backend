@@ -65,7 +65,8 @@ public class GoogleOauthApiClient implements SocialOauthApiClient {
       }
 
       // 3. 공통 객체로 변환
-      return new SocialUserInfo(userInfoResponse.id(), getProvider(), userInfoResponse.name());
+      return new SocialUserInfo(
+          userInfoResponse.id(), getProvider(), userInfoResponse.name(), userInfoResponse.email());
 
     } catch (BusinessException e) {
 
@@ -85,7 +86,7 @@ public class GoogleOauthApiClient implements SocialOauthApiClient {
         .queryParam("client_id", clientId)
         .queryParam("redirect_uri", defaultRedirectUri)
         .queryParam("response_type", "code")
-        .queryParam("scope", "profile")
+        .queryParam("scope", "profile email")
         .build()
         .toUriString();
   }
