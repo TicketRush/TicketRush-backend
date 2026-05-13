@@ -14,6 +14,7 @@ import org.springframework.stereotype.Component;
 import org.springframework.util.LinkedMultiValueMap;
 import org.springframework.util.MultiValueMap;
 import org.springframework.web.client.RestClient;
+import org.springframework.web.util.UriComponentsBuilder;
 
 @Slf4j
 @Component
@@ -29,7 +30,7 @@ public class KakaoOauthApiClient implements SocialOauthApiClient {
   private String clientSecret;
 
   @Value("${oauth.kakao.redirect-uri}")
-  private String defaultRedirectUri;
+  private String redirectUri;
 
   @Value("${oauth.kakao.token-uri}")
   private String tokenUri;
@@ -37,20 +38,18 @@ public class KakaoOauthApiClient implements SocialOauthApiClient {
   @Value("${oauth.kakao.user-info-uri}")
   private String userInfoUri;
 
+  @Value("${oauth.kakao.auth-uri}")
+  private String authUri;
+
   @Override
   public SocialProvider getProvider() {
     return SocialProvider.KAKAO;
   }
 
   @Override
-  public SocialUserInfo getUserInfo(String code, String redirectUri) {
-
+  public SocialUserInfo getUserInfo(String code) {
     try {
-
-      // redirectUri가 없으면 기본값 사용
-      String uri = redirectUri != null ? redirectUri : defaultRedirectUri;
-
-      OauthTokenResponse tokenResponse = getToken(code, uri);
+      OauthTokenResponse tokenResponse = getToken(code);
 
       if (tokenResponse == null || tokenResponse.accessToken() == null) {
         throw new BusinessException(ErrorStatus.AUTH_KAKAO_TOKEN_FAILED);
@@ -63,7 +62,6 @@ public class KakaoOauthApiClient implements SocialOauthApiClient {
       }
 
       String socialId = String.valueOf(userInfoResponse.id());
-
       String nickname =
           userInfoResponse.properties() != null ? userInfoResponse.properties().nickname() : null;
 
@@ -72,35 +70,30 @@ public class KakaoOauthApiClient implements SocialOauthApiClient {
     } catch (BusinessException e) {
 
       throw e;
-
     } catch (Exception e) {
-
       log.error("Kakao OAuth 처리 중 에러 발생", e);
       throw new BusinessException(ErrorStatus.AUTH_KAKAO_INFO_FAILED);
     }
   }
 
   @Override
-  public String generateOAuthUrl(String redirectUri) {
+  public String generateOAuthUrl() {
 
-    String uri = redirectUri != null ? redirectUri : defaultRedirectUri;
-
-    return "https://kauth.kakao.com/oauth/authorize"
-        + "?client_id="
-        + clientId
-        + "&redirect_uri="
-        + uri
-        + "&response_type=code";
+    return UriComponentsBuilder.fromUriString(authUri)
+        .queryParam("client_id", clientId)
+        .queryParam("redirect_uri", redirectUri)
+        .queryParam("response_type", "code")
+        .build()
+        .toUriString();
   }
 
-  private OauthTokenResponse getToken(String code, String redirectUri) {
+  private OauthTokenResponse getToken(String code) {
 
     log.info("clientId = {}", clientId);
     log.info("clientSecret = {}", clientSecret);
     log.info("redirectUri = {}", redirectUri);
 
     MultiValueMap<String, String> form = new LinkedMultiValueMap<>();
-
     form.add("grant_type", "authorization_code");
     form.add("client_id", clientId);
     form.add("client_secret", clientSecret);
@@ -117,7 +110,6 @@ public class KakaoOauthApiClient implements SocialOauthApiClient {
   }
 
   private KakaoUserInfoResponse getProfile(String accessToken) {
-
     return restClient
         .get()
         .uri(userInfoUri)
@@ -128,6 +120,6 @@ public class KakaoOauthApiClient implements SocialOauthApiClient {
 
   @Override
   public String getDefaultRedirectUri() {
-    return defaultRedirectUri;
+    return redirectUri;
   }
 }

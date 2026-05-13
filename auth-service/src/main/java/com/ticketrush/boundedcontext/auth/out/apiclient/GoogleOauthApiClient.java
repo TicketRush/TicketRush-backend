@@ -31,21 +31,27 @@ public class GoogleOauthApiClient implements SocialOauthApiClient {
   @Value("${oauth.google.redirect-uri}")
   private String defaultRedirectUri;
 
+  @Value("${oauth.google.auth-uri}")
+  private String authUri;
+
+  @Value("${oauth.google.token-uri}")
+  private String tokenUri;
+
+  @Value("${oauth.google.user-info-uri}")
+  private String userInfoUri;
+
   @Override
   public SocialProvider getProvider() {
     return SocialProvider.GOOGLE;
   }
 
   @Override
-  public SocialUserInfo getUserInfo(String code, String redirectUri) {
+  public SocialUserInfo getUserInfo(String code) {
 
     try {
 
-      // redirectUri가 없으면 기본값 사용
-      String uri = redirectUri != null ? redirectUri : defaultRedirectUri;
-
       // 1. 인가 코드로 access token 요청
-      OauthTokenResponse tokenResponse = requestToken(code, uri);
+      OauthTokenResponse tokenResponse = requestToken(code, defaultRedirectUri);
 
       if (tokenResponse == null || tokenResponse.accessToken() == null) {
         throw new BusinessException(ErrorStatus.AUTH_GOOGLE_TOKEN_FAILED);
@@ -59,8 +65,7 @@ public class GoogleOauthApiClient implements SocialOauthApiClient {
       }
 
       // 3. 공통 객체로 변환
-      return new SocialUserInfo(
-          userInfoResponse.id(), SocialProvider.GOOGLE, userInfoResponse.name());
+      return new SocialUserInfo(userInfoResponse.id(), getProvider(), userInfoResponse.name());
 
     } catch (BusinessException e) {
 
@@ -74,13 +79,11 @@ public class GoogleOauthApiClient implements SocialOauthApiClient {
   }
 
   @Override
-  public String generateOAuthUrl(String redirectUri) {
+  public String generateOAuthUrl() {
 
-    String uri = redirectUri != null ? redirectUri : defaultRedirectUri;
-
-    return UriComponentsBuilder.fromUriString("https://accounts.google.com/o/oauth2/v2/auth")
+    return UriComponentsBuilder.fromUriString(authUri)
         .queryParam("client_id", clientId)
-        .queryParam("redirect_uri", uri)
+        .queryParam("redirect_uri", defaultRedirectUri)
         .queryParam("response_type", "code")
         .queryParam("scope", "profile")
         .build()
@@ -96,7 +99,7 @@ public class GoogleOauthApiClient implements SocialOauthApiClient {
 
     return restClient
         .post()
-        .uri("https://oauth2.googleapis.com/token")
+        .uri(tokenUri)
         .contentType(MediaType.APPLICATION_FORM_URLENCODED)
         .body(
             "code="
@@ -116,7 +119,7 @@ public class GoogleOauthApiClient implements SocialOauthApiClient {
 
     return restClient
         .get()
-        .uri("https://www.googleapis.com/oauth2/v2/userinfo")
+        .uri(userInfoUri)
         .header(HttpHeaders.AUTHORIZATION, "Bearer " + accessToken)
         .retrieve()
         .body(GoogleUserInfoResponse.class);

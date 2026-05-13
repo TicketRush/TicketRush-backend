@@ -27,9 +27,9 @@ public class AuthFacade {
   private final ProviderParser providerParser;
 
   // OAuth 로그인 URL 생성
-  public String getOAuthLoginUrl(String provider, String redirectUri) {
+  public String getOAuthLoginUrl(String provider) {
     SocialProvider socialProvider = providerParser.parse(provider);
-    return oauthLoginUrlUseCase.generateOAuthUrl(socialProvider, redirectUri);
+    return oauthLoginUrlUseCase.generateOAuthUrl(socialProvider);
   }
 
   // 소셜 로그인 + JWT 발급
