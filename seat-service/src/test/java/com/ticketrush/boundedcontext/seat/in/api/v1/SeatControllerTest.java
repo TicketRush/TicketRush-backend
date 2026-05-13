@@ -8,16 +8,16 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import com.ticketrush.boundedcontext.seat.app.dto.response.SeatAvailabilityResponse;
 import com.ticketrush.boundedcontext.seat.app.dto.response.SeatLayoutResponse;
 import com.ticketrush.boundedcontext.seat.app.facade.SeatFacade;
+import com.ticketrush.support.WebMvcSliceTest;
 import java.util.List;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.boot.webmvc.test.autoconfigure.WebMvcTest;
 import org.springframework.security.test.context.support.WithMockUser;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
 
-@WebMvcTest(SeatController.class)
+@WebMvcSliceTest(SeatController.class)
 class SeatControllerTest {
 
   @Autowired private MockMvc mockMvc;
@@ -38,13 +38,13 @@ class SeatControllerTest {
     mockMvc
         .perform(get("/api/v1/seat/{performanceId}/seat-layouts", performanceId))
         .andExpect(status().isOk())
-        .andExpect(jsonPath("$.isSuccess").value(true))
+        .andExpect(jsonPath("$.is_success").value(true))
         .andExpect(jsonPath("$.result.length()").value(2))
-        .andExpect(jsonPath("$.result[0].seatId").value(1))
-        .andExpect(jsonPath("$.result[0].seatLayoutId").value(101))
-        .andExpect(jsonPath("$.result[0].seatNumber").value("A-1"))
-        .andExpect(jsonPath("$.result[1].seatId").value(2))
-        .andExpect(jsonPath("$.result[1].seatNumber").value("A-2"));
+        .andExpect(jsonPath("$.result[0].seat_id").value(1))
+        .andExpect(jsonPath("$.result[0].seat_layout_id").value(101))
+        .andExpect(jsonPath("$.result[0].seat_number").value("A-1"))
+        .andExpect(jsonPath("$.result[1].seat_id").value(2))
+        .andExpect(jsonPath("$.result[1].seat_number").value("A-2"));
   }
 
   @Test
@@ -60,8 +60,8 @@ class SeatControllerTest {
     mockMvc
         .perform(get("/api/v1/seat/{performanceId}/seat-counts", performanceId))
         .andExpect(status().isOk())
-        .andExpect(jsonPath("$.isSuccess").value(true))
-        .andExpect(jsonPath("$.result.availableCount").value(8))
-        .andExpect(jsonPath("$.result.totalCount").value(10));
+        .andExpect(jsonPath("$.is_success").value(true))
+        .andExpect(jsonPath("$.result.available_count").value(8))
+        .andExpect(jsonPath("$.result.total_count").value(10));
   }
 }
