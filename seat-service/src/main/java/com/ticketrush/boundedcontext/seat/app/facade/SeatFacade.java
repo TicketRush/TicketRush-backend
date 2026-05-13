@@ -9,6 +9,7 @@ import com.ticketrush.boundedcontext.seat.app.usecase.SeatGetSeatLayoutsUseCase;
 import com.ticketrush.boundedcontext.seat.app.usecase.SeatHoldUseCase;
 import com.ticketrush.boundedcontext.seat.app.usecase.SeatLockUseCase;
 import com.ticketrush.boundedcontext.seat.app.usecase.SeatUnlockUseCase;
+import com.ticketrush.boundedcontext.seat.out.repository.SeatLayoutRepository;
 import com.ticketrush.global.eventpublisher.EventPublisher;
 import com.ticketrush.shared.seat.event.SeatHoldFailedEvent;
 import java.time.LocalDateTime;
@@ -16,6 +17,7 @@ import java.util.List;
 import java.util.Optional;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.stereotype.Service;
 
 @Slf4j
@@ -30,6 +32,7 @@ public class SeatFacade {
   private final SeatHoldUseCase seatHoldUseCase;
   private final SeatLockUseCase seatLockUseCase;
   private final SeatUnlockUseCase seatUnlockUseCase;
+  private final SeatLayoutRepository seatLayoutRepository;
   private final EventPublisher eventPublisher;
 
   public List<SeatLayoutResponse> getPerformanceSeatLayouts(Long performanceId) {
@@ -41,7 +44,16 @@ public class SeatFacade {
   }
 
   public void createDefaultSeats(Long performanceId) {
-    seatCreateDefaultLayoutUseCase.execute(performanceId);
+    try {
+      seatCreateDefaultLayoutUseCase.execute(performanceId);
+    } catch (DataIntegrityViolationException e) {
+      if (seatLayoutRepository.existsByPerformanceId(performanceId)) {
+        log.info("동시에 생성된 좌석 배치도가 있어 좌석 생성을 스킵합니다. performanceId: {}", performanceId);
+        return;
+      }
+
+      throw e;
+    }
   }
 
   public void holdSeat(Long seatId, LocalDateTime holdExpiredAt) {

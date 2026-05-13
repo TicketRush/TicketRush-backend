@@ -31,7 +31,7 @@ public class SeatCreateDefaultLayoutUseCase {
     }
 
     SeatLayout savedLayout =
-        seatLayoutRepository.save(
+        seatLayoutRepository.saveAndFlush(
             SeatLayout.builder()
                 .performanceId(performanceId)
                 .totalRows(DEFAULT_TOTAL_ROWS)

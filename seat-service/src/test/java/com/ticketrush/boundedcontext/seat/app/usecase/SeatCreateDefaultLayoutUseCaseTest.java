@@ -1,6 +1,7 @@
 package com.ticketrush.boundedcontext.seat.app.usecase;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import com.ticketrush.boundedcontext.seat.app.dto.response.SeatLayoutResponse;
 import com.ticketrush.boundedcontext.seat.domain.entity.SeatLayout;
@@ -13,6 +14,7 @@ import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.data.jpa.test.autoconfigure.DataJpaTest;
 import org.springframework.context.annotation.Import;
+import org.springframework.dao.DataIntegrityViolationException;
 
 @DataJpaTest
 @Import(SeatCreateDefaultLayoutUseCase.class)
@@ -63,5 +65,22 @@ class SeatCreateDefaultLayoutUseCaseTest {
     // then
     assertThat(seatLayoutRepository.findAll()).hasSize(1);
     assertThat(seatRepository.countByPerformanceId(performanceId)).isEqualTo(120L);
+  }
+
+  @Test
+  @DisplayName("공연 ID에 대한 좌석 배치도는 DB 유니크 제약으로 중복 생성을 막는다")
+  void performanceIdIsUnique() {
+    // given
+    Long performanceId = 1L;
+    SeatLayout firstLayout =
+        SeatLayout.builder().performanceId(performanceId).totalRows(10).maxCols(12).build();
+    SeatLayout duplicatedLayout =
+        SeatLayout.builder().performanceId(performanceId).totalRows(10).maxCols(12).build();
+
+    seatLayoutRepository.saveAndFlush(firstLayout);
+
+    // when & then
+    assertThatThrownBy(() -> seatLayoutRepository.saveAndFlush(duplicatedLayout))
+        .isInstanceOf(DataIntegrityViolationException.class);
   }
 }
