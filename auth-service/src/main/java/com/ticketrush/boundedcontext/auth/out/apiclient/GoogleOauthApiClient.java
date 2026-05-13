@@ -31,6 +31,15 @@ public class GoogleOauthApiClient implements SocialOauthApiClient {
   @Value("${oauth.google.redirect-uri}")
   private String defaultRedirectUri;
 
+  @Value("${oauth.google.auth-uri}")
+  private String authUri;
+
+  @Value("${oauth.google.token-uri}")
+  private String tokenUri;
+
+  @Value("${oauth.google.user-info-uri}")
+  private String userInfoUri;
+
   @Override
   public SocialProvider getProvider() {
     return SocialProvider.GOOGLE;
@@ -72,7 +81,7 @@ public class GoogleOauthApiClient implements SocialOauthApiClient {
   @Override
   public String generateOAuthUrl() {
 
-    return UriComponentsBuilder.fromUriString("https://accounts.google.com/o/oauth2/v2/auth")
+    return UriComponentsBuilder.fromUriString(authUri)
         .queryParam("client_id", clientId)
         .queryParam("redirect_uri", defaultRedirectUri)
         .queryParam("response_type", "code")
@@ -90,7 +99,7 @@ public class GoogleOauthApiClient implements SocialOauthApiClient {
 
     return restClient
         .post()
-        .uri("https://oauth2.googleapis.com/token")
+        .uri(tokenUri)
         .contentType(MediaType.APPLICATION_FORM_URLENCODED)
         .body(
             "code="
@@ -110,7 +119,7 @@ public class GoogleOauthApiClient implements SocialOauthApiClient {
 
     return restClient
         .get()
-        .uri("https://www.googleapis.com/oauth2/v2/userinfo")
+        .uri(userInfoUri)
         .header(HttpHeaders.AUTHORIZATION, "Bearer " + accessToken)
         .retrieve()
         .body(GoogleUserInfoResponse.class);
