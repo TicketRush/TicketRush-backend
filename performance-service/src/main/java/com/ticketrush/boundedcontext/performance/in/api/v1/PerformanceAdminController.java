@@ -96,7 +96,7 @@ public class PerformanceAdminController {
     return ApiResponse.onSuccess(SuccessStatus.OK);
   }
 
-  @Operation(summary = "공연 정보 수정", description = "공연의 텍스트 정보를 부분 수정합니다. null 필드는 수정하지 않습니다.")
+  @Operation(summary = "공연 정보 수정", description = "공연 정보를 부분 수정합니다. null 필드는 수정하지 않습니다.")
   @PerformancePatchApiResponses
   @PatchMapping("/{id}")
   public ResponseEntity<ApiResponse<Void>> patchPerformance(
