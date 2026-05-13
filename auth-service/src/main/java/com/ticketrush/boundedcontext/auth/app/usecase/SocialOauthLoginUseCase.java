@@ -13,11 +13,9 @@ import com.ticketrush.global.security.JwtTokenProvider;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
-import org.springframework.transaction.annotation.Transactional;
 
 @Slf4j
 @Component
-@Transactional(readOnly = true)
 @RequiredArgsConstructor
 /*
 1. provider에 맞는 OAuth 서비스 선택
