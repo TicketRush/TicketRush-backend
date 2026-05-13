@@ -16,6 +16,27 @@ import java.lang.annotation.Target;
 @Documented
 @ApiResponses({
   @ApiResponse(
+      responseCode = "400",
+      description = "잘못된 요청",
+      content =
+          @Content(
+              mediaType = "application/json",
+              schema =
+                  @Schema(implementation = com.ticketrush.global.dto.response.ApiResponse.class),
+              examples =
+                  @ExampleObject(
+                      name = "ValidationError",
+                      summary = "유효하지 않은 공연 ID",
+                      value =
+                          """
+                          {
+                            "is_success": false,
+                            "code": "VALID_400_001",
+                            "message": "입력값이 올바르지 않습니다.",
+                            "trace_id": "trace-id-example"
+                          }
+                          """))),
+  @ApiResponse(
       responseCode = "404",
       description = "공연 없음",
       content =
