@@ -12,6 +12,8 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
 import org.springframework.stereotype.Component;
+import org.springframework.util.LinkedMultiValueMap;
+import org.springframework.util.MultiValueMap;
 import org.springframework.web.client.RestClient;
 import org.springframework.web.util.UriComponentsBuilder;
 
@@ -98,22 +100,20 @@ public class GoogleOauthApiClient implements SocialOauthApiClient {
 
   private OauthTokenResponse requestToken(String code, String redirectUri) {
 
+    MultiValueMap<String, String> params = new LinkedMultiValueMap<>();
+    params.add("code", code);
+    params.add("client_id", clientId);
+    params.add("client_secret", clientSecret);
+    params.add("redirect_uri", redirectUri);
+    params.add("grant_type", "authorization_code");
+
     return restClient
-        .post()
-        .uri(tokenUri)
-        .contentType(MediaType.APPLICATION_FORM_URLENCODED)
-        .body(
-            "code="
-                + code
-                + "&client_id="
-                + clientId
-                + "&client_secret="
-                + clientSecret
-                + "&redirect_uri="
-                + redirectUri
-                + "&grant_type=authorization_code")
-        .retrieve()
-        .body(OauthTokenResponse.class);
+      .post()
+      .uri(tokenUri)
+      .contentType(MediaType.APPLICATION_FORM_URLENCODED)
+      .body(params)
+      .retrieve()
+      .body(OauthTokenResponse.class);
   }
 
   private GoogleUserInfoResponse requestUserInfo(String accessToken) {
