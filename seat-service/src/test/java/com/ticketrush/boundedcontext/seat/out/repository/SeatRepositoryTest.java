@@ -151,7 +151,7 @@ class SeatRepositoryTest {
 
   @Test
   @DisplayName("공연 ID로 전체 좌석 수와 AVAILABLE 상태 좌석 수를 계산한다")
-  void countByPerformanceIdAndSeatStatus() {
+  void countSeatAvailabilityByPerformanceId_ReturnsAvailableAndTotalCounts() {
     // given
     Long targetPerformanceId = 1L;
     Long otherPerformanceId = 99L;
@@ -196,13 +196,24 @@ class SeatRepositoryTest {
         List.of(availableSeat1, availableSeat2, holdSeat, soldSeat, otherPerformanceSeat));
 
     // when
-    Long availableCount =
-        seatRepository.countByPerformanceIdAndSeatStatus(targetPerformanceId, SeatStatus.AVAILABLE);
-    Long totalCount = seatRepository.countByPerformanceId(targetPerformanceId);
+    var response =
+        seatRepository.countSeatAvailabilityByPerformanceId(
+            targetPerformanceId, SeatStatus.AVAILABLE);
 
     // then
-    assertThat(availableCount).isEqualTo(2L);
-    assertThat(totalCount).isEqualTo(4L);
+    assertThat(response.availableCount()).isEqualTo(2L);
+    assertThat(response.totalCount()).isEqualTo(4L);
+  }
+
+  @Test
+  @DisplayName("공연 ID에 해당하는 좌석이 없으면 0을 반환한다")
+  void countSeatAvailabilityByPerformanceId_ReturnsZeroWhenNoSeatsExist() {
+    // when
+    var response = seatRepository.countSeatAvailabilityByPerformanceId(1L, SeatStatus.AVAILABLE);
+
+    // then
+    assertThat(response.availableCount()).isZero();
+    assertThat(response.totalCount()).isZero();
   }
 
   @Test
