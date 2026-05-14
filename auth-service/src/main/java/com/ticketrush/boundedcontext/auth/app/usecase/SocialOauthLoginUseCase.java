@@ -48,8 +48,6 @@ public class SocialOauthLoginUseCase {
 
     Long userId = userResponse.userId();
 
-    log.info("🔥 user-service 응답 = {}", userResponse);
-
     // 3. JWT 생성
     String accessToken = jwtTokenProvider.createAccessToken(userId, "USER");
 
