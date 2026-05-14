@@ -150,6 +150,73 @@ class SeatRepositoryTest {
   }
 
   @Test
+  @DisplayName("공연 ID로 전체 좌석 수와 AVAILABLE 상태 좌석 수를 계산한다")
+  void countSeatAvailabilityByPerformanceId_ReturnsAvailableAndTotalCounts() {
+    // given
+    Long targetPerformanceId = 1L;
+    Long otherPerformanceId = 99L;
+
+    Seat availableSeat1 =
+        Seat.builder()
+            .seatLayoutId(1L)
+            .performanceId(targetPerformanceId)
+            .seatNumber("A1")
+            .seatStatus(SeatStatus.AVAILABLE)
+            .build();
+    Seat availableSeat2 =
+        Seat.builder()
+            .seatLayoutId(1L)
+            .performanceId(targetPerformanceId)
+            .seatNumber("A2")
+            .seatStatus(SeatStatus.AVAILABLE)
+            .build();
+    Seat holdSeat =
+        Seat.builder()
+            .seatLayoutId(1L)
+            .performanceId(targetPerformanceId)
+            .seatNumber("A3")
+            .seatStatus(SeatStatus.HOLD)
+            .build();
+    Seat soldSeat =
+        Seat.builder()
+            .seatLayoutId(1L)
+            .performanceId(targetPerformanceId)
+            .seatNumber("A4")
+            .seatStatus(SeatStatus.SOLD)
+            .build();
+    Seat otherPerformanceSeat =
+        Seat.builder()
+            .seatLayoutId(2L)
+            .performanceId(otherPerformanceId)
+            .seatNumber("A1")
+            .seatStatus(SeatStatus.AVAILABLE)
+            .build();
+
+    seatRepository.saveAll(
+        List.of(availableSeat1, availableSeat2, holdSeat, soldSeat, otherPerformanceSeat));
+
+    // when
+    var response =
+        seatRepository.countSeatAvailabilityByPerformanceId(
+            targetPerformanceId, SeatStatus.AVAILABLE);
+
+    // then
+    assertThat(response.availableCount()).isEqualTo(2L);
+    assertThat(response.totalCount()).isEqualTo(4L);
+  }
+
+  @Test
+  @DisplayName("공연 ID에 해당하는 좌석이 없으면 0을 반환한다")
+  void countSeatAvailabilityByPerformanceId_ReturnsZeroWhenNoSeatsExist() {
+    // when
+    var response = seatRepository.countSeatAvailabilityByPerformanceId(1L, SeatStatus.AVAILABLE);
+
+    // then
+    assertThat(response.availableCount()).isZero();
+    assertThat(response.totalCount()).isZero();
+  }
+
+  @Test
   @DisplayName("HOLD 상태인 좌석을 SOLD 상태로 변경하고 선점 만료 시간을 초기화한다")
   void confirmSoldById_ChangesHoldSeatToSold() {
     // given
