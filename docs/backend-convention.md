@@ -202,7 +202,7 @@ Diary diary = diaryRepository.findByDiaryIdAndUserId(diaryId, userId)
 ### 🛠 버전 정보
 
 * **Java:** 21
-* **Spring Boot:** 4.0.1 (LTS)
+* **Spring Boot:** 4.0.3 (LTS)
 
 ### 🏷 주석 컨벤션
 
