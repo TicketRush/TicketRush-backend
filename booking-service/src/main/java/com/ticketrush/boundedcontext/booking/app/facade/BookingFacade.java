@@ -1,6 +1,7 @@
 package com.ticketrush.boundedcontext.booking.app.facade;
 
 import com.ticketrush.boundedcontext.booking.app.dto.request.BookingCreateRequest;
+import com.ticketrush.boundedcontext.booking.app.dto.response.BookingPendingResponse;
 import com.ticketrush.boundedcontext.booking.app.usecase.BookingCreateUseCase;
 import com.ticketrush.boundedcontext.booking.app.usecase.BookingIssueNumberUseCase;
 import com.ticketrush.boundedcontext.booking.app.usecase.BookingValidateReferencesUseCase;
@@ -20,7 +21,7 @@ public class BookingFacade {
   private final BookingValidateReferencesUseCase bookingValidateReferencesUseCase;
   private final BookingValidateSeatAvailableUseCase bookingValidateSeatAvailableUseCase;
 
-  public Booking createBooking(Long userId, Long performanceId, Long seatId) {
+  public BookingPendingResponse createBooking(Long userId, Long performanceId, Long seatId) {
     // 참조 및 좌석 가용성 검증 실행
     bookingValidateReferencesUseCase.execute(userId, performanceId, seatId);
     bookingValidateSeatAvailableUseCase.execute(seatId, performanceId);
@@ -32,6 +33,8 @@ public class BookingFacade {
     BookingCreateRequest request =
         new BookingCreateRequest(userId, performanceId, seatId, bookingNumber);
 
-    return bookingCreateUseCase.execute(request);
+    Booking booking = bookingCreateUseCase.execute(request);
+
+    return BookingPendingResponse.from(booking);
   }
 }

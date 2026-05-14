@@ -3,7 +3,6 @@ package com.ticketrush.boundedcontext.booking.in.api.v1;
 import com.ticketrush.boundedcontext.booking.app.dto.request.BookingPendingRequest;
 import com.ticketrush.boundedcontext.booking.app.dto.response.BookingPendingResponse;
 import com.ticketrush.boundedcontext.booking.app.facade.BookingFacade;
-import com.ticketrush.boundedcontext.booking.domain.entity.Booking;
 import com.ticketrush.global.dto.response.ApiResponse;
 import com.ticketrush.global.security.CustomUserDetails;
 import com.ticketrush.global.status.SuccessStatus;
@@ -33,9 +32,9 @@ public class BookingController {
   public ResponseEntity<ApiResponse<BookingPendingResponse>> createPendingBooking(
       @AuthenticationPrincipal CustomUserDetails user,
       @Valid @RequestBody BookingPendingRequest request) {
-    Booking booking =
+    BookingPendingResponse response =
         bookingFacade.createBooking(user.getUserId(), request.performanceId(), request.seatId());
 
-    return ApiResponse.onSuccess(SuccessStatus.CREATED, BookingPendingResponse.from(booking));
+    return ApiResponse.onSuccess(SuccessStatus.CREATED, response);
   }
 }
