@@ -2,6 +2,7 @@ package com.ticketrush.boundedcontext.seat.app.usecase;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.BDDMockito.given;
+import static org.mockito.Mockito.verify;
 
 import com.ticketrush.boundedcontext.seat.app.dto.response.SeatAvailabilityResponse;
 import com.ticketrush.boundedcontext.seat.out.repository.SeatRepository;
@@ -25,15 +26,32 @@ class SeatGetAvailabilityUseCaseTest {
   void executeReturnsSeatAvailability() {
     // given
     Long performanceId = 1L;
-    given(seatRepository.countByPerformanceIdAndSeatStatus(performanceId, SeatStatus.AVAILABLE))
-        .willReturn(8L);
-    given(seatRepository.countByPerformanceId(performanceId)).willReturn(10L);
+    given(seatRepository.countSeatAvailabilityByPerformanceId(performanceId, SeatStatus.AVAILABLE))
+        .willReturn(new SeatAvailabilityResponse(8L, 10L));
 
     // when
     SeatAvailabilityResponse response = useCase.execute(performanceId);
 
     // then
     assertThat(response.availableCount()).isEqualTo(8L);
+    assertThat(response.totalCount()).isEqualTo(10L);
+    verify(seatRepository)
+        .countSeatAvailabilityByPerformanceId(performanceId, SeatStatus.AVAILABLE);
+  }
+
+  @Test
+  @DisplayName("잔여 좌석이 없으면 availableCount 0과 전체 좌석 수를 반환한다")
+  void executeReturnsZeroAvailableCount() {
+    // given
+    Long performanceId = 1L;
+    given(seatRepository.countSeatAvailabilityByPerformanceId(performanceId, SeatStatus.AVAILABLE))
+        .willReturn(new SeatAvailabilityResponse(0L, 10L));
+
+    // when
+    SeatAvailabilityResponse response = useCase.execute(performanceId);
+
+    // then
+    assertThat(response.availableCount()).isZero();
     assertThat(response.totalCount()).isEqualTo(10L);
   }
 }
