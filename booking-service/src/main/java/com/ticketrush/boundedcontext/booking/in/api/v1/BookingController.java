@@ -5,9 +5,7 @@ import com.ticketrush.boundedcontext.booking.app.dto.response.BookingPendingResp
 import com.ticketrush.boundedcontext.booking.app.facade.BookingFacade;
 import com.ticketrush.boundedcontext.booking.domain.entity.Booking;
 import com.ticketrush.global.dto.response.ApiResponse;
-import com.ticketrush.global.exception.BusinessException;
 import com.ticketrush.global.security.CustomUserDetails;
-import com.ticketrush.global.status.ErrorStatus;
 import com.ticketrush.global.status.SuccessStatus;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
@@ -35,10 +33,6 @@ public class BookingController {
   public ResponseEntity<ApiResponse<BookingPendingResponse>> createPendingBooking(
       @AuthenticationPrincipal CustomUserDetails user,
       @Valid @RequestBody BookingPendingRequest request) {
-    if (user == null) {
-      throw new BusinessException(ErrorStatus.UNAUTHORIZED);
-    }
-
     Booking booking =
         bookingFacade.createBooking(user.getUserId(), request.performanceId(), request.seatId());
 
