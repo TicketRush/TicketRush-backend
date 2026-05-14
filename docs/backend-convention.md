@@ -73,14 +73,12 @@
 
 ### 🔡 파일명 컨벤션
 
-| 항목                     | 규칙                          | 예시                                    |
-|------------------------|-----------------------------|---------------------------------------|
-| **Class 이름 (UseCase)** | `{module}{function}UseCase` | `MarketCompleteOrderPaymentUseCase`   |
-| **Controller**         | `{module}Controller`        | `MemberController`                    |
-| **Timestamp 필드**       | `{동사}edAt`                  | `createdAt`, `updatedAt`, `deletedAt` |
-| **Table**              | 소문자 또는 `소문자_소문자`            | `@Table(name = "booking")`<br>        
-
-<br>`@Table(name = "payment_account")` |
+| 항목                     | 규칙                          | 예시                                                               |
+|------------------------|-----------------------------|------------------------------------------------------------------|
+| **Class 이름 (UseCase)** | `{module}{function}UseCase` | `MarketCompleteOrderPaymentUseCase`                              |
+| **Controller**         | `{module}Controller`        | `MemberController`                                               |
+| **Timestamp 필드**       | `{동사}edAt`                  | `createdAt`, `updatedAt`, `deletedAt`                            |
+| **Table**              | 소문자 또는 `소문자_소문자`            | `@Table(name = "booking")`<br>`@Table(name = "payment_account")` |
 
 ### 🔠 자바 네이밍 컨벤션
 
