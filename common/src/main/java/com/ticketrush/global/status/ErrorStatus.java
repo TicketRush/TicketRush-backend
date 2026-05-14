@@ -83,6 +83,10 @@ public enum ErrorStatus {
       HttpStatus.BAD_REQUEST, "PERFORMANCE_400_004", "유효하지 않은 공연 상태 전환입니다."),
   PERFORMANCE_NOT_ON_SALE(HttpStatus.BAD_REQUEST, "PERFORMANCE_400_005", "예매 가능한 공연이 아닙니다."),
 
+  // Performance 409
+  PERFORMANCE_HAS_SOLD_SEATS(
+      HttpStatus.CONFLICT, "PERFORMANCE_409_001", "예매 완료된 좌석이 있어 삭제할 수 없습니다."),
+
   // Performance 404
   PERFORMANCE_NOT_FOUND(HttpStatus.NOT_FOUND, "PERFORMANCE_404_001", "공연이 존재하지 않습니다."),
 

@@ -2,13 +2,16 @@ package com.ticketrush.boundedcontext.performance.app.facade;
 
 import com.ticketrush.boundedcontext.performance.app.dto.request.PerformanceChangeStatusRequest;
 import com.ticketrush.boundedcontext.performance.app.dto.request.PerformanceCreateRequest;
+import com.ticketrush.boundedcontext.performance.app.dto.request.PerformancePatchRequest;
 import com.ticketrush.boundedcontext.performance.app.dto.response.PerformanceCreateResponse;
 import com.ticketrush.boundedcontext.performance.app.dto.response.PerformanceDetailResponse;
 import com.ticketrush.boundedcontext.performance.app.dto.response.PerformanceListResponse;
 import com.ticketrush.boundedcontext.performance.app.usecase.PerformanceChangeStatusUseCase;
 import com.ticketrush.boundedcontext.performance.app.usecase.PerformanceCreateUseCase;
+import com.ticketrush.boundedcontext.performance.app.usecase.PerformanceDeleteUseCase;
 import com.ticketrush.boundedcontext.performance.app.usecase.PerformanceGetDetailUseCase;
 import com.ticketrush.boundedcontext.performance.app.usecase.PerformanceGetListUseCase;
+import com.ticketrush.boundedcontext.performance.app.usecase.PerformancePatchUseCase;
 import com.ticketrush.boundedcontext.performance.app.usecase.PerformanceValidateUseCase;
 import com.ticketrush.boundedcontext.performance.domain.types.Genre;
 import java.util.List;
@@ -26,6 +29,8 @@ public class PerformanceFacade {
   private final PerformanceGetListUseCase performanceGetListUseCase;
   private final PerformanceGetDetailUseCase performanceGetDetailUseCase;
   private final PerformanceChangeStatusUseCase performanceChangeStatusUseCase;
+  private final PerformancePatchUseCase performancePatchUseCase;
+  private final PerformanceDeleteUseCase performanceDeleteUseCase;
   private final PerformanceValidateUseCase performanceValidateUseCase;
 
   public PerformanceCreateResponse createPerformance(
@@ -47,6 +52,14 @@ public class PerformanceFacade {
 
   public void changePerformanceStatus(Long performanceId, PerformanceChangeStatusRequest request) {
     performanceChangeStatusUseCase.execute(performanceId, request);
+  }
+
+  public void patchPerformance(Long performanceId, PerformancePatchRequest request) {
+    performancePatchUseCase.execute(performanceId, request);
+  }
+
+  public void deletePerformance(Long performanceId) {
+    performanceDeleteUseCase.execute(performanceId);
   }
 
   public void validatePerformance(Long performanceId) {
