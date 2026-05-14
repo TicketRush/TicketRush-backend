@@ -15,10 +15,6 @@ public class SeatGetAvailabilityUseCase {
   private final SeatRepository seatRepository;
 
   public SeatAvailabilityResponse execute(Long performanceId) {
-    Long availableCount =
-        seatRepository.countByPerformanceIdAndSeatStatus(performanceId, SeatStatus.AVAILABLE);
-    Long totalCount = seatRepository.countByPerformanceId(performanceId);
-
-    return new SeatAvailabilityResponse(availableCount, totalCount);
+    return seatRepository.countSeatAvailabilityByPerformanceId(performanceId, SeatStatus.AVAILABLE);
   }
 }
