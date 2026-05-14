@@ -8,6 +8,7 @@ import com.ticketrush.global.dto.response.ApiResponse;
 import com.ticketrush.global.exception.BusinessException;
 import com.ticketrush.global.status.ErrorStatus;
 import com.ticketrush.global.status.SuccessStatus;
+import io.swagger.v3.oas.annotations.Operation;
 import jakarta.validation.Valid;
 import java.util.List;
 import lombok.RequiredArgsConstructor;
@@ -34,6 +35,7 @@ public class SeatController {
   private String internalToken;
 
   @GetMapping("/{performanceId}/seat-layouts")
+  @Operation(summary = "공연별 좌석 배치 조회", description = "공연 ID에 해당하는 좌석 ID, 좌석 배치 ID, 좌석 번호를 조회합니다.")
   public ResponseEntity<ApiResponse<List<SeatLayoutResponse>>> getSeatLayouts(
       @PathVariable Long performanceId) {
     List<SeatLayoutResponse> response = seatFacade.getPerformanceSeatLayouts(performanceId);
@@ -41,6 +43,7 @@ public class SeatController {
   }
 
   @GetMapping("/{performanceId}/seat-counts")
+  @Operation(summary = "공연별 좌석 수 조회", description = "공연 ID에 해당하는 잔여 좌석 수와 전체 좌석 수를 조회합니다.")
   public ResponseEntity<ApiResponse<SeatAvailabilityResponse>> getSeatCounts(
       @PathVariable Long performanceId) {
     SeatAvailabilityResponse response = seatFacade.getPerformanceSeatAvailability(performanceId);
@@ -48,6 +51,7 @@ public class SeatController {
   }
 
   @PostMapping("/internal/sold")
+  @Operation(summary = "좌석 판매 확정", description = "내부 토큰을 검증한 뒤 HOLD 상태 좌석을 SOLD 상태로 확정합니다.")
   public ResponseEntity<ApiResponse<Void>> confirmSold(
       @RequestHeader(value = INTERNAL_TOKEN_HEADER, required = false) String internalTokenHeader,
       @Valid @RequestBody SeatSoldConfirmRequest request) {
