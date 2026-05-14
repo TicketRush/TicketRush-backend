@@ -4,9 +4,9 @@ import com.fasterxml.jackson.annotation.JsonProperty;
 
 // user-service → auth-service 응답 DTO
 public record UserServiceSocialLoginResponse(
-  @JsonProperty(value = "user_id") Long userId,
-  String name,
-  @JsonProperty(value = "is_new_user") boolean isNewUser) {
+    @JsonProperty(value = "user_id") Long userId,
+    String name,
+    @JsonProperty(value = "is_new_user") boolean isNewUser) {
 
   private String maskValue(String value) {
     if (value == null || value.isEmpty()) {
@@ -23,13 +23,13 @@ public record UserServiceSocialLoginResponse(
   @Override
   public String toString() {
     return "UserServiceSocialLoginResponse{"
-      + "userId="
-      + userId
-      + ", name='"
-      + maskValue(name)
-      + '\''
-      + ", isNewUser="
-      + isNewUser
-      + '}';
+        + "userId="
+        + userId
+        + ", name='"
+        + maskValue(name)
+        + '\''
+        + ", isNewUser="
+        + isNewUser
+        + '}';
   }
 }

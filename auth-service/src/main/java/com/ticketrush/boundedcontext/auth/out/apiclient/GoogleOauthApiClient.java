@@ -69,7 +69,7 @@ public class GoogleOauthApiClient implements SocialOauthApiClient {
 
       // 3. 공통 객체로 변환
       return new SocialUserInfo(
-        userInfoResponse.id(), getProvider(), userInfoResponse.name(), userInfoResponse.email());
+          userInfoResponse.id(), getProvider(), userInfoResponse.name(), userInfoResponse.email());
 
     } catch (BusinessException e) {
       throw e;
@@ -84,13 +84,13 @@ public class GoogleOauthApiClient implements SocialOauthApiClient {
   public String generateOAuthUrl() {
 
     return UriComponentsBuilder.fromUriString(authUri)
-      .queryParam("client_id", clientId)
-      .queryParam("redirect_uri", defaultRedirectUri)
-      .queryParam("response_type", "code")
-      .queryParam("scope", "profile email")
-      .build()
-      .encode()
-      .toUriString();
+        .queryParam("client_id", clientId)
+        .queryParam("redirect_uri", defaultRedirectUri)
+        .queryParam("response_type", "code")
+        .queryParam("scope", "profile email")
+        .build()
+        .encode()
+        .toUriString();
   }
 
   @Override
@@ -109,45 +109,45 @@ public class GoogleOauthApiClient implements SocialOauthApiClient {
     form.add("grant_type", "authorization_code");
 
     return restClient
-      .post()
-      .uri(tokenUri)
-      .contentType(MediaType.APPLICATION_FORM_URLENCODED)
-      .body(form)
-      .retrieve()
-      .onStatus(
-        HttpStatusCode::is4xxClientError,
-        (request, response) -> {
-          log.warn("Google OAuth 토큰 발급 요청 실패 - 클라이언트 오류. status={}", response.getStatusCode());
-          throw new BusinessException(ErrorStatus.AUTH_GOOGLE_TOKEN_FAILED);
-        })
-      .onStatus(
-        HttpStatusCode::is5xxServerError,
-        (request, response) -> {
-          log.error("Google OAuth 토큰 발급 요청 실패 - 서버 오류. status={}", response.getStatusCode());
-          throw new BusinessException(ErrorStatus.AUTH_GOOGLE_TOKEN_FAILED);
-        })
-      .body(OauthTokenResponse.class);
+        .post()
+        .uri(tokenUri)
+        .contentType(MediaType.APPLICATION_FORM_URLENCODED)
+        .body(form)
+        .retrieve()
+        .onStatus(
+            HttpStatusCode::is4xxClientError,
+            (request, response) -> {
+              log.warn("Google OAuth 토큰 발급 요청 실패 - 클라이언트 오류. status={}", response.getStatusCode());
+              throw new BusinessException(ErrorStatus.AUTH_GOOGLE_TOKEN_FAILED);
+            })
+        .onStatus(
+            HttpStatusCode::is5xxServerError,
+            (request, response) -> {
+              log.error("Google OAuth 토큰 발급 요청 실패 - 서버 오류. status={}", response.getStatusCode());
+              throw new BusinessException(ErrorStatus.AUTH_GOOGLE_TOKEN_FAILED);
+            })
+        .body(OauthTokenResponse.class);
   }
 
   private GoogleUserInfoResponse requestUserInfo(String accessToken) {
 
     return restClient
-      .get()
-      .uri(userInfoUri)
-      .header(HttpHeaders.AUTHORIZATION, "Bearer " + accessToken)
-      .retrieve()
-      .onStatus(
-        HttpStatusCode::is4xxClientError,
-        (request, response) -> {
-          log.warn("Google OAuth 사용자 정보 조회 실패 - 클라이언트 오류. status={}", response.getStatusCode());
-          throw new BusinessException(ErrorStatus.AUTH_GOOGLE_INFO_FAILED);
-        })
-      .onStatus(
-        HttpStatusCode::is5xxServerError,
-        (request, response) -> {
-          log.error("Google OAuth 사용자 정보 조회 실패 - 서버 오류. status={}", response.getStatusCode());
-          throw new BusinessException(ErrorStatus.AUTH_GOOGLE_INFO_FAILED);
-        })
-      .body(GoogleUserInfoResponse.class);
+        .get()
+        .uri(userInfoUri)
+        .header(HttpHeaders.AUTHORIZATION, "Bearer " + accessToken)
+        .retrieve()
+        .onStatus(
+            HttpStatusCode::is4xxClientError,
+            (request, response) -> {
+              log.warn("Google OAuth 사용자 정보 조회 실패 - 클라이언트 오류. status={}", response.getStatusCode());
+              throw new BusinessException(ErrorStatus.AUTH_GOOGLE_INFO_FAILED);
+            })
+        .onStatus(
+            HttpStatusCode::is5xxServerError,
+            (request, response) -> {
+              log.error("Google OAuth 사용자 정보 조회 실패 - 서버 오류. status={}", response.getStatusCode());
+              throw new BusinessException(ErrorStatus.AUTH_GOOGLE_INFO_FAILED);
+            })
+        .body(GoogleUserInfoResponse.class);
   }
 }

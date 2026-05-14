@@ -60,18 +60,18 @@ public class SocialLoginRequest {
   @Override
   public String toString() {
     return "SocialLoginRequest{"
-      + "socialId='"
-      + maskValue(socialId)
-      + '\''
-      + ", socialProvider='"
-      + socialProvider
-      + '\''
-      + ", name='"
-      + maskValue(name)
-      + '\''
-      + ", email='"
-      + maskEmail(email)
-      + '\''
-      + '}';
+        + "socialId='"
+        + maskValue(socialId)
+        + '\''
+        + ", socialProvider='"
+        + socialProvider
+        + '\''
+        + ", name='"
+        + maskValue(name)
+        + '\''
+        + ", email='"
+        + maskEmail(email)
+        + '\''
+        + '}';
   }
 }

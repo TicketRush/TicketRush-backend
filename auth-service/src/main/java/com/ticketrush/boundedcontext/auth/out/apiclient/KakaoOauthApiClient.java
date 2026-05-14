@@ -65,7 +65,7 @@ public class KakaoOauthApiClient implements SocialOauthApiClient {
 
       String socialId = String.valueOf(userInfoResponse.id());
       String nickname =
-        userInfoResponse.properties() != null ? userInfoResponse.properties().nickname() : null;
+          userInfoResponse.properties() != null ? userInfoResponse.properties().nickname() : null;
 
       return new SocialUserInfo(socialId, getProvider(), nickname, null);
 
@@ -82,12 +82,12 @@ public class KakaoOauthApiClient implements SocialOauthApiClient {
   public String generateOAuthUrl() {
 
     return UriComponentsBuilder.fromUriString(authUri)
-      .queryParam("client_id", clientId)
-      .queryParam("redirect_uri", redirectUri)
-      .queryParam("response_type", "code")
-      .build()
-      .encode()
-      .toUriString();
+        .queryParam("client_id", clientId)
+        .queryParam("redirect_uri", redirectUri)
+        .queryParam("response_type", "code")
+        .build()
+        .encode()
+        .toUriString();
   }
 
   private OauthTokenResponse getToken(String code) {
@@ -100,46 +100,46 @@ public class KakaoOauthApiClient implements SocialOauthApiClient {
     form.add("code", code);
 
     return restClient
-      .post()
-      .uri(tokenUri)
-      .contentType(MediaType.APPLICATION_FORM_URLENCODED)
-      .body(form)
-      .retrieve()
-      .onStatus(
-        HttpStatusCode::is4xxClientError,
-        (request, response) -> {
-          log.warn("Kakao OAuth 토큰 발급 요청 실패 - 클라이언트 오류. status={}", response.getStatusCode());
-          throw new BusinessException(ErrorStatus.AUTH_KAKAO_TOKEN_FAILED);
-        })
-      .onStatus(
-        HttpStatusCode::is5xxServerError,
-        (request, response) -> {
-          log.error("Kakao OAuth 토큰 발급 요청 실패 - 서버 오류. status={}", response.getStatusCode());
-          throw new BusinessException(ErrorStatus.AUTH_KAKAO_TOKEN_FAILED);
-        })
-      .body(OauthTokenResponse.class);
+        .post()
+        .uri(tokenUri)
+        .contentType(MediaType.APPLICATION_FORM_URLENCODED)
+        .body(form)
+        .retrieve()
+        .onStatus(
+            HttpStatusCode::is4xxClientError,
+            (request, response) -> {
+              log.warn("Kakao OAuth 토큰 발급 요청 실패 - 클라이언트 오류. status={}", response.getStatusCode());
+              throw new BusinessException(ErrorStatus.AUTH_KAKAO_TOKEN_FAILED);
+            })
+        .onStatus(
+            HttpStatusCode::is5xxServerError,
+            (request, response) -> {
+              log.error("Kakao OAuth 토큰 발급 요청 실패 - 서버 오류. status={}", response.getStatusCode());
+              throw new BusinessException(ErrorStatus.AUTH_KAKAO_TOKEN_FAILED);
+            })
+        .body(OauthTokenResponse.class);
   }
 
   private KakaoUserInfoResponse getProfile(String accessToken) {
 
     return restClient
-      .get()
-      .uri(userInfoUri)
-      .header(HttpHeaders.AUTHORIZATION, "Bearer " + accessToken)
-      .retrieve()
-      .onStatus(
-        HttpStatusCode::is4xxClientError,
-        (request, response) -> {
-          log.warn("Kakao OAuth 사용자 정보 조회 실패 - 클라이언트 오류. status={}", response.getStatusCode());
-          throw new BusinessException(ErrorStatus.AUTH_KAKAO_INFO_FAILED);
-        })
-      .onStatus(
-        HttpStatusCode::is5xxServerError,
-        (request, response) -> {
-          log.error("Kakao OAuth 사용자 정보 조회 실패 - 서버 오류. status={}", response.getStatusCode());
-          throw new BusinessException(ErrorStatus.AUTH_KAKAO_INFO_FAILED);
-        })
-      .body(KakaoUserInfoResponse.class);
+        .get()
+        .uri(userInfoUri)
+        .header(HttpHeaders.AUTHORIZATION, "Bearer " + accessToken)
+        .retrieve()
+        .onStatus(
+            HttpStatusCode::is4xxClientError,
+            (request, response) -> {
+              log.warn("Kakao OAuth 사용자 정보 조회 실패 - 클라이언트 오류. status={}", response.getStatusCode());
+              throw new BusinessException(ErrorStatus.AUTH_KAKAO_INFO_FAILED);
+            })
+        .onStatus(
+            HttpStatusCode::is5xxServerError,
+            (request, response) -> {
+              log.error("Kakao OAuth 사용자 정보 조회 실패 - 서버 오류. status={}", response.getStatusCode());
+              throw new BusinessException(ErrorStatus.AUTH_KAKAO_INFO_FAILED);
+            })
+        .body(KakaoUserInfoResponse.class);
   }
 
   @Override
