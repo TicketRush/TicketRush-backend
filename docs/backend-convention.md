@@ -210,7 +210,7 @@ Diary diary = diaryRepository.findByDiaryIdAndUserId(diaryId, userId)
 * **1줄 주석:** `// 주석 내용`
 * **여러 줄 주석:**
     * 코드 블록 설명: `/* 주석 내용 */`
-    * 클래스/메서드/필드 설명 (API 문서화용): `/ 주석 내용 */`
+    * 클래스/메서드/필드 설명 (API 문서화용): `/** 주석 내용 */`
 
 ### 🔁 @Transactional 규칙
 
