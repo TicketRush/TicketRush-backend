@@ -10,8 +10,11 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.HttpHeaders;
+import org.springframework.http.HttpStatusCode;
 import org.springframework.http.MediaType;
 import org.springframework.stereotype.Component;
+import org.springframework.util.LinkedMultiValueMap;
+import org.springframework.util.MultiValueMap;
 import org.springframework.web.client.RestClient;
 import org.springframework.web.util.UriComponentsBuilder;
 
@@ -65,15 +68,14 @@ public class GoogleOauthApiClient implements SocialOauthApiClient {
       }
 
       // 3. 공통 객체로 변환
-      return new SocialUserInfo(userInfoResponse.id(), getProvider(), userInfoResponse.name());
+      return new SocialUserInfo(
+          userInfoResponse.id(), getProvider(), userInfoResponse.name(), userInfoResponse.email());
 
     } catch (BusinessException e) {
-
       throw e;
 
     } catch (Exception e) {
-
-      log.error("Google OAuth 처리 중 에러 발생", e);
+      log.error("Google OAuth 처리 중 예상하지 못한 에러 발생", e);
       throw new BusinessException(ErrorStatus.AUTH_GOOGLE_INFO_FAILED);
     }
   }
@@ -85,8 +87,9 @@ public class GoogleOauthApiClient implements SocialOauthApiClient {
         .queryParam("client_id", clientId)
         .queryParam("redirect_uri", defaultRedirectUri)
         .queryParam("response_type", "code")
-        .queryParam("scope", "profile")
+        .queryParam("scope", "profile email")
         .build()
+        .encode()
         .toUriString();
   }
 
@@ -97,21 +100,32 @@ public class GoogleOauthApiClient implements SocialOauthApiClient {
 
   private OauthTokenResponse requestToken(String code, String redirectUri) {
 
+    MultiValueMap<String, String> form = new LinkedMultiValueMap<>();
+
+    form.add("code", code);
+    form.add("client_id", clientId);
+    form.add("client_secret", clientSecret);
+    form.add("redirect_uri", redirectUri);
+    form.add("grant_type", "authorization_code");
+
     return restClient
         .post()
         .uri(tokenUri)
         .contentType(MediaType.APPLICATION_FORM_URLENCODED)
-        .body(
-            "code="
-                + code
-                + "&client_id="
-                + clientId
-                + "&client_secret="
-                + clientSecret
-                + "&redirect_uri="
-                + redirectUri
-                + "&grant_type=authorization_code")
+        .body(form)
         .retrieve()
+        .onStatus(
+            HttpStatusCode::is4xxClientError,
+            (request, response) -> {
+              log.warn("Google OAuth 토큰 발급 요청 실패 - 클라이언트 오류. status={}", response.getStatusCode());
+              throw new BusinessException(ErrorStatus.AUTH_GOOGLE_TOKEN_FAILED);
+            })
+        .onStatus(
+            HttpStatusCode::is5xxServerError,
+            (request, response) -> {
+              log.error("Google OAuth 토큰 발급 요청 실패 - 서버 오류. status={}", response.getStatusCode());
+              throw new BusinessException(ErrorStatus.AUTH_GOOGLE_TOKEN_FAILED);
+            })
         .body(OauthTokenResponse.class);
   }
 
@@ -122,6 +136,18 @@ public class GoogleOauthApiClient implements SocialOauthApiClient {
         .uri(userInfoUri)
         .header(HttpHeaders.AUTHORIZATION, "Bearer " + accessToken)
         .retrieve()
+        .onStatus(
+            HttpStatusCode::is4xxClientError,
+            (request, response) -> {
+              log.warn("Google OAuth 사용자 정보 조회 실패 - 클라이언트 오류. status={}", response.getStatusCode());
+              throw new BusinessException(ErrorStatus.AUTH_GOOGLE_INFO_FAILED);
+            })
+        .onStatus(
+            HttpStatusCode::is5xxServerError,
+            (request, response) -> {
+              log.error("Google OAuth 사용자 정보 조회 실패 - 서버 오류. status={}", response.getStatusCode());
+              throw new BusinessException(ErrorStatus.AUTH_GOOGLE_INFO_FAILED);
+            })
         .body(GoogleUserInfoResponse.class);
   }
 }

@@ -9,6 +9,8 @@ import com.ticketrush.global.status.ErrorStatus;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.http.HttpHeaders;
+import org.springframework.http.HttpStatusCode;
 import org.springframework.http.MediaType;
 import org.springframework.stereotype.Component;
 import org.springframework.util.LinkedMultiValueMap;
@@ -65,13 +67,13 @@ public class KakaoOauthApiClient implements SocialOauthApiClient {
       String nickname =
           userInfoResponse.properties() != null ? userInfoResponse.properties().nickname() : null;
 
-      return new SocialUserInfo(socialId, getProvider(), nickname);
+      return new SocialUserInfo(socialId, getProvider(), nickname, null);
 
     } catch (BusinessException e) {
-
       throw e;
+
     } catch (Exception e) {
-      log.error("Kakao OAuth 처리 중 에러 발생", e);
+      log.error("Kakao OAuth 처리 중 예상하지 못한 에러 발생", e);
       throw new BusinessException(ErrorStatus.AUTH_KAKAO_INFO_FAILED);
     }
   }
@@ -84,14 +86,11 @@ public class KakaoOauthApiClient implements SocialOauthApiClient {
         .queryParam("redirect_uri", redirectUri)
         .queryParam("response_type", "code")
         .build()
+        .encode()
         .toUriString();
   }
 
   private OauthTokenResponse getToken(String code) {
-
-    log.info("clientId = {}", clientId);
-    log.info("clientSecret = {}", clientSecret);
-    log.info("redirectUri = {}", redirectUri);
 
     MultiValueMap<String, String> form = new LinkedMultiValueMap<>();
     form.add("grant_type", "authorization_code");
@@ -106,15 +105,40 @@ public class KakaoOauthApiClient implements SocialOauthApiClient {
         .contentType(MediaType.APPLICATION_FORM_URLENCODED)
         .body(form)
         .retrieve()
+        .onStatus(
+            HttpStatusCode::is4xxClientError,
+            (request, response) -> {
+              log.warn("Kakao OAuth 토큰 발급 요청 실패 - 클라이언트 오류. status={}", response.getStatusCode());
+              throw new BusinessException(ErrorStatus.AUTH_KAKAO_TOKEN_FAILED);
+            })
+        .onStatus(
+            HttpStatusCode::is5xxServerError,
+            (request, response) -> {
+              log.error("Kakao OAuth 토큰 발급 요청 실패 - 서버 오류. status={}", response.getStatusCode());
+              throw new BusinessException(ErrorStatus.AUTH_KAKAO_TOKEN_FAILED);
+            })
         .body(OauthTokenResponse.class);
   }
 
   private KakaoUserInfoResponse getProfile(String accessToken) {
+
     return restClient
         .get()
         .uri(userInfoUri)
-        .header("Authorization", "Bearer " + accessToken)
+        .header(HttpHeaders.AUTHORIZATION, "Bearer " + accessToken)
         .retrieve()
+        .onStatus(
+            HttpStatusCode::is4xxClientError,
+            (request, response) -> {
+              log.warn("Kakao OAuth 사용자 정보 조회 실패 - 클라이언트 오류. status={}", response.getStatusCode());
+              throw new BusinessException(ErrorStatus.AUTH_KAKAO_INFO_FAILED);
+            })
+        .onStatus(
+            HttpStatusCode::is5xxServerError,
+            (request, response) -> {
+              log.error("Kakao OAuth 사용자 정보 조회 실패 - 서버 오류. status={}", response.getStatusCode());
+              throw new BusinessException(ErrorStatus.AUTH_KAKAO_INFO_FAILED);
+            })
         .body(KakaoUserInfoResponse.class);
   }
 

@@ -68,8 +68,9 @@ public class NaverOauthApiClient implements SocialOauthApiClient {
 
       String socialId = userInfoResponse.response().id();
       String nickname = userInfoResponse.response().name();
+      String email = userInfoResponse.response().email();
 
-      return new SocialUserInfo(socialId, getProvider(), nickname);
+      return new SocialUserInfo(socialId, getProvider(), nickname, email);
 
     } catch (BusinessException e) {
       throw e;
