@@ -58,7 +58,7 @@ spring:
               predicates:
                 - Path=/api/v1/seat/*/seat-status/stream
               metadata:
-                response-timeout: 2100000
+                response-timeout: -1
                 connect-timeout: 5000
 
             - id: seat-service
