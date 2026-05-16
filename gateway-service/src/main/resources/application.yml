@@ -53,6 +53,14 @@ spring:
               filters:
                 - RewritePath=/v3/api-docs/payment,/v3/api-docs
 
+            - id: seat-sse-service
+              uri: http://${services.seat.host}:8086
+              predicates:
+                - Path=/api/v1/seat/*/seat-status/stream
+              metadata:
+                response-timeout: 2100000
+                connect-timeout: 5000
+
             - id: seat-service
               uri: http://${services.seat.host}:8086
               predicates:
