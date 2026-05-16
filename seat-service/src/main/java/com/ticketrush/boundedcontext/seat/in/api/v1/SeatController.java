@@ -9,6 +9,7 @@ import com.ticketrush.global.exception.BusinessException;
 import com.ticketrush.global.status.ErrorStatus;
 import com.ticketrush.global.status.SuccessStatus;
 import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.Parameter;
 import jakarta.validation.Valid;
 import java.util.List;
 import lombok.RequiredArgsConstructor;
@@ -43,9 +44,10 @@ public class SeatController {
   }
 
   @GetMapping("/{performanceId}/seat-counts")
-  @Operation(summary = "공연별 좌석 수 조회", description = "공연 ID에 해당하는 잔여 좌석 수와 전체 좌석 수를 조회합니다.")
+  @Operation(summary = "공연 좌석 수 조회", description = "공연 ID로 예매 가능한 좌석 수와 전체 좌석 수를 조회합니다.")
+  @SeatCountsApiResponses
   public ResponseEntity<ApiResponse<SeatAvailabilityResponse>> getSeatCounts(
-      @PathVariable Long performanceId) {
+      @Parameter(description = "공연 ID") @PathVariable Long performanceId) {
     SeatAvailabilityResponse response = seatFacade.getPerformanceSeatAvailability(performanceId);
     return ApiResponse.onSuccess(SuccessStatus.OK, response);
   }
