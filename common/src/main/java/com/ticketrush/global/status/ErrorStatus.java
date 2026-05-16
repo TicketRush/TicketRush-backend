@@ -34,11 +34,10 @@ public enum ErrorStatus {
   AUTH_GOOGLE_INFO_FAILED(HttpStatus.BAD_REQUEST, "AUTH_400_006", "잘못된 구글 정보입니다."),
   AUTH_NAVER_TOKEN_FAILED(HttpStatus.BAD_REQUEST, "AUTH_400_007", "네이버 토큰 요청에 실패했습니다."),
   AUTH_NAVER_INFO_FAILED(HttpStatus.BAD_REQUEST, "AUTH_400_008", "네이버 사용자 정보 조회에 실패했습니다."),
-  AUTH_KAKAO_INFO_FAILED(HttpStatus.NOT_FOUND, "AUTH_400_009", "카카오 사용자 정보 조회를 실패하였습니다."),
-  AUTH_EMAIL_ALREADY_EXISTS(HttpStatus.BAD_REQUEST, "AUTH_400_010", "이미 가입된 이메일입니다."),
-  AUTH_EMAIL_SEND_FAILED(HttpStatus.BAD_REQUEST, "AUTH_400_011", "Email 인증번호 발송에 실패하였습니다."),
+  AUTH_EMAIL_ALREADY_EXISTS(HttpStatus.BAD_REQUEST, "AUTH_400_009", "이미 가입된 이메일입니다."),
+  AUTH_EMAIL_SEND_FAILED(HttpStatus.BAD_REQUEST, "AUTH_400_010", "Email 인증번호 발송에 실패하였습니다."),
   AUTH_EMAIL_EXISTS_CHECK_BAD_REQUEST(
-      HttpStatus.BAD_REQUEST, "AUTH_400_012", "이메일 중복 확인 요청이 올바르지 않습니다."),
+      HttpStatus.BAD_REQUEST, "AUTH_400_011", "이메일 중복 확인 요청이 올바르지 않습니다."),
 
   // Auth 401
   AUTH_INVALID_REFRESH_TOKEN(HttpStatus.UNAUTHORIZED, "AUTH_401_001", "유효하지 않은 Refresh Token입니다."),
@@ -61,6 +60,7 @@ public enum ErrorStatus {
   // Auth 503
   AUTH_USER_COMMUNICATION_FAILED(
       HttpStatus.SERVICE_UNAVAILABLE, "AUTH_503_001", "user-service와 통신에 실패했습니다."),
+  AUTH_KAKAO_INFO_FAILED(HttpStatus.NOT_FOUND, "AUTH_503_002", "카카오 사용자 정보 조회를 실패하였습니다."),
 
   // Booking 404
   BOOKING_NOT_FOUND(HttpStatus.NOT_FOUND, "BOOKING_404_001", "해당 예매를 찾을 수 없습니다."),
