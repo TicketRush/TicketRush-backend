@@ -11,11 +11,9 @@ import java.security.SecureRandom;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
-import org.springframework.transaction.annotation.Transactional;
 
 @Slf4j
 @Component
-@Transactional(readOnly = true)
 @RequiredArgsConstructor
 public class SignupEmailAuthNumberSendUseCase {
 
@@ -50,14 +48,12 @@ public class SignupEmailAuthNumberSendUseCase {
       redisRepository.deleteSignupEmailAuthNumber(email);
       redisRepository.deleteSignupEmailAuthCooldown(email);
 
-      log.error("회원가입 이메일 인증 번호 발송 실패 email={}", email, e);
-
-      log.error("회원가입 이메일 인증 번호 발송 실패 email={}", email, e);
+      log.error("회원가입 이메일 인증 번호 발송 실패 email={}", maskEmail(email), e);
 
       throw new BusinessException(ErrorStatus.AUTH_EMAIL_SEND_FAILED);
     }
 
-    log.info("회원가입 이메일 인증 번호 발송 완료 email={}", email);
+    log.info("회원가입 이메일 인증 번호 발송 완료 email={}", maskEmail(email));
 
     return new SignupEmailAuthNumberSendResponse("이메일 인증 번호가 발송되었습니다.");
   }
@@ -65,5 +61,19 @@ public class SignupEmailAuthNumberSendUseCase {
   private String createAuthNumber() {
     int number = SECURE_RANDOM.nextInt(900000) + 100000;
     return String.valueOf(number);
+  }
+
+  private String maskEmail(String email) {
+    if (email == null || email.isBlank()) {
+      return "unknown";
+    }
+
+    int atIndex = email.indexOf("@");
+
+    if (atIndex <= 1) {
+      return "***";
+    }
+
+    return email.charAt(0) + "***" + email.substring(atIndex);
   }
 }
