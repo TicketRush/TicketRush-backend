@@ -32,6 +32,9 @@ public enum ErrorStatus {
       HttpStatus.BAD_REQUEST, "AUTH_400_004", "유효하지 않은 Redirect URI입니다."),
   AUTH_GOOGLE_TOKEN_FAILED(HttpStatus.BAD_REQUEST, "AUTH_400_005", "잘못된 구글 토큰입니다."),
   AUTH_GOOGLE_INFO_FAILED(HttpStatus.BAD_REQUEST, "AUTH_400_006", "잘못된 구글 정보입니다."),
+  AUTH_NAVER_TOKEN_FAILED(HttpStatus.BAD_REQUEST, "AUTH_400_007", "네이버 토큰 요청에 실패했습니다."),
+  AUTH_NAVER_INFO_FAILED(HttpStatus.BAD_REQUEST, "AUTH_400_008", "네이버 사용자 정보 조회에 실패했습니다."),
+  AUTH_KAKAO_INFO_FAILED(HttpStatus.NOT_FOUND, "AUTH_400_009", "카카오 사용자 정보 조회를 실패하였습니다."),
 
   // Auth 401
   AUTH_INVALID_REFRESH_TOKEN(HttpStatus.UNAUTHORIZED, "AUTH_401_001", "유효하지 않은 Refresh Token입니다."),
@@ -42,9 +45,6 @@ public enum ErrorStatus {
 
   // Auth 403
   AUTH_ACCESS_DENIED(HttpStatus.FORBIDDEN, "AUTH_403_001", "접근 권한이 없습니다."),
-
-  // Auth 404
-  AUTH_KAKAO_INFO_FAILED(HttpStatus.NOT_FOUND, "AUTH_404_001", "카카오 사용자 정보 조회를 실패하였습니다."),
 
   // Auth 500
   AUTH_USER_SERVER_ERROR(
@@ -82,6 +82,10 @@ public enum ErrorStatus {
   PERFORMANCE_INVALID_STATUS_TRANSITION(
       HttpStatus.BAD_REQUEST, "PERFORMANCE_400_004", "유효하지 않은 공연 상태 전환입니다."),
   PERFORMANCE_NOT_ON_SALE(HttpStatus.BAD_REQUEST, "PERFORMANCE_400_005", "예매 가능한 공연이 아닙니다."),
+
+  // Performance 409
+  PERFORMANCE_HAS_SOLD_SEATS(
+      HttpStatus.CONFLICT, "PERFORMANCE_409_001", "예매 완료된 좌석이 있어 삭제할 수 없습니다."),
 
   // Performance 404
   PERFORMANCE_NOT_FOUND(HttpStatus.NOT_FOUND, "PERFORMANCE_404_001", "공연이 존재하지 않습니다."),

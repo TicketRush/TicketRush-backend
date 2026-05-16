@@ -7,9 +7,9 @@ public interface SocialOauthApiClient {
 
   SocialProvider getProvider();
 
-  SocialUserInfo getUserInfo(String code, String redirectUri);
+  SocialUserInfo getUserInfo(String code);
 
-  String generateOAuthUrl(String redirectUri);
+  String generateOAuthUrl();
 
   String getDefaultRedirectUri();
 }

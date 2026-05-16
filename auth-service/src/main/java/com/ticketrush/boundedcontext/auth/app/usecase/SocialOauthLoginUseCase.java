@@ -13,11 +13,9 @@ import com.ticketrush.global.security.JwtTokenProvider;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
-import org.springframework.transaction.annotation.Transactional;
 
 @Slf4j
 @Component
-@Transactional(readOnly = true)
 @RequiredArgsConstructor
 /*
 1. provider에 맞는 OAuth 서비스 선택
@@ -37,7 +35,7 @@ public class SocialOauthLoginUseCase {
     // 1. OAuth 사용자 정보 조회
     SocialOauthApiClient oauthClient = socialOauthApiClientFactory.getClient(request.provider());
 
-    SocialUserInfo socialUserInfo = oauthClient.getUserInfo(request.code(), request.redirectUri());
+    SocialUserInfo socialUserInfo = oauthClient.getUserInfo(request.code());
 
     // 2. user-service 호출
     UserServiceSocialLoginResponse userResponse =
@@ -45,11 +43,10 @@ public class SocialOauthLoginUseCase {
             new UserServiceSocialLoginRequest(
                 socialUserInfo.socialId(),
                 socialUserInfo.socialProvider().name(),
-                socialUserInfo.name()));
+                socialUserInfo.name(),
+                socialUserInfo.email()));
 
     Long userId = userResponse.userId();
-
-    log.info("🔥 user-service 응답 = {}", userResponse);
 
     // 3. JWT 생성
     String accessToken = jwtTokenProvider.createAccessToken(userId, "USER");

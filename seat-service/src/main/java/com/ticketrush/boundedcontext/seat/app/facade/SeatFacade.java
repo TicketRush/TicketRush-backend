@@ -25,8 +25,8 @@ import org.springframework.stereotype.Service;
 @RequiredArgsConstructor
 public class SeatFacade {
 
-  private final SeatGetSeatLayoutsUseCase seatGetSeatLayoutsUseCase;
   private final SeatGetAvailabilityUseCase seatGetAvailabilityUseCase;
+  private final SeatGetSeatLayoutsUseCase seatGetSeatLayoutsUseCase;
   private final SeatCreateDefaultLayoutUseCase seatCreateDefaultLayoutUseCase;
   private final SeatConfirmSoldUseCase seatConfirmSoldUseCase;
   private final SeatHoldUseCase seatHoldUseCase;

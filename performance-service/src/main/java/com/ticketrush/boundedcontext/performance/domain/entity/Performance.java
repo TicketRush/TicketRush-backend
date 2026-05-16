@@ -16,6 +16,7 @@ import jakarta.persistence.JoinColumn;
 import jakarta.persistence.OrderColumn;
 import jakarta.persistence.Table;
 import java.time.LocalDate;
+import java.time.LocalDateTime;
 import java.time.LocalTime;
 import java.util.ArrayList;
 import java.util.List;
@@ -23,9 +24,11 @@ import lombok.AccessLevel;
 import lombok.Builder;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
+import org.hibernate.annotations.SQLRestriction;
 
 @Entity
 @Table(name = "performance")
+@SQLRestriction("deleted_at IS NULL")
 @Getter
 @NoArgsConstructor(access = AccessLevel.PROTECTED)
 @AttributeOverride(name = "id", column = @Column(name = "performance_id"))
@@ -84,6 +87,9 @@ public class Performance extends AutoIdBaseEntity {
   @OrderColumn(name = "facility_order")
   private List<String> facilities = new ArrayList<>();
 
+  @Column(name = "deleted_at")
+  private LocalDateTime deletedAt;
+
   @Builder
   public Performance(
       String title,
@@ -123,6 +129,53 @@ public class Performance extends AutoIdBaseEntity {
     this.imageMainUrl = mainImageUrl;
     this.image3dUrl = model3dUrl;
     this.imageGalleryUrls = galleryUrls != null ? galleryUrls : new ArrayList<>();
+  }
+
+  public void update(
+      String title,
+      String performer,
+      Genre genre,
+      String description,
+      LocalDate showDate,
+      LocalTime showTime,
+      Integer durationMinutes,
+      Long price,
+      Integer totalSeats,
+      String address) {
+    if (title != null) {
+      this.title = title;
+    }
+    if (performer != null) {
+      this.performer = performer;
+    }
+    if (genre != null) {
+      this.genre = genre;
+    }
+    if (description != null) {
+      this.description = description;
+    }
+    if (showDate != null) {
+      this.showDate = showDate;
+    }
+    if (showTime != null) {
+      this.showTime = showTime;
+    }
+    if (durationMinutes != null) {
+      this.durationMinutes = durationMinutes;
+    }
+    if (price != null) {
+      this.price = price;
+    }
+    if (totalSeats != null) {
+      this.totalSeats = totalSeats;
+    }
+    if (address != null) {
+      this.address = address;
+    }
+  }
+
+  public void softDelete() {
+    this.deletedAt = LocalDateTime.now();
   }
 
   public boolean canTransitionTo(PerformanceStatus target) {

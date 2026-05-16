@@ -10,11 +10,13 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 
 import com.ticketrush.boundedcontext.booking.app.dto.request.BookingCreateRequest;
+import com.ticketrush.boundedcontext.booking.app.dto.response.BookingPendingResponse;
 import com.ticketrush.boundedcontext.booking.app.usecase.BookingCreateUseCase;
 import com.ticketrush.boundedcontext.booking.app.usecase.BookingIssueNumberUseCase;
 import com.ticketrush.boundedcontext.booking.app.usecase.BookingValidateReferencesUseCase;
 import com.ticketrush.boundedcontext.booking.app.usecase.BookingValidateSeatAvailableUseCase;
 import com.ticketrush.boundedcontext.booking.domain.entity.Booking;
+import com.ticketrush.boundedcontext.booking.domain.types.BookingStatus;
 import com.ticketrush.global.exception.BusinessException;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -47,6 +49,7 @@ class BookingFacadeTest {
             .performanceId(performanceId)
             .seatId(seatId)
             .bookingNumber(bookingNumber)
+            .bookingStatus(BookingStatus.PENDING)
             .build();
 
     given(bookingIssueNumberUseCase.execute()).willReturn(bookingNumber);
@@ -56,10 +59,11 @@ class BookingFacadeTest {
         .willReturn(booking);
 
     // when
-    Booking result = bookingFacade.createBooking(userId, performanceId, seatId);
+    BookingPendingResponse result = bookingFacade.createBooking(userId, performanceId, seatId);
 
     // then
-    assertThat(result).isSameAs(booking);
+    assertThat(result.bookingNumber()).isEqualTo(bookingNumber);
+    assertThat(result.status()).isEqualTo(BookingStatus.PENDING.name());
     verify(bookingValidateReferencesUseCase).execute(userId, performanceId, seatId);
     verify(bookingValidateSeatAvailableUseCase).execute(seatId, performanceId);
   }

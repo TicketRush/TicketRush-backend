@@ -17,32 +17,32 @@ import org.springframework.transaction.annotation.Transactional;
 @Transactional(readOnly = true)
 @RequiredArgsConstructor
 public class OauthLoginUrlUseCase {
+
   private final SocialOauthApiClientFactory socialOauthApiClientFactory;
   private final AuthSecurityProperties securityProperties;
 
   // 어느 provider로 로그인할 지를 받아서 그 로그인에 필요한 OAuth 인증 URL을 만들어 반환
-  public String generateOAuthUrl(SocialProvider provider, String redirectUri) {
+  public String generateOAuthUrl(SocialProvider provider) {
 
-    SocialOauthApiClient service = socialOauthApiClientFactory.getClient(provider);
+    SocialOauthApiClient oauthClient = socialOauthApiClientFactory.getClient(provider);
 
-    if (redirectUri == null) {
-      redirectUri = service.getDefaultRedirectUri();
-    }
+    String redirectUri = oauthClient.getDefaultRedirectUri();
 
     validateRedirectUri(redirectUri);
 
-    return socialOauthApiClientFactory.getClient(provider).generateOAuthUrl(redirectUri);
+    return oauthClient.generateOAuthUrl();
   }
 
   private void validateRedirectUri(String redirectUri) {
-    if (redirectUri == null) {
-      return;
+
+    if (redirectUri == null || redirectUri.isBlank()) {
+      throw new BusinessException(ErrorStatus.AUTH_OAUTH_INVALID_REDIRECT_URI);
     }
 
     List<String> allowedRedirectDomains =
         securityProperties.getOauth2().getAllowedRedirectDomains();
 
-    if (allowedRedirectDomains.isEmpty()) {
+    if (allowedRedirectDomains == null || allowedRedirectDomains.isEmpty()) {
       throw new BusinessException(ErrorStatus.AUTH_OAUTH_INVALID_REDIRECT_URI);
     }
 
@@ -54,7 +54,8 @@ public class OauthLoginUrlUseCase {
     }
 
     String host = uri.getHost();
-    if (host == null) {
+
+    if (host == null || host.isBlank()) {
       throw new BusinessException(ErrorStatus.AUTH_OAUTH_INVALID_REDIRECT_URI);
     }
 

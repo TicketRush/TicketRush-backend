@@ -6,15 +6,6 @@ import jakarta.validation.constraints.NotNull;
 
 @Schema(description = "예약 대기 생성 요청 DTO")
 public record BookingPendingRequest(
-    // TODO: 인증 로직 완료 후 컨트롤러 파라미터(예: @AuthenticationPrincipal)로 대체하고 삭제할 필드
-    @JsonProperty("user_id")
-        @Schema(
-            name = "user_id",
-            description = "사용자 ID",
-            example = "1",
-            requiredMode = Schema.RequiredMode.REQUIRED)
-        @NotNull
-        Long userId,
     @JsonProperty("performance_id")
         @Schema(
             name = "performance_id",

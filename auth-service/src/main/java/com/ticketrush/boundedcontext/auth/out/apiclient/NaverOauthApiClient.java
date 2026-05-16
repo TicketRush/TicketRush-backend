@@ -1,6 +1,6 @@
 package com.ticketrush.boundedcontext.auth.out.apiclient;
 
-import com.ticketrush.boundedcontext.auth.app.dto.response.KakaoUserInfoResponse;
+import com.ticketrush.boundedcontext.auth.app.dto.response.NaverUserInfoResponse;
 import com.ticketrush.boundedcontext.auth.app.dto.response.OauthTokenResponse;
 import com.ticketrush.boundedcontext.auth.domain.types.SocialProvider;
 import com.ticketrush.boundedcontext.auth.domain.types.SocialUserInfo;
@@ -21,83 +21,89 @@ import org.springframework.web.util.UriComponentsBuilder;
 @Slf4j
 @Component
 @RequiredArgsConstructor
-public class KakaoOauthApiClient implements SocialOauthApiClient {
+public class NaverOauthApiClient implements SocialOauthApiClient {
 
   private final RestClient restClient;
 
-  @Value("${oauth.kakao.client-id}")
+  @Value("${oauth.naver.client-id}")
   private String clientId;
 
-  @Value("${oauth.kakao.client-secret}")
+  @Value("${oauth.naver.client-secret}")
   private String clientSecret;
 
-  @Value("${oauth.kakao.redirect-uri}")
-  private String redirectUri;
+  @Value("${oauth.naver.redirect-uri}")
+  private String defaultRedirectUri;
 
-  @Value("${oauth.kakao.token-uri}")
+  @Value("${oauth.naver.authorization-uri}")
+  private String authorizationUri;
+
+  @Value("${oauth.naver.token-uri}")
   private String tokenUri;
 
-  @Value("${oauth.kakao.user-info-uri}")
+  @Value("${oauth.naver.user-info-uri}")
   private String userInfoUri;
-
-  @Value("${oauth.kakao.auth-uri}")
-  private String authUri;
 
   @Override
   public SocialProvider getProvider() {
-    return SocialProvider.KAKAO;
+    return SocialProvider.NAVER;
   }
 
   @Override
   public SocialUserInfo getUserInfo(String code) {
+
     try {
-      OauthTokenResponse tokenResponse = getToken(code);
+      OauthTokenResponse tokenResponse = getToken(code, defaultRedirectUri);
 
       if (tokenResponse == null || tokenResponse.accessToken() == null) {
-        throw new BusinessException(ErrorStatus.AUTH_KAKAO_TOKEN_FAILED);
+        throw new BusinessException(ErrorStatus.AUTH_NAVER_TOKEN_FAILED);
       }
 
-      KakaoUserInfoResponse userInfoResponse = getProfile(tokenResponse.accessToken());
+      NaverUserInfoResponse userInfoResponse = getProfile(tokenResponse.accessToken());
 
-      if (userInfoResponse == null || userInfoResponse.id() == null) {
-        throw new BusinessException(ErrorStatus.AUTH_KAKAO_INFO_FAILED);
+      if (userInfoResponse == null
+          || userInfoResponse.response() == null
+          || userInfoResponse.response().id() == null) {
+        throw new BusinessException(ErrorStatus.AUTH_NAVER_INFO_FAILED);
       }
 
-      String socialId = String.valueOf(userInfoResponse.id());
-      String nickname =
-          userInfoResponse.properties() != null ? userInfoResponse.properties().nickname() : null;
+      String socialId = userInfoResponse.response().id();
+      String nickname = userInfoResponse.response().name();
+      String email = userInfoResponse.response().email();
 
-      return new SocialUserInfo(socialId, getProvider(), nickname, null);
+      return new SocialUserInfo(socialId, getProvider(), nickname, email);
 
     } catch (BusinessException e) {
       throw e;
 
     } catch (Exception e) {
-      log.error("Kakao OAuth 처리 중 예상하지 못한 에러 발생", e);
-      throw new BusinessException(ErrorStatus.AUTH_KAKAO_INFO_FAILED);
+      log.error("Naver OAuth 처리 중 예상하지 못한 에러 발생", e);
+      throw new BusinessException(ErrorStatus.AUTH_NAVER_INFO_FAILED);
     }
   }
 
   @Override
   public String generateOAuthUrl() {
 
-    return UriComponentsBuilder.fromUriString(authUri)
-        .queryParam("client_id", clientId)
-        .queryParam("redirect_uri", redirectUri)
+    return UriComponentsBuilder.fromUriString(authorizationUri)
         .queryParam("response_type", "code")
+        .queryParam("client_id", clientId)
+        .queryParam("redirect_uri", defaultRedirectUri)
+        .queryParam("state", "test")
         .build()
         .encode()
         .toUriString();
   }
 
-  private OauthTokenResponse getToken(String code) {
+  private OauthTokenResponse getToken(String code, String redirectUri) {
 
     MultiValueMap<String, String> form = new LinkedMultiValueMap<>();
+
     form.add("grant_type", "authorization_code");
     form.add("client_id", clientId);
     form.add("client_secret", clientSecret);
     form.add("redirect_uri", redirectUri);
     form.add("code", code);
+    form.add("state", "test");
 
     return restClient
         .post()
@@ -108,19 +114,19 @@ public class KakaoOauthApiClient implements SocialOauthApiClient {
         .onStatus(
             HttpStatusCode::is4xxClientError,
             (request, response) -> {
-              log.warn("Kakao OAuth 토큰 발급 요청 실패 - 클라이언트 오류. status={}", response.getStatusCode());
-              throw new BusinessException(ErrorStatus.AUTH_KAKAO_TOKEN_FAILED);
+              log.warn("Naver OAuth 토큰 발급 요청 실패 - 클라이언트 오류. status={}", response.getStatusCode());
+              throw new BusinessException(ErrorStatus.AUTH_NAVER_TOKEN_FAILED);
             })
         .onStatus(
             HttpStatusCode::is5xxServerError,
             (request, response) -> {
-              log.error("Kakao OAuth 토큰 발급 요청 실패 - 서버 오류. status={}", response.getStatusCode());
-              throw new BusinessException(ErrorStatus.AUTH_KAKAO_TOKEN_FAILED);
+              log.error("Naver OAuth 토큰 발급 요청 실패 - 서버 오류. status={}", response.getStatusCode());
+              throw new BusinessException(ErrorStatus.AUTH_NAVER_TOKEN_FAILED);
             })
         .body(OauthTokenResponse.class);
   }
 
-  private KakaoUserInfoResponse getProfile(String accessToken) {
+  private NaverUserInfoResponse getProfile(String accessToken) {
 
     return restClient
         .get()
@@ -130,20 +136,20 @@ public class KakaoOauthApiClient implements SocialOauthApiClient {
         .onStatus(
             HttpStatusCode::is4xxClientError,
             (request, response) -> {
-              log.warn("Kakao OAuth 사용자 정보 조회 실패 - 클라이언트 오류. status={}", response.getStatusCode());
-              throw new BusinessException(ErrorStatus.AUTH_KAKAO_INFO_FAILED);
+              log.warn("Naver OAuth 사용자 정보 조회 실패 - 클라이언트 오류. status={}", response.getStatusCode());
+              throw new BusinessException(ErrorStatus.AUTH_NAVER_INFO_FAILED);
             })
         .onStatus(
             HttpStatusCode::is5xxServerError,
             (request, response) -> {
-              log.error("Kakao OAuth 사용자 정보 조회 실패 - 서버 오류. status={}", response.getStatusCode());
-              throw new BusinessException(ErrorStatus.AUTH_KAKAO_INFO_FAILED);
+              log.error("Naver OAuth 사용자 정보 조회 실패 - 서버 오류. status={}", response.getStatusCode());
+              throw new BusinessException(ErrorStatus.AUTH_NAVER_INFO_FAILED);
             })
-        .body(KakaoUserInfoResponse.class);
+        .body(NaverUserInfoResponse.class);
   }
 
   @Override
   public String getDefaultRedirectUri() {
-    return redirectUri;
+    return defaultRedirectUri;
   }
 }

@@ -1,5 +1,6 @@
 package com.ticketrush.boundedcontext.seat.out.repository;
 
+import com.ticketrush.boundedcontext.seat.app.dto.response.SeatAvailabilityResponse;
 import com.ticketrush.boundedcontext.seat.app.dto.response.SeatLayoutResponse;
 import com.ticketrush.boundedcontext.seat.domain.entity.Seat;
 import com.ticketrush.global.types.SeatStatus;
@@ -15,6 +16,16 @@ public interface SeatRepository extends JpaRepository<Seat, Long> {
   Long countByPerformanceId(Long performanceId);
 
   Long countByPerformanceIdAndSeatStatus(Long performanceId, SeatStatus seatStatus);
+
+  @Query(
+      "SELECT new com.ticketrush.boundedcontext.seat.app.dto.response.SeatAvailabilityResponse("
+          + "COUNT(CASE WHEN s.seatStatus = :availableStatus THEN s.id ELSE null END), "
+          + "COUNT(s)) "
+          + "FROM Seat s "
+          + "WHERE s.performanceId = :performanceId")
+  SeatAvailabilityResponse countSeatAvailabilityByPerformanceId(
+      @Param("performanceId") Long performanceId,
+      @Param("availableStatus") SeatStatus availableStatus);
 
   @Query(
       "SELECT new com.ticketrush.boundedcontext.seat.app.dto.response.SeatLayoutResponse("

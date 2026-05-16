@@ -11,13 +11,12 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import com.ticketrush.boundedcontext.seat.app.dto.response.SeatAvailabilityResponse;
 import com.ticketrush.boundedcontext.seat.app.dto.response.SeatLayoutResponse;
 import com.ticketrush.boundedcontext.seat.app.facade.SeatFacade;
-import com.ticketrush.global.config.JacksonConfig;
 import com.ticketrush.global.config.SecurityConfig;
+import com.ticketrush.support.WebMvcSliceTest;
 import java.util.List;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.boot.webmvc.test.autoconfigure.WebMvcTest;
 import org.springframework.context.annotation.Import;
 import org.springframework.http.MediaType;
 import org.springframework.security.test.context.support.WithMockUser;
@@ -25,8 +24,8 @@ import org.springframework.test.context.TestPropertySource;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
 
-@WebMvcTest(SeatController.class)
-@Import({JacksonConfig.class, SecurityConfig.class})
+@WebMvcSliceTest(SeatController.class)
+@Import(SecurityConfig.class)
 @TestPropertySource(properties = "gateway.internal-token=test-token")
 class SeatControllerTest {
 
@@ -65,7 +64,7 @@ class SeatControllerTest {
   void getSeatCounts() throws Exception {
     // given
     Long performanceId = 1L;
-    SeatAvailabilityResponse response = new SeatAvailabilityResponse(120L, 120L);
+    SeatAvailabilityResponse response = new SeatAvailabilityResponse(8L, 10L);
     given(seatFacade.getPerformanceSeatAvailability(performanceId)).willReturn(response);
 
     // when & then
@@ -73,8 +72,8 @@ class SeatControllerTest {
         .perform(get("/api/v1/seat/{performanceId}/seat-counts", performanceId))
         .andExpect(status().isOk())
         .andExpect(jsonPath("$.is_success").value(true))
-        .andExpect(jsonPath("$.result.available_count").value(120))
-        .andExpect(jsonPath("$.result.total_count").value(120));
+        .andExpect(jsonPath("$.result.available_count").value(8))
+        .andExpect(jsonPath("$.result.total_count").value(10));
   }
 
   @Test
