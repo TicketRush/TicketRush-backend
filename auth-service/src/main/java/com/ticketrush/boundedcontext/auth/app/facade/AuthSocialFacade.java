@@ -9,7 +9,6 @@ import com.ticketrush.boundedcontext.auth.app.usecase.SocialLogoutUseCase;
 import com.ticketrush.boundedcontext.auth.app.usecase.SocialOauthLoginUseCase;
 import com.ticketrush.boundedcontext.auth.app.usecase.TokenReissueUseCase;
 import com.ticketrush.boundedcontext.auth.domain.types.SocialProvider;
-import com.ticketrush.global.security.JwtTokenProvider;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
@@ -23,7 +22,6 @@ public class AuthSocialFacade {
   private final OauthLoginUrlUseCase oauthLoginUrlUseCase;
   private final TokenReissueUseCase tokenReissueUseCase;
   private final SocialLogoutUseCase socialLogoutUseCase;
-  private final JwtTokenProvider jwtTokenProvider;
   private final ProviderParser providerParser;
 
   // OAuth 로그인 URL 생성

@@ -26,10 +26,8 @@ public class AuthController {
   @Operation(summary = "회원가입 이메일 인증 번호 발송", description = "회원가입 전 이메일 중복 확인 후 인증 번호를 발송합니다.")
   @PostMapping("/signup/email-verification/send")
   public ResponseEntity<ApiResponse<SignupEmailAuthNumberSendResponse>> sendSignupEmailAuthNumber(
-    @Valid @RequestBody SignupEmailAuthNumberSendRequest request
-  ) {
-    SignupEmailAuthNumberSendResponse response =
-      authFacade.sendSignupEmailAuthNumber(request);
+      @Valid @RequestBody SignupEmailAuthNumberSendRequest request) {
+    SignupEmailAuthNumberSendResponse response = authFacade.sendSignupEmailAuthNumber(request);
 
     return ApiResponse.onSuccess(SuccessStatus.OK, response);
   }

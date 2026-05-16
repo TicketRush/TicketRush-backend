@@ -68,9 +68,7 @@ public class RedisRepository {
     String key = SIGNUP_EMAIL_AUTH_COOLDOWN_PREFIX + email;
 
     Boolean saved =
-      redisTemplate
-        .opsForValue()
-        .setIfAbsent(key, "1", SIGNUP_EMAIL_AUTH_COOLDOWN_TTL);
+        redisTemplate.opsForValue().setIfAbsent(key, "1", SIGNUP_EMAIL_AUTH_COOLDOWN_TTL);
 
     return Boolean.TRUE.equals(saved);
   }
