@@ -52,6 +52,8 @@ public class SignupEmailAuthNumberSendUseCase {
 
       log.error("회원가입 이메일 인증 번호 발송 실패 email={}", email, e);
 
+      log.error("회원가입 이메일 인증 번호 발송 실패 email={}", email, e);
+
       throw new BusinessException(ErrorStatus.AUTH_EMAIL_SEND_FAILED);
     }
 
