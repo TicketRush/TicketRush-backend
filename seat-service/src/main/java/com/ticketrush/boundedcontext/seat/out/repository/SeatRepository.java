@@ -19,6 +19,16 @@ public interface SeatRepository extends JpaRepository<Seat, Long> {
 
   @Query(
       "SELECT new com.ticketrush.boundedcontext.seat.app.dto.response.SeatAvailabilityResponse("
+          + "COUNT(CASE WHEN s.seatStatus = :availableStatus THEN 1 END), "
+          + "COUNT(s)) "
+          + "FROM Seat s "
+          + "WHERE s.performanceId = :performanceId")
+  SeatAvailabilityResponse getAvailabilityByPerformanceId(
+      @Param("performanceId") Long performanceId,
+      @Param("availableStatus") SeatStatus availableStatus);
+
+  @Query(
+      "SELECT new com.ticketrush.boundedcontext.seat.app.dto.response.SeatAvailabilityResponse("
           + "COUNT(CASE WHEN s.seatStatus = :availableStatus THEN s.id ELSE null END), "
           + "COUNT(s)) "
           + "FROM Seat s "
