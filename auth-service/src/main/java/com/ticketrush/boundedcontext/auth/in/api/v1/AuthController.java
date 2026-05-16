@@ -3,10 +3,13 @@ package com.ticketrush.boundedcontext.auth.in.api.v1;
 import com.ticketrush.boundedcontext.auth.app.dto.request.SignupEmailAuthNumberSendRequest;
 import com.ticketrush.boundedcontext.auth.app.dto.response.SignupEmailAuthNumberSendResponse;
 import com.ticketrush.boundedcontext.auth.app.facade.AuthFacade;
+import com.ticketrush.global.dto.response.ApiResponse;
+import com.ticketrush.global.status.SuccessStatus;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
+import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
@@ -22,8 +25,12 @@ public class AuthController {
 
   @Operation(summary = "회원가입 이메일 인증 번호 발송", description = "회원가입 전 이메일 중복 확인 후 인증 번호를 발송합니다.")
   @PostMapping("/signup/email-verification/send")
-  public SignupEmailAuthNumberSendResponse sendSignupEmailAuthNumber(
-      @Valid @RequestBody SignupEmailAuthNumberSendRequest request) {
-    return authFacade.sendSignupEmailAuthNumber(request);
+  public ResponseEntity<ApiResponse<SignupEmailAuthNumberSendResponse>> sendSignupEmailAuthNumber(
+    @Valid @RequestBody SignupEmailAuthNumberSendRequest request
+  ) {
+    SignupEmailAuthNumberSendResponse response =
+      authFacade.sendSignupEmailAuthNumber(request);
+
+    return ApiResponse.onSuccess(SuccessStatus.OK, response);
   }
 }
