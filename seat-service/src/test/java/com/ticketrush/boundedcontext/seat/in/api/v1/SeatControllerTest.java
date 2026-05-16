@@ -11,7 +11,9 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import com.ticketrush.boundedcontext.seat.app.dto.response.SeatAvailabilityResponse;
 import com.ticketrush.boundedcontext.seat.app.dto.response.SeatLayoutResponse;
 import com.ticketrush.boundedcontext.seat.app.facade.SeatFacade;
+import com.ticketrush.boundedcontext.seat.in.sse.SeatStatusSseEmitterRegistry;
 import com.ticketrush.global.config.SecurityConfig;
+import com.ticketrush.global.types.SeatStatus;
 import com.ticketrush.support.WebMvcSliceTest;
 import java.util.List;
 import org.junit.jupiter.api.DisplayName;
@@ -23,6 +25,7 @@ import org.springframework.security.test.context.support.WithMockUser;
 import org.springframework.test.context.TestPropertySource;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
+import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
 
 @WebMvcSliceTest(SeatController.class)
 @Import(SecurityConfig.class)
@@ -34,6 +37,7 @@ class SeatControllerTest {
   @Autowired private MockMvc mockMvc;
 
   @MockitoBean private SeatFacade seatFacade;
+  @MockitoBean private SeatStatusSseEmitterRegistry seatStatusSseEmitterRegistry;
 
   @Test
   @WithMockUser
@@ -42,7 +46,9 @@ class SeatControllerTest {
     // given
     Long performanceId = 1L;
     List<SeatLayoutResponse> mockResponse =
-        List.of(new SeatLayoutResponse(1L, 101L, "A-1"), new SeatLayoutResponse(2L, 101L, "A-2"));
+        List.of(
+            new SeatLayoutResponse(1L, 101L, "A-1", SeatStatus.AVAILABLE, null),
+            new SeatLayoutResponse(2L, 101L, "A-2", SeatStatus.HOLD, null));
     given(seatFacade.getPerformanceSeatLayouts(performanceId)).willReturn(mockResponse);
 
     // when & then
@@ -54,8 +60,27 @@ class SeatControllerTest {
         .andExpect(jsonPath("$.result[0].seat_id").value(1))
         .andExpect(jsonPath("$.result[0].seat_layout_id").value(101))
         .andExpect(jsonPath("$.result[0].seat_number").value("A-1"))
+        .andExpect(jsonPath("$.result[0].seat_status").value("AVAILABLE"))
         .andExpect(jsonPath("$.result[1].seat_id").value(2))
-        .andExpect(jsonPath("$.result[1].seat_number").value("A-2"));
+        .andExpect(jsonPath("$.result[1].seat_number").value("A-2"))
+        .andExpect(jsonPath("$.result[1].seat_status").value("HOLD"));
+  }
+
+  @Test
+  @WithMockUser
+  @DisplayName("공연 ID로 좌석 상태 SSE 스트림을 구독한다")
+  void subscribeSeatStatus() throws Exception {
+    // given
+    Long performanceId = 1L;
+    SseEmitter emitter = new SseEmitter();
+    given(seatStatusSseEmitterRegistry.subscribe(performanceId)).willReturn(emitter);
+
+    // when & then
+    mockMvc
+        .perform(get("/api/v1/seat/{performanceId}/seat-status/stream", performanceId))
+        .andExpect(status().isOk());
+
+    verify(seatStatusSseEmitterRegistry).subscribe(performanceId);
   }
 
   @Test

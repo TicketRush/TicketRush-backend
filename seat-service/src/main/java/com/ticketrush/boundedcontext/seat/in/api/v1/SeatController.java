@@ -4,6 +4,7 @@ import com.ticketrush.boundedcontext.seat.app.dto.request.SeatSoldConfirmRequest
 import com.ticketrush.boundedcontext.seat.app.dto.response.SeatAvailabilityResponse;
 import com.ticketrush.boundedcontext.seat.app.dto.response.SeatLayoutResponse;
 import com.ticketrush.boundedcontext.seat.app.facade.SeatFacade;
+import com.ticketrush.boundedcontext.seat.in.sse.SeatStatusSseEmitterRegistry;
 import com.ticketrush.global.dto.response.ApiResponse;
 import com.ticketrush.global.exception.BusinessException;
 import com.ticketrush.global.status.ErrorStatus;
@@ -13,6 +14,7 @@ import jakarta.validation.Valid;
 import java.util.List;
 import lombok.RequiredArgsConstructor;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
@@ -21,6 +23,7 @@ import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestHeader;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
 
 @RestController
 @RequestMapping("/api/v1/seat")
@@ -30,6 +33,7 @@ public class SeatController {
   private static final String INTERNAL_TOKEN_HEADER = "X-Internal-Token";
 
   private final SeatFacade seatFacade;
+  private final SeatStatusSseEmitterRegistry seatStatusSseEmitterRegistry;
 
   @Value("${gateway.internal-token}")
   private String internalToken;
@@ -48,6 +52,14 @@ public class SeatController {
       @PathVariable Long performanceId) {
     SeatAvailabilityResponse response = seatFacade.getPerformanceSeatAvailability(performanceId);
     return ApiResponse.onSuccess(SuccessStatus.OK, response);
+  }
+
+  @GetMapping(
+      value = "/{performanceId}/seat-status/stream",
+      produces = MediaType.TEXT_EVENT_STREAM_VALUE)
+  @Operation(summary = "공연별 좌석 상태 SSE 구독", description = "공연 ID에 해당하는 좌석 상태 변경 이벤트를 실시간으로 구독합니다.")
+  public SseEmitter subscribeSeatStatus(@PathVariable Long performanceId) {
+    return seatStatusSseEmitterRegistry.subscribe(performanceId);
   }
 
   @PostMapping("/internal/sold")
