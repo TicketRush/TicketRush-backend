@@ -14,9 +14,15 @@ public class RedisRepository {
   private final RedisTemplate<String, String> redisTemplate;
 
   private static final String REFRESH_TOKEN_PREFIX = "RT:";
+
   private static final String SIGNUP_EMAIL_AUTH_NUMBER_PREFIX = "SIGNUP:EMAIL:AUTH_NUMBER:";
+  private static final String SIGNUP_EMAIL_AUTH_COOLDOWN_PREFIX = "SIGNUP:EMAIL:AUTH_COOLDOWN:";
+
   // 인증번호 유효시간 = 5분
   private static final Duration SIGNUP_EMAIL_AUTH_NUMBER_TTL = Duration.ofMinutes(5);
+
+  // 인증번호 재발송 쿨다운 = 60초
+  private static final Duration SIGNUP_EMAIL_AUTH_COOLDOWN_TTL = Duration.ofSeconds(60);
 
   // 토큰 저장
   public void saveRefreshToken(Long userId, String refreshToken, long expiration) {
@@ -54,6 +60,24 @@ public class RedisRepository {
   // 발송 실패 시 인증번호 삭제
   public void deleteSignupEmailAuthNumber(String email) {
     String key = SIGNUP_EMAIL_AUTH_NUMBER_PREFIX + email;
+    redisTemplate.delete(key);
+  }
+
+  // 회원가입 이메일 인증번호 재발송 쿨다운 저장
+  public boolean saveSignupEmailAuthCooldownIfAbsent(String email) {
+    String key = SIGNUP_EMAIL_AUTH_COOLDOWN_PREFIX + email;
+
+    Boolean saved =
+      redisTemplate
+        .opsForValue()
+        .setIfAbsent(key, "1", SIGNUP_EMAIL_AUTH_COOLDOWN_TTL);
+
+    return Boolean.TRUE.equals(saved);
+  }
+
+  // 이메일 발송 실패 시 쿨다운 삭제
+  public void deleteSignupEmailAuthCooldown(String email) {
+    String key = SIGNUP_EMAIL_AUTH_COOLDOWN_PREFIX + email;
     redisTemplate.delete(key);
   }
 }

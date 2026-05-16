@@ -34,6 +34,12 @@ public class SignupEmailAuthNumberSendUseCase {
       throw new BusinessException(ErrorStatus.AUTH_EMAIL_ALREADY_EXISTS);
     }
 
+    boolean cooldownSaved = redisRepository.saveSignupEmailAuthCooldownIfAbsent(email);
+
+    if (!cooldownSaved) {
+      throw new BusinessException(ErrorStatus.AUTH_EMAIL_AUTH_NUMBER_SEND_TOO_FREQUENT);
+    }
+
     String authNumber = createAuthNumber();
 
     redisRepository.saveSignupEmailAuthNumber(email, authNumber);
@@ -42,6 +48,10 @@ public class SignupEmailAuthNumberSendUseCase {
       emailSender.send(email, "[회원가입] 이메일 인증 번호", "인증 번호는 " + authNumber + " 입니다.");
     } catch (Exception e) {
       redisRepository.deleteSignupEmailAuthNumber(email);
+      redisRepository.deleteSignupEmailAuthCooldown(email);
+
+      log.error("회원가입 이메일 인증 번호 발송 실패 email={}", email, e);
+
       throw new BusinessException(ErrorStatus.AUTH_EMAIL_SEND_FAILED);
     }
 

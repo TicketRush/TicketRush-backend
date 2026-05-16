@@ -48,6 +48,7 @@ public enum ErrorStatus {
 
   // Auth 403
   AUTH_ACCESS_DENIED(HttpStatus.FORBIDDEN, "AUTH_403_001", "접근 권한이 없습니다."),
+  AUTH_EMAIL_AUTH_NUMBER_SEND_TOO_FREQUENT(HttpStatus.FORBIDDEN, "AUTH_403_002", "이메일 인증 번호는 60초 후 다시 요청할 수 있습니다."),
 
   // Auth 500
   AUTH_USER_SERVER_ERROR(
