@@ -4,9 +4,12 @@ import static org.mockito.BDDMockito.given;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.verifyNoInteractions;
 
+import com.ticketrush.boundedcontext.seat.app.support.SeatStatusEventPublisher;
 import com.ticketrush.boundedcontext.seat.domain.entity.Seat;
 import com.ticketrush.boundedcontext.seat.out.repository.SeatRepository;
+import com.ticketrush.global.types.SeatStatus;
 import java.util.Optional;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -19,6 +22,7 @@ import org.mockito.junit.jupiter.MockitoExtension;
 class SeatReleaseSingleUseCaseTest {
 
   @Mock private SeatRepository seatRepository;
+  @Mock private SeatStatusEventPublisher seatStatusEventPublisher;
 
   @InjectMocks private SeatReleaseSingleUseCase seatReleaseSingleUseCase;
 
@@ -27,15 +31,43 @@ class SeatReleaseSingleUseCaseTest {
   void execute_WhenSeatExists_ReleasesHold() {
     // given
     Long seatId = 1L;
-    Seat mockSeat = mock(Seat.class);
-    given(seatRepository.findById(seatId)).willReturn(Optional.of(mockSeat));
+    Seat seat =
+        Seat.builder()
+            .seatLayoutId(1L)
+            .performanceId(1L)
+            .seatNumber("A-1")
+            .seatStatus(SeatStatus.HOLD)
+            .build();
+    given(seatRepository.findById(seatId)).willReturn(Optional.of(seat));
 
     // when
     seatReleaseSingleUseCase.execute(seatId);
 
     // then
     verify(seatRepository).findById(seatId);
-    verify(mockSeat).releaseHold(); // 엔티티의 상태 변경 메서드가 호출되었는지 검증
+    verify(seatStatusEventPublisher).publishAfterCommit(seat);
+  }
+
+  @Test
+  @DisplayName("HOLD 상태가 아닌 좌석의 만료 이벤트 수신 시 상태 변경 이벤트를 발행하지 않는다")
+  void execute_WhenSeatIsNotHold_DoesNotPublishEvent() {
+    // given
+    Long seatId = 1L;
+    Seat seat =
+        Seat.builder()
+            .seatLayoutId(1L)
+            .performanceId(1L)
+            .seatNumber("A-1")
+            .seatStatus(SeatStatus.SOLD)
+            .build();
+    given(seatRepository.findById(seatId)).willReturn(Optional.of(seat));
+
+    // when
+    seatReleaseSingleUseCase.execute(seatId);
+
+    // then
+    verify(seatRepository).findById(seatId);
+    verifyNoInteractions(seatStatusEventPublisher);
   }
 
   @Test

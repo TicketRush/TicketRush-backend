@@ -3,7 +3,9 @@ package com.ticketrush.boundedcontext.seat.app.usecase;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.BDDMockito.given;
+import static org.mockito.Mockito.verify;
 
+import com.ticketrush.boundedcontext.seat.app.support.SeatStatusEventPublisher;
 import com.ticketrush.boundedcontext.seat.domain.entity.Seat;
 import com.ticketrush.boundedcontext.seat.out.repository.SeatRepository;
 import com.ticketrush.global.exception.BusinessException;
@@ -24,6 +26,7 @@ class SeatHoldUseCaseTest {
   @InjectMocks private SeatHoldUseCase seatHoldUseCase;
 
   @Mock private SeatRepository seatRepository;
+  @Mock private SeatStatusEventPublisher seatStatusEventPublisher;
 
   @Test
   @DisplayName("성공: 좌석이 존재하고 만료 시간이 유효하면 HOLD 상태로 변경된다")
@@ -50,6 +53,7 @@ class SeatHoldUseCaseTest {
     // verify(mock) 대신 실제 객체의 상태가 변했는지 직접 확인
     assertThat(seat.getSeatStatus()).isEqualTo(SeatStatus.HOLD);
     assertThat(seat.getHoldExpiredAt()).isEqualTo(expiredAt);
+    verify(seatStatusEventPublisher).publishAfterCommit(seat);
   }
 
   @Test
