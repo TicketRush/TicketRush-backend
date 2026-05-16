@@ -30,7 +30,9 @@ public class UserController {
 
   @Operation(summary = "이메일 중복 확인", description = "이메일로 가입된 회원이 존재하는지 확인합니다.")
   @GetMapping("/exists/email")
-  public EmailExistsResponse existsByEmail(@RequestParam String email) {
+  public EmailExistsResponse existsByEmail(
+    @RequestParam(required = false) String email
+  ) {
     return userFacade.existsByEmail(email);
   }
 }
