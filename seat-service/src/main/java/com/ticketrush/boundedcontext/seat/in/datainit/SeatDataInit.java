@@ -1,6 +1,6 @@
 package com.ticketrush.boundedcontext.seat.in.datainit;
 
-import com.ticketrush.boundedcontext.seat.app.usecase.SeatCreateDefaultLayoutUseCase;
+import com.ticketrush.boundedcontext.seat.app.facade.SeatFacade;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.boot.ApplicationArguments;
@@ -16,11 +16,11 @@ public class SeatDataInit implements ApplicationRunner {
 
   private static final Long DUMMY_PERFORMANCE_ID = 1L;
 
-  private final SeatCreateDefaultLayoutUseCase seatCreateDefaultLayoutUseCase;
+  private final SeatFacade seatFacade;
 
   @Override
   public void run(ApplicationArguments args) {
-    seatCreateDefaultLayoutUseCase.execute(DUMMY_PERFORMANCE_ID);
+    seatFacade.createDefaultSeats(DUMMY_PERFORMANCE_ID);
     log.info("local/dev 프로필용 더미 공연 좌석 초기화를 요청했습니다. performanceId: {}", DUMMY_PERFORMANCE_ID);
   }
 }
