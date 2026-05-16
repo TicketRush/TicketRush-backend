@@ -13,20 +13,25 @@ public class RedisRepository {
 
   private final RedisTemplate<String, String> redisTemplate;
 
-  // 저장
+  private static final String REFRESH_TOKEN_PREFIX = "RT:";
+  private static final String SIGNUP_EMAIL_AUTH_NUMBER_PREFIX = "SIGNUP:EMAIL:AUTH_NUMBER:";
+  // 인증번호 유효시간 = 5분
+  private static final Duration SIGNUP_EMAIL_AUTH_NUMBER_TTL = Duration.ofMinutes(5);
+
+  // 토큰 저장
   public void saveRefreshToken(Long userId, String refreshToken, long expiration) {
-    String key = "RT:" + userId;
+    String key = REFRESH_TOKEN_PREFIX + userId;
     redisTemplate.opsForValue().set(key, refreshToken, Duration.ofMillis(expiration));
   }
 
   // 조회
   public String getRefreshToken(Long userId) {
-    return redisTemplate.opsForValue().get("RT:" + userId);
+    return redisTemplate.opsForValue().get(REFRESH_TOKEN_PREFIX + userId);
   }
 
   // 삭제 (로그아웃)
   public void deleteRefreshToken(Long userId) {
-    redisTemplate.delete("RT:" + userId);
+    redisTemplate.delete(REFRESH_TOKEN_PREFIX + userId);
   }
 
   // 검증
@@ -37,5 +42,18 @@ public class RedisRepository {
     log.debug("저장 토큰 길이 = {}", saved != null ? saved.length() : 0);
 
     return saved != null && saved.equals(refreshToken);
+  }
+
+  // 회원가입 이메일 인증번호 저장
+  public void saveSignupEmailAuthNumber(String email, String authNumber) {
+    String key = SIGNUP_EMAIL_AUTH_NUMBER_PREFIX + email;
+
+    redisTemplate.opsForValue().set(key, authNumber, SIGNUP_EMAIL_AUTH_NUMBER_TTL);
+  }
+
+  // 발송 실패 시 인증번호 삭제
+  public void deleteSignupEmailAuthNumber(String email) {
+    String key = SIGNUP_EMAIL_AUTH_NUMBER_PREFIX + email;
+    redisTemplate.delete(key);
   }
 }
