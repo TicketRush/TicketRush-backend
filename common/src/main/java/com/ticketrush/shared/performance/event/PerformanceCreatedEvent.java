@@ -14,7 +14,8 @@ public record PerformanceCreatedEvent(
     Long price)
     implements DomainEvent {
 
-  private static final String TOPIC = "performance-events";
+  public static final String TOPIC = "performance-events";
+  public static final String EVENT_NAME = "PerformanceCreated";
 
   @Override
   public String topic() {
@@ -28,7 +29,7 @@ public record PerformanceCreatedEvent(
 
   @Override
   public String eventName() {
-    return "PerformanceCreated";
+    return EVENT_NAME;
   }
 
   @Override

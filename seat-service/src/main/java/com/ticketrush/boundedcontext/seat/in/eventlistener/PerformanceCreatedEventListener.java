@@ -16,17 +16,15 @@ import org.springframework.stereotype.Component;
 @RequiredArgsConstructor
 public class PerformanceCreatedEventListener {
 
-  private static final String PERFORMANCE_EVENTS_TOPIC = "performance-events";
   private static final String SEAT_GROUP_ID = "seat-group";
-  private static final String PERFORMANCE_CREATED_EVENT = "PerformanceCreated";
 
   private final SeatFacade seatFacade;
   private final JsonConverter jsonConverter;
 
-  @KafkaListener(topics = PERFORMANCE_EVENTS_TOPIC, groupId = SEAT_GROUP_ID)
+  @KafkaListener(topics = PerformanceCreatedEvent.TOPIC, groupId = SEAT_GROUP_ID)
   public void handlePerformanceCreated(@Payload DomainEventEnvelope envelope, Acknowledgment ack) {
     try {
-      if (!PERFORMANCE_CREATED_EVENT.equals(envelope.eventType())) {
+      if (!PerformanceCreatedEvent.EVENT_NAME.equals(envelope.eventType())) {
         log.info("처리 대상이 아닌 공연 이벤트입니다. eventType: {}", envelope.eventType());
         ack.acknowledge();
         return;
