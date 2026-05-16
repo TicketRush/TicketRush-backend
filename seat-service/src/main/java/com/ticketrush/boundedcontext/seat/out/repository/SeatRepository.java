@@ -19,18 +19,22 @@ public interface SeatRepository extends JpaRepository<Seat, Long> {
           + "COUNT(s)) "
           + "FROM Seat s "
           + "WHERE s.performanceId = :performanceId")
-  SeatAvailabilityResponse countSeatAvailabilityByPerformanceId(
+  SeatAvailabilityResponse getAvailabilityByPerformanceId(
       @Param("performanceId") Long performanceId,
       @Param("availableStatus") SeatStatus availableStatus);
 
   @Query(
       "SELECT new com.ticketrush.boundedcontext.seat.app.dto.response.SeatLayoutResponse("
-          + "s.id, sl.id, s.seatNumber) "
+          + "s.id, sl.id, s.seatNumber, s.seatStatus, s.holdExpiredAt) "
           + "FROM Seat s "
           + "JOIN SeatLayout sl ON s.seatLayoutId = sl.id "
           + "WHERE s.performanceId = :performanceId")
   List<SeatLayoutResponse> findSeatLayoutsByPerformanceId(
       @Param("performanceId") Long performanceId);
+
+  @Query("SELECT s FROM Seat s " + "WHERE s.seatStatus = :holdStatus AND s.holdExpiredAt <= :now")
+  List<Seat> findExpiredHoldSeats(
+      @Param("holdStatus") SeatStatus holdStatus, @Param("now") LocalDateTime now);
 
   @Modifying(clearAutomatically = true)
   @Query(
