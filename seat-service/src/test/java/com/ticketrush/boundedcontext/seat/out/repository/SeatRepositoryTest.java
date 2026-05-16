@@ -79,10 +79,11 @@ class SeatRepositoryTest {
         .extracting(
             SeatLayoutResponse::seatId,
             SeatLayoutResponse::seatLayoutId,
-            SeatLayoutResponse::seatNumber)
+            SeatLayoutResponse::seatNumber,
+            SeatLayoutResponse::seatStatus)
         .containsExactlyInAnyOrder(
-            tuple(seat1.getId(), targetLayout.getId(), "A-1"),
-            tuple(seat2.getId(), targetLayout.getId(), "A-2"));
+            tuple(seat1.getId(), targetLayout.getId(), "A-1", SeatStatus.AVAILABLE),
+            tuple(seat2.getId(), targetLayout.getId(), "A-2", SeatStatus.AVAILABLE));
   }
 
   @Test
@@ -151,7 +152,7 @@ class SeatRepositoryTest {
 
   @Test
   @DisplayName("공연 ID로 전체 좌석 수와 AVAILABLE 상태 좌석 수를 계산한다")
-  void countSeatAvailabilityByPerformanceId_ReturnsAvailableAndTotalCounts() {
+  void getAvailabilityByPerformanceId_ReturnsAvailableAndTotalCounts() {
     // given
     Long targetPerformanceId = 1L;
     Long otherPerformanceId = 99L;
@@ -197,8 +198,7 @@ class SeatRepositoryTest {
 
     // when
     var response =
-        seatRepository.countSeatAvailabilityByPerformanceId(
-            targetPerformanceId, SeatStatus.AVAILABLE);
+        seatRepository.getAvailabilityByPerformanceId(targetPerformanceId, SeatStatus.AVAILABLE);
 
     // then
     assertThat(response.availableCount()).isEqualTo(2L);
@@ -207,9 +207,9 @@ class SeatRepositoryTest {
 
   @Test
   @DisplayName("공연 ID에 해당하는 좌석이 없으면 0을 반환한다")
-  void countSeatAvailabilityByPerformanceId_ReturnsZeroWhenNoSeatsExist() {
+  void getAvailabilityByPerformanceId_ReturnsZeroWhenNoSeatsExist() {
     // when
-    var response = seatRepository.countSeatAvailabilityByPerformanceId(1L, SeatStatus.AVAILABLE);
+    var response = seatRepository.getAvailabilityByPerformanceId(1L, SeatStatus.AVAILABLE);
 
     // then
     assertThat(response.availableCount()).isZero();

@@ -5,6 +5,7 @@ import static org.mockito.BDDMockito.given;
 
 import com.ticketrush.boundedcontext.seat.app.dto.response.SeatLayoutResponse;
 import com.ticketrush.boundedcontext.seat.out.repository.SeatRepository;
+import com.ticketrush.global.types.SeatStatus;
 import java.util.List;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -25,9 +26,10 @@ class SeatGetSeatLayoutsUseCaseTest {
   void executeReturnsSeatLayouts() {
     // given
     Long performanceId = 1L;
-    // DTO 변경 반영: (seatId, layoutId, seatNumber)
     List<SeatLayoutResponse> expectedResponses =
-        List.of(new SeatLayoutResponse(1L, 101L, "A-1"), new SeatLayoutResponse(2L, 101L, "A-2"));
+        List.of(
+            new SeatLayoutResponse(1L, 101L, "A-1", SeatStatus.AVAILABLE, null),
+            new SeatLayoutResponse(2L, 101L, "A-2", SeatStatus.HOLD, null));
     given(seatRepository.findSeatLayoutsByPerformanceId(performanceId))
         .willReturn(expectedResponses);
 
@@ -38,5 +40,6 @@ class SeatGetSeatLayoutsUseCaseTest {
     assertThat(actualResponses).hasSize(2);
     assertThat(actualResponses.getFirst().seatId()).isEqualTo(1L);
     assertThat(actualResponses.getFirst().seatNumber()).isEqualTo("A-1");
+    assertThat(actualResponses.getFirst().seatStatus()).isEqualTo(SeatStatus.AVAILABLE);
   }
 }
