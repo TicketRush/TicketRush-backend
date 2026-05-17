@@ -26,7 +26,7 @@ class SeatGetAvailabilityUseCaseTest {
   void executeReturnsSeatAvailability() {
     // given
     Long performanceId = 1L;
-    given(seatRepository.countSeatAvailabilityByPerformanceId(performanceId, SeatStatus.AVAILABLE))
+    given(seatRepository.getAvailabilityByPerformanceId(performanceId, SeatStatus.AVAILABLE))
         .willReturn(new SeatAvailabilityResponse(8L, 10L));
 
     // when
@@ -35,8 +35,7 @@ class SeatGetAvailabilityUseCaseTest {
     // then
     assertThat(response.availableCount()).isEqualTo(8L);
     assertThat(response.totalCount()).isEqualTo(10L);
-    verify(seatRepository)
-        .countSeatAvailabilityByPerformanceId(performanceId, SeatStatus.AVAILABLE);
+    verify(seatRepository).getAvailabilityByPerformanceId(performanceId, SeatStatus.AVAILABLE);
   }
 
   @Test
@@ -44,7 +43,7 @@ class SeatGetAvailabilityUseCaseTest {
   void executeReturnsZeroAvailableCount() {
     // given
     Long performanceId = 1L;
-    given(seatRepository.countSeatAvailabilityByPerformanceId(performanceId, SeatStatus.AVAILABLE))
+    given(seatRepository.getAvailabilityByPerformanceId(performanceId, SeatStatus.AVAILABLE))
         .willReturn(new SeatAvailabilityResponse(0L, 10L));
 
     // when

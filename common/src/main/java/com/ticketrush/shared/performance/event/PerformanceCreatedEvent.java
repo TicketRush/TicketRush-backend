@@ -1,8 +1,7 @@
-package com.ticketrush.boundedcontext.performance.domain.event;
+package com.ticketrush.shared.performance.event;
 
 import com.ticketrush.global.event.DomainEvent;
 import com.ticketrush.global.event.EventUtils;
-import com.ticketrush.global.kafka.TopicNames;
 import java.time.LocalDate;
 import java.time.LocalTime;
 
@@ -15,9 +14,12 @@ public record PerformanceCreatedEvent(
     Long price)
     implements DomainEvent {
 
+  public static final String TOPIC = "performance-events";
+  public static final String EVENT_NAME = "PerformanceCreated";
+
   @Override
   public String topic() {
-    return TopicNames.PERFORMANCE_EVENTS;
+    return TOPIC;
   }
 
   @Override
@@ -27,7 +29,7 @@ public record PerformanceCreatedEvent(
 
   @Override
   public String eventName() {
-    return "PerformanceCreated";
+    return EVENT_NAME;
   }
 
   @Override

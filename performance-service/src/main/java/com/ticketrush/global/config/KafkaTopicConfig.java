@@ -1,6 +1,6 @@
 package com.ticketrush.global.config;
 
-import com.ticketrush.global.kafka.TopicNames;
+import com.ticketrush.shared.performance.event.PerformanceCreatedEvent;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnExpression;
 import org.springframework.context.annotation.Bean;
@@ -22,7 +22,7 @@ public class KafkaTopicConfig {
   @Bean
   public NewTopics performanceKafkaTopics() {
     return new NewTopics(
-        TopicBuilder.name(TopicNames.PERFORMANCE_EVENTS)
+        TopicBuilder.name(PerformanceCreatedEvent.TOPIC)
             .partitions(partitions)
             .replicas(replicas)
             .build());
