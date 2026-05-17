@@ -3,6 +3,7 @@ package com.ticketrush.boundedcontext.auth.out.apiclient;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.ticketrush.boundedcontext.auth.app.dto.request.UserServiceSocialLoginRequest;
+import com.ticketrush.boundedcontext.auth.app.dto.response.UserServiceEmailExistsResponse;
 import com.ticketrush.boundedcontext.auth.app.dto.response.UserServiceSocialLoginResponse;
 import com.ticketrush.global.exception.BusinessException;
 import com.ticketrush.global.status.ErrorStatus;
@@ -11,12 +12,12 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.HttpStatusCode;
 import org.springframework.http.MediaType;
-import org.springframework.stereotype.Service;
+import org.springframework.stereotype.Component;
 import org.springframework.web.client.RestClient;
 
 // auth-service가 user-service를 호출하기 위한 전용 클라이언트
 @Slf4j
-@Service
+@Component
 @RequiredArgsConstructor
 public class UserServiceClient {
 
@@ -24,6 +25,9 @@ public class UserServiceClient {
 
   @Value("${service.user-service.base-url}")
   private String userServiceBaseUrl;
+
+  private static final String SOCIAL_LOGIN_PATH = "/api/v1/user/social-login";
+  private static final String EMAIL_EXISTS_PATH = "/api/v1/user/exists/email?email={email}";
 
   public UserServiceSocialLoginResponse socialLogin(UserServiceSocialLoginRequest request) {
 
@@ -37,7 +41,7 @@ public class UserServiceClient {
     UserServiceSocialLoginResponse response =
         restClient
             .post()
-            .uri(userServiceBaseUrl + "/api/v1/user/social-login")
+            .uri(userServiceBaseUrl + SOCIAL_LOGIN_PATH)
             .contentType(MediaType.APPLICATION_JSON)
             .body(request)
             .retrieve()
@@ -60,5 +64,45 @@ public class UserServiceClient {
     }
 
     return response;
+  }
+
+  // 존재하는 이메일 검증
+  public boolean existsByEmail(String email) {
+    if (email == null || email.isBlank()) {
+      throw new BusinessException(ErrorStatus.AUTH_EMAIL_EXISTS_CHECK_BAD_REQUEST);
+    }
+
+    try {
+      UserServiceEmailExistsResponse response =
+          restClient
+              .get()
+              .uri(userServiceBaseUrl + EMAIL_EXISTS_PATH, email)
+              .retrieve()
+              .onStatus(
+                  HttpStatusCode::is4xxClientError,
+                  (req, res) -> {
+                    log.error("user-service 이메일 중복 확인 4xx 에러 발생: status={}", res.getStatusCode());
+                    throw new BusinessException(ErrorStatus.AUTH_EMAIL_EXISTS_CHECK_BAD_REQUEST);
+                  })
+              .onStatus(
+                  HttpStatusCode::is5xxServerError,
+                  (req, res) -> {
+                    log.error("user-service 이메일 중복 확인 5xx 에러 발생: status={}", res.getStatusCode());
+                    throw new BusinessException(ErrorStatus.AUTH_EMAIL_EXISTS_CHECK_SERVER_ERROR);
+                  })
+              .body(UserServiceEmailExistsResponse.class);
+
+      if (response == null) {
+        throw new BusinessException(ErrorStatus.AUTH_EMAIL_EXISTS_CHECK_COMMUNICATION_FAILED);
+      }
+
+      return response.exists();
+
+    } catch (BusinessException e) {
+      throw e;
+    } catch (Exception e) {
+      log.error("user-service 이메일 중복 확인 통신 실패 email={}", email, e);
+      throw new BusinessException(ErrorStatus.AUTH_EMAIL_EXISTS_CHECK_COMMUNICATION_FAILED);
+    }
   }
 }
