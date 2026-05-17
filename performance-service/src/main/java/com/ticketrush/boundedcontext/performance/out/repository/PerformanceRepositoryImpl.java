@@ -29,10 +29,18 @@ public class PerformanceRepositoryImpl implements PerformanceRepositoryCustom {
     QPerformance performance = QPerformance.performance;
 
     BooleanBuilder predicate = new BooleanBuilder();
-    if (genre != null) predicate.and(performance.genre.eq(genre));
-    if (minPrice != null) predicate.and(performance.price.goe(minPrice));
-    if (maxPrice != null) predicate.and(performance.price.loe(maxPrice));
-    if (status != null) predicate.and(performance.performanceStatus.eq(status));
+    if (genre != null) {
+      predicate.and(performance.genre.eq(genre));
+    }
+    if (minPrice != null) {
+      predicate.and(performance.price.goe(minPrice));
+    }
+    if (maxPrice != null) {
+      predicate.and(performance.price.loe(maxPrice));
+    }
+    if (status != null) {
+      predicate.and(performance.performanceStatus.eq(status));
+    }
 
     List<Performance> content =
         queryFactory
