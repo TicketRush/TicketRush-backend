@@ -62,7 +62,7 @@ public enum ErrorStatus {
   // Auth 503
   AUTH_USER_COMMUNICATION_FAILED(
       HttpStatus.SERVICE_UNAVAILABLE, "AUTH_503_001", "user-service와 통신에 실패했습니다."),
-  AUTH_KAKAO_INFO_FAILED(HttpStatus.NOT_FOUND, "AUTH_503_002", "카카오 사용자 정보 조회를 실패하였습니다."),
+  AUTH_KAKAO_INFO_FAILED(HttpStatus.SERVICE_UNAVAILABLE, "AUTH_503_002", "카카오 사용자 정보 조회를 실패하였습니다."),
 
   // Booking 404
   BOOKING_NOT_FOUND(HttpStatus.NOT_FOUND, "BOOKING_404_001", "해당 예매를 찾을 수 없습니다."),
