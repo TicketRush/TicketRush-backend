@@ -44,11 +44,7 @@ public class PerformanceRepositoryImpl implements PerformanceRepositoryCustom {
             .fetch();
 
     Long totalCount =
-        queryFactory
-            .select(performance.count())
-            .from(performance)
-            .where(predicate)
-            .fetchOne();
+        queryFactory.select(performance.count()).from(performance).where(predicate).fetchOne();
 
     return new PageImpl<>(content, pageable, totalCount != null ? totalCount : 0L);
   }
