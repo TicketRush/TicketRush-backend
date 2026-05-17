@@ -4,6 +4,7 @@ import com.ticketrush.boundedcontext.performance.app.dto.response.PerformanceDet
 import com.ticketrush.boundedcontext.performance.app.dto.response.PerformanceListResponse;
 import com.ticketrush.boundedcontext.performance.app.facade.PerformanceFacade;
 import com.ticketrush.boundedcontext.performance.domain.types.Genre;
+import com.ticketrush.boundedcontext.performance.domain.types.PerformanceStatus;
 import com.ticketrush.global.dto.response.ApiResponse;
 import com.ticketrush.global.status.SuccessStatus;
 import io.swagger.v3.oas.annotations.Operation;
@@ -56,12 +57,18 @@ public class PerformanceController {
   @PerformanceListApiResponses
   @GetMapping
   public ResponseEntity<ApiResponse<List<PerformanceListResponse>>> getPerformances(
-      @Parameter(description = "장르 필터 (미입력 시 전체 조회)") @RequestParam(required = false) Genre genre,
+      @Parameter(description = "장르 필터 (미입력 시 전체 조회)") @RequestParam(required = false)
+          Genre genre,
+      @Parameter(description = "최소 가격") @RequestParam(required = false) Long minPrice,
+      @Parameter(description = "최대 가격") @RequestParam(required = false) Long maxPrice,
+      @Parameter(description = "공연 상태 필터") @RequestParam(required = false)
+          PerformanceStatus status,
       @ParameterObject
           @PageableDefault(size = 8, sort = "createdAt", direction = Sort.Direction.DESC)
           Pageable pageable) {
 
-    Page<PerformanceListResponse> performances = performanceFacade.getPerformances(genre, pageable);
+    Page<PerformanceListResponse> performances =
+        performanceFacade.getPerformances(genre, minPrice, maxPrice, status, pageable);
 
     return ApiResponse.onSuccess(SuccessStatus.OK, performances);
   }

@@ -56,7 +56,8 @@ class PerformanceGetListTest {
   @DisplayName("장르를 지정하지 않으면 전체 공연 목록을 반환한다")
   void getAll_whenGenreIsNull() {
     Pageable pageable = PageRequest.of(0, 10, Sort.by(Sort.Direction.DESC, "createdAt"));
-    Page<PerformanceListResponse> result = performanceGetListUseCase.execute(null, pageable);
+    Page<PerformanceListResponse> result =
+        performanceGetListUseCase.execute(null, null, null, null, pageable);
     assertThat(result.getTotalElements()).isEqualTo(4);
   }
 
@@ -65,7 +66,7 @@ class PerformanceGetListTest {
   void getByGenre_whenGenreIsGiven() {
     Pageable pageable = PageRequest.of(0, 10, Sort.by(Sort.Direction.DESC, "createdAt"));
     Page<PerformanceListResponse> result =
-        performanceGetListUseCase.execute(Genre.CONCERT, pageable);
+        performanceGetListUseCase.execute(Genre.CONCERT, null, null, null, pageable);
     assertThat(result.getTotalElements()).isEqualTo(2);
     assertThat(result.getContent()).allMatch(p -> p.genre() == Genre.CONCERT);
   }
@@ -76,8 +77,10 @@ class PerformanceGetListTest {
     Pageable firstPage = PageRequest.of(0, 2, Sort.by(Sort.Direction.DESC, "createdAt"));
     Pageable secondPage = PageRequest.of(1, 2, Sort.by(Sort.Direction.DESC, "createdAt"));
 
-    Page<PerformanceListResponse> page1 = performanceGetListUseCase.execute(null, firstPage);
-    Page<PerformanceListResponse> page2 = performanceGetListUseCase.execute(null, secondPage);
+    Page<PerformanceListResponse> page1 =
+        performanceGetListUseCase.execute(null, null, null, null, firstPage);
+    Page<PerformanceListResponse> page2 =
+        performanceGetListUseCase.execute(null, null, null, null, secondPage);
 
     assertThat(page1.getContent()).hasSize(2);
     assertThat(page2.getContent()).hasSize(2);
