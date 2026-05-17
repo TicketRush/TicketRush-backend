@@ -17,12 +17,16 @@ public class RedisRepository {
 
   private static final String SIGNUP_EMAIL_AUTH_NUMBER_PREFIX = "SIGNUP:EMAIL:AUTH_NUMBER:";
   private static final String SIGNUP_EMAIL_AUTH_COOLDOWN_PREFIX = "SIGNUP:EMAIL:AUTH_COOLDOWN:";
+  private static final String SIGNUP_EMAIL_AUTH_VERIFIED_PREFIX = "SIGNUP:EMAIL:AUTH_VERIFIED:";
 
   // 인증번호 유효시간 = 5분
   private static final Duration SIGNUP_EMAIL_AUTH_NUMBER_TTL = Duration.ofMinutes(5);
 
   // 인증번호 재발송 쿨다운 = 60초
   private static final Duration SIGNUP_EMAIL_AUTH_COOLDOWN_TTL = Duration.ofSeconds(60);
+
+  // 이메일 인증 완료 상태 유효시간 = 30분
+  private static final Duration SIGNUP_EMAIL_AUTH_VERIFIED_TTL = Duration.ofMinutes(30);
 
   // 토큰 저장
   public void saveRefreshToken(Long userId, String refreshToken, long expiration) {
@@ -77,5 +81,18 @@ public class RedisRepository {
   public void deleteSignupEmailAuthCooldown(String email) {
     String key = SIGNUP_EMAIL_AUTH_COOLDOWN_PREFIX + email;
     redisTemplate.delete(key);
+  }
+
+  // 회원가입 이메일 인증번호 조회
+  public String getSignupEmailAuthNumber(String email) {
+    String key = SIGNUP_EMAIL_AUTH_NUMBER_PREFIX + email;
+    return redisTemplate.opsForValue().get(key);
+  }
+
+  // 회원가입 이메일 인증 완료 상태 저장
+  public void saveSignupEmailAuthVerified(String email) {
+    String key = SIGNUP_EMAIL_AUTH_VERIFIED_PREFIX + email;
+
+    redisTemplate.opsForValue().set(key, "true", SIGNUP_EMAIL_AUTH_VERIFIED_TTL);
   }
 }

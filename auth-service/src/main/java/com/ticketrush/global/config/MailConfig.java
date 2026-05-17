@@ -2,6 +2,7 @@ package com.ticketrush.global.config;
 
 import java.util.Objects;
 import lombok.RequiredArgsConstructor;
+import org.springframework.boot.context.properties.EnableConfigurationProperties;
 import org.springframework.boot.mail.autoconfigure.MailProperties;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
@@ -10,6 +11,7 @@ import org.springframework.mail.javamail.JavaMailSenderImpl;
 
 @Configuration
 @RequiredArgsConstructor
+@EnableConfigurationProperties(MailProperties.class)
 public class MailConfig {
 
   private static final int DEFAULT_SMTP_PORT = 587;
