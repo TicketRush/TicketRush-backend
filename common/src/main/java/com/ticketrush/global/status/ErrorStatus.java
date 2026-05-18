@@ -51,7 +51,7 @@ public enum ErrorStatus {
       HttpStatus.FORBIDDEN, "AUTH_403_002", "이메일 인증 번호는 60초 후 다시 요청할 수 있습니다."),
 
   // Auth 404
-  AUTH_NUMBER_VERIFY_NOT_FOUND(HttpStatus.NOT_FOUND, "COMMON_404_001", "인증번호가 만료되었거나 존재하지 않습니다."),
+  AUTH_NUMBER_VERIFY_NOT_FOUND(HttpStatus.NOT_FOUND, "AUTH_404_001", "인증번호가 만료되었거나 존재하지 않습니다."),
 
   // Auth 500
   AUTH_USER_SERVER_ERROR(
