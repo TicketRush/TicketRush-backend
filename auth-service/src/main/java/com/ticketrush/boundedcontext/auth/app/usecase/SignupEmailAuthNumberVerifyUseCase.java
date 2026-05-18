@@ -31,6 +31,6 @@ public class SignupEmailAuthNumberVerifyUseCase {
     redisRepository.saveSignupEmailAuthVerified(email);
     redisRepository.deleteSignupEmailAuthNumber(email);
 
-    return new SignupEmailAuthNumberVerifyResponse(true);
+    return new SignupEmailAuthNumberVerifyResponse();
   }
 }
