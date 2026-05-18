@@ -18,7 +18,8 @@ public class RedisRepository {
   private static final String SIGNUP_EMAIL_AUTH_NUMBER_PREFIX = "SIGNUP:EMAIL:AUTH_NUMBER:";
   private static final String SIGNUP_EMAIL_AUTH_COOLDOWN_PREFIX = "SIGNUP:EMAIL:AUTH_COOLDOWN:";
   private static final String SIGNUP_EMAIL_AUTH_VERIFIED_PREFIX = "SIGNUP:EMAIL:AUTH_VERIFIED:";
-  private static final String SIGNUP_EMAIL_AUTH_VERIFY_ATTEMPT_PREFIX = "SIGNUP:EMAIL:AUTH_VERIFY_ATTEMPT:";
+  private static final String SIGNUP_EMAIL_AUTH_VERIFY_ATTEMPT_PREFIX =
+      "SIGNUP:EMAIL:AUTH_VERIFY_ATTEMPT:";
 
   // 인증번호 유효시간 = 5분
   private static final Duration SIGNUP_EMAIL_AUTH_NUMBER_TTL = Duration.ofMinutes(5);

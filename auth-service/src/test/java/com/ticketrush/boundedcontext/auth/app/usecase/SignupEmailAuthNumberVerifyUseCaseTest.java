@@ -19,11 +19,9 @@ import org.mockito.junit.jupiter.MockitoExtension;
 @ExtendWith(MockitoExtension.class)
 class SignupEmailAuthNumberVerifyUseCaseTest {
 
-  @Mock
-  private RedisRepository redisRepository;
+  @Mock private RedisRepository redisRepository;
 
-  @InjectMocks
-  private SignupEmailAuthNumberVerifyUseCase signupEmailAuthNumberVerifyUseCase;
+  @InjectMocks private SignupEmailAuthNumberVerifyUseCase signupEmailAuthNumberVerifyUseCase;
 
   @Test
   @DisplayName("회원가입 이메일 인증번호 검증에 성공한다")
@@ -33,14 +31,14 @@ class SignupEmailAuthNumberVerifyUseCaseTest {
     String authNumber = "123456";
 
     SignupEmailAuthNumberVerifyRequest request =
-      new SignupEmailAuthNumberVerifyRequest(email, authNumber);
+        new SignupEmailAuthNumberVerifyRequest(email, authNumber);
 
     given(redisRepository.getSignupEmailAuthNumber(email)).willReturn(authNumber);
     given(redisRepository.getSignupEmailAuthVerifyAttemptCount(email)).willReturn(0);
 
     // when & then
     assertThatCode(() -> signupEmailAuthNumberVerifyUseCase.execute(request))
-      .doesNotThrowAnyException();
+        .doesNotThrowAnyException();
 
     verify(redisRepository).saveSignupEmailAuthVerified(email);
     verify(redisRepository).deleteSignupEmailAuthNumber(email);
@@ -55,13 +53,13 @@ class SignupEmailAuthNumberVerifyUseCaseTest {
     String inputAuthNumber = "123456";
 
     SignupEmailAuthNumberVerifyRequest request =
-      new SignupEmailAuthNumberVerifyRequest(email, inputAuthNumber);
+        new SignupEmailAuthNumberVerifyRequest(email, inputAuthNumber);
 
     given(redisRepository.getSignupEmailAuthNumber(email)).willReturn(null);
 
     // when & then
     assertThatThrownBy(() -> signupEmailAuthNumberVerifyUseCase.execute(request))
-      .isInstanceOf(BusinessException.class);
+        .isInstanceOf(BusinessException.class);
 
     verify(redisRepository, never()).saveSignupEmailAuthVerified(email);
     verify(redisRepository, never()).deleteSignupEmailAuthNumber(email);
@@ -77,7 +75,7 @@ class SignupEmailAuthNumberVerifyUseCaseTest {
     String inputAuthNumber = "654321";
 
     SignupEmailAuthNumberVerifyRequest request =
-      new SignupEmailAuthNumberVerifyRequest(email, inputAuthNumber);
+        new SignupEmailAuthNumberVerifyRequest(email, inputAuthNumber);
 
     given(redisRepository.getSignupEmailAuthNumber(email)).willReturn(savedAuthNumber);
     given(redisRepository.getSignupEmailAuthVerifyAttemptCount(email)).willReturn(0);
@@ -85,7 +83,7 @@ class SignupEmailAuthNumberVerifyUseCaseTest {
 
     // when & then
     assertThatThrownBy(() -> signupEmailAuthNumberVerifyUseCase.execute(request))
-      .isInstanceOf(BusinessException.class);
+        .isInstanceOf(BusinessException.class);
 
     verify(redisRepository).increaseSignupEmailAuthVerifyAttempt(email);
     verify(redisRepository, never()).saveSignupEmailAuthVerified(email);
@@ -102,7 +100,7 @@ class SignupEmailAuthNumberVerifyUseCaseTest {
     String inputAuthNumber = "654321";
 
     SignupEmailAuthNumberVerifyRequest request =
-      new SignupEmailAuthNumberVerifyRequest(email, inputAuthNumber);
+        new SignupEmailAuthNumberVerifyRequest(email, inputAuthNumber);
 
     given(redisRepository.getSignupEmailAuthNumber(email)).willReturn(savedAuthNumber);
     given(redisRepository.getSignupEmailAuthVerifyAttemptCount(email)).willReturn(4);
@@ -110,7 +108,7 @@ class SignupEmailAuthNumberVerifyUseCaseTest {
 
     // when & then
     assertThatThrownBy(() -> signupEmailAuthNumberVerifyUseCase.execute(request))
-      .isInstanceOf(BusinessException.class);
+        .isInstanceOf(BusinessException.class);
 
     verify(redisRepository).increaseSignupEmailAuthVerifyAttempt(email);
     verify(redisRepository).deleteSignupEmailAuthNumber(email);
@@ -127,14 +125,14 @@ class SignupEmailAuthNumberVerifyUseCaseTest {
     String inputAuthNumber = "123456";
 
     SignupEmailAuthNumberVerifyRequest request =
-      new SignupEmailAuthNumberVerifyRequest(email, inputAuthNumber);
+        new SignupEmailAuthNumberVerifyRequest(email, inputAuthNumber);
 
     given(redisRepository.getSignupEmailAuthNumber(email)).willReturn(savedAuthNumber);
     given(redisRepository.getSignupEmailAuthVerifyAttemptCount(email)).willReturn(5);
 
     // when & then
     assertThatThrownBy(() -> signupEmailAuthNumberVerifyUseCase.execute(request))
-      .isInstanceOf(BusinessException.class);
+        .isInstanceOf(BusinessException.class);
 
     verify(redisRepository).deleteSignupEmailAuthNumber(email);
     verify(redisRepository).deleteSignupEmailAuthVerifyAttempt(email);
