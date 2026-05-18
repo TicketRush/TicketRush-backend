@@ -36,7 +36,7 @@ class PerformanceValidationTest {
 
   @MockitoBean private PerformanceFacade performanceFacade;
 
-  final String baseUrl = "/api/v1/performance";
+  final String baseUrl = "/api/v1/performance/admin";
 
   private PerformanceCreateRequest.PerformanceCreateRequestBuilder createBaseRequest() {
     return PerformanceCreateRequest.builder()
