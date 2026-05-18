@@ -11,6 +11,7 @@ import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.constraints.Positive;
+import jakarta.validation.constraints.PositiveOrZero;
 import java.util.List;
 import lombok.RequiredArgsConstructor;
 import org.springdoc.core.annotations.ParameterObject;
@@ -58,8 +59,10 @@ public class PerformanceController {
   @GetMapping
   public ResponseEntity<ApiResponse<List<PerformanceListResponse>>> getPerformances(
       @Parameter(description = "장르 필터 (미입력 시 전체 조회)") @RequestParam(required = false) Genre genre,
-      @Parameter(description = "최소 가격") @RequestParam(required = false) Long minPrice,
-      @Parameter(description = "최대 가격") @RequestParam(required = false) Long maxPrice,
+      @Parameter(description = "최소 가격") @PositiveOrZero @RequestParam(required = false)
+          Long minPrice,
+      @Parameter(description = "최대 가격") @PositiveOrZero @RequestParam(required = false)
+          Long maxPrice,
       @Parameter(description = "공연 상태 필터") @RequestParam(required = false) PerformanceStatus status,
       @ParameterObject
           @PageableDefault(size = 8, sort = "createdAt", direction = Sort.Direction.DESC)
