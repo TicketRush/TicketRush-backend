@@ -59,4 +59,24 @@ class PerformanceAdminControllerTest {
   void deletePerformance_noAuth_forbidden() throws Exception {
     mockMvc.perform(delete(BASE_URL + "/1")).andExpect(status().isForbidden());
   }
+
+  @Test
+  @DisplayName("내부 토큰 없이 관리자 권한으로 공연 삭제 요청 시 403을 반환한다")
+  void deletePerformance_missingInternalToken_forbidden() throws Exception {
+    mockMvc
+        .perform(delete(BASE_URL + "/1").header("X-User-Id", "1").header("X-User-Role", "ADMIN"))
+        .andExpect(status().isForbidden());
+  }
+
+  @Test
+  @DisplayName("잘못된 내부 토큰과 관리자 권한으로 공연 삭제 요청 시 403을 반환한다")
+  void deletePerformance_invalidInternalToken_forbidden() throws Exception {
+    mockMvc
+        .perform(
+            delete(BASE_URL + "/1")
+                .header("X-Internal-Token", "invalid-token")
+                .header("X-User-Id", "1")
+                .header("X-User-Role", "ADMIN"))
+        .andExpect(status().isForbidden());
+  }
 }
