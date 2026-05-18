@@ -3,6 +3,7 @@ package com.ticketrush.boundedcontext.performance.out.repository;
 import com.querydsl.core.BooleanBuilder;
 import com.querydsl.core.types.Order;
 import com.querydsl.core.types.OrderSpecifier;
+import com.querydsl.jpa.impl.JPAQuery;
 import com.querydsl.jpa.impl.JPAQueryFactory;
 import com.ticketrush.boundedcontext.performance.domain.entity.Performance;
 import com.ticketrush.boundedcontext.performance.domain.entity.QPerformance;
@@ -13,9 +14,9 @@ import com.ticketrush.global.status.ErrorStatus;
 import java.util.List;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
-import org.springframework.data.domain.PageImpl;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.Sort;
+import org.springframework.data.support.PageableExecutionUtils;
 import org.springframework.stereotype.Repository;
 
 @Repository
@@ -53,10 +54,10 @@ public class PerformanceRepositoryImpl implements PerformanceRepositoryCustom {
             .orderBy(toOrderSpecifiers(performance, pageable))
             .fetch();
 
-    Long totalCount =
-        queryFactory.select(performance.count()).from(performance).where(predicate).fetchOne();
+    JPAQuery<Long> countQuery =
+        queryFactory.select(performance.count()).from(performance).where(predicate);
 
-    return new PageImpl<>(content, pageable, totalCount != null ? totalCount : 0L);
+    return PageableExecutionUtils.getPage(content, pageable, countQuery::fetchOne);
   }
 
   private OrderSpecifier<?>[] toOrderSpecifiers(QPerformance performance, Pageable pageable) {
