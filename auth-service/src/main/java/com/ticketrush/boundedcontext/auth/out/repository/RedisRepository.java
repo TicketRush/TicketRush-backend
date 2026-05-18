@@ -18,6 +18,7 @@ public class RedisRepository {
   private static final String SIGNUP_EMAIL_AUTH_NUMBER_PREFIX = "SIGNUP:EMAIL:AUTH_NUMBER:";
   private static final String SIGNUP_EMAIL_AUTH_COOLDOWN_PREFIX = "SIGNUP:EMAIL:AUTH_COOLDOWN:";
   private static final String SIGNUP_EMAIL_AUTH_VERIFIED_PREFIX = "SIGNUP:EMAIL:AUTH_VERIFIED:";
+  private static final String SIGNUP_EMAIL_AUTH_VERIFY_ATTEMPT_PREFIX = "SIGNUP:EMAIL:AUTH_VERIFY_ATTEMPT:";
 
   // 인증번호 유효시간 = 5분
   private static final Duration SIGNUP_EMAIL_AUTH_NUMBER_TTL = Duration.ofMinutes(5);
@@ -27,6 +28,9 @@ public class RedisRepository {
 
   // 이메일 인증 완료 상태 유효시간 = 30분
   private static final Duration SIGNUP_EMAIL_AUTH_VERIFIED_TTL = Duration.ofMinutes(30);
+
+  // 인증번호 검증 실패 횟수 유효시간 = 5분
+  private static final Duration SIGNUP_EMAIL_AUTH_VERIFY_ATTEMPT_TTL = Duration.ofMinutes(5);
 
   // 토큰 저장
   public void saveRefreshToken(Long userId, String refreshToken, long expiration) {
@@ -94,5 +98,36 @@ public class RedisRepository {
     String key = SIGNUP_EMAIL_AUTH_VERIFIED_PREFIX + email;
 
     redisTemplate.opsForValue().set(key, "true", SIGNUP_EMAIL_AUTH_VERIFIED_TTL);
+  }
+
+  // 추가: 회원가입 이메일 인증번호 검증 실패 횟수 증가
+  public long increaseSignupEmailAuthVerifyAttempt(String email) {
+    String key = SIGNUP_EMAIL_AUTH_VERIFY_ATTEMPT_PREFIX + email;
+
+    Long attemptCount = redisTemplate.opsForValue().increment(key);
+
+    if (attemptCount != null && attemptCount == 1L) {
+      redisTemplate.expire(key, SIGNUP_EMAIL_AUTH_VERIFY_ATTEMPT_TTL);
+    }
+
+    return attemptCount == null ? 0L : attemptCount;
+  }
+
+  // 추가: 회원가입 이메일 인증번호 검증 실패 횟수 조회
+  public int getSignupEmailAuthVerifyAttemptCount(String email) {
+    String key = SIGNUP_EMAIL_AUTH_VERIFY_ATTEMPT_PREFIX + email;
+    String attemptCount = redisTemplate.opsForValue().get(key);
+
+    if (attemptCount == null) {
+      return 0;
+    }
+
+    return Integer.parseInt(attemptCount);
+  }
+
+  // 추가: 회원가입 이메일 인증번호 검증 실패 횟수 삭제
+  public void deleteSignupEmailAuthVerifyAttempt(String email) {
+    String key = SIGNUP_EMAIL_AUTH_VERIFY_ATTEMPT_PREFIX + email;
+    redisTemplate.delete(key);
   }
 }
