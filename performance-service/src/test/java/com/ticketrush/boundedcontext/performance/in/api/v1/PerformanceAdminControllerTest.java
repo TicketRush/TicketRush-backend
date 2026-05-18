@@ -25,7 +25,7 @@ class PerformanceAdminControllerTest {
 
   @MockitoBean private PerformanceFacade performanceFacade;
 
-  private static final String BASE_URL = "/api/v1/performance";
+  private static final String BASE_URL = "/api/v1/performance/admin";
   private static final String INTERNAL_TOKEN = "test-token";
 
   @Test
