@@ -79,10 +79,11 @@ class SeatRepositoryTest {
         .extracting(
             SeatLayoutResponse::seatId,
             SeatLayoutResponse::seatLayoutId,
-            SeatLayoutResponse::seatNumber)
+            SeatLayoutResponse::seatNumber,
+            SeatLayoutResponse::seatStatus)
         .containsExactlyInAnyOrder(
-            tuple(seat1.getId(), targetLayout.getId(), "A-1"),
-            tuple(seat2.getId(), targetLayout.getId(), "A-2"));
+            tuple(seat1.getId(), targetLayout.getId(), "A-1", SeatStatus.AVAILABLE),
+            tuple(seat2.getId(), targetLayout.getId(), "A-2", SeatStatus.AVAILABLE));
   }
 
   @Test

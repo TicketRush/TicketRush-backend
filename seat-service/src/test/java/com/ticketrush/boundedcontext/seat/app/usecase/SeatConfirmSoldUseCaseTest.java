@@ -5,10 +5,13 @@ import static org.mockito.BDDMockito.given;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoMoreInteractions;
 
+import com.ticketrush.boundedcontext.seat.app.support.SeatStatusEventPublisher;
+import com.ticketrush.boundedcontext.seat.domain.entity.Seat;
 import com.ticketrush.boundedcontext.seat.out.repository.SeatRepository;
 import com.ticketrush.global.exception.BusinessException;
 import com.ticketrush.global.status.ErrorStatus;
 import com.ticketrush.global.types.SeatStatus;
+import java.util.Optional;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -23,6 +26,7 @@ class SeatConfirmSoldUseCaseTest {
 
   @Mock private SeatRepository seatRepository;
   @Mock private SeatUnlockUseCase seatUnlockUseCase;
+  @Mock private SeatStatusEventPublisher seatStatusEventPublisher;
 
   @Test
   @DisplayName("성공: HOLD 상태인 좌석을 SOLD 상태로 확정한다")
@@ -30,14 +34,19 @@ class SeatConfirmSoldUseCaseTest {
     // given
     String bookingNumber = "X7B29-KLPW1";
     Long seatId = 1L;
+    Seat seat =
+        Seat.builder().performanceId(1L).seatNumber("A-1").seatStatus(SeatStatus.SOLD).build();
 
     given(seatRepository.confirmSoldById(seatId, SeatStatus.HOLD, SeatStatus.SOLD)).willReturn(1);
+    given(seatRepository.findById(seatId)).willReturn(Optional.of(seat));
 
     // when
     seatConfirmSoldUseCase.execute(bookingNumber, seatId);
 
     // then
     verify(seatRepository).confirmSoldById(seatId, SeatStatus.HOLD, SeatStatus.SOLD);
+    verify(seatRepository).findById(seatId);
+    verify(seatStatusEventPublisher).publishAfterCommit(seat);
     verify(seatUnlockUseCase).forceRelease(seatId);
   }
 
