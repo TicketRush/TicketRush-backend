@@ -1,74 +1,45 @@
 package com.ticketrush.boundedcontext.auth.in.api.v1;
 
-import com.ticketrush.boundedcontext.auth.app.dto.request.SocialOauthLoginRequest;
-import com.ticketrush.boundedcontext.auth.app.dto.request.TokenReissueRequest;
-import com.ticketrush.boundedcontext.auth.app.dto.response.OauthLoginResponse;
-import com.ticketrush.boundedcontext.auth.app.dto.response.TokenReissueResponse;
+import com.ticketrush.boundedcontext.auth.app.dto.request.SignupEmailAuthNumberSendRequest;
+import com.ticketrush.boundedcontext.auth.app.dto.request.SignupEmailAuthNumberVerifyRequest;
+import com.ticketrush.boundedcontext.auth.app.dto.response.SignupEmailAuthNumberSendResponse;
+import com.ticketrush.boundedcontext.auth.app.dto.response.SignupEmailAuthNumberVerifyResponse;
 import com.ticketrush.boundedcontext.auth.app.facade.AuthFacade;
 import com.ticketrush.global.dto.response.ApiResponse;
-import com.ticketrush.global.exception.BusinessException;
-import com.ticketrush.global.security.CustomUserDetails;
-import com.ticketrush.global.status.ErrorStatus;
 import com.ticketrush.global.status.SuccessStatus;
 import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
-import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.ResponseEntity;
-import org.springframework.security.core.annotation.AuthenticationPrincipal;
-import org.springframework.web.bind.annotation.GetMapping;
-import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
-@Slf4j
+@Tag(name = "Auth", description = "인증 API")
 @RestController
-@RequiredArgsConstructor
 @RequestMapping("/api/v1/auth")
+@RequiredArgsConstructor
 public class AuthController {
 
   private final AuthFacade authFacade;
 
-  @Operation(summary = "OAuth2 로그인 URL 조회", description = "OAuth2 로그인 URL을 반환합니다.")
-  @GetMapping("/oauth/{provider}/url")
-  public ResponseEntity<ApiResponse<String>> getOAuthLoginUrl(@PathVariable String provider) {
+  @Operation(summary = "회원가입 이메일 인증 번호 발송", description = "회원가입 전 이메일 중복 확인 후 인증 번호를 발송합니다.")
+  @PostMapping("/signup/email-verification/send")
+  public ResponseEntity<ApiResponse<SignupEmailAuthNumberSendResponse>> sendSignupEmailAuthNumber(
+      @Valid @RequestBody SignupEmailAuthNumberSendRequest request) {
+    SignupEmailAuthNumberSendResponse response = authFacade.sendSignupEmailAuthNumber(request);
 
-    String url = authFacade.getOAuthLoginUrl(provider);
-    return ApiResponse.onSuccess(SuccessStatus.OK, url);
-  }
-
-  @Operation(summary = "소셜 로그인", description = "인가 코드를 통해 사용자 인증 후 JWT 토큰(access, refresh)을 발급합니다.")
-  @PostMapping("/social/login")
-  public ResponseEntity<ApiResponse<OauthLoginResponse>> socialLogin(
-      @RequestBody @Valid SocialOauthLoginRequest request) {
-
-    OauthLoginResponse response = authFacade.socialLogin(request);
     return ApiResponse.onSuccess(SuccessStatus.OK, response);
   }
 
-  @Operation(
-      summary = "JWT 토큰 재발급",
-      description = "refresh token을 검증한 뒤 access token과 refresh token을 재발급합니다.")
-  @PostMapping("/reissue")
-  public ResponseEntity<ApiResponse<TokenReissueResponse>> reissue(
-      @RequestBody @Valid TokenReissueRequest request) {
+  @Operation(summary = "회원가입 이메일 인증 번호 확인", description = "회원가입 이메일로 발송된 인증 번호가 일치하는지 확인합니다.")
+  @PostMapping("/signup/email-verification/verify")
+  public ResponseEntity<ApiResponse<SignupEmailAuthNumberVerifyResponse>>
+      verifySignupEmailAuthNumber(@Valid @RequestBody SignupEmailAuthNumberVerifyRequest request) {
+    SignupEmailAuthNumberVerifyResponse response = authFacade.verifySignupEmailAuthNumber(request);
 
-    TokenReissueResponse response = authFacade.reissue(request.refreshToken());
     return ApiResponse.onSuccess(SuccessStatus.OK, response);
-  }
-
-  @Operation(summary = "소셜 로그아웃", description = "Refresh token 삭제를 통해 로그아웃합니다.")
-  @PostMapping("/logout")
-  public ResponseEntity<ApiResponse<Void>> logout(@AuthenticationPrincipal CustomUserDetails user) {
-
-    if (user == null) {
-      throw new BusinessException(ErrorStatus.UNAUTHORIZED);
-    }
-
-    authFacade.logout(user.getUserId());
-
-    return ApiResponse.onSuccess(SuccessStatus.OK);
   }
 }

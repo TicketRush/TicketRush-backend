@@ -31,10 +31,12 @@ public enum ErrorStatus {
   AUTH_OAUTH_INVALID_REDIRECT_URI(
       HttpStatus.BAD_REQUEST, "AUTH_400_004", "유효하지 않은 Redirect URI입니다."),
   AUTH_GOOGLE_TOKEN_FAILED(HttpStatus.BAD_REQUEST, "AUTH_400_005", "잘못된 구글 토큰입니다."),
-  AUTH_GOOGLE_INFO_FAILED(HttpStatus.BAD_REQUEST, "AUTH_400_006", "잘못된 구글 정보입니다."),
-  AUTH_NAVER_TOKEN_FAILED(HttpStatus.BAD_REQUEST, "AUTH_400_007", "네이버 토큰 요청에 실패했습니다."),
-  AUTH_NAVER_INFO_FAILED(HttpStatus.BAD_REQUEST, "AUTH_400_008", "네이버 사용자 정보 조회에 실패했습니다."),
-  AUTH_KAKAO_INFO_FAILED(HttpStatus.NOT_FOUND, "AUTH_400_009", "카카오 사용자 정보 조회를 실패하였습니다."),
+  AUTH_NAVER_TOKEN_FAILED(HttpStatus.BAD_REQUEST, "AUTH_400_006", "네이버 토큰 요청에 실패했습니다."),
+  AUTH_EMAIL_ALREADY_EXISTS(HttpStatus.BAD_REQUEST, "AUTH_400_007", "이미 가입된 이메일입니다."),
+  AUTH_EMAIL_SEND_FAILED(HttpStatus.BAD_REQUEST, "AUTH_400_008", "Email 인증번호 발송에 실패하였습니다."),
+  AUTH_EMAIL_EXISTS_CHECK_BAD_REQUEST(
+      HttpStatus.BAD_REQUEST, "AUTH_400_009", "이메일 중복 확인 요청이 올바르지 않습니다."),
+  AUTH_NUMBER_NOT_MATCH(HttpStatus.BAD_REQUEST, "AUTH_400_010", "인증번호가 일치하지 않습니다."),
 
   // Auth 401
   AUTH_INVALID_REFRESH_TOKEN(HttpStatus.UNAUTHORIZED, "AUTH_401_001", "유효하지 않은 Refresh Token입니다."),
@@ -45,14 +47,28 @@ public enum ErrorStatus {
 
   // Auth 403
   AUTH_ACCESS_DENIED(HttpStatus.FORBIDDEN, "AUTH_403_001", "접근 권한이 없습니다."),
+  AUTH_EMAIL_AUTH_NUMBER_SEND_TOO_FREQUENT(
+      HttpStatus.FORBIDDEN, "AUTH_403_002", "이메일 인증 번호는 60초 후 다시 요청할 수 있습니다."),
+  AUTH_NUMBER_VERIFY_ATTEMPT_EXCEEDED(
+      HttpStatus.FORBIDDEN, "AUTH_403_003", "인증번호 입력 횟수를 초과했습니다. 인증번호를 다시 발급해주세요."),
+
+  // Auth 404
+  AUTH_NUMBER_VERIFY_NOT_FOUND(HttpStatus.NOT_FOUND, "AUTH_404_001", "인증번호가 만료되었거나 존재하지 않습니다."),
 
   // Auth 500
   AUTH_USER_SERVER_ERROR(
       HttpStatus.INTERNAL_SERVER_ERROR, "AUTH_500_001", "user-service 내부 오류가 발생했습니다."),
+  AUTH_EMAIL_EXISTS_CHECK_SERVER_ERROR(
+      HttpStatus.INTERNAL_SERVER_ERROR, "AUTH_500_002", "이메일 중복 확인 중 user-service 서버 오류가 발생했습니다."),
+  AUTH_EMAIL_EXISTS_CHECK_COMMUNICATION_FAILED(
+      HttpStatus.INTERNAL_SERVER_ERROR, "AUTH_500_003", "이메일 중복 확인 중 user-service와 통신에 실패했습니다."),
 
   // Auth 503
   AUTH_USER_COMMUNICATION_FAILED(
       HttpStatus.SERVICE_UNAVAILABLE, "AUTH_503_001", "user-service와 통신에 실패했습니다."),
+  AUTH_KAKAO_INFO_FAILED(HttpStatus.SERVICE_UNAVAILABLE, "AUTH_503_002", "카카오 사용자 정보 조회를 실패하였습니다."),
+  AUTH_GOOGLE_INFO_FAILED(HttpStatus.SERVICE_UNAVAILABLE, "AUTH_503_003", "구글 사용자 정보 조회에 실패했습니다."),
+  AUTH_NAVER_INFO_FAILED(HttpStatus.SERVICE_UNAVAILABLE, "AUTH_503_004", "네이버 사용자 정보 조회에 실패했습니다."),
 
   // Booking 404
   BOOKING_NOT_FOUND(HttpStatus.NOT_FOUND, "BOOKING_404_001", "해당 예매를 찾을 수 없습니다."),
@@ -100,6 +116,7 @@ public enum ErrorStatus {
   USER_SOCIAL_ID_REQUIRED(HttpStatus.BAD_REQUEST, "USER_400_002", "socialId는 필수입니다."),
   USER_SOCIAL_PROVIDER_INVALID(
       HttpStatus.BAD_REQUEST, "USER_400_003", "socialProviderId가 유효하지 않습니다."),
+  USER_EMAIL_REQUIRED(HttpStatus.BAD_REQUEST, "USER_400_004", "이메일은 필수입니다."),
 
   // User 404
   USER_NOT_FOUND(HttpStatus.NOT_FOUND, "USER_404_001", "해당 사용자를 찾을 수 없습니다.");
