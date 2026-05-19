@@ -11,7 +11,6 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import com.ticketrush.boundedcontext.seat.app.dto.response.SeatAvailabilityResponse;
 import com.ticketrush.boundedcontext.seat.app.dto.response.SeatLayoutResponse;
 import com.ticketrush.boundedcontext.seat.app.facade.SeatFacade;
-import com.ticketrush.boundedcontext.seat.in.sse.SeatStatusSseEmitterRegistry;
 import com.ticketrush.global.config.SecurityConfig;
 import com.ticketrush.global.types.SeatStatus;
 import com.ticketrush.support.WebMvcSliceTest;
@@ -37,7 +36,6 @@ class SeatControllerTest {
   @Autowired private MockMvc mockMvc;
 
   @MockitoBean private SeatFacade seatFacade;
-  @MockitoBean private SeatStatusSseEmitterRegistry seatStatusSseEmitterRegistry;
 
   @Test
   @WithMockUser
@@ -73,14 +71,14 @@ class SeatControllerTest {
     // given
     Long performanceId = 1L;
     SseEmitter emitter = new SseEmitter();
-    given(seatStatusSseEmitterRegistry.subscribe(performanceId)).willReturn(emitter);
+    given(seatFacade.subscribeSeatStatus(performanceId)).willReturn(emitter);
 
     // when & then
     mockMvc
         .perform(get("/api/v1/seat/{performanceId}/seat-status/stream", performanceId))
         .andExpect(status().isOk());
 
-    verify(seatStatusSseEmitterRegistry).subscribe(performanceId);
+    verify(seatFacade).subscribeSeatStatus(performanceId);
   }
 
   @Test

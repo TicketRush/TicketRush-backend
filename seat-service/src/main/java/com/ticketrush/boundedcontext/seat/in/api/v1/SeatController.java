@@ -4,7 +4,6 @@ import com.ticketrush.boundedcontext.seat.app.dto.request.SeatSoldConfirmRequest
 import com.ticketrush.boundedcontext.seat.app.dto.response.SeatAvailabilityResponse;
 import com.ticketrush.boundedcontext.seat.app.dto.response.SeatLayoutResponse;
 import com.ticketrush.boundedcontext.seat.app.facade.SeatFacade;
-import com.ticketrush.boundedcontext.seat.in.sse.SeatStatusSseEmitterRegistry;
 import com.ticketrush.global.dto.response.ApiResponse;
 import com.ticketrush.global.exception.BusinessException;
 import com.ticketrush.global.status.ErrorStatus;
@@ -34,7 +33,6 @@ public class SeatController {
   private static final String INTERNAL_TOKEN_HEADER = "X-Internal-Token";
 
   private final SeatFacade seatFacade;
-  private final SeatStatusSseEmitterRegistry seatStatusSseEmitterRegistry;
 
   @Value("${gateway.internal-token}")
   private String internalToken;
@@ -61,7 +59,7 @@ public class SeatController {
       produces = MediaType.TEXT_EVENT_STREAM_VALUE)
   @Operation(summary = "공연별 좌석 상태 SSE 구독", description = "공연 ID에 해당하는 좌석 상태 변경 이벤트를 실시간으로 구독합니다.")
   public SseEmitter subscribeSeatStatus(@PathVariable Long performanceId) {
-    return seatStatusSseEmitterRegistry.subscribe(performanceId);
+    return seatFacade.subscribeSeatStatus(performanceId);
   }
 
   @PostMapping("/internal/sold")
