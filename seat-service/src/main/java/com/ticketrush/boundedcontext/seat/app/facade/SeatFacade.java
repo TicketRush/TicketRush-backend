@@ -2,6 +2,7 @@ package com.ticketrush.boundedcontext.seat.app.facade;
 
 import com.ticketrush.boundedcontext.seat.app.dto.response.SeatAvailabilityResponse;
 import com.ticketrush.boundedcontext.seat.app.dto.response.SeatLayoutResponse;
+import com.ticketrush.boundedcontext.seat.app.support.SeatStatusStreamSubscriber;
 import com.ticketrush.boundedcontext.seat.app.usecase.SeatConfirmSoldUseCase;
 import com.ticketrush.boundedcontext.seat.app.usecase.SeatCreateDefaultLayoutUseCase;
 import com.ticketrush.boundedcontext.seat.app.usecase.SeatGetAvailabilityUseCase;
@@ -19,6 +20,7 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.stereotype.Service;
+import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
 
 @Slf4j
 @Service
@@ -32,6 +34,7 @@ public class SeatFacade {
   private final SeatHoldUseCase seatHoldUseCase;
   private final SeatLockUseCase seatLockUseCase;
   private final SeatUnlockUseCase seatUnlockUseCase;
+  private final SeatStatusStreamSubscriber seatStatusStreamSubscriber;
   private final SeatLayoutRepository seatLayoutRepository;
   private final EventPublisher eventPublisher;
 
@@ -41,6 +44,10 @@ public class SeatFacade {
 
   public SeatAvailabilityResponse getPerformanceSeatAvailability(Long performanceId) {
     return seatGetAvailabilityUseCase.execute(performanceId);
+  }
+
+  public SseEmitter subscribeSeatStatus(Long performanceId) {
+    return seatStatusStreamSubscriber.subscribe(performanceId);
   }
 
   public void createDefaultSeats(Long performanceId) {

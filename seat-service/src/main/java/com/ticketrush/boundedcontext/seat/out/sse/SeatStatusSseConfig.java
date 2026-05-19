@@ -1,4 +1,4 @@
-package com.ticketrush.boundedcontext.seat.in.sse;
+package com.ticketrush.boundedcontext.seat.out.sse;
 
 import java.util.concurrent.Executor;
 import org.springframework.context.annotation.Bean;
