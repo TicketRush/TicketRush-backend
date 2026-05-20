@@ -1,7 +1,9 @@
 package com.ticketrush.boundedcontext.user.in.api.v1;
 
+import com.ticketrush.boundedcontext.user.app.dto.request.SignupRequest;
 import com.ticketrush.boundedcontext.user.app.dto.request.SocialLoginRequest;
 import com.ticketrush.boundedcontext.user.app.dto.response.EmailExistsResponse;
+import com.ticketrush.boundedcontext.user.app.dto.response.SignupResponse;
 import com.ticketrush.boundedcontext.user.app.dto.response.SocialLoginResponse;
 import com.ticketrush.boundedcontext.user.app.facade.UserFacade;
 import io.swagger.v3.oas.annotations.Operation;
@@ -32,5 +34,11 @@ public class UserController {
   @GetMapping("/exists/email")
   public EmailExistsResponse existsByEmail(@RequestParam(required = false) String email) {
     return userFacade.existsByEmail(email);
+  }
+
+  @Operation(summary = "회원가입", description = "이메일과 비밀번호로 회원가입합니다.")
+  @PostMapping("/signup")
+  public SignupResponse signup(@RequestBody SignupRequest request) {
+    return userFacade.signup(request);
   }
 }

@@ -1,7 +1,7 @@
 package com.ticketrush.boundedcontext.auth.out.apiclient;
 
-import com.ticketrush.boundedcontext.auth.app.dto.response.GoogleUserInfoResponse;
-import com.ticketrush.boundedcontext.auth.app.dto.response.OauthTokenResponse;
+import com.ticketrush.boundedcontext.auth.app.dto.response.social.GoogleUserInfoResponse;
+import com.ticketrush.boundedcontext.auth.app.dto.response.social.OauthTokenResponse;
 import com.ticketrush.boundedcontext.auth.domain.types.SocialProvider;
 import com.ticketrush.boundedcontext.auth.domain.types.SocialUserInfo;
 import com.ticketrush.global.exception.BusinessException;

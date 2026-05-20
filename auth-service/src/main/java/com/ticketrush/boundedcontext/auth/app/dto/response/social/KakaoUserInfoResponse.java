@@ -1,4 +1,4 @@
-package com.ticketrush.boundedcontext.auth.app.dto.response;
+package com.ticketrush.boundedcontext.auth.app.dto.response.social;
 
 /*
  auth-service가 access token으로 카카오 사용자 정보 요청을 할 때, 카카오의 사용자 정보 응답 반환 DTO

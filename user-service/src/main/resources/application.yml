@@ -8,6 +8,10 @@ spring:
   application:
     name: user-service
 
+service:
+  auth:
+    url: http://localhost:8082
+
 custom:
   global:
     internalBackUrl: http://localhost:${server.port:8081}
