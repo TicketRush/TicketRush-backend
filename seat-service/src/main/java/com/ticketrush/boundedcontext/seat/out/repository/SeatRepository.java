@@ -1,7 +1,7 @@
 package com.ticketrush.boundedcontext.seat.out.repository;
 
-import com.ticketrush.boundedcontext.seat.app.dto.response.SeatAvailabilityResponse;
 import com.ticketrush.boundedcontext.seat.app.dto.response.SeatLayoutResponse;
+import com.ticketrush.boundedcontext.seat.app.dto.response.SeatStatusCountsResponse;
 import com.ticketrush.boundedcontext.seat.domain.entity.Seat;
 import com.ticketrush.global.types.SeatStatus;
 import java.time.LocalDateTime;
@@ -18,14 +18,18 @@ public interface SeatRepository extends JpaRepository<Seat, Long> {
   Long countByPerformanceIdAndSeatStatus(Long performanceId, SeatStatus seatStatus);
 
   @Query(
-      "SELECT new com.ticketrush.boundedcontext.seat.app.dto.response.SeatAvailabilityResponse("
+      "SELECT new com.ticketrush.boundedcontext.seat.app.dto.response.SeatStatusCountsResponse("
+          + "COUNT(s), "
           + "COUNT(CASE WHEN s.seatStatus = :availableStatus THEN 1 END), "
-          + "COUNT(s)) "
+          + "COUNT(CASE WHEN s.seatStatus = :soldStatus THEN 1 END), "
+          + "COUNT(CASE WHEN s.seatStatus = :holdStatus THEN 1 END)) "
           + "FROM Seat s "
           + "WHERE s.performanceId = :performanceId")
-  SeatAvailabilityResponse getAvailabilityByPerformanceId(
+  SeatStatusCountsResponse getStatusCountsByPerformanceId(
       @Param("performanceId") Long performanceId,
-      @Param("availableStatus") SeatStatus availableStatus);
+      @Param("availableStatus") SeatStatus availableStatus,
+      @Param("soldStatus") SeatStatus soldStatus,
+      @Param("holdStatus") SeatStatus holdStatus);
 
   @Query(
       "SELECT new com.ticketrush.boundedcontext.seat.app.dto.response.SeatLayoutResponse("
