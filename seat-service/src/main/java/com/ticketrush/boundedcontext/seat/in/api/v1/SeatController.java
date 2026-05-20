@@ -1,8 +1,8 @@
 package com.ticketrush.boundedcontext.seat.in.api.v1;
 
 import com.ticketrush.boundedcontext.seat.app.dto.request.SeatSoldConfirmRequest;
-import com.ticketrush.boundedcontext.seat.app.dto.response.SeatAvailabilityResponse;
 import com.ticketrush.boundedcontext.seat.app.dto.response.SeatLayoutResponse;
+import com.ticketrush.boundedcontext.seat.app.dto.response.SeatStatusCountsResponse;
 import com.ticketrush.boundedcontext.seat.app.facade.SeatFacade;
 import com.ticketrush.global.dto.response.ApiResponse;
 import com.ticketrush.global.exception.BusinessException;
@@ -46,11 +46,13 @@ public class SeatController {
   }
 
   @GetMapping("/{performanceId}/seat-counts")
-  @Operation(summary = "공연 좌석 수 조회", description = "공연 ID로 예매 가능한 좌석 수와 전체 좌석 수를 조회합니다.")
+  @Operation(
+      summary = "공연 좌석 상태별 수 조회",
+      description = "공연 ID로 전체, 예매 가능, 판매 완료, 임시 선점 좌석 수를 조회합니다.")
   @SeatCountsApiResponses
-  public ResponseEntity<ApiResponse<SeatAvailabilityResponse>> getSeatCounts(
+  public ResponseEntity<ApiResponse<SeatStatusCountsResponse>> getSeatCounts(
       @Parameter(description = "공연 ID") @PathVariable Long performanceId) {
-    SeatAvailabilityResponse response = seatFacade.getPerformanceSeatAvailability(performanceId);
+    SeatStatusCountsResponse response = seatFacade.getPerformanceSeatStatusCounts(performanceId);
     return ApiResponse.onSuccess(SuccessStatus.OK, response);
   }
 

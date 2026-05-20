@@ -35,8 +35,10 @@ import java.lang.annotation.Target;
                             "message": "요청에 성공하였습니다.",
                             "trace_id": "trace-id-example",
                             "result": {
+                              "total_count": 120,
                               "available_count": 120,
-                              "total_count": 120
+                              "sold_count": 0,
+                              "hold_count": 0
                             }
                           }
                           """))),
