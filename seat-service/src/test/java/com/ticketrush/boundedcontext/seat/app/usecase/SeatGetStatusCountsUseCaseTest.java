@@ -1,12 +1,14 @@
 package com.ticketrush.boundedcontext.seat.app.usecase;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.BDDMockito.given;
 import static org.mockito.Mockito.verify;
 
 import com.ticketrush.boundedcontext.seat.app.dto.response.SeatStatusCountsResponse;
 import com.ticketrush.boundedcontext.seat.out.repository.SeatRepository;
-import com.ticketrush.global.types.SeatStatus;
+import java.time.LocalDateTime;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -28,7 +30,7 @@ class SeatGetStatusCountsUseCaseTest {
     Long performanceId = 1L;
     given(
             seatRepository.getStatusCountsByPerformanceId(
-                performanceId, SeatStatus.AVAILABLE, SeatStatus.SOLD, SeatStatus.HOLD))
+                eq(performanceId), any(LocalDateTime.class)))
         .willReturn(new SeatStatusCountsResponse(10L, 6L, 3L, 1L));
 
     // when
@@ -40,8 +42,7 @@ class SeatGetStatusCountsUseCaseTest {
     assertThat(response.soldCount()).isEqualTo(3L);
     assertThat(response.holdCount()).isEqualTo(1L);
     verify(seatRepository)
-        .getStatusCountsByPerformanceId(
-            performanceId, SeatStatus.AVAILABLE, SeatStatus.SOLD, SeatStatus.HOLD);
+        .getStatusCountsByPerformanceId(eq(performanceId), any(LocalDateTime.class));
   }
 
   @Test
@@ -51,7 +52,7 @@ class SeatGetStatusCountsUseCaseTest {
     Long performanceId = 1L;
     given(
             seatRepository.getStatusCountsByPerformanceId(
-                performanceId, SeatStatus.AVAILABLE, SeatStatus.SOLD, SeatStatus.HOLD))
+                eq(performanceId), any(LocalDateTime.class)))
         .willReturn(new SeatStatusCountsResponse(0L, 0L, 0L, 0L));
 
     // when
