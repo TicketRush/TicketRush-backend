@@ -20,16 +20,24 @@ public interface SeatRepository extends JpaRepository<Seat, Long> {
   @Query(
       "SELECT new com.ticketrush.boundedcontext.seat.app.dto.response.SeatStatusCountsResponse("
           + "COUNT(s), "
-          + "COUNT(CASE WHEN s.seatStatus = :availableStatus THEN 1 END), "
+          + "COUNT(CASE WHEN s.seatStatus = :availableStatus "
+          + "OR (s.seatStatus = :holdStatus AND s.holdExpiredAt <= :now) THEN 1 END), "
           + "COUNT(CASE WHEN s.seatStatus = :soldStatus THEN 1 END), "
-          + "COUNT(CASE WHEN s.seatStatus = :holdStatus THEN 1 END)) "
+          + "COUNT(CASE WHEN s.seatStatus = :holdStatus AND s.holdExpiredAt > :now THEN 1 END)) "
           + "FROM Seat s "
           + "WHERE s.performanceId = :performanceId")
-  SeatStatusCountsResponse getStatusCountsByPerformanceId(
+  SeatStatusCountsResponse getStatusCountsByPerformanceIdAndStatuses(
       @Param("performanceId") Long performanceId,
       @Param("availableStatus") SeatStatus availableStatus,
       @Param("soldStatus") SeatStatus soldStatus,
-      @Param("holdStatus") SeatStatus holdStatus);
+      @Param("holdStatus") SeatStatus holdStatus,
+      @Param("now") LocalDateTime now);
+
+  default SeatStatusCountsResponse getStatusCountsByPerformanceId(
+      Long performanceId, LocalDateTime now) {
+    return getStatusCountsByPerformanceIdAndStatuses(
+        performanceId, SeatStatus.AVAILABLE, SeatStatus.SOLD, SeatStatus.HOLD, now);
+  }
 
   @Query(
       "SELECT new com.ticketrush.boundedcontext.seat.app.dto.response.SeatLayoutResponse("
