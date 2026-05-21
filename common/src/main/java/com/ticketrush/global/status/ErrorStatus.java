@@ -123,7 +123,17 @@ public enum ErrorStatus {
   USER_EMAIL_REQUIRED(HttpStatus.BAD_REQUEST, "USER_400_004", "이메일은 필수입니다."),
 
   // User 404
-  USER_NOT_FOUND(HttpStatus.NOT_FOUND, "USER_404_001", "해당 사용자를 찾을 수 없습니다.");
+  USER_NOT_FOUND(HttpStatus.NOT_FOUND, "USER_404_001", "해당 사용자를 찾을 수 없습니다."),
+
+  // Payment 400
+  PAYMENT_AMOUNT_MISMATCH(HttpStatus.BAD_REQUEST, "PAYMENT_400_001", "결제 금액이 일치하지 않습니다."),
+
+  // Payment 502
+  PAYMENT_APPROVAL_FAILED(HttpStatus.BAD_GATEWAY, "PAYMENT_502_001", "PG사 결제 승인에 실패했습니다."),
+
+  // Payment 503
+  PAYMENT_PG_COMMUNICATION_FAILED(
+      HttpStatus.SERVICE_UNAVAILABLE, "PAYMENT_503_001", "PG사와 통신에 실패했습니다.");
 
   private final HttpStatus httpStatus;
   private final String code;
