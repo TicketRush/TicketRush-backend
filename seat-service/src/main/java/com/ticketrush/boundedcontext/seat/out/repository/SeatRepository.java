@@ -1,7 +1,7 @@
 package com.ticketrush.boundedcontext.seat.out.repository;
 
-import com.ticketrush.boundedcontext.seat.app.dto.response.SeatAvailabilityResponse;
 import com.ticketrush.boundedcontext.seat.app.dto.response.SeatLayoutResponse;
+import com.ticketrush.boundedcontext.seat.app.dto.response.SeatStatusCountsResponse;
 import com.ticketrush.boundedcontext.seat.domain.entity.Seat;
 import com.ticketrush.global.types.SeatStatus;
 import java.time.LocalDateTime;
@@ -18,14 +18,26 @@ public interface SeatRepository extends JpaRepository<Seat, Long> {
   Long countByPerformanceIdAndSeatStatus(Long performanceId, SeatStatus seatStatus);
 
   @Query(
-      "SELECT new com.ticketrush.boundedcontext.seat.app.dto.response.SeatAvailabilityResponse("
-          + "COUNT(CASE WHEN s.seatStatus = :availableStatus THEN 1 END), "
-          + "COUNT(s)) "
+      "SELECT new com.ticketrush.boundedcontext.seat.app.dto.response.SeatStatusCountsResponse("
+          + "COUNT(s), "
+          + "COUNT(CASE WHEN s.seatStatus = :availableStatus "
+          + "OR (s.seatStatus = :holdStatus AND s.holdExpiredAt <= :now) THEN 1 END), "
+          + "COUNT(CASE WHEN s.seatStatus = :soldStatus THEN 1 END), "
+          + "COUNT(CASE WHEN s.seatStatus = :holdStatus AND s.holdExpiredAt > :now THEN 1 END)) "
           + "FROM Seat s "
           + "WHERE s.performanceId = :performanceId")
-  SeatAvailabilityResponse getAvailabilityByPerformanceId(
+  SeatStatusCountsResponse getStatusCountsByPerformanceIdAndStatuses(
       @Param("performanceId") Long performanceId,
-      @Param("availableStatus") SeatStatus availableStatus);
+      @Param("availableStatus") SeatStatus availableStatus,
+      @Param("soldStatus") SeatStatus soldStatus,
+      @Param("holdStatus") SeatStatus holdStatus,
+      @Param("now") LocalDateTime now);
+
+  default SeatStatusCountsResponse getStatusCountsByPerformanceId(
+      Long performanceId, LocalDateTime now) {
+    return getStatusCountsByPerformanceIdAndStatuses(
+        performanceId, SeatStatus.AVAILABLE, SeatStatus.SOLD, SeatStatus.HOLD, now);
+  }
 
   @Query(
       "SELECT new com.ticketrush.boundedcontext.seat.app.dto.response.SeatLayoutResponse("

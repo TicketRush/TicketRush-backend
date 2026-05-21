@@ -8,8 +8,8 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
-import com.ticketrush.boundedcontext.seat.app.dto.response.SeatAvailabilityResponse;
 import com.ticketrush.boundedcontext.seat.app.dto.response.SeatLayoutResponse;
+import com.ticketrush.boundedcontext.seat.app.dto.response.SeatStatusCountsResponse;
 import com.ticketrush.boundedcontext.seat.app.facade.SeatFacade;
 import com.ticketrush.global.config.SecurityConfig;
 import com.ticketrush.global.types.SeatStatus;
@@ -83,20 +83,22 @@ class SeatControllerTest {
 
   @Test
   @WithMockUser
-  @DisplayName("공연 ID로 잔여 좌석 수와 전체 좌석 수를 조회하고 200 OK를 반환한다")
+  @DisplayName("공연 ID로 전체 좌석 수와 상태별 좌석 수를 조회하고 200 OK를 반환한다")
   void getSeatCounts() throws Exception {
     // given
     Long performanceId = 1L;
-    SeatAvailabilityResponse response = new SeatAvailabilityResponse(8L, 10L);
-    given(seatFacade.getPerformanceSeatAvailability(performanceId)).willReturn(response);
+    SeatStatusCountsResponse response = new SeatStatusCountsResponse(10L, 6L, 3L, 1L);
+    given(seatFacade.getPerformanceSeatStatusCounts(performanceId)).willReturn(response);
 
     // when & then
     mockMvc
         .perform(get("/api/v1/seat/{performanceId}/seat-counts", performanceId))
         .andExpect(status().isOk())
         .andExpect(jsonPath("$.is_success").value(true))
-        .andExpect(jsonPath("$.result.available_count").value(8))
-        .andExpect(jsonPath("$.result.total_count").value(10));
+        .andExpect(jsonPath("$.result.total_count").value(10))
+        .andExpect(jsonPath("$.result.available_count").value(6))
+        .andExpect(jsonPath("$.result.sold_count").value(3))
+        .andExpect(jsonPath("$.result.hold_count").value(1));
   }
 
   @Test

@@ -1,12 +1,12 @@
 package com.ticketrush.boundedcontext.seat.app.facade;
 
-import com.ticketrush.boundedcontext.seat.app.dto.response.SeatAvailabilityResponse;
 import com.ticketrush.boundedcontext.seat.app.dto.response.SeatLayoutResponse;
+import com.ticketrush.boundedcontext.seat.app.dto.response.SeatStatusCountsResponse;
 import com.ticketrush.boundedcontext.seat.app.support.SeatStatusStreamSubscriber;
 import com.ticketrush.boundedcontext.seat.app.usecase.SeatConfirmSoldUseCase;
 import com.ticketrush.boundedcontext.seat.app.usecase.SeatCreateDefaultLayoutUseCase;
-import com.ticketrush.boundedcontext.seat.app.usecase.SeatGetAvailabilityUseCase;
 import com.ticketrush.boundedcontext.seat.app.usecase.SeatGetSeatLayoutsUseCase;
+import com.ticketrush.boundedcontext.seat.app.usecase.SeatGetStatusCountsUseCase;
 import com.ticketrush.boundedcontext.seat.app.usecase.SeatHoldUseCase;
 import com.ticketrush.boundedcontext.seat.app.usecase.SeatLockUseCase;
 import com.ticketrush.boundedcontext.seat.app.usecase.SeatUnlockUseCase;
@@ -27,7 +27,7 @@ import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
 @RequiredArgsConstructor
 public class SeatFacade {
 
-  private final SeatGetAvailabilityUseCase seatGetAvailabilityUseCase;
+  private final SeatGetStatusCountsUseCase seatGetStatusCountsUseCase;
   private final SeatGetSeatLayoutsUseCase seatGetSeatLayoutsUseCase;
   private final SeatCreateDefaultLayoutUseCase seatCreateDefaultLayoutUseCase;
   private final SeatConfirmSoldUseCase seatConfirmSoldUseCase;
@@ -42,8 +42,8 @@ public class SeatFacade {
     return seatGetSeatLayoutsUseCase.execute(performanceId);
   }
 
-  public SeatAvailabilityResponse getPerformanceSeatAvailability(Long performanceId) {
-    return seatGetAvailabilityUseCase.execute(performanceId);
+  public SeatStatusCountsResponse getPerformanceSeatStatusCounts(Long performanceId) {
+    return seatGetStatusCountsUseCase.execute(performanceId);
   }
 
   public SseEmitter subscribeSeatStatus(Long performanceId) {
