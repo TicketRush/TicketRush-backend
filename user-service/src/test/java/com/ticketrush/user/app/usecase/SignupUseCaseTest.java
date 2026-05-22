@@ -3,6 +3,7 @@ package com.ticketrush.user.app.usecase;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.BDDMockito.given;
 import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.never;
@@ -10,6 +11,7 @@ import static org.mockito.Mockito.verify;
 
 import com.ticketrush.boundedcontext.user.app.dto.request.SignupRequest;
 import com.ticketrush.boundedcontext.user.app.dto.response.SignupResponse;
+import com.ticketrush.boundedcontext.user.app.mapper.SignupMapper;
 import com.ticketrush.boundedcontext.user.app.usecase.SignupUseCase;
 import com.ticketrush.boundedcontext.user.domain.entity.User;
 import com.ticketrush.boundedcontext.user.domain.entity.UserAccount;
@@ -21,9 +23,11 @@ import com.ticketrush.global.status.ErrorStatus;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.mapstruct.factory.Mappers;
 import org.mockito.ArgumentCaptor;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
+import org.mockito.Spy;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.test.util.ReflectionTestUtils;
@@ -40,6 +44,8 @@ class SignupUseCaseTest {
   @Mock private PasswordEncoder passwordEncoder;
 
   @Mock private AuthRestClient authRestClient;
+
+  @Spy private SignupMapper signupMapper = Mappers.getMapper(SignupMapper.class);
 
   @Test
   @DisplayName("인증 완료된 이메일과 유효한 비밀번호로 회원가입에 성공한다")
@@ -71,6 +77,8 @@ class SignupUseCaseTest {
     assertThat(response.name()).isEqualTo("김혜림");
 
     verify(authRestClient).consumeSignupEmailVerification(request.email());
+    verify(signupMapper).toUser(request);
+    verify(signupMapper).toUserAccount(any(User.class), eq("encoded-password"));
 
     ArgumentCaptor<UserAccount> userAccountCaptor = ArgumentCaptor.forClass(UserAccount.class);
 
@@ -78,6 +86,7 @@ class SignupUseCaseTest {
 
     UserAccount savedUserAccount = userAccountCaptor.getValue();
 
+    assertThat(savedUserAccount.getUser().getId()).isEqualTo(1L);
     assertThat(savedUserAccount.getUser().getEmail()).isEqualTo("test@example.com");
     assertThat(savedUserAccount.getPassword()).isEqualTo("encoded-password");
   }
@@ -97,6 +106,8 @@ class SignupUseCaseTest {
         .hasMessageContaining("이미 가입된 이메일입니다.");
 
     verify(authRestClient, never()).consumeSignupEmailVerification(any());
+    verify(signupMapper, never()).toUser(any(SignupRequest.class));
+    verify(signupMapper, never()).toUserAccount(any(User.class), any(String.class));
     verify(userRepository, never()).saveAndFlush(any(User.class));
     verify(userAccountRepository, never()).saveAndFlush(any(UserAccount.class));
   }
@@ -118,6 +129,8 @@ class SignupUseCaseTest {
     assertThatThrownBy(() -> signupUseCase.execute(request)).isInstanceOf(BusinessException.class);
 
     verify(authRestClient).consumeSignupEmailVerification(request.email());
+    verify(signupMapper, never()).toUser(any(SignupRequest.class));
+    verify(signupMapper, never()).toUserAccount(any(User.class), any(String.class));
     verify(userRepository, never()).saveAndFlush(any(User.class));
     verify(userAccountRepository, never()).saveAndFlush(any(UserAccount.class));
   }
@@ -137,6 +150,8 @@ class SignupUseCaseTest {
         .hasMessageContaining("비밀번호와 비밀번호 확인이 일치하지 않습니다.");
 
     verify(authRestClient, never()).consumeSignupEmailVerification(any());
+    verify(signupMapper, never()).toUser(any(SignupRequest.class));
+    verify(signupMapper, never()).toUserAccount(any(User.class), any(String.class));
     verify(userRepository, never()).saveAndFlush(any(User.class));
     verify(userAccountRepository, never()).saveAndFlush(any(UserAccount.class));
   }
@@ -156,6 +171,8 @@ class SignupUseCaseTest {
         .hasMessageContaining("비밀번호는 소문자, 숫자, 특수문자를 포함하여 12자 이상이어야 합니다.");
 
     verify(authRestClient, never()).consumeSignupEmailVerification(any());
+    verify(signupMapper, never()).toUser(any(SignupRequest.class));
+    verify(signupMapper, never()).toUserAccount(any(User.class), any(String.class));
     verify(userRepository, never()).saveAndFlush(any(User.class));
     verify(userAccountRepository, never()).saveAndFlush(any(UserAccount.class));
   }
@@ -174,6 +191,8 @@ class SignupUseCaseTest {
         .hasMessageContaining("비밀번호를 입력해주세요.");
 
     verify(authRestClient, never()).consumeSignupEmailVerification(any());
+    verify(signupMapper, never()).toUser(any(SignupRequest.class));
+    verify(signupMapper, never()).toUserAccount(any(User.class), any(String.class));
     verify(userRepository, never()).saveAndFlush(any(User.class));
     verify(userAccountRepository, never()).saveAndFlush(any(UserAccount.class));
   }

@@ -2,9 +2,9 @@ package com.ticketrush.boundedcontext.user.app.usecase;
 
 import com.ticketrush.boundedcontext.user.app.dto.request.SignupRequest;
 import com.ticketrush.boundedcontext.user.app.dto.response.SignupResponse;
+import com.ticketrush.boundedcontext.user.app.mapper.SignupMapper;
 import com.ticketrush.boundedcontext.user.domain.entity.User;
 import com.ticketrush.boundedcontext.user.domain.entity.UserAccount;
-import com.ticketrush.boundedcontext.user.domain.types.UserRole;
 import com.ticketrush.boundedcontext.user.out.apiclient.AuthRestClient;
 import com.ticketrush.boundedcontext.user.out.repository.UserAccountRepository;
 import com.ticketrush.boundedcontext.user.out.repository.UserRepository;
@@ -28,6 +28,7 @@ public class SignupUseCase {
   private final UserAccountRepository userAccountRepository;
   private final PasswordEncoder passwordEncoder;
   private final AuthRestClient authRestClient;
+  private final SignupMapper signupMapper;
 
   private static final Pattern PASSWORD_PATTERN =
       Pattern.compile(
@@ -59,19 +60,13 @@ public class SignupUseCase {
     authRestClient.consumeSignupEmailVerification(request.email());
     log.info("[회원가입] 이메일 인증 완료 상태 소비 완료 email={}", request.email());
 
-    User user =
-        User.builder()
-            .name(request.name())
-            .email(request.email())
-            .userRole(UserRole.MEMBER)
-            .build();
+    User user = signupMapper.toUser(request);
 
     try {
       User savedUser = userRepository.saveAndFlush(user);
       log.info("[회원가입] User 저장 완료 userId={}, email={}", savedUser.getId(), savedUser.getEmail());
 
-      UserAccount userAccount =
-          UserAccount.builder().user(savedUser).password(encodedPassword).build();
+      UserAccount userAccount = signupMapper.toUserAccount(savedUser, encodedPassword);
 
       userAccountRepository.saveAndFlush(userAccount);
       log.info("[회원가입] UserAccount 저장 완료 userId={}", savedUser.getId());
