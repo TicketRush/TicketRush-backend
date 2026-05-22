@@ -1,4 +1,4 @@
-package com.ticketrush.boundedcontext.user.out;
+package com.ticketrush.boundedcontext.user.out.apiclient;
 
 import com.ticketrush.boundedcontext.user.app.dto.response.AuthApiResponse;
 import com.ticketrush.boundedcontext.user.app.dto.response.EmailVerificationCheckResponse;

@@ -1,7 +1,7 @@
 package com.ticketrush.boundedcontext.user.app.usecase;
 
 import com.ticketrush.boundedcontext.user.app.dto.response.EmailExistsResponse;
-import com.ticketrush.boundedcontext.user.out.UserRepository;
+import com.ticketrush.boundedcontext.user.out.repository.UserRepository;
 import com.ticketrush.global.exception.BusinessException;
 import com.ticketrush.global.status.ErrorStatus;
 import lombok.RequiredArgsConstructor;

@@ -1,4 +1,4 @@
-package com.ticketrush.boundedcontext.user.out;
+package com.ticketrush.boundedcontext.user.out.repository;
 
 import com.ticketrush.boundedcontext.user.domain.entity.UserAccount;
 import java.util.Optional;
