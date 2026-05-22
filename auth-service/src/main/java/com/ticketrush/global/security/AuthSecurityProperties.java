@@ -14,6 +14,8 @@ import org.springframework.stereotype.Component;
 @ConfigurationProperties(prefix = "custom.security")
 public class AuthSecurityProperties extends SecurityProperties {
 
+  private String internalToken;
+
   private Oauth2 oauth2 = new Oauth2();
 
   @Getter

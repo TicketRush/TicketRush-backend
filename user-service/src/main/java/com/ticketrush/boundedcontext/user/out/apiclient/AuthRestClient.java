@@ -6,6 +6,7 @@ import com.ticketrush.global.exception.BusinessException;
 import com.ticketrush.global.status.ErrorStatus;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.core.ParameterizedTypeReference;
 import org.springframework.stereotype.Component;
 import org.springframework.web.client.RestClient;
@@ -15,7 +16,12 @@ import org.springframework.web.client.RestClient;
 @RequiredArgsConstructor
 public class AuthRestClient {
 
+  private static final String INTERNAL_TOKEN_HEADER = "X-Internal-Token";
+
   private final RestClient authServiceRestClient;
+
+  @Value("${custom.security.internal-token}")
+  private String internalToken;
 
   public void consumeSignupEmailVerification(String email) {
     SignupEmailVerificationConsumeRequest request =
@@ -25,6 +31,7 @@ public class AuthRestClient {
       authServiceRestClient
           .post()
           .uri("/api/v1/auth/signup/email-verification/consume")
+          .header(INTERNAL_TOKEN_HEADER, internalToken)
           .body(request)
           .retrieve()
           .body(new ParameterizedTypeReference<AuthApiResponse<Void>>() {});

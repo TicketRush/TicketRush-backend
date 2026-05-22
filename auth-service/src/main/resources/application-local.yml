@@ -57,6 +57,7 @@ app:
 custom:
   security:
     permit-all: false
+    internal-token: ${GATEWAY_INTERNAL_TOKEN}
     permit-urls:
       # ========== 개발 도구 ==========
       - /h2-console/**
