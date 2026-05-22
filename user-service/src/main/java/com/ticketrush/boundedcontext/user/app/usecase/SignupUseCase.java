@@ -30,8 +30,8 @@ public class SignupUseCase {
   private final AuthRestClient authRestClient;
 
   private static final Pattern PASSWORD_PATTERN =
-    Pattern.compile(
-      "^(?=.*[a-z])(?=.*\\d)(?=.*[!@#$%^&*()_+\\-=\\[\\]{};':\"\\\\|,.<>/?]).{12,}$");
+      Pattern.compile(
+          "^(?=.*[a-z])(?=.*\\d)(?=.*[!@#$%^&*()_+\\-=\\[\\]{};':\"\\\\|,.<>/?]).{12,}$");
 
   public SignupResponse execute(SignupRequest request) {
 
@@ -60,21 +60,18 @@ public class SignupUseCase {
     log.info("[회원가입] 이메일 인증 완료 상태 소비 완료 email={}", request.email());
 
     User user =
-      User.builder()
-        .name(request.name())
-        .email(request.email())
-        .userRole(UserRole.MEMBER)
-        .build();
+        User.builder()
+            .name(request.name())
+            .email(request.email())
+            .userRole(UserRole.MEMBER)
+            .build();
 
     try {
       User savedUser = userRepository.saveAndFlush(user);
       log.info("[회원가입] User 저장 완료 userId={}, email={}", savedUser.getId(), savedUser.getEmail());
 
       UserAccount userAccount =
-        UserAccount.builder()
-          .user(savedUser)
-          .password(encodedPassword)
-          .build();
+          UserAccount.builder().user(savedUser).password(encodedPassword).build();
 
       userAccountRepository.saveAndFlush(userAccount);
       log.info("[회원가입] UserAccount 저장 완료 userId={}", savedUser.getId());
@@ -102,9 +99,9 @@ public class SignupUseCase {
   private void validatePassword(String password, String passwordConfirm) {
 
     if (password == null
-      || password.isBlank()
-      || passwordConfirm == null
-      || passwordConfirm.isBlank()) {
+        || password.isBlank()
+        || passwordConfirm == null
+        || passwordConfirm.isBlank()) {
       throw new BusinessException(ErrorStatus.USER_PASSWORD_REQUIRED);
     }
 

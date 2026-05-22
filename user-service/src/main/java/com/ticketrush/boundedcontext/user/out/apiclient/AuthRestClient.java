@@ -19,15 +19,15 @@ public class AuthRestClient {
 
   public void consumeSignupEmailVerification(String email) {
     SignupEmailVerificationConsumeRequest request =
-      new SignupEmailVerificationConsumeRequest(email);
+        new SignupEmailVerificationConsumeRequest(email);
 
     try {
       authServiceRestClient
-        .post()
-        .uri("/api/v1/auth/signup/email-verification/consume")
-        .body(request)
-        .retrieve()
-        .body(new ParameterizedTypeReference<AuthApiResponse<Void>>() {});
+          .post()
+          .uri("/api/v1/auth/signup/email-verification/consume")
+          .body(request)
+          .retrieve()
+          .body(new ParameterizedTypeReference<AuthApiResponse<Void>>() {});
 
       log.info("[회원가입 이메일 인증 완료 상태 소비 요청 성공] email={}", email);
 
