@@ -2,6 +2,7 @@ package com.ticketrush.boundedcontext.auth.in.api.v1;
 
 import com.ticketrush.boundedcontext.auth.app.dto.request.SignupEmailAuthNumberSendRequest;
 import com.ticketrush.boundedcontext.auth.app.dto.request.SignupEmailAuthNumberVerifyRequest;
+import com.ticketrush.boundedcontext.auth.app.dto.request.SignupEmailVerificationConsumeRequest;
 import com.ticketrush.boundedcontext.auth.app.dto.response.signup.SignupEmailAuthNumberSendResponse;
 import com.ticketrush.boundedcontext.auth.app.dto.response.signup.SignupEmailAuthNumberVerifyResponse;
 import com.ticketrush.boundedcontext.auth.app.dto.response.signup.SignupEmailVerificationCheckResponse;
@@ -53,5 +54,14 @@ public class AuthController {
     SignupEmailVerificationCheckResponse response = authFacade.checkSignupEmailVerification(email);
 
     return ApiResponse.onSuccess(SuccessStatus.OK, response);
+  }
+
+  @Operation(summary = "회원가입 이메일 인증 완료 상태 소비", description = "회원가입 진행 전 이메일 인증 완료 상태를 확인하고 삭제합니다.")
+  @PostMapping("/signup/email-verification/consume")
+  public ResponseEntity<ApiResponse<Void>> consumeSignupEmailVerification(
+    @Valid @RequestBody SignupEmailVerificationConsumeRequest request) {
+    authFacade.consumeSignupEmailAuthVerified(request);
+
+    return ApiResponse.onSuccess(SuccessStatus.OK, (Void) null);
   }
 }

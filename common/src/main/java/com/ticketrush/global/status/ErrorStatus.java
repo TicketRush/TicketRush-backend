@@ -37,6 +37,7 @@ public enum ErrorStatus {
   AUTH_EMAIL_EXISTS_CHECK_BAD_REQUEST(
       HttpStatus.BAD_REQUEST, "AUTH_400_009", "이메일 중복 확인 요청이 올바르지 않습니다."),
   AUTH_NUMBER_NOT_MATCH(HttpStatus.BAD_REQUEST, "AUTH_400_010", "인증번호가 일치하지 않습니다."),
+  EMAIL_AUTH_NOT_VERIFIED(HttpStatus.BAD_REQUEST, "EMAIL_AUTH_400_011", "이메일 인증이 완료되지 않았습니다."),
 
   // Auth 401
   AUTH_INVALID_REFRESH_TOKEN(HttpStatus.UNAUTHORIZED, "AUTH_401_001", "유효하지 않은 Refresh Token입니다."),

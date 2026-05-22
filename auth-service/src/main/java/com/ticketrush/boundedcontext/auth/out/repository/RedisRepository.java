@@ -139,6 +139,14 @@ public class RedisRepository {
     return Boolean.TRUE.equals(redisTemplate.hasKey(key));
   }
 
+  public boolean consumeSignupEmailAuthVerified(String email) {
+    String key = SIGNUP_EMAIL_AUTH_VERIFIED_PREFIX + email;
+
+    Boolean deleted = redisTemplate.delete(key);
+
+    return Boolean.TRUE.equals(deleted);
+  }
+
   // 회원가입 완료 후 이메일 인증 완료 상태 삭제
   public void deleteSignupEmailAuthVerified(String email) {
     String key = SIGNUP_EMAIL_AUTH_VERIFIED_PREFIX + email;
