@@ -5,6 +5,7 @@ import com.ticketrush.boundedcontext.user.app.dto.request.SocialLoginRequest;
 import com.ticketrush.boundedcontext.user.app.dto.response.EmailExistsResponse;
 import com.ticketrush.boundedcontext.user.app.dto.response.SignupResponse;
 import com.ticketrush.boundedcontext.user.app.dto.response.SocialLoginResponse;
+import com.ticketrush.boundedcontext.user.app.dto.response.UserAuthInfoResponse;
 import com.ticketrush.boundedcontext.user.app.facade.UserFacade;
 import com.ticketrush.global.dto.response.ApiResponse;
 import com.ticketrush.global.status.SuccessStatus;
@@ -49,6 +50,15 @@ public class UserController {
   @PostMapping("/signup")
   public ResponseEntity<ApiResponse<SignupResponse>> signup(@RequestBody SignupRequest request) {
     SignupResponse response = userFacade.signup(request);
+
+    return ApiResponse.onSuccess(SuccessStatus.OK, response);
+  }
+
+  @Operation(summary = "로그인 검증용 회원 정보 조회", description = "이메일로 로그인 검증에 필요한 회원 정보를 조회합니다.")
+  @GetMapping("/auth-info")
+  public ResponseEntity<ApiResponse<UserAuthInfoResponse>> getUserAuthInfoByEmail(
+      @RequestParam String email) {
+    UserAuthInfoResponse response = userFacade.getUserAuthInfoByEmail(email);
 
     return ApiResponse.onSuccess(SuccessStatus.OK, response);
   }

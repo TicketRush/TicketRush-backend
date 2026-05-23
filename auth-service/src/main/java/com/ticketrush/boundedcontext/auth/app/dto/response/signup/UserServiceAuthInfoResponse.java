@@ -1,0 +1,6 @@
+package com.ticketrush.boundedcontext.auth.app.dto.response.signup;
+
+import com.fasterxml.jackson.annotation.JsonProperty;
+
+public record UserServiceAuthInfoResponse(
+    @JsonProperty("user_id") Long userId, String email, String password, String role) {}

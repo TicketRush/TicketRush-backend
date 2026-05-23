@@ -1,8 +1,10 @@
 package com.ticketrush.boundedcontext.auth.in.api.v1;
 
+import com.ticketrush.boundedcontext.auth.app.dto.request.LoginRequest;
 import com.ticketrush.boundedcontext.auth.app.dto.request.SignupEmailAuthNumberSendRequest;
 import com.ticketrush.boundedcontext.auth.app.dto.request.SignupEmailAuthNumberVerifyRequest;
 import com.ticketrush.boundedcontext.auth.app.dto.request.SignupEmailVerificationConsumeRequest;
+import com.ticketrush.boundedcontext.auth.app.dto.response.signup.LoginResponse;
 import com.ticketrush.boundedcontext.auth.app.dto.response.signup.SignupEmailAuthNumberSendResponse;
 import com.ticketrush.boundedcontext.auth.app.dto.response.signup.SignupEmailAuthNumberVerifyResponse;
 import com.ticketrush.boundedcontext.auth.app.dto.response.signup.SignupEmailVerificationCheckResponse;
@@ -63,5 +65,14 @@ public class AuthController {
     authFacade.consumeSignupEmailAuthVerified(request);
 
     return ApiResponse.onSuccess(SuccessStatus.OK, (Void) null);
+  }
+
+  @Operation(summary = "로그인", description = "이메일과 비밀번호로 로그인합니다.")
+  @PostMapping("/login")
+  public ResponseEntity<ApiResponse<LoginResponse>> login(
+      @Valid @RequestBody LoginRequest request) {
+    LoginResponse response = authFacade.login(request);
+
+    return ApiResponse.onSuccess(SuccessStatus.OK, response);
   }
 }
