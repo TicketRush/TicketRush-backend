@@ -1,12 +1,18 @@
 package com.ticketrush.boundedcontext.booking.app.facade;
 
 import com.ticketrush.boundedcontext.booking.app.dto.request.BookingCreateRequest;
+import com.ticketrush.boundedcontext.booking.app.dto.response.BookingCountResponse;
 import com.ticketrush.boundedcontext.booking.app.dto.response.BookingPendingResponse;
+import com.ticketrush.boundedcontext.booking.app.dto.response.BookingSummaryResponse;
+import com.ticketrush.boundedcontext.booking.app.usecase.BookingCountUseCase;
 import com.ticketrush.boundedcontext.booking.app.usecase.BookingCreateUseCase;
+import com.ticketrush.boundedcontext.booking.app.usecase.BookingGetMyBookingsUseCase;
 import com.ticketrush.boundedcontext.booking.app.usecase.BookingIssueNumberUseCase;
 import com.ticketrush.boundedcontext.booking.app.usecase.BookingValidateReferencesUseCase;
 import com.ticketrush.boundedcontext.booking.app.usecase.BookingValidateSeatAvailableUseCase;
 import com.ticketrush.boundedcontext.booking.domain.entity.Booking;
+import com.ticketrush.boundedcontext.booking.domain.types.BookingStatus;
+import java.util.List;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
@@ -18,6 +24,8 @@ public class BookingFacade {
 
   private final BookingIssueNumberUseCase bookingIssueNumberUseCase;
   private final BookingCreateUseCase bookingCreateUseCase;
+  private final BookingGetMyBookingsUseCase bookingGetMyBookingsUseCase;
+  private final BookingCountUseCase bookingCountUseCase;
   private final BookingValidateReferencesUseCase bookingValidateReferencesUseCase;
   private final BookingValidateSeatAvailableUseCase bookingValidateSeatAvailableUseCase;
 
@@ -36,5 +44,13 @@ public class BookingFacade {
     Booking booking = bookingCreateUseCase.execute(request);
 
     return BookingPendingResponse.from(booking);
+  }
+
+  public List<BookingSummaryResponse> getMyBookings(Long userId, BookingStatus bookingStatus) {
+    return bookingGetMyBookingsUseCase.execute(userId, bookingStatus);
+  }
+
+  public BookingCountResponse countMyBookings(Long userId, BookingStatus bookingStatus) {
+    return bookingCountUseCase.execute(userId, bookingStatus);
   }
 }

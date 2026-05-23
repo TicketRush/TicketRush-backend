@@ -1,20 +1,26 @@
 package com.ticketrush.boundedcontext.booking.in.api.v1;
 
 import com.ticketrush.boundedcontext.booking.app.dto.request.BookingPendingRequest;
+import com.ticketrush.boundedcontext.booking.app.dto.response.BookingCountResponse;
 import com.ticketrush.boundedcontext.booking.app.dto.response.BookingPendingResponse;
+import com.ticketrush.boundedcontext.booking.app.dto.response.BookingSummaryResponse;
 import com.ticketrush.boundedcontext.booking.app.facade.BookingFacade;
+import com.ticketrush.boundedcontext.booking.domain.types.BookingStatus;
 import com.ticketrush.global.dto.response.ApiResponse;
 import com.ticketrush.global.security.CustomUserDetails;
 import com.ticketrush.global.status.SuccessStatus;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
+import java.util.List;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
+import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 @Tag(name = "Booking", description = "예약 관련 API")
@@ -36,5 +42,27 @@ public class BookingController {
         bookingFacade.createBooking(user.getUserId(), request.performanceId(), request.seatId());
 
     return ApiResponse.onSuccess(SuccessStatus.CREATED, response);
+  }
+
+  @Operation(
+      summary = "내 예매 내역 조회",
+      description = "로그인한 사용자의 예매 내역을 조회합니다. 좌석 번호와 공연 상세 정보는 각 모듈 API에서 조회합니다.")
+  @GetMapping("/me")
+  public ResponseEntity<ApiResponse<List<BookingSummaryResponse>>> getMyBookings(
+      @AuthenticationPrincipal CustomUserDetails user,
+      @RequestParam(defaultValue = "CONFIRMED") BookingStatus status) {
+    List<BookingSummaryResponse> response = bookingFacade.getMyBookings(user.getUserId(), status);
+
+    return ApiResponse.onSuccess(SuccessStatus.OK, response);
+  }
+
+  @Operation(summary = "내 예매 수 조회", description = "로그인한 사용자의 상태별 예매 수를 조회합니다.")
+  @GetMapping("/me/count")
+  public ResponseEntity<ApiResponse<BookingCountResponse>> countMyBookings(
+      @AuthenticationPrincipal CustomUserDetails user,
+      @RequestParam(defaultValue = "CONFIRMED") BookingStatus status) {
+    BookingCountResponse response = bookingFacade.countMyBookings(user.getUserId(), status);
+
+    return ApiResponse.onSuccess(SuccessStatus.OK, response);
   }
 }
