@@ -65,6 +65,9 @@ public class Booking extends AutoIdBaseEntity {
 
   public void confirm(LocalDateTime confirmedAt) {
     if (this.bookingStatus == BookingStatus.CONFIRMED) {
+      if (this.confirmedAt == null) {
+        this.confirmedAt = confirmedAt;
+      }
       return;
     }
 

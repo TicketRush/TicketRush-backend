@@ -50,6 +50,30 @@ class BookingConfirmUseCaseTest {
   }
 
   @Test
+  @DisplayName("성공: 이미 확정된 예매의 확정 시각이 비어 있으면 보정한다")
+  void execute_fills_confirmed_at_when_already_confirmed_without_timestamp() {
+    // given
+    Long bookingId = 1L;
+    LocalDateTime confirmedAt = LocalDateTime.of(2026, 5, 22, 10, 30);
+    Booking booking =
+        Booking.builder()
+            .userId(1L)
+            .performanceId(2L)
+            .seatId(3L)
+            .bookingNumber("BOOK-1234")
+            .bookingStatus(BookingStatus.CONFIRMED)
+            .build();
+    given(bookingRepository.findById(bookingId)).willReturn(Optional.of(booking));
+
+    // when
+    bookingConfirmUseCase.execute(bookingId, confirmedAt);
+
+    // then
+    assertThat(booking.getBookingStatus()).isEqualTo(BookingStatus.CONFIRMED);
+    assertThat(booking.getConfirmedAt()).isEqualTo(confirmedAt);
+  }
+
+  @Test
   @DisplayName("실패: 예매가 없으면 예외를 던진다")
   void execute_fail_when_booking_not_found() {
     // given
