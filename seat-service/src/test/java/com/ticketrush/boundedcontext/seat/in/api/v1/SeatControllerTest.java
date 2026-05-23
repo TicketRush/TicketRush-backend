@@ -9,6 +9,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 import com.ticketrush.boundedcontext.seat.app.dto.response.SeatLayoutResponse;
+import com.ticketrush.boundedcontext.seat.app.dto.response.SeatNumberResponse;
 import com.ticketrush.boundedcontext.seat.app.dto.response.SeatStatusCountsResponse;
 import com.ticketrush.boundedcontext.seat.app.facade.SeatFacade;
 import com.ticketrush.global.config.SecurityConfig;
@@ -62,6 +63,29 @@ class SeatControllerTest {
         .andExpect(jsonPath("$.result[1].seat_id").value(2))
         .andExpect(jsonPath("$.result[1].seat_number").value("A-2"))
         .andExpect(jsonPath("$.result[1].seat_status").value("HOLD"));
+  }
+
+  @Test
+  @WithMockUser
+  @DisplayName("좌석 ID 목록으로 좌석 번호 목록을 조회한다")
+  void getSeatNumbers() throws Exception {
+    // given
+    List<Long> seatIds = List.of(1L, 2L);
+    List<SeatNumberResponse> response =
+        List.of(new SeatNumberResponse(1L, "A-1"), new SeatNumberResponse(2L, "A-2"));
+    given(seatFacade.getSeatNumbers(seatIds)).willReturn(response);
+
+    // when & then
+    mockMvc
+        .perform(get("/api/v1/seat/numbers").param("seatIds", "1", "2"))
+        .andExpect(status().isOk())
+        .andExpect(jsonPath("$.is_success").value(true))
+        .andExpect(jsonPath("$.result[0].seat_id").value(1))
+        .andExpect(jsonPath("$.result[0].seat_number").value("A-1"))
+        .andExpect(jsonPath("$.result[1].seat_id").value(2))
+        .andExpect(jsonPath("$.result[1].seat_number").value("A-2"));
+
+    verify(seatFacade).getSeatNumbers(seatIds);
   }
 
   @Test

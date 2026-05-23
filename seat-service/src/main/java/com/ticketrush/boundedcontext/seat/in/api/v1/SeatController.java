@@ -2,6 +2,7 @@ package com.ticketrush.boundedcontext.seat.in.api.v1;
 
 import com.ticketrush.boundedcontext.seat.app.dto.request.SeatSoldConfirmRequest;
 import com.ticketrush.boundedcontext.seat.app.dto.response.SeatLayoutResponse;
+import com.ticketrush.boundedcontext.seat.app.dto.response.SeatNumberResponse;
 import com.ticketrush.boundedcontext.seat.app.dto.response.SeatStatusCountsResponse;
 import com.ticketrush.boundedcontext.seat.app.facade.SeatFacade;
 import com.ticketrush.global.dto.response.ApiResponse;
@@ -22,6 +23,7 @@ import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestHeader;
 import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
 
@@ -42,6 +44,14 @@ public class SeatController {
   public ResponseEntity<ApiResponse<List<SeatLayoutResponse>>> getSeatLayouts(
       @PathVariable Long performanceId) {
     List<SeatLayoutResponse> response = seatFacade.getPerformanceSeatLayouts(performanceId);
+    return ApiResponse.onSuccess(SuccessStatus.OK, response);
+  }
+
+  @GetMapping("/numbers")
+  @Operation(summary = "좌석 번호 목록 조회", description = "좌석 ID 목록에 해당하는 좌석 번호를 조회합니다.")
+  public ResponseEntity<ApiResponse<List<SeatNumberResponse>>> getSeatNumbers(
+      @RequestParam List<Long> seatIds) {
+    List<SeatNumberResponse> response = seatFacade.getSeatNumbers(seatIds);
     return ApiResponse.onSuccess(SuccessStatus.OK, response);
   }
 
