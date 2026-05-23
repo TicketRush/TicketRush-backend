@@ -21,7 +21,7 @@ public class User extends AutoIdBaseEntity {
   @Column(nullable = true, length = 50)
   private String name;
 
-  @Column(nullable = true, length = 100)
+  @Column(nullable = true, unique = true, length = 100)
   private String email;
 
   @Enumerated(EnumType.STRING)

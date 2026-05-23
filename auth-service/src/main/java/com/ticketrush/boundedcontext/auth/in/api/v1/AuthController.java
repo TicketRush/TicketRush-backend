@@ -2,8 +2,10 @@ package com.ticketrush.boundedcontext.auth.in.api.v1;
 
 import com.ticketrush.boundedcontext.auth.app.dto.request.SignupEmailAuthNumberSendRequest;
 import com.ticketrush.boundedcontext.auth.app.dto.request.SignupEmailAuthNumberVerifyRequest;
-import com.ticketrush.boundedcontext.auth.app.dto.response.SignupEmailAuthNumberSendResponse;
-import com.ticketrush.boundedcontext.auth.app.dto.response.SignupEmailAuthNumberVerifyResponse;
+import com.ticketrush.boundedcontext.auth.app.dto.request.SignupEmailVerificationConsumeRequest;
+import com.ticketrush.boundedcontext.auth.app.dto.response.signup.SignupEmailAuthNumberSendResponse;
+import com.ticketrush.boundedcontext.auth.app.dto.response.signup.SignupEmailAuthNumberVerifyResponse;
+import com.ticketrush.boundedcontext.auth.app.dto.response.signup.SignupEmailVerificationCheckResponse;
 import com.ticketrush.boundedcontext.auth.app.facade.AuthFacade;
 import com.ticketrush.global.dto.response.ApiResponse;
 import com.ticketrush.global.status.SuccessStatus;
@@ -12,9 +14,11 @@ import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
+import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 @Tag(name = "Auth", description = "인증 API")
@@ -41,5 +45,23 @@ public class AuthController {
     SignupEmailAuthNumberVerifyResponse response = authFacade.verifySignupEmailAuthNumber(request);
 
     return ApiResponse.onSuccess(SuccessStatus.OK, response);
+  }
+
+  @Operation(summary = "회원가입 이메일 인증 완료 여부 조회", description = "회원가입 전 이메일 인증 완료 여부를 조회합니다.")
+  @GetMapping("/signup/email-verification/verified")
+  public ResponseEntity<ApiResponse<SignupEmailVerificationCheckResponse>>
+      checkSignupEmailVerification(@RequestParam String email) {
+    SignupEmailVerificationCheckResponse response = authFacade.checkSignupEmailVerification(email);
+
+    return ApiResponse.onSuccess(SuccessStatus.OK, response);
+  }
+
+  @Operation(summary = "회원가입 이메일 인증 완료 상태 소비", description = "회원가입 진행 전 이메일 인증 완료 상태를 확인하고 삭제합니다.")
+  @PostMapping("/signup/email-verification/consume")
+  public ResponseEntity<ApiResponse<Void>> consumeSignupEmailVerification(
+      @Valid @RequestBody SignupEmailVerificationConsumeRequest request) {
+    authFacade.consumeSignupEmailAuthVerified(request);
+
+    return ApiResponse.onSuccess(SuccessStatus.OK, (Void) null);
   }
 }

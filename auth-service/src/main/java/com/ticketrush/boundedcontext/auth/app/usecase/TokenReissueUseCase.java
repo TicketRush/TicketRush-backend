@@ -1,6 +1,6 @@
 package com.ticketrush.boundedcontext.auth.app.usecase;
 
-import com.ticketrush.boundedcontext.auth.app.dto.response.TokenReissueResponse;
+import com.ticketrush.boundedcontext.auth.app.dto.response.social.TokenReissueResponse;
 import com.ticketrush.boundedcontext.auth.out.repository.RedisRepository;
 import com.ticketrush.global.exception.BusinessException;
 import com.ticketrush.global.security.JwtTokenProvider;

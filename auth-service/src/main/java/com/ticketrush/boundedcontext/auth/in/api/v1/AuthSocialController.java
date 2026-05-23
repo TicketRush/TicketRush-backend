@@ -2,8 +2,8 @@ package com.ticketrush.boundedcontext.auth.in.api.v1;
 
 import com.ticketrush.boundedcontext.auth.app.dto.request.SocialOauthLoginRequest;
 import com.ticketrush.boundedcontext.auth.app.dto.request.TokenReissueRequest;
-import com.ticketrush.boundedcontext.auth.app.dto.response.OauthLoginResponse;
-import com.ticketrush.boundedcontext.auth.app.dto.response.TokenReissueResponse;
+import com.ticketrush.boundedcontext.auth.app.dto.response.social.OauthLoginResponse;
+import com.ticketrush.boundedcontext.auth.app.dto.response.social.TokenReissueResponse;
 import com.ticketrush.boundedcontext.auth.app.facade.AuthSocialFacade;
 import com.ticketrush.global.dto.response.ApiResponse;
 import com.ticketrush.global.exception.BusinessException;

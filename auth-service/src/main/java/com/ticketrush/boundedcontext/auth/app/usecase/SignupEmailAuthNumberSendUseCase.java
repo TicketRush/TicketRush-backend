@@ -1,7 +1,7 @@
 package com.ticketrush.boundedcontext.auth.app.usecase;
 
 import com.ticketrush.boundedcontext.auth.app.dto.request.SignupEmailAuthNumberSendRequest;
-import com.ticketrush.boundedcontext.auth.app.dto.response.SignupEmailAuthNumberSendResponse;
+import com.ticketrush.boundedcontext.auth.app.dto.response.signup.SignupEmailAuthNumberSendResponse;
 import com.ticketrush.boundedcontext.auth.out.apiclient.EmailSender;
 import com.ticketrush.boundedcontext.auth.out.apiclient.UserServiceClient;
 import com.ticketrush.boundedcontext.auth.out.repository.RedisRepository;

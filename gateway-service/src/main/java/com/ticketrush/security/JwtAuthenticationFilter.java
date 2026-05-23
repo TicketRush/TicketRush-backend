@@ -30,42 +30,44 @@ public class JwtAuthenticationFilter implements GlobalFilter, Ordered {
 
     String token = resolveToken(exchange);
 
-    // 토큰 없으면 그냥 통과
+    ServerHttpRequest.Builder requestBuilder =
+        exchange
+            .getRequest()
+            .mutate()
+            .headers(
+                headers -> {
+                  headers.remove("X-User-Id");
+                  headers.remove("X-User-Role");
+                  headers.remove("X-Internal-Token");
+                });
+
     if (token == null) {
-      return chain.filter(exchange);
+      ServerHttpRequest request = requestBuilder.build();
+      return chain.filter(exchange.mutate().request(request).build());
     }
 
-    // JWT 검증
-    jwtTokenProvider.validateToken(token);
+    boolean validToken = jwtTokenProvider.validateToken(token);
 
-    // AccessToken 여부 검증
+    if (!validToken) {
+      throw new BusinessException(ErrorStatus.AUTH_INVALID_TOKEN);
+    }
+
     String type = jwtTokenProvider.getType(token);
 
     if (!"access".equals(type)) {
       throw new BusinessException(ErrorStatus.AUTH_INVALID_TOKEN_TYPE);
     }
 
-    // 토큰에서 사용자 정보 추출
     Long userId = jwtTokenProvider.getUserId(token);
     String role = jwtTokenProvider.getRole(token);
 
     log.info("🔥 userId = {}", userId);
     log.info("🔥 role = {}", role);
 
-    // 내부 서비스로 사용자 정보 전달
     ServerHttpRequest request =
-        exchange
-            .getRequest()
-            .mutate()
+        requestBuilder
             .headers(
                 headers -> {
-
-                  // 외부 헤더 제거
-                  headers.remove("X-User-Id");
-                  headers.remove("X-User-Role");
-                  headers.remove("X-Internal-Token");
-
-                  // Gateway가 다시 세팅
                   headers.set("X-User-Id", String.valueOf(userId));
                   headers.set("X-User-Role", role);
                   headers.set("X-Internal-Token", internalToken);

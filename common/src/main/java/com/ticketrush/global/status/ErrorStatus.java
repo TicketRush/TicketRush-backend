@@ -37,6 +37,7 @@ public enum ErrorStatus {
   AUTH_EMAIL_EXISTS_CHECK_BAD_REQUEST(
       HttpStatus.BAD_REQUEST, "AUTH_400_009", "이메일 중복 확인 요청이 올바르지 않습니다."),
   AUTH_NUMBER_NOT_MATCH(HttpStatus.BAD_REQUEST, "AUTH_400_010", "인증번호가 일치하지 않습니다."),
+  EMAIL_AUTH_NOT_VERIFIED(HttpStatus.BAD_REQUEST, "EMAIL_AUTH_400_011", "이메일 인증이 완료되지 않았습니다."),
 
   // Auth 401
   AUTH_INVALID_REFRESH_TOKEN(HttpStatus.UNAUTHORIZED, "AUTH_401_001", "유효하지 않은 Refresh Token입니다."),
@@ -121,6 +122,14 @@ public enum ErrorStatus {
   USER_SOCIAL_PROVIDER_INVALID(
       HttpStatus.BAD_REQUEST, "USER_400_003", "socialProviderId가 유효하지 않습니다."),
   USER_EMAIL_REQUIRED(HttpStatus.BAD_REQUEST, "USER_400_004", "이메일은 필수입니다."),
+  USER_PASSWORD_REQUIRED(HttpStatus.BAD_REQUEST, "USER_400_005", "비밀번호를 입력해주세요."),
+  USER_PASSWORD_NOT_MATCH(HttpStatus.BAD_REQUEST, "USER_400_006", "비밀번호와 비밀번호 확인이 일치하지 않습니다."),
+  USER_PASSWORD_INVALID(
+      HttpStatus.BAD_REQUEST, "USER_400_007", "비밀번호는 소문자, 숫자, 특수문자를 포함하여 12자 이상이어야 합니다."),
+  USER_EMAIL_ALREADY_EXISTS(HttpStatus.BAD_REQUEST, "USER_400_008", "이미 가입된 이메일입니다."),
+  USER_NAME_REQUIRED(HttpStatus.BAD_REQUEST, "USER_400_009", "이름을 입력해주세요."),
+  // User 401
+  EMAIL_VERIFICATION_REQUIRED(HttpStatus.UNAUTHORIZED, "USER_401_001", "이메일 인증번호 일치 확인 인증이 필요합니다."),
 
   // User 404
   USER_NOT_FOUND(HttpStatus.NOT_FOUND, "USER_404_001", "해당 사용자를 찾을 수 없습니다.");

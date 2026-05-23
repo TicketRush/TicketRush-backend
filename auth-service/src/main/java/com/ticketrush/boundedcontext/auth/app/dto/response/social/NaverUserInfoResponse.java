@@ -1,4 +1,4 @@
-package com.ticketrush.boundedcontext.auth.app.dto.response;
+package com.ticketrush.boundedcontext.auth.app.dto.response.social;
 
 public record NaverUserInfoResponse(String resultcode, String message, Response response) {
 

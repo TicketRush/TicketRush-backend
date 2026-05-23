@@ -101,7 +101,7 @@ public class RedisRepository {
     redisTemplate.opsForValue().set(key, "true", SIGNUP_EMAIL_AUTH_VERIFIED_TTL);
   }
 
-  // 추가: 회원가입 이메일 인증번호 검증 실패 횟수 증가
+  // 회원가입 이메일 인증번호 검증 실패 횟수 증가
   public long increaseSignupEmailAuthVerifyAttempt(String email) {
     String key = SIGNUP_EMAIL_AUTH_VERIFY_ATTEMPT_PREFIX + email;
 
@@ -114,7 +114,7 @@ public class RedisRepository {
     return attemptCount == null ? 0L : attemptCount;
   }
 
-  // 추가: 회원가입 이메일 인증번호 검증 실패 횟수 조회
+  // 회원가입 이메일 인증번호 검증 실패 횟수 조회
   public int getSignupEmailAuthVerifyAttemptCount(String email) {
     String key = SIGNUP_EMAIL_AUTH_VERIFY_ATTEMPT_PREFIX + email;
     String attemptCount = redisTemplate.opsForValue().get(key);
@@ -126,9 +126,31 @@ public class RedisRepository {
     return Integer.parseInt(attemptCount);
   }
 
-  // 추가: 회원가입 이메일 인증번호 검증 실패 횟수 삭제
+  // 회원가입 이메일 인증번호 검증 실패 횟수 삭제
   public void deleteSignupEmailAuthVerifyAttempt(String email) {
     String key = SIGNUP_EMAIL_AUTH_VERIFY_ATTEMPT_PREFIX + email;
+    redisTemplate.delete(key);
+  }
+
+  // 회원가입 이메일 인증 완료 여부 조회
+  public boolean isSignupEmailAuthVerified(String email) {
+    String key = SIGNUP_EMAIL_AUTH_VERIFIED_PREFIX + email;
+
+    return Boolean.TRUE.equals(redisTemplate.hasKey(key));
+  }
+
+  public boolean consumeSignupEmailAuthVerified(String email) {
+    String key = SIGNUP_EMAIL_AUTH_VERIFIED_PREFIX + email;
+
+    Boolean deleted = redisTemplate.delete(key);
+
+    return Boolean.TRUE.equals(deleted);
+  }
+
+  // 회원가입 완료 후 이메일 인증 완료 상태 삭제
+  public void deleteSignupEmailAuthVerified(String email) {
+    String key = SIGNUP_EMAIL_AUTH_VERIFIED_PREFIX + email;
+
     redisTemplate.delete(key);
   }
 }
