@@ -4,7 +4,7 @@ import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.ticketrush.boundedcontext.auth.app.dto.request.UserServiceSocialLoginRequest;
 import com.ticketrush.boundedcontext.auth.app.dto.response.signup.UserServiceApiResponse;
-import com.ticketrush.boundedcontext.auth.app.dto.response.signup.UserServiceAuthInfoResponse;
+import com.ticketrush.boundedcontext.auth.app.dto.response.login.UserServiceAuthInfoResponse;
 import com.ticketrush.boundedcontext.auth.app.dto.response.signup.UserServiceEmailExistsResponse;
 import com.ticketrush.boundedcontext.auth.app.dto.response.social.UserServiceSocialLoginResponse;
 import com.ticketrush.global.exception.BusinessException;

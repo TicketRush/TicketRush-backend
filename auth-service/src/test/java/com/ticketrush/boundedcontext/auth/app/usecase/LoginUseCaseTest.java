@@ -9,8 +9,8 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import com.ticketrush.boundedcontext.auth.app.dto.request.LoginRequest;
-import com.ticketrush.boundedcontext.auth.app.dto.response.signup.LoginResponse;
-import com.ticketrush.boundedcontext.auth.app.dto.response.signup.UserServiceAuthInfoResponse;
+import com.ticketrush.boundedcontext.auth.app.dto.response.login.LoginResponse;
+import com.ticketrush.boundedcontext.auth.app.dto.response.login.UserServiceAuthInfoResponse;
 import com.ticketrush.boundedcontext.auth.out.apiclient.UserServiceClient;
 import com.ticketrush.global.exception.BusinessException;
 import com.ticketrush.global.security.JwtTokenProvider;

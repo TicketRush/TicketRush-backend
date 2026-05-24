@@ -4,7 +4,7 @@ import com.ticketrush.boundedcontext.auth.app.dto.request.LoginRequest;
 import com.ticketrush.boundedcontext.auth.app.dto.request.SignupEmailAuthNumberSendRequest;
 import com.ticketrush.boundedcontext.auth.app.dto.request.SignupEmailAuthNumberVerifyRequest;
 import com.ticketrush.boundedcontext.auth.app.dto.request.SignupEmailVerificationConsumeRequest;
-import com.ticketrush.boundedcontext.auth.app.dto.response.signup.LoginResponse;
+import com.ticketrush.boundedcontext.auth.app.dto.response.login.LoginResponse;
 import com.ticketrush.boundedcontext.auth.app.dto.response.signup.SignupEmailAuthNumberSendResponse;
 import com.ticketrush.boundedcontext.auth.app.dto.response.signup.SignupEmailAuthNumberVerifyResponse;
 import com.ticketrush.boundedcontext.auth.app.dto.response.signup.SignupEmailVerificationCheckResponse;
