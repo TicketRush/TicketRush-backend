@@ -70,14 +70,15 @@ class PaymentControllerTest {
         .andExpect(status().isOk())
         .andExpect(jsonPath("$.is_success").value(true))
         .andExpect(jsonPath("$.result.payment_id").value(1))
-        .andExpect(jsonPath("$.result.status").value("COMPLETED"));
+        .andExpect(jsonPath("$.result.status").value("COMPLETED"))
+        .andExpect(jsonPath("$.result.paid_at").value("2026-05-22 10:00:00"));
 
     verify(paymentFacade).confirm(eq(userId), any(PaymentConfirmRequest.class));
   }
 
   @Test
-  @DisplayName("인증 principal이 없으면 401 Unauthorized를 반환한다")
-  void confirm_fails_when_principal_missing() throws Exception {
+  @DisplayName("Gateway 인증 헤더가 없으면 401 Unauthorized를 반환한다")
+  void confirm_fails_when_gateway_headers_missing() throws Exception {
     // given
     String requestBody =
         """
@@ -162,5 +163,7 @@ class PaymentControllerTest {
         .andExpect(status().isBadRequest())
         .andExpect(jsonPath("$.is_success").value(false))
         .andExpect(jsonPath("$.code").value(ErrorStatus.PAYMENT_AMOUNT_MISMATCH.getCode()));
+
+    verify(paymentFacade).confirm(eq(userId), any(PaymentConfirmRequest.class));
   }
 }
