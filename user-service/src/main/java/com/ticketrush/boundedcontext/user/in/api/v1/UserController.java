@@ -2,6 +2,7 @@ package com.ticketrush.boundedcontext.user.in.api.v1;
 
 import com.ticketrush.boundedcontext.user.app.dto.request.SignupRequest;
 import com.ticketrush.boundedcontext.user.app.dto.request.SocialLoginRequest;
+import com.ticketrush.boundedcontext.user.app.dto.request.UserAuthInfoRequest;
 import com.ticketrush.boundedcontext.user.app.dto.response.EmailExistsResponse;
 import com.ticketrush.boundedcontext.user.app.dto.response.SignupResponse;
 import com.ticketrush.boundedcontext.user.app.dto.response.SocialLoginResponse;
@@ -55,10 +56,10 @@ public class UserController {
   }
 
   @Operation(summary = "로그인 검증용 회원 정보 조회", description = "이메일로 로그인 검증에 필요한 회원 정보를 조회합니다.")
-  @GetMapping("/auth-info")
+  @PostMapping("/auth-info")
   public ResponseEntity<ApiResponse<UserAuthInfoResponse>> getUserAuthInfoByEmail(
-      @RequestParam String email) {
-    UserAuthInfoResponse response = userFacade.getUserAuthInfoByEmail(email);
+      @RequestBody UserAuthInfoRequest request) {
+    UserAuthInfoResponse response = userFacade.getUserAuthInfoByEmail(request.email());
 
     return ApiResponse.onSuccess(SuccessStatus.OK, response);
   }

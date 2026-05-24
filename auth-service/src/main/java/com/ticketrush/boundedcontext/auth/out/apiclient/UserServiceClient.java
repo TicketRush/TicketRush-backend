@@ -2,6 +2,7 @@ package com.ticketrush.boundedcontext.auth.out.apiclient;
 
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.ticketrush.boundedcontext.auth.app.dto.request.UserServiceAuthInfoRequest;
 import com.ticketrush.boundedcontext.auth.app.dto.request.UserServiceSocialLoginRequest;
 import com.ticketrush.boundedcontext.auth.app.dto.response.login.UserServiceAuthInfoResponse;
 import com.ticketrush.boundedcontext.auth.app.dto.response.signup.UserServiceApiResponse;
@@ -31,7 +32,7 @@ public class UserServiceClient {
 
   private static final String SOCIAL_LOGIN_PATH = "/api/v1/user/social-login";
   private static final String EMAIL_EXISTS_PATH = "/api/v1/user/exists/email?email={email}";
-  private static final String USER_AUTH_INFO_PATH = "/api/v1/user/auth-info?email={email}";
+  private static final String USER_AUTH_INFO_PATH = "/api/v1/user/auth-info";
 
   public UserServiceSocialLoginResponse socialLogin(UserServiceSocialLoginRequest request) {
 
@@ -119,10 +120,14 @@ public class UserServiceClient {
     }
 
     try {
+      UserServiceAuthInfoRequest request = new UserServiceAuthInfoRequest(email);
+
       UserServiceApiResponse<UserServiceAuthInfoResponse> response =
           restClient
-              .get()
-              .uri(userServiceBaseUrl + USER_AUTH_INFO_PATH, email)
+              .post()
+              .uri(userServiceBaseUrl + USER_AUTH_INFO_PATH)
+              .contentType(MediaType.APPLICATION_JSON)
+              .body(request)
               .retrieve()
               .onStatus(
                   HttpStatusCode::is4xxClientError,
