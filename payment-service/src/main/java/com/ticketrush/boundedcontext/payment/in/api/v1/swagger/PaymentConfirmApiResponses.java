@@ -37,7 +37,7 @@ import java.lang.annotation.Target;
                             "result": {
                               "payment_id": 1,
                               "status": "COMPLETED",
-                              "paid_at": "2026-05-22T10:00:00"
+                              "paid_at": "2025-01-15 10:00:00"
                             }
                           }
                           """))),
