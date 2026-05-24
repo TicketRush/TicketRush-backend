@@ -22,7 +22,7 @@ public class LoginUseCase {
   public LoginResponse execute(LoginRequest request) {
     UserServiceAuthInfoResponse user = userServiceClient.getUserAuthInfoByEmail(request.email());
 
-    if (!passwordEncoder.matches(request.password(), user.password())) {
+    if (!passwordEncoder.matches(request.password(), user.passwordHash())) {
       throw new BusinessException(ErrorStatus.AUTH_LOGIN_FAILED);
     }
 
@@ -33,12 +33,7 @@ public class LoginUseCase {
     String refreshToken = jwtTokenProvider.createRefreshToken(user.userId());
 
     return new LoginResponse(
-      user.userId(),
-      user.email(),
-      normalizedRole,
-      accessToken,
-      refreshToken
-    );
+        user.userId(), user.email(), normalizedRole, accessToken, refreshToken);
   }
 
   private String normalizeRole(String role) {

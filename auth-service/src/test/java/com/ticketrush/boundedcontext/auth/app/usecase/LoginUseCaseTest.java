@@ -40,21 +40,19 @@ class LoginUseCaseTest {
     // given
     String email = "test@example.com";
     String rawPassword = "Password123!";
-    String encodedPassword = "$2a$10$encoded-password";
+    String passwordHash = "$2a$10$encoded-password";
     Long userId = 1L;
-    String role = "MEMBER";
+    String userServiceRole = "MEMBER";
+    String tokenRole = "USER";
 
     LoginRequest request = new LoginRequest(email, rawPassword);
 
     UserServiceAuthInfoResponse userInfo =
-        new UserServiceAuthInfoResponse(userId, email, encodedPassword, role);
+        new UserServiceAuthInfoResponse(userId, email, passwordHash, userServiceRole);
 
     when(userServiceClient.getUserAuthInfoByEmail(email)).thenReturn(userInfo);
-
-    when(passwordEncoder.matches(rawPassword, encodedPassword)).thenReturn(true);
-
-    when(jwtTokenProvider.createAccessToken(userId, role)).thenReturn("access-token");
-
+    when(passwordEncoder.matches(rawPassword, passwordHash)).thenReturn(true);
+    when(jwtTokenProvider.createAccessToken(userId, tokenRole)).thenReturn("access-token");
     when(jwtTokenProvider.createRefreshToken(userId)).thenReturn("refresh-token");
 
     // when
@@ -63,13 +61,13 @@ class LoginUseCaseTest {
     // then
     assertThat(response.userId()).isEqualTo(userId);
     assertThat(response.email()).isEqualTo(email);
-    assertThat(response.role()).isEqualTo(role);
+    assertThat(response.role()).isEqualTo(tokenRole);
     assertThat(response.accessToken()).isEqualTo("access-token");
     assertThat(response.refreshToken()).isEqualTo("refresh-token");
 
     verify(userServiceClient).getUserAuthInfoByEmail(email);
-    verify(passwordEncoder).matches(rawPassword, encodedPassword);
-    verify(jwtTokenProvider).createAccessToken(userId, role);
+    verify(passwordEncoder).matches(rawPassword, passwordHash);
+    verify(jwtTokenProvider).createAccessToken(userId, tokenRole);
     verify(jwtTokenProvider).createRefreshToken(userId);
   }
 
@@ -79,24 +77,23 @@ class LoginUseCaseTest {
     // given
     String email = "test@example.com";
     String rawPassword = "WrongPassword123!";
-    String encodedPassword = "$2a$10$encoded-password";
+    String passwordHash = "$2a$10$encoded-password";
     Long userId = 1L;
-    String role = "MEMBER";
+    String userServiceRole = "MEMBER";
 
     LoginRequest request = new LoginRequest(email, rawPassword);
 
     UserServiceAuthInfoResponse userInfo =
-        new UserServiceAuthInfoResponse(userId, email, encodedPassword, role);
+        new UserServiceAuthInfoResponse(userId, email, passwordHash, userServiceRole);
 
     when(userServiceClient.getUserAuthInfoByEmail(email)).thenReturn(userInfo);
-
-    when(passwordEncoder.matches(rawPassword, encodedPassword)).thenReturn(false);
+    when(passwordEncoder.matches(rawPassword, passwordHash)).thenReturn(false);
 
     // when & then
     assertThatThrownBy(() -> loginUseCase.execute(request)).isInstanceOf(BusinessException.class);
 
     verify(userServiceClient).getUserAuthInfoByEmail(email);
-    verify(passwordEncoder).matches(rawPassword, encodedPassword);
+    verify(passwordEncoder).matches(rawPassword, passwordHash);
     verify(jwtTokenProvider, never()).createAccessToken(anyLong(), anyString());
     verify(jwtTokenProvider, never()).createRefreshToken(anyLong());
   }
