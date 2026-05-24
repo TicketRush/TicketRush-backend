@@ -26,10 +26,26 @@ public class LoginUseCase {
       throw new BusinessException(ErrorStatus.AUTH_LOGIN_FAILED);
     }
 
-    String accessToken = jwtTokenProvider.createAccessToken(user.userId(), user.role());
+    String normalizedRole = normalizeRole(user.role());
+
+    String accessToken = jwtTokenProvider.createAccessToken(user.userId(), normalizedRole);
 
     String refreshToken = jwtTokenProvider.createRefreshToken(user.userId());
 
-    return new LoginResponse(user.userId(), user.email(), user.role(), accessToken, refreshToken);
+    return new LoginResponse(
+      user.userId(),
+      user.email(),
+      normalizedRole,
+      accessToken,
+      refreshToken
+    );
+  }
+
+  private String normalizeRole(String role) {
+    return switch (role) {
+      case "MEMBER" -> "USER";
+      case "ADMIN" -> "ADMIN";
+      default -> throw new IllegalArgumentException("지원하지 않는 사용자 역할입니다: " + role);
+    };
   }
 }
