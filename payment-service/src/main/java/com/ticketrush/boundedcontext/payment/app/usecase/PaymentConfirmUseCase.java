@@ -25,6 +25,11 @@ public class PaymentConfirmUseCase {
   private final PaymentEventPublisher paymentEventPublisher;
 
   public PaymentConfirmResponse execute(Long userId, PaymentConfirmRequest request) {
+    if (paymentRepository.existsByBookingIdAndStatus(
+        request.bookingId(), PaymentStatus.COMPLETED)) {
+      throw new BusinessException(ErrorStatus.PAYMENT_ALREADY_COMPLETED);
+    }
+
     PaymentApprovalResponse approval =
         paymentApprovalClient.approve(
             new PaymentApprovalRequest(

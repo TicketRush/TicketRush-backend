@@ -48,6 +48,8 @@ class PaymentConfirmUseCaseTest {
     PaymentConfirmRequest request =
         new PaymentConfirmRequest(bookingId, seatId, PaymentProvider.KAKAO, amount, "pgKey_xyz");
 
+    given(paymentRepository.existsByBookingIdAndStatus(bookingId, PaymentStatus.COMPLETED))
+        .willReturn(false);
     given(paymentApprovalClient.approve(any()))
         .willReturn(new PaymentApprovalResponse("APR-123", amount, approvedAt));
 
@@ -87,6 +89,8 @@ class PaymentConfirmUseCaseTest {
         new PaymentConfirmRequest(
             bookingId, seatId, PaymentProvider.KAKAO, requestAmount, "pgKey_xyz");
 
+    given(paymentRepository.existsByBookingIdAndStatus(bookingId, PaymentStatus.COMPLETED))
+        .willReturn(false);
     given(paymentApprovalClient.approve(any()))
         .willReturn(new PaymentApprovalResponse("APR-123", approvedAmount, LocalDateTime.now()));
 
@@ -96,6 +100,30 @@ class PaymentConfirmUseCaseTest {
         .extracting("errorStatus")
         .isEqualTo(ErrorStatus.PAYMENT_AMOUNT_MISMATCH);
 
+    verify(paymentRepository, never()).save(any(Payment.class));
+    verify(paymentEventPublisher, never())
+        .publishConfirmed(any(), any(), any(), any(), any(), any());
+  }
+
+  @Test
+  @DisplayName("동일 bookingId의 COMPLETED 결제가 이미 존재하면 PAYMENT_409_001 예외가 발생한다")
+  void execute_fail_when_already_completed() {
+    // given
+    Long userId = 10L;
+    Long bookingId = 100L;
+    PaymentConfirmRequest request =
+        new PaymentConfirmRequest(bookingId, 200L, PaymentProvider.KAKAO, 55_000L, "pgKey_xyz");
+
+    given(paymentRepository.existsByBookingIdAndStatus(bookingId, PaymentStatus.COMPLETED))
+        .willReturn(true);
+
+    // when & then
+    assertThatThrownBy(() -> paymentConfirmUseCase.execute(userId, request))
+        .isInstanceOf(BusinessException.class)
+        .extracting("errorStatus")
+        .isEqualTo(ErrorStatus.PAYMENT_ALREADY_COMPLETED);
+
+    verify(paymentApprovalClient, never()).approve(any());
     verify(paymentRepository, never()).save(any(Payment.class));
     verify(paymentEventPublisher, never())
         .publishConfirmed(any(), any(), any(), any(), any(), any());
