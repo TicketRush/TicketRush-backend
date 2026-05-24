@@ -37,7 +37,8 @@ public enum ErrorStatus {
   AUTH_EMAIL_EXISTS_CHECK_BAD_REQUEST(
       HttpStatus.BAD_REQUEST, "AUTH_400_009", "이메일 중복 확인 요청이 올바르지 않습니다."),
   AUTH_NUMBER_NOT_MATCH(HttpStatus.BAD_REQUEST, "AUTH_400_010", "인증번호가 일치하지 않습니다."),
-  EMAIL_AUTH_NOT_VERIFIED(HttpStatus.BAD_REQUEST, "EMAIL_AUTH_400_011", "이메일 인증이 완료되지 않았습니다."),
+  EMAIL_AUTH_NOT_VERIFIED(HttpStatus.BAD_REQUEST, "AUTH_400_011", "이메일 인증이 완료되지 않았습니다."),
+  AUTH_LOGIN_BAD_REQUEST(HttpStatus.BAD_REQUEST, "AUTH_400_012", "로그인 요청이 올바르지 않습니다."),
 
   // Auth 401
   AUTH_INVALID_REFRESH_TOKEN(HttpStatus.UNAUTHORIZED, "AUTH_401_001", "유효하지 않은 Refresh Token입니다."),
@@ -45,6 +46,7 @@ public enum ErrorStatus {
   AUTH_INVALID_TOKEN(HttpStatus.UNAUTHORIZED, "AUTH_401_003", "유효하지 않은 JWT 토큰입니다."),
   AUTH_EXPIRED_TOKEN(HttpStatus.UNAUTHORIZED, "AUTH_401_004", "만료된 JWT 토큰입니다."),
   AUTH_INVALID_TOKEN_TYPE(HttpStatus.UNAUTHORIZED, "AUTH_401_005", "Access Token만 사용할 수 있습니다."),
+  AUTH_LOGIN_FAILED(HttpStatus.UNAUTHORIZED, "AUTH_401_006", "이메일 또는 비밀번호가 올바르지 않습니다."),
 
   // Auth 403
   AUTH_ACCESS_DENIED(HttpStatus.FORBIDDEN, "AUTH_403_001", "접근 권한이 없습니다."),
