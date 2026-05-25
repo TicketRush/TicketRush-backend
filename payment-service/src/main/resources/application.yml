@@ -28,6 +28,7 @@ payment:
     stub:
       enabled: ${PAYMENT_PG_STUB_ENABLED:false}
     toss:
+      enabled: ${TOSS_PAYMENTS_ENABLED:false}
       base-url: ${TOSS_PAYMENTS_BASE_URL:https://api.tosspayments.com}
       secret-key: ${TOSS_PAYMENTS_SECRET_KEY:}
       connect-timeout-ms: ${TOSS_PAYMENTS_CONNECT_TIMEOUT_MS:3000}

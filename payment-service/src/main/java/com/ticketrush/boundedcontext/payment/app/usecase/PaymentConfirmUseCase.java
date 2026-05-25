@@ -69,7 +69,7 @@ public class PaymentConfirmUseCase {
     return PaymentConfirmResponse.from(saved);
   }
 
-  /* Toss orderId 규격(6~64자, 영문/숫자/_/-)을 만족하기 위해 zero-padding 한다. */
+  /* PG 공통 orderId 규격(6~64자, 영문/숫자/_/-, 현재 Toss 기준)을 만족하기 위해 zero-padding 한다. */
   private String generateOrderId(Long bookingId) {
     return "BKG-%07d".formatted(bookingId);
   }

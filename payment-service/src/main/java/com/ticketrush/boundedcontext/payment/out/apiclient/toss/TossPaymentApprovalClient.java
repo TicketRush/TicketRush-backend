@@ -22,12 +22,13 @@ import org.springframework.web.client.RestClientException;
 /**
  * Toss Payments 결제 승인 API 연동 구현체.
  *
- * <p>{@code payment.pg.toss.secret-key} 가 비어있지 않을 때만 활성화된다.
+ * <p>{@code payment.pg.toss.enabled=true} 일 때만 활성화된다. secret-key 미설정 시 {@link
+ * com.ticketrush.global.config.RestClientConfig#tossPaymentRestClient}에서 startup 단계에 실패시킨다.
  */
 @Slf4j
 @Component
 @Order(0)
-@ConditionalOnProperty(prefix = "payment.pg.toss", name = "secret-key")
+@ConditionalOnProperty(prefix = "payment.pg.toss", name = "enabled", havingValue = "true")
 public class TossPaymentApprovalClient implements PaymentApprovalClient {
 
   private static final String CONFIRM_PATH = "/v1/payments/confirm";
