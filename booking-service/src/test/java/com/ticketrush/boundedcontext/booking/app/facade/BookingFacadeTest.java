@@ -10,20 +10,29 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 
 import com.ticketrush.boundedcontext.booking.app.dto.request.BookingCreateRequest;
+import com.ticketrush.boundedcontext.booking.app.dto.response.BookingCountResponse;
 import com.ticketrush.boundedcontext.booking.app.dto.response.BookingPendingResponse;
+import com.ticketrush.boundedcontext.booking.app.dto.response.BookingSummaryResponse;
+import com.ticketrush.boundedcontext.booking.app.usecase.BookingCountUseCase;
 import com.ticketrush.boundedcontext.booking.app.usecase.BookingCreateUseCase;
+import com.ticketrush.boundedcontext.booking.app.usecase.BookingGetMyBookingsUseCase;
 import com.ticketrush.boundedcontext.booking.app.usecase.BookingIssueNumberUseCase;
 import com.ticketrush.boundedcontext.booking.app.usecase.BookingValidateReferencesUseCase;
 import com.ticketrush.boundedcontext.booking.app.usecase.BookingValidateSeatAvailableUseCase;
 import com.ticketrush.boundedcontext.booking.domain.entity.Booking;
 import com.ticketrush.boundedcontext.booking.domain.types.BookingStatus;
+import com.ticketrush.global.dto.request.OffsetPageRequest;
 import com.ticketrush.global.exception.BusinessException;
+import java.time.LocalDateTime;
+import java.util.List;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageImpl;
 
 @ExtendWith(MockitoExtension.class)
 class BookingFacadeTest {
@@ -32,6 +41,8 @@ class BookingFacadeTest {
 
   @Mock private BookingIssueNumberUseCase bookingIssueNumberUseCase;
   @Mock private BookingCreateUseCase bookingCreateUseCase;
+  @Mock private BookingGetMyBookingsUseCase bookingGetMyBookingsUseCase;
+  @Mock private BookingCountUseCase bookingCountUseCase;
   @Mock private BookingValidateReferencesUseCase bookingValidateReferencesUseCase;
   @Mock private BookingValidateSeatAvailableUseCase bookingValidateSeatAvailableUseCase;
 
@@ -111,5 +122,50 @@ class BookingFacadeTest {
     verify(bookingValidateReferencesUseCase).execute(userId, performanceId, seatId);
     verify(bookingValidateSeatAvailableUseCase).execute(seatId, performanceId);
     verifyNoInteractions(bookingIssueNumberUseCase, bookingCreateUseCase);
+  }
+
+  @Test
+  @DisplayName("성공: 회원 예매 내역 조회를 위임한다")
+  void getMyBookings_success() {
+    // given
+    Long userId = 1L;
+    BookingSummaryResponse response =
+        new BookingSummaryResponse(
+            100L,
+            "BOOK-1234",
+            2L,
+            3L,
+            BookingStatus.CONFIRMED,
+            LocalDateTime.of(2026, 5, 22, 10, 30));
+
+    given(
+            bookingGetMyBookingsUseCase.execute(
+                userId, BookingStatus.CONFIRMED, new OffsetPageRequest(0, 10)))
+        .willReturn(new PageImpl<>(List.of(response)));
+
+    // when
+    Page<BookingSummaryResponse> result =
+        bookingFacade.getMyBookings(userId, BookingStatus.CONFIRMED, new OffsetPageRequest(0, 10));
+
+    // then
+    assertThat(result.getContent()).containsExactly(response);
+    verify(bookingGetMyBookingsUseCase)
+        .execute(userId, BookingStatus.CONFIRMED, new OffsetPageRequest(0, 10));
+  }
+
+  @Test
+  @DisplayName("성공: 회원 예매 수 조회를 위임한다")
+  void countMyBookings_success() {
+    // given
+    Long userId = 1L;
+    BookingCountResponse response = new BookingCountResponse(BookingStatus.CONFIRMED, 3L);
+    given(bookingCountUseCase.execute(userId, BookingStatus.CONFIRMED)).willReturn(response);
+
+    // when
+    BookingCountResponse result = bookingFacade.countMyBookings(userId, BookingStatus.CONFIRMED);
+
+    // then
+    assertThat(result).isEqualTo(response);
+    verify(bookingCountUseCase).execute(userId, BookingStatus.CONFIRMED);
   }
 }

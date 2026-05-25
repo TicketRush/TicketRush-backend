@@ -10,6 +10,7 @@ import jakarta.persistence.Entity;
 import jakarta.persistence.EnumType;
 import jakarta.persistence.Enumerated;
 import jakarta.persistence.Table;
+import java.time.LocalDateTime;
 import lombok.AccessLevel;
 import lombok.Builder;
 import lombok.Getter;
@@ -38,6 +39,9 @@ public class Booking extends AutoIdBaseEntity {
   @Column(name = "booking_status", length = 20, nullable = false)
   private BookingStatus bookingStatus;
 
+  @Column(name = "confirmed_at")
+  private LocalDateTime confirmedAt;
+
   @Builder
   public Booking(
       String bookingNumber,
@@ -57,5 +61,22 @@ public class Booking extends AutoIdBaseEntity {
       throw new BusinessException(ErrorStatus.BOOKING_CANCEL_NOT_ALLOWED);
     }
     this.bookingStatus = BookingStatus.CANCELED;
+  }
+
+  public void confirm(LocalDateTime confirmedAt) {
+    if (this.bookingStatus == BookingStatus.CONFIRMED) {
+      if (this.confirmedAt == null) {
+        // 결제 확정 이벤트 재처리 시 과거 확정 데이터의 누락된 확정 시각을 보정한다.
+        this.confirmedAt = confirmedAt;
+      }
+      return;
+    }
+
+    if (this.bookingStatus != BookingStatus.PENDING) {
+      throw new BusinessException(ErrorStatus.BOOKING_CONFIRM_NOT_ALLOWED);
+    }
+
+    this.bookingStatus = BookingStatus.CONFIRMED;
+    this.confirmedAt = confirmedAt;
   }
 }

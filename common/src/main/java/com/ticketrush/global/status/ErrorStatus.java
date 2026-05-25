@@ -78,6 +78,7 @@ public enum ErrorStatus {
 
   // Booking 409
   BOOKING_CANCEL_NOT_ALLOWED(HttpStatus.CONFLICT, "BOOKING_409_001", "취소할 수 없는 예매 상태입니다."),
+  BOOKING_CONFIRM_NOT_ALLOWED(HttpStatus.CONFLICT, "BOOKING_409_002", "확정할 수 없는 예매 상태입니다."),
 
   // Booking 500
   BOOKING_NUMBER_RETRY_EXCEEDED(

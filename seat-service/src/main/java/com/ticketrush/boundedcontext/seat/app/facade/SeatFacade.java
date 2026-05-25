@@ -1,10 +1,12 @@
 package com.ticketrush.boundedcontext.seat.app.facade;
 
 import com.ticketrush.boundedcontext.seat.app.dto.response.SeatLayoutResponse;
+import com.ticketrush.boundedcontext.seat.app.dto.response.SeatNumberResponse;
 import com.ticketrush.boundedcontext.seat.app.dto.response.SeatStatusCountsResponse;
 import com.ticketrush.boundedcontext.seat.app.support.SeatStatusStreamSubscriber;
 import com.ticketrush.boundedcontext.seat.app.usecase.SeatConfirmSoldUseCase;
 import com.ticketrush.boundedcontext.seat.app.usecase.SeatCreateDefaultLayoutUseCase;
+import com.ticketrush.boundedcontext.seat.app.usecase.SeatGetNumbersUseCase;
 import com.ticketrush.boundedcontext.seat.app.usecase.SeatGetSeatLayoutsUseCase;
 import com.ticketrush.boundedcontext.seat.app.usecase.SeatGetStatusCountsUseCase;
 import com.ticketrush.boundedcontext.seat.app.usecase.SeatHoldUseCase;
@@ -29,6 +31,7 @@ public class SeatFacade {
 
   private final SeatGetStatusCountsUseCase seatGetStatusCountsUseCase;
   private final SeatGetSeatLayoutsUseCase seatGetSeatLayoutsUseCase;
+  private final SeatGetNumbersUseCase seatGetNumbersUseCase;
   private final SeatCreateDefaultLayoutUseCase seatCreateDefaultLayoutUseCase;
   private final SeatConfirmSoldUseCase seatConfirmSoldUseCase;
   private final SeatHoldUseCase seatHoldUseCase;
@@ -40,6 +43,10 @@ public class SeatFacade {
 
   public List<SeatLayoutResponse> getPerformanceSeatLayouts(Long performanceId) {
     return seatGetSeatLayoutsUseCase.execute(performanceId);
+  }
+
+  public List<SeatNumberResponse> getSeatNumbers(List<Long> seatIds) {
+    return seatGetNumbersUseCase.execute(seatIds);
   }
 
   public SeatStatusCountsResponse getPerformanceSeatStatusCounts(Long performanceId) {
