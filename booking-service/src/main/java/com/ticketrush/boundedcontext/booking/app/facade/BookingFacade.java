@@ -12,9 +12,10 @@ import com.ticketrush.boundedcontext.booking.app.usecase.BookingValidateReferenc
 import com.ticketrush.boundedcontext.booking.app.usecase.BookingValidateSeatAvailableUseCase;
 import com.ticketrush.boundedcontext.booking.domain.entity.Booking;
 import com.ticketrush.boundedcontext.booking.domain.types.BookingStatus;
-import java.util.List;
+import com.ticketrush.global.dto.request.OffsetPageRequest;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.data.domain.Page;
 import org.springframework.stereotype.Service;
 
 @Slf4j
@@ -46,8 +47,9 @@ public class BookingFacade {
     return BookingPendingResponse.from(booking);
   }
 
-  public List<BookingSummaryResponse> getMyBookings(Long userId, BookingStatus bookingStatus) {
-    return bookingGetMyBookingsUseCase.execute(userId, bookingStatus);
+  public Page<BookingSummaryResponse> getMyBookings(
+      Long userId, BookingStatus bookingStatus, OffsetPageRequest pageRequest) {
+    return bookingGetMyBookingsUseCase.execute(userId, bookingStatus, pageRequest);
   }
 
   public BookingCountResponse countMyBookings(Long userId, BookingStatus bookingStatus) {

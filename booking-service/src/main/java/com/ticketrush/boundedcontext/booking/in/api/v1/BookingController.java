@@ -6,6 +6,7 @@ import com.ticketrush.boundedcontext.booking.app.dto.response.BookingPendingResp
 import com.ticketrush.boundedcontext.booking.app.dto.response.BookingSummaryResponse;
 import com.ticketrush.boundedcontext.booking.app.facade.BookingFacade;
 import com.ticketrush.boundedcontext.booking.domain.types.BookingStatus;
+import com.ticketrush.global.dto.request.OffsetPageRequest;
 import com.ticketrush.global.dto.response.ApiResponse;
 import com.ticketrush.global.security.CustomUserDetails;
 import com.ticketrush.global.status.SuccessStatus;
@@ -14,9 +15,12 @@ import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import java.util.List;
 import lombok.RequiredArgsConstructor;
+import org.springframework.data.domain.Page;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
+import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.ModelAttribute;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
@@ -24,6 +28,7 @@ import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 @Tag(name = "Booking", description = "예약 관련 API")
+@Validated
 @RestController
 @RequestMapping("/api/v1/booking")
 @RequiredArgsConstructor
@@ -50,8 +55,10 @@ public class BookingController {
   @GetMapping("/me")
   public ResponseEntity<ApiResponse<List<BookingSummaryResponse>>> getMyBookings(
       @AuthenticationPrincipal CustomUserDetails user,
-      @RequestParam(defaultValue = "CONFIRMED") BookingStatus status) {
-    List<BookingSummaryResponse> response = bookingFacade.getMyBookings(user.getUserId(), status);
+      @RequestParam(defaultValue = "CONFIRMED") BookingStatus status,
+      @ModelAttribute OffsetPageRequest pageRequest) {
+    Page<BookingSummaryResponse> response =
+        bookingFacade.getMyBookings(user.getUserId(), status, pageRequest);
 
     return ApiResponse.onSuccess(SuccessStatus.OK, response);
   }

@@ -16,6 +16,7 @@ import com.ticketrush.boundedcontext.booking.app.facade.BookingFacade;
 import com.ticketrush.boundedcontext.booking.domain.types.BookingStatus;
 import com.ticketrush.global.config.JacksonConfig;
 import com.ticketrush.global.config.SecurityConfig;
+import com.ticketrush.global.dto.request.OffsetPageRequest;
 import com.ticketrush.global.security.GatewayHeaderFilter;
 import com.ticketrush.global.status.ErrorStatus;
 import java.time.LocalDateTime;
@@ -25,6 +26,8 @@ import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.webmvc.test.autoconfigure.WebMvcTest;
 import org.springframework.context.annotation.Import;
+import org.springframework.data.domain.PageImpl;
+import org.springframework.data.domain.PageRequest;
 import org.springframework.http.MediaType;
 import org.springframework.test.context.TestPropertySource;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
@@ -90,8 +93,10 @@ class BookingControllerTest {
             BookingStatus.CONFIRMED,
             LocalDateTime.of(2026, 5, 22, 10, 30));
 
-    given(bookingFacade.getMyBookings(userId, BookingStatus.CONFIRMED))
-        .willReturn(List.of(response));
+    given(
+            bookingFacade.getMyBookings(
+                userId, BookingStatus.CONFIRMED, new OffsetPageRequest(0, 10)))
+        .willReturn(new PageImpl<>(List.of(response), PageRequest.of(0, 10), 1));
 
     // when & then
     mockMvc
@@ -107,9 +112,14 @@ class BookingControllerTest {
         .andExpect(jsonPath("$.result[0].performance_id").value(2))
         .andExpect(jsonPath("$.result[0].seat_id").value(3))
         .andExpect(jsonPath("$.result[0].booking_status").value("CONFIRMED"))
-        .andExpect(jsonPath("$.result[0].confirmed_at").value("2026-05-22 10:30:00"));
+        .andExpect(jsonPath("$.result[0].confirmed_at").value("2026-05-22 10:30:00"))
+        .andExpect(jsonPath("$.pagination_info.page_index").value(0))
+        .andExpect(jsonPath("$.pagination_info.size").value(10))
+        .andExpect(jsonPath("$.pagination_info.total_elements").value(1))
+        .andExpect(jsonPath("$.pagination_info.total_pages").value(1));
 
-    verify(bookingFacade).getMyBookings(eq(userId), eq(BookingStatus.CONFIRMED));
+    verify(bookingFacade)
+        .getMyBookings(eq(userId), eq(BookingStatus.CONFIRMED), eq(new OffsetPageRequest(0, 10)));
   }
 
   @Test

@@ -66,6 +66,7 @@ public class Booking extends AutoIdBaseEntity {
   public void confirm(LocalDateTime confirmedAt) {
     if (this.bookingStatus == BookingStatus.CONFIRMED) {
       if (this.confirmedAt == null) {
+        // 결제 확정 이벤트 재처리 시 과거 확정 데이터의 누락된 확정 시각을 보정한다.
         this.confirmedAt = confirmedAt;
       }
       return;

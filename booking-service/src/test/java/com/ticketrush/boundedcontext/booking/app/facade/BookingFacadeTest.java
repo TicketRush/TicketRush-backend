@@ -21,6 +21,7 @@ import com.ticketrush.boundedcontext.booking.app.usecase.BookingValidateReferenc
 import com.ticketrush.boundedcontext.booking.app.usecase.BookingValidateSeatAvailableUseCase;
 import com.ticketrush.boundedcontext.booking.domain.entity.Booking;
 import com.ticketrush.boundedcontext.booking.domain.types.BookingStatus;
+import com.ticketrush.global.dto.request.OffsetPageRequest;
 import com.ticketrush.global.exception.BusinessException;
 import java.time.LocalDateTime;
 import java.util.List;
@@ -30,6 +31,8 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageImpl;
 
 @ExtendWith(MockitoExtension.class)
 class BookingFacadeTest {
@@ -135,16 +138,19 @@ class BookingFacadeTest {
             BookingStatus.CONFIRMED,
             LocalDateTime.of(2026, 5, 22, 10, 30));
 
-    given(bookingGetMyBookingsUseCase.execute(userId, BookingStatus.CONFIRMED))
-        .willReturn(List.of(response));
+    given(
+            bookingGetMyBookingsUseCase.execute(
+                userId, BookingStatus.CONFIRMED, new OffsetPageRequest(0, 10)))
+        .willReturn(new PageImpl<>(List.of(response)));
 
     // when
-    List<BookingSummaryResponse> result =
-        bookingFacade.getMyBookings(userId, BookingStatus.CONFIRMED);
+    Page<BookingSummaryResponse> result =
+        bookingFacade.getMyBookings(userId, BookingStatus.CONFIRMED, new OffsetPageRequest(0, 10));
 
     // then
-    assertThat(result).containsExactly(response);
-    verify(bookingGetMyBookingsUseCase).execute(userId, BookingStatus.CONFIRMED);
+    assertThat(result.getContent()).containsExactly(response);
+    verify(bookingGetMyBookingsUseCase)
+        .execute(userId, BookingStatus.CONFIRMED, new OffsetPageRequest(0, 10));
   }
 
   @Test
