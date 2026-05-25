@@ -2,9 +2,12 @@ package com.ticketrush.boundedcontext.seat.app.usecase;
 
 import com.ticketrush.boundedcontext.seat.app.dto.response.SeatNumberResponse;
 import com.ticketrush.boundedcontext.seat.out.repository.SeatRepository;
+import com.ticketrush.global.exception.BusinessException;
+import com.ticketrush.global.status.ErrorStatus;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
-import java.util.Objects;
+import java.util.Set;
 import java.util.function.Function;
 import java.util.stream.Collectors;
 import lombok.RequiredArgsConstructor;
@@ -27,6 +30,12 @@ public class SeatGetNumbersUseCase {
         seatRepository.findSeatNumbersByIdIn(seatIds).stream()
             .collect(Collectors.toMap(SeatNumberResponse::seatId, Function.identity()));
 
-    return seatIds.stream().map(seatNumbersById::get).filter(Objects::nonNull).toList();
+    Set<Long> missingSeatIds = new LinkedHashSet<>(seatIds);
+    missingSeatIds.removeAll(seatNumbersById.keySet());
+    if (!missingSeatIds.isEmpty()) {
+      throw new BusinessException(ErrorStatus.SEAT_NOT_FOUND, missingSeatIds);
+    }
+
+    return seatIds.stream().map(seatNumbersById::get).toList();
   }
 }

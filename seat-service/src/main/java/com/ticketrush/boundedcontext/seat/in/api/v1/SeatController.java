@@ -12,11 +12,13 @@ import com.ticketrush.global.status.SuccessStatus;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
 import jakarta.validation.Valid;
+import jakarta.validation.constraints.Size;
 import java.util.List;
 import lombok.RequiredArgsConstructor;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
+import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -27,6 +29,7 @@ import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
 
+@Validated
 @RestController
 @RequestMapping("/api/v1/seat")
 @RequiredArgsConstructor
@@ -50,7 +53,7 @@ public class SeatController {
   @GetMapping("/numbers")
   @Operation(summary = "좌석 번호 목록 조회", description = "좌석 ID 목록에 해당하는 좌석 번호를 조회합니다.")
   public ResponseEntity<ApiResponse<List<SeatNumberResponse>>> getSeatNumbers(
-      @RequestParam List<Long> seatIds) {
+      @RequestParam @Size(min = 1, max = 120) List<Long> seatIds) {
     List<SeatNumberResponse> response = seatFacade.getSeatNumbers(seatIds);
     return ApiResponse.onSuccess(SuccessStatus.OK, response);
   }
