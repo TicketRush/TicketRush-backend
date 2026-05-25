@@ -36,6 +36,12 @@ public class Payment extends AutoIdBaseEntity {
   @Column(nullable = false)
   private PaymentStatus status; // 결제 상태 (PENDING, COMPLETED 등)
 
+  @Column(length = 200)
+  private String paymentKey; // PG사 발급 결제 키
+
+  @Column(length = 100)
+  private String approvalNumber; // PG사 응답 승인 번호 / 거래 식별자
+
   private LocalDateTime paidAt; // 결제 완료 시점
 
   @Builder
@@ -44,11 +50,15 @@ public class Payment extends AutoIdBaseEntity {
       PaymentProvider provider,
       Long amount,
       PaymentStatus status,
+      String paymentKey,
+      String approvalNumber,
       LocalDateTime paidAt) {
     this.bookingId = bookingId;
     this.provider = provider;
     this.amount = amount;
     this.status = status;
+    this.paymentKey = paymentKey;
+    this.approvalNumber = approvalNumber;
     this.paidAt = paidAt;
   }
 }

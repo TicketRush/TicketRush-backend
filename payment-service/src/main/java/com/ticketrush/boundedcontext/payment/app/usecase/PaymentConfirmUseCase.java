@@ -5,7 +5,7 @@ import com.ticketrush.boundedcontext.payment.app.dto.response.PaymentConfirmResp
 import com.ticketrush.boundedcontext.payment.app.support.PaymentEventPublisher;
 import com.ticketrush.boundedcontext.payment.domain.entity.Payment;
 import com.ticketrush.boundedcontext.payment.domain.types.PaymentStatus;
-import com.ticketrush.boundedcontext.payment.out.apiclient.PaymentApprovalClient;
+import com.ticketrush.boundedcontext.payment.out.apiclient.PaymentApprovalClientRouter;
 import com.ticketrush.boundedcontext.payment.out.apiclient.PaymentApprovalRequest;
 import com.ticketrush.boundedcontext.payment.out.apiclient.PaymentApprovalResponse;
 import com.ticketrush.boundedcontext.payment.out.repository.PaymentRepository;
@@ -21,7 +21,7 @@ import org.springframework.transaction.annotation.Transactional;
 public class PaymentConfirmUseCase {
 
   private final PaymentRepository paymentRepository;
-  private final PaymentApprovalClient paymentApprovalClient;
+  private final PaymentApprovalClientRouter paymentApprovalClientRouter;
   private final PaymentEventPublisher paymentEventPublisher;
 
   public PaymentConfirmResponse execute(Long userId, PaymentConfirmRequest request) {
@@ -30,10 +30,16 @@ public class PaymentConfirmUseCase {
       throw new BusinessException(ErrorStatus.PAYMENT_ALREADY_COMPLETED);
     }
 
+    String orderId = generateOrderId(request.bookingId());
+
     PaymentApprovalResponse approval =
-        paymentApprovalClient.approve(
+        paymentApprovalClientRouter.approve(
             new PaymentApprovalRequest(
-                request.provider(), request.paymentKey(), request.bookingId(), request.amount()));
+                request.provider(),
+                request.paymentKey(),
+                orderId,
+                request.bookingId(),
+                request.amount()));
 
     if (!request.amount().equals(approval.approvedAmount())) {
       throw new BusinessException(ErrorStatus.PAYMENT_AMOUNT_MISMATCH);
@@ -45,6 +51,8 @@ public class PaymentConfirmUseCase {
             .provider(request.provider())
             .amount(approval.approvedAmount())
             .status(PaymentStatus.COMPLETED)
+            .paymentKey(request.paymentKey())
+            .approvalNumber(approval.approvalNumber())
             .paidAt(approval.approvedAt())
             .build();
 
@@ -59,5 +67,10 @@ public class PaymentConfirmUseCase {
         saved.getPaidAt());
 
     return PaymentConfirmResponse.from(saved);
+  }
+
+  /* Toss orderId 규격(6~64자, 영문/숫자/_/-)을 만족하기 위해 zero-padding 한다. */
+  private String generateOrderId(Long bookingId) {
+    return "BKG-%07d".formatted(bookingId);
   }
 }
