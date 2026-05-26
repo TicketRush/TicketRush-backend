@@ -10,6 +10,7 @@ import static org.springframework.test.web.client.response.MockRestResponseCreat
 import static org.springframework.test.web.client.response.MockRestResponseCreators.withStatus;
 import static org.springframework.test.web.client.response.MockRestResponseCreators.withSuccess;
 
+import com.fasterxml.jackson.databind.ObjectMapper;
 import com.ticketrush.boundedcontext.payment.domain.types.PaymentProvider;
 import com.ticketrush.boundedcontext.payment.out.apiclient.PaymentApprovalRequest;
 import com.ticketrush.boundedcontext.payment.out.apiclient.PaymentApprovalResponse;
@@ -35,7 +36,7 @@ class TossPaymentApprovalClientTest {
   void setUp() {
     RestClient.Builder builder = RestClient.builder().baseUrl(BASE_URL);
     mockServer = MockRestServiceServer.bindTo(builder).build();
-    client = new TossPaymentApprovalClient(builder.build());
+    client = new TossPaymentApprovalClient(builder.build(), new ObjectMapper());
   }
 
   @Test
@@ -74,15 +75,75 @@ class TossPaymentApprovalClientTest {
   }
 
   @Test
-  @DisplayName("Toss가 4xx를 반환하면 PAYMENT_502_001 예외가 발생한다")
-  void approve_fails_when_pg_returns_4xx() {
+  @DisplayName("Toss 4xx + ALREADY_PROCESSED_PAYMENT → PAYMENT_ALREADY_COMPLETED")
+  void approve_maps_already_processed_payment() {
+    expect4xxWithCode("ALREADY_PROCESSED_PAYMENT");
+
+    assertApproveThrows(ErrorStatus.PAYMENT_ALREADY_COMPLETED);
+
+    mockServer.verify();
+  }
+
+  @Test
+  @DisplayName("Toss 4xx + NOT_FOUND_PAYMENT_SESSION → PAYMENT_SESSION_NOT_FOUND")
+  void approve_maps_not_found_payment_session() {
+    expect4xxWithCode("NOT_FOUND_PAYMENT_SESSION");
+
+    assertApproveThrows(ErrorStatus.PAYMENT_SESSION_NOT_FOUND);
+
+    mockServer.verify();
+  }
+
+  @Test
+  @DisplayName("Toss 4xx + INVALID_CARD_NUMBER → PAYMENT_CARD_REJECTED (prefix 매칭)")
+  void approve_maps_invalid_card_prefix() {
+    expect4xxWithCode("INVALID_CARD_NUMBER");
+
+    assertApproveThrows(ErrorStatus.PAYMENT_CARD_REJECTED);
+
+    mockServer.verify();
+  }
+
+  @Test
+  @DisplayName("Toss 4xx + EXCEED_MAX_DAILY_PAYMENT_COUNT → PAYMENT_LIMIT_EXCEEDED (prefix 매칭)")
+  void approve_maps_exceed_max_daily_payment_prefix() {
+    expect4xxWithCode("EXCEED_MAX_DAILY_PAYMENT_COUNT");
+
+    assertApproveThrows(ErrorStatus.PAYMENT_LIMIT_EXCEEDED);
+
+    mockServer.verify();
+  }
+
+  @Test
+  @DisplayName("Toss 4xx + FORBIDDEN_REQUEST → PAYMENT_PG_AUTH_FAILED")
+  void approve_maps_forbidden_request() {
+    expect4xxWithCode("FORBIDDEN_REQUEST");
+
+    assertApproveThrows(ErrorStatus.PAYMENT_PG_AUTH_FAILED);
+
+    mockServer.verify();
+  }
+
+  @Test
+  @DisplayName("Toss 4xx + 미정의 코드 → PAYMENT_APPROVAL_FAILED 폴백")
+  void approve_falls_back_for_unknown_code() {
+    expect4xxWithCode("SOME_UNDEFINED_TOSS_CODE");
+
+    assertApproveThrows(ErrorStatus.PAYMENT_APPROVAL_FAILED);
+
+    mockServer.verify();
+  }
+
+  private void expect4xxWithCode(String tossCode) {
     mockServer
         .expect(requestTo(CONFIRM_URL))
         .andRespond(
             withStatus(org.springframework.http.HttpStatus.BAD_REQUEST)
                 .contentType(MediaType.APPLICATION_JSON)
-                .body("{\"code\":\"ALREADY_PROCESSED_PAYMENT\"}"));
+                .body("{\"code\":\"" + tossCode + "\",\"message\":\"테스트 거절 메시지\"}"));
+  }
 
+  private void assertApproveThrows(ErrorStatus expected) {
     assertThatThrownBy(
             () ->
                 client.approve(
@@ -90,9 +151,7 @@ class TossPaymentApprovalClientTest {
                         PaymentProvider.TOSS, "pgKey_xyz", "BKG-0000100", 100L, 55_000L)))
         .isInstanceOf(BusinessException.class)
         .extracting("errorStatus")
-        .isEqualTo(ErrorStatus.PAYMENT_APPROVAL_FAILED);
-
-    mockServer.verify();
+        .isEqualTo(expected);
   }
 
   @Test

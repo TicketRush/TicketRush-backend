@@ -1,11 +1,13 @@
 package com.ticketrush.boundedcontext.payment.out.apiclient.toss;
 
+import com.fasterxml.jackson.databind.ObjectMapper;
 import com.ticketrush.boundedcontext.payment.domain.types.PaymentProvider;
 import com.ticketrush.boundedcontext.payment.out.apiclient.PaymentApprovalClient;
 import com.ticketrush.boundedcontext.payment.out.apiclient.PaymentApprovalRequest;
 import com.ticketrush.boundedcontext.payment.out.apiclient.PaymentApprovalResponse;
 import com.ticketrush.global.exception.BusinessException;
 import com.ticketrush.global.status.ErrorStatus;
+import java.io.IOException;
 import java.time.LocalDateTime;
 import java.time.ZoneId;
 import lombok.extern.slf4j.Slf4j;
@@ -14,6 +16,7 @@ import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.core.annotation.Order;
 import org.springframework.http.HttpStatusCode;
 import org.springframework.http.MediaType;
+import org.springframework.http.client.ClientHttpResponse;
 import org.springframework.stereotype.Component;
 import org.springframework.web.client.ResourceAccessException;
 import org.springframework.web.client.RestClient;
@@ -34,9 +37,12 @@ public class TossPaymentApprovalClient implements PaymentApprovalClient {
   private static final String CONFIRM_PATH = "/v1/payments/confirm";
 
   private final RestClient restClient;
+  private final ObjectMapper objectMapper;
 
-  public TossPaymentApprovalClient(@Qualifier("tossPaymentRestClient") RestClient restClient) {
+  public TossPaymentApprovalClient(
+      @Qualifier("tossPaymentRestClient") RestClient restClient, ObjectMapper objectMapper) {
     this.restClient = restClient;
+    this.objectMapper = objectMapper;
   }
 
   @Override
@@ -60,12 +66,18 @@ public class TossPaymentApprovalClient implements PaymentApprovalClient {
               .onStatus(
                   HttpStatusCode::is4xxClientError,
                   (req, res) -> {
+                    TossErrorResponse errorBody = readErrorBody(res);
+                    String tossCode = errorBody == null ? null : errorBody.code();
+                    TossErrorCode mapped = TossErrorCode.from(tossCode);
                     log.warn(
-                        "[PG-TOSS] 결제 승인 거절. status={}, orderId={}, bookingId={}",
+                        "[PG-TOSS] 결제 승인 거절. status={}, tossCode={}, mapped={}, "
+                            + "orderId={}, bookingId={}",
                         res.getStatusCode(),
+                        tossCode,
+                        mapped,
                         request.orderId(),
                         request.bookingId());
-                    throw new BusinessException(ErrorStatus.PAYMENT_APPROVAL_FAILED);
+                    throw new BusinessException(mapped.getErrorStatus());
                   })
               .onStatus(
                   HttpStatusCode::is5xxServerError,
@@ -126,6 +138,14 @@ public class TossPaymentApprovalClient implements PaymentApprovalClient {
           request.bookingId(),
           e.getMessage());
       throw new BusinessException(ErrorStatus.PAYMENT_PG_COMMUNICATION_FAILED);
+    }
+  }
+
+  private TossErrorResponse readErrorBody(ClientHttpResponse response) {
+    try {
+      return objectMapper.readValue(response.getBody(), TossErrorResponse.class);
+    } catch (IOException e) {
+      return null;
     }
   }
 }
