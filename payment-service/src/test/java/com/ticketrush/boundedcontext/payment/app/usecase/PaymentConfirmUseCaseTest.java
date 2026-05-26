@@ -14,7 +14,7 @@ import com.ticketrush.boundedcontext.payment.app.support.PaymentEventPublisher;
 import com.ticketrush.boundedcontext.payment.domain.entity.Payment;
 import com.ticketrush.boundedcontext.payment.domain.types.PaymentProvider;
 import com.ticketrush.boundedcontext.payment.domain.types.PaymentStatus;
-import com.ticketrush.boundedcontext.payment.out.apiclient.PaymentApprovalClient;
+import com.ticketrush.boundedcontext.payment.out.apiclient.PaymentApprovalClientRouter;
 import com.ticketrush.boundedcontext.payment.out.apiclient.PaymentApprovalRequest;
 import com.ticketrush.boundedcontext.payment.out.apiclient.PaymentApprovalResponse;
 import com.ticketrush.boundedcontext.payment.out.repository.PaymentRepository;
@@ -34,7 +34,7 @@ import org.mockito.junit.jupiter.MockitoExtension;
 class PaymentConfirmUseCaseTest {
 
   @Mock private PaymentRepository paymentRepository;
-  @Mock private PaymentApprovalClient paymentApprovalClient;
+  @Mock private PaymentApprovalClientRouter paymentApprovalClientRouter;
   @Mock private PaymentEventPublisher paymentEventPublisher;
 
   @InjectMocks private PaymentConfirmUseCase paymentConfirmUseCase;
@@ -48,15 +48,16 @@ class PaymentConfirmUseCaseTest {
     Long seatId = 200L;
     Long amount = 55_000L;
     String paymentKey = "pgKey_xyz";
+    String approvalNumber = "APR-123";
     Long savedPaymentId = 999L;
     LocalDateTime approvedAt = LocalDateTime.of(2025, 1, 15, 10, 0);
     PaymentConfirmRequest request =
-        new PaymentConfirmRequest(bookingId, seatId, PaymentProvider.KAKAO, amount, paymentKey);
+        new PaymentConfirmRequest(bookingId, seatId, PaymentProvider.TOSS, amount, paymentKey);
 
     given(paymentRepository.existsByBookingIdAndStatus(bookingId, PaymentStatus.COMPLETED))
         .willReturn(false);
-    given(paymentApprovalClient.approve(any()))
-        .willReturn(new PaymentApprovalResponse("APR-123", amount, approvedAt));
+    given(paymentApprovalClientRouter.approve(any()))
+        .willReturn(new PaymentApprovalResponse(approvalNumber, amount, approvedAt));
     given(paymentRepository.save(any(Payment.class)))
         .willAnswer(
             invocation -> {
@@ -75,10 +76,11 @@ class PaymentConfirmUseCaseTest {
 
     ArgumentCaptor<PaymentApprovalRequest> approvalCaptor =
         ArgumentCaptor.forClass(PaymentApprovalRequest.class);
-    verify(paymentApprovalClient).approve(approvalCaptor.capture());
+    verify(paymentApprovalClientRouter).approve(approvalCaptor.capture());
     PaymentApprovalRequest sentApproval = approvalCaptor.getValue();
-    assertThat(sentApproval.provider()).isEqualTo(PaymentProvider.KAKAO);
+    assertThat(sentApproval.provider()).isEqualTo(PaymentProvider.TOSS);
     assertThat(sentApproval.paymentKey()).isEqualTo(paymentKey);
+    assertThat(sentApproval.orderId()).isEqualTo("BKG-0000100");
     assertThat(sentApproval.bookingId()).isEqualTo(bookingId);
     assertThat(sentApproval.amount()).isEqualTo(amount);
 
@@ -86,9 +88,11 @@ class PaymentConfirmUseCaseTest {
     verify(paymentRepository).save(paymentCaptor.capture());
     Payment savedPayment = paymentCaptor.getValue();
     assertThat(savedPayment.getBookingId()).isEqualTo(bookingId);
-    assertThat(savedPayment.getProvider()).isEqualTo(PaymentProvider.KAKAO);
+    assertThat(savedPayment.getProvider()).isEqualTo(PaymentProvider.TOSS);
     assertThat(savedPayment.getAmount()).isEqualTo(amount);
     assertThat(savedPayment.getStatus()).isEqualTo(PaymentStatus.COMPLETED);
+    assertThat(savedPayment.getPaymentKey()).isEqualTo(paymentKey);
+    assertThat(savedPayment.getApprovalNumber()).isEqualTo(approvalNumber);
     assertThat(savedPayment.getPaidAt()).isEqualTo(approvedAt);
 
     verify(paymentEventPublisher)
@@ -117,7 +121,7 @@ class PaymentConfirmUseCaseTest {
 
     given(paymentRepository.existsByBookingIdAndStatus(bookingId, PaymentStatus.COMPLETED))
         .willReturn(false);
-    given(paymentApprovalClient.approve(any()))
+    given(paymentApprovalClientRouter.approve(any()))
         .willReturn(new PaymentApprovalResponse("APR-123", approvedAmount, LocalDateTime.now()));
 
     // when & then
@@ -149,7 +153,7 @@ class PaymentConfirmUseCaseTest {
         .extracting("errorStatus")
         .isEqualTo(ErrorStatus.PAYMENT_ALREADY_COMPLETED);
 
-    verify(paymentApprovalClient, never()).approve(any());
+    verify(paymentApprovalClientRouter, never()).approve(any());
     verify(paymentRepository, never()).save(any(Payment.class));
     verify(paymentEventPublisher, never())
         .publishConfirmed(any(), any(), any(), any(), any(), any());
