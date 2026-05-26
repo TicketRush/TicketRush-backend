@@ -87,13 +87,26 @@ public class TossPaymentApprovalClient implements PaymentApprovalClient {
         throw new BusinessException(ErrorStatus.PAYMENT_PG_COMMUNICATION_FAILED);
       }
 
-      LocalDateTime approvedAt =
-          response.approvedAt() == null
-              ? LocalDateTime.now()
-              : response.approvedAt().atZoneSameInstant(ZoneId.systemDefault()).toLocalDateTime();
+      if (response.approvedAt() == null) {
+        log.error(
+            "[PG-TOSS] 응답에 approvedAt 누락. orderId={}, bookingId={}",
+            request.orderId(),
+            request.bookingId());
+        throw new BusinessException(ErrorStatus.PAYMENT_PG_COMMUNICATION_FAILED);
+      }
 
       String approvalNumber =
           response.transactionKey() != null ? response.transactionKey() : response.paymentKey();
+      if (approvalNumber == null) {
+        log.error(
+            "[PG-TOSS] 응답에 transactionKey, paymentKey 모두 누락. orderId={}, bookingId={}",
+            request.orderId(),
+            request.bookingId());
+        throw new BusinessException(ErrorStatus.PAYMENT_PG_COMMUNICATION_FAILED);
+      }
+
+      LocalDateTime approvedAt =
+          response.approvedAt().atZoneSameInstant(ZoneId.systemDefault()).toLocalDateTime();
 
       return new PaymentApprovalResponse(approvalNumber, response.totalAmount(), approvedAt);
 

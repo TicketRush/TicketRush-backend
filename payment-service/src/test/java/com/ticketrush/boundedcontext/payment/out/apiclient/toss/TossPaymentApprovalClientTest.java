@@ -132,6 +132,65 @@ class TossPaymentApprovalClientTest {
   }
 
   @Test
+  @DisplayName("응답에 approvedAt이 없으면 통신 실패로 처리한다")
+  void approve_fails_when_approved_at_is_missing() {
+    String responseBody =
+        """
+        {
+          "paymentKey": "pgKey_xyz",
+          "orderId": "BKG-0000100",
+          "transactionKey": "TX-ABC123",
+          "totalAmount": 55000,
+          "status": "DONE"
+        }
+        """;
+
+    mockServer
+        .expect(requestTo(CONFIRM_URL))
+        .andRespond(withSuccess(responseBody, MediaType.APPLICATION_JSON));
+
+    assertThatThrownBy(
+            () ->
+                client.approve(
+                    new PaymentApprovalRequest(
+                        PaymentProvider.TOSS, "pgKey_xyz", "BKG-0000100", 100L, 55_000L)))
+        .isInstanceOf(BusinessException.class)
+        .extracting("errorStatus")
+        .isEqualTo(ErrorStatus.PAYMENT_PG_COMMUNICATION_FAILED);
+
+    mockServer.verify();
+  }
+
+  @Test
+  @DisplayName("응답에 transactionKey와 paymentKey가 모두 없으면 통신 실패로 처리한다")
+  void approve_fails_when_both_identifiers_are_missing() {
+    String responseBody =
+        """
+        {
+          "orderId": "BKG-0000100",
+          "totalAmount": 55000,
+          "status": "DONE",
+          "approvedAt": "2026-05-22T10:00:00+09:00"
+        }
+        """;
+
+    mockServer
+        .expect(requestTo(CONFIRM_URL))
+        .andRespond(withSuccess(responseBody, MediaType.APPLICATION_JSON));
+
+    assertThatThrownBy(
+            () ->
+                client.approve(
+                    new PaymentApprovalRequest(
+                        PaymentProvider.TOSS, "pgKey_xyz", "BKG-0000100", 100L, 55_000L)))
+        .isInstanceOf(BusinessException.class)
+        .extracting("errorStatus")
+        .isEqualTo(ErrorStatus.PAYMENT_PG_COMMUNICATION_FAILED);
+
+    mockServer.verify();
+  }
+
+  @Test
   @DisplayName("TOSS provider만 지원한다")
   void supports_toss_only() {
     assertThat(client.supports(PaymentProvider.TOSS)).isTrue();
