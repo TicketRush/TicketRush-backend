@@ -5,6 +5,7 @@ import java.time.LocalDateTime;
 import java.util.UUID;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
+import org.springframework.context.annotation.Profile;
 import org.springframework.core.annotation.Order;
 import org.springframework.stereotype.Component;
 
@@ -13,9 +14,12 @@ import org.springframework.stereotype.Component;
  *
  * <p>{@code payment.pg.stub.enabled=true} 일 때만 활성화된다. {@link PaymentApprovalClientRouter}에서 실제
  * provider별 구현체가 우선 선택되도록 {@link Order} 우선순위는 가장 낮게 둔다.
+ *
+ * <p>운영(prod) 프로파일에서는 환경변수 설정과 무관하게 절대 활성화되지 않는다.
  */
 @Slf4j
 @Component
+@Profile("!prod")
 @Order(Integer.MAX_VALUE)
 @ConditionalOnProperty(
     prefix = "payment.pg.stub",
