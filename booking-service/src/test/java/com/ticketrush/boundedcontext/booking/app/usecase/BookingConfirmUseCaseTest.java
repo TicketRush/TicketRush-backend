@@ -1,5 +1,6 @@
 package com.ticketrush.boundedcontext.booking.app.usecase;
 
+import static com.ticketrush.global.status.ErrorStatus.BOOKING_EXPIRED;
 import static com.ticketrush.global.status.ErrorStatus.BOOKING_NOT_FOUND;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
@@ -85,5 +86,27 @@ class BookingConfirmUseCaseTest {
         .isInstanceOf(BusinessException.class)
         .extracting(ex -> ((BusinessException) ex).getErrorStatus())
         .isEqualTo(BOOKING_NOT_FOUND);
+  }
+
+  @Test
+  @DisplayName("실패: 만료된 예매는 확정할 수 없다")
+  void execute_fail_when_booking_expired() {
+    // given
+    Long bookingId = 1L;
+    Booking booking =
+        Booking.builder()
+            .userId(1L)
+            .performanceId(2L)
+            .seatId(3L)
+            .bookingNumber("BOOK-1234")
+            .bookingStatus(BookingStatus.EXPIRED)
+            .build();
+    given(bookingRepository.findById(bookingId)).willReturn(Optional.of(booking));
+
+    // when & then
+    assertThatThrownBy(() -> bookingConfirmUseCase.execute(bookingId, LocalDateTime.now()))
+        .isInstanceOf(BusinessException.class)
+        .extracting(ex -> ((BusinessException) ex).getErrorStatus())
+        .isEqualTo(BOOKING_EXPIRED);
   }
 }

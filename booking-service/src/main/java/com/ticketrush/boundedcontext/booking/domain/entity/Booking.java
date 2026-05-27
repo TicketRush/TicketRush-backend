@@ -72,6 +72,10 @@ public class Booking extends AutoIdBaseEntity {
       return;
     }
 
+    if (this.bookingStatus == BookingStatus.EXPIRED) {
+      throw new BusinessException(ErrorStatus.BOOKING_EXPIRED);
+    }
+
     if (this.bookingStatus != BookingStatus.PENDING) {
       throw new BusinessException(ErrorStatus.BOOKING_CONFIRM_NOT_ALLOWED);
     }
