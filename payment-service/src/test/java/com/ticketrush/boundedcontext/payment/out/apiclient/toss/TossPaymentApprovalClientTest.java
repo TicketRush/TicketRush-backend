@@ -115,6 +115,36 @@ class TossPaymentApprovalClientTest {
   }
 
   @Test
+  @DisplayName("Toss 4xx + EXCEED_MAX_PAYMENT_AMOUNT → PAYMENT_LIMIT_EXCEEDED")
+  void approve_maps_exceed_max_payment_amount() {
+    expect4xxWithCode("EXCEED_MAX_PAYMENT_AMOUNT");
+
+    assertApproveThrows(ErrorStatus.PAYMENT_LIMIT_EXCEEDED);
+
+    mockServer.verify();
+  }
+
+  @Test
+  @DisplayName("Toss 4xx + EXCEED_MAX_ONE_DAY_AMOUNT → PAYMENT_LIMIT_EXCEEDED")
+  void approve_maps_exceed_max_one_day_amount() {
+    expect4xxWithCode("EXCEED_MAX_ONE_DAY_AMOUNT");
+
+    assertApproveThrows(ErrorStatus.PAYMENT_LIMIT_EXCEEDED);
+
+    mockServer.verify();
+  }
+
+  @Test
+  @DisplayName("Toss 4xx + EXCEED_MAX_MONTHLY_PAYMENT_AMOUNT → PAYMENT_LIMIT_EXCEEDED")
+  void approve_maps_exceed_max_monthly_payment_amount() {
+    expect4xxWithCode("EXCEED_MAX_MONTHLY_PAYMENT_AMOUNT");
+
+    assertApproveThrows(ErrorStatus.PAYMENT_LIMIT_EXCEEDED);
+
+    mockServer.verify();
+  }
+
+  @Test
   @DisplayName("Toss 4xx + FORBIDDEN_REQUEST → PAYMENT_PG_AUTH_FAILED")
   void approve_maps_forbidden_request() {
     expect4xxWithCode("FORBIDDEN_REQUEST");
