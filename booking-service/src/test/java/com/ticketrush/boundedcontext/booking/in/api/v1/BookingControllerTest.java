@@ -161,7 +161,8 @@ class BookingControllerTest {
                 .header("X-Internal-Token", INTERNAL_TOKEN)
                 .header("X-User-Id", userId)
                 .header("X-User-Role", "USER"))
-        .andExpect(status().isNoContent());
+        .andExpect(status().isOk())
+        .andExpect(jsonPath("$.is_success").value(true));
 
     verify(bookingFacade).cancelMyBooking(eq(userId), eq(bookingNumber));
   }

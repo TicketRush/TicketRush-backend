@@ -70,6 +70,23 @@ class SeatReleaseReservationUseCaseTest {
   }
 
   @Test
+  @DisplayName("성공: 좌석의 예매 번호가 없으면 레거시 데이터로 보고 반환을 허용한다")
+  void execute_success_when_seat_booking_number_is_null() {
+    // given
+    Long seatId = 1L;
+    Seat seat =
+        Seat.builder().performanceId(1L).seatNumber("A-1").seatStatus(SeatStatus.SOLD).build();
+    given(seatRepository.findById(seatId)).willReturn(Optional.of(seat));
+
+    // when
+    seatReleaseReservationUseCase.execute(seatId, "BOOK-1234");
+
+    // then
+    assertThat(seat.getSeatStatus()).isEqualTo(SeatStatus.AVAILABLE);
+    verify(seatStatusEventPublisher).publishAfterCommit(seat);
+  }
+
+  @Test
   @DisplayName("성공: 이벤트의 예매 번호와 좌석의 예매 번호가 다르면 스킵한다")
   void execute_skip_when_booking_number_mismatched() {
     // given

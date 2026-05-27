@@ -81,6 +81,6 @@ public class BookingController {
       @AuthenticationPrincipal CustomUserDetails user, @PathVariable String bookingNumber) {
     bookingFacade.cancelMyBooking(user.getUserId(), bookingNumber);
 
-    return ApiResponse.onSuccess(SuccessStatus.NO_CONTENT);
+    return ApiResponse.onSuccess(SuccessStatus.OK);
   }
 }

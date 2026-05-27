@@ -31,12 +31,17 @@ public class SeatReleaseReservationUseCase {
       return;
     }
 
-    if (!Objects.equals(seat.getBookingNumber(), bookingNumber)) {
+    if (seat.getBookingNumber() != null
+        && !Objects.equals(seat.getBookingNumber(), bookingNumber)) {
       log.warn(
           "예매 취소 좌석 반환 스킵: 좌석의 예매 번호가 이벤트와 다릅니다. seatId: {}, eventBookingNumber: {}",
           seatId,
           bookingNumber);
       return;
+    }
+
+    if (seat.getBookingNumber() == null) {
+      log.warn("예매 취소 좌석 반환: 좌석의 예매 번호가 없어 이벤트 예매 번호 검증을 생략합니다. seatId: {}", seatId);
     }
 
     seat.releaseReservation();
