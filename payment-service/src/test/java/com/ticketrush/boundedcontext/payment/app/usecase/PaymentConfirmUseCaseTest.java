@@ -88,6 +88,7 @@ class PaymentConfirmUseCaseTest {
     verify(paymentRepository).save(paymentCaptor.capture());
     Payment savedPayment = paymentCaptor.getValue();
     assertThat(savedPayment.getBookingId()).isEqualTo(bookingId);
+    assertThat(savedPayment.getUserId()).isEqualTo(userId);
     assertThat(savedPayment.getProvider()).isEqualTo(PaymentProvider.TOSS);
     assertThat(savedPayment.getAmount()).isEqualTo(amount);
     assertThat(savedPayment.getStatus()).isEqualTo(PaymentStatus.COMPLETED);

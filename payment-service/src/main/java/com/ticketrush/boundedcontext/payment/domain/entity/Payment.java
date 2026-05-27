@@ -25,6 +25,9 @@ public class Payment extends AutoIdBaseEntity {
   @Column(nullable = false)
   private Long bookingId;
 
+  /* userId는 #207 시점 신규 도입. 기존 결제 row 호환을 위해 nullable. backfill 후 NOT NULL 전환 예정. */
+  private Long userId;
+
   @Enumerated(EnumType.STRING)
   @Column(nullable = false)
   private PaymentProvider provider; // 결제 수단 (예: KAKAO, NAVER)
@@ -47,6 +50,7 @@ public class Payment extends AutoIdBaseEntity {
   @Builder
   private Payment(
       Long bookingId,
+      Long userId,
       PaymentProvider provider,
       Long amount,
       PaymentStatus status,
@@ -54,6 +58,7 @@ public class Payment extends AutoIdBaseEntity {
       String approvalNumber,
       LocalDateTime paidAt) {
     this.bookingId = bookingId;
+    this.userId = userId;
     this.provider = provider;
     this.amount = amount;
     this.status = status;
