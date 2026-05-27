@@ -141,6 +141,9 @@ public enum ErrorStatus {
   PAYMENT_AMOUNT_MISMATCH(HttpStatus.BAD_REQUEST, "PAYMENT_400_001", "결제 금액이 일치하지 않습니다."),
   PAYMENT_PROVIDER_NOT_SUPPORTED(HttpStatus.BAD_REQUEST, "PAYMENT_400_002", "지원하지 않는 결제 수단입니다."),
 
+  // Payment 404
+  PAYMENT_NOT_FOUND(HttpStatus.NOT_FOUND, "PAYMENT_404_002", "결제 내역을 찾을 수 없습니다."),
+
   // Payment 409
   PAYMENT_ALREADY_COMPLETED(HttpStatus.CONFLICT, "PAYMENT_409_001", "이미 결제가 완료된 예매입니다."),
 
