@@ -140,8 +140,8 @@ public enum ErrorStatus {
   // Payment 400
   PAYMENT_AMOUNT_MISMATCH(HttpStatus.BAD_REQUEST, "PAYMENT_400_001", "결제 금액이 일치하지 않습니다."),
   PAYMENT_PROVIDER_NOT_SUPPORTED(HttpStatus.BAD_REQUEST, "PAYMENT_400_002", "지원하지 않는 결제 수단입니다."),
-  PAYMENT_CARD_REJECTED(
-      HttpStatus.BAD_REQUEST, "PAYMENT_400_003", "카드 결제가 거절되었습니다. 다른 카드로 시도해주세요."),
+  PAYMENT_METHOD_REJECTED(
+      HttpStatus.BAD_REQUEST, "PAYMENT_400_003", "결제가 거절되었습니다. 다른 결제수단으로 시도해주세요."),
   PAYMENT_LIMIT_EXCEEDED(HttpStatus.BAD_REQUEST, "PAYMENT_400_004", "카드 한도 또는 결제 한도를 초과했습니다."),
 
   // Payment 404

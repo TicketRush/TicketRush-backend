@@ -95,11 +95,11 @@ class TossPaymentApprovalClientTest {
   }
 
   @Test
-  @DisplayName("Toss 4xx + INVALID_CARD_NUMBER → PAYMENT_CARD_REJECTED (prefix 매칭)")
+  @DisplayName("Toss 4xx + INVALID_CARD_NUMBER → PAYMENT_METHOD_REJECTED (prefix 매칭)")
   void approve_maps_invalid_card_prefix() {
     expect4xxWithCode("INVALID_CARD_NUMBER");
 
-    assertApproveThrows(ErrorStatus.PAYMENT_CARD_REJECTED);
+    assertApproveThrows(ErrorStatus.PAYMENT_METHOD_REJECTED);
 
     mockServer.verify();
   }
