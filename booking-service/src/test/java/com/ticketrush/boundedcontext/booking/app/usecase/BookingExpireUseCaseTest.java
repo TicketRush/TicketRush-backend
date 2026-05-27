@@ -2,16 +2,21 @@ package com.ticketrush.boundedcontext.booking.app.usecase;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.BDDMockito.given;
+import static org.mockito.Mockito.any;
 import static org.mockito.Mockito.eq;
+import static org.mockito.Mockito.lenient;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 
 import com.ticketrush.boundedcontext.booking.domain.types.BookingStatus;
 import com.ticketrush.boundedcontext.booking.out.repository.BookingRepository;
+import com.ticketrush.shared.booking.event.BookingExpiredEvent;
 import java.time.Clock;
 import java.time.Instant;
 import java.time.LocalDateTime;
 import java.time.ZoneId;
 import java.util.List;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -19,7 +24,10 @@ import org.mockito.ArgumentCaptor;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.data.domain.Pageable;
+import org.springframework.transaction.support.TransactionCallback;
+import org.springframework.transaction.support.TransactionTemplate;
 
 @ExtendWith(MockitoExtension.class)
 class BookingExpireUseCaseTest {
@@ -31,7 +39,18 @@ class BookingExpireUseCaseTest {
 
   @Mock private BookingRepository bookingRepository;
 
+  @Mock private TransactionTemplate transactionTemplate;
+
+  @Mock private ApplicationEventPublisher applicationEventPublisher;
+
   @Mock private Clock clock;
+
+  @BeforeEach
+  void setUp() {
+    lenient()
+        .when(transactionTemplate.execute(any()))
+        .thenAnswer(invocation -> executeTransaction(invocation.getArgument(0)));
+  }
 
   @Test
   @DisplayName("성공: 생성 후 5분이 지난 PENDING 예매를 EXPIRED로 전이한다")
@@ -47,8 +66,8 @@ class BookingExpireUseCaseTest {
                 org.mockito.ArgumentMatchers.any(Pageable.class)))
         .willReturn(bookingIds);
     given(
-            bookingRepository.expirePendingBookingsByIds(
-                bookingIds, BookingStatus.PENDING, BookingStatus.EXPIRED))
+            bookingRepository.expirePendingBookingById(
+                1L, BookingStatus.PENDING, BookingStatus.EXPIRED))
         .willReturn(1);
 
     // when
@@ -56,6 +75,8 @@ class BookingExpireUseCaseTest {
 
     // then
     assertThat(result).isEqualTo(1);
+    verify(applicationEventPublisher)
+        .publishEvent(new BookingExpiredEvent(1L, LocalDateTime.of(2026, 5, 27, 15, 0)));
   }
 
   @Test
@@ -119,13 +140,17 @@ class BookingExpireUseCaseTest {
                 org.mockito.ArgumentMatchers.any(Pageable.class)))
         .willReturn(firstBatch, secondBatch);
     given(
-            bookingRepository.expirePendingBookingsByIds(
-                firstBatch, BookingStatus.PENDING, BookingStatus.EXPIRED))
-        .willReturn(100);
+            bookingRepository.expirePendingBookingById(
+                org.mockito.ArgumentMatchers.longThat(id -> id >= 1 && id <= 100),
+                eq(BookingStatus.PENDING),
+                eq(BookingStatus.EXPIRED)))
+        .willReturn(1);
     given(
-            bookingRepository.expirePendingBookingsByIds(
-                secondBatch, BookingStatus.PENDING, BookingStatus.EXPIRED))
-        .willReturn(3);
+            bookingRepository.expirePendingBookingById(
+                org.mockito.ArgumentMatchers.longThat(id -> id >= 101 && id <= 103),
+                eq(BookingStatus.PENDING),
+                eq(BookingStatus.EXPIRED)))
+        .willReturn(1);
 
     // when
     int result = bookingExpireUseCase.execute();
@@ -148,15 +173,29 @@ class BookingExpireUseCaseTest {
                 org.mockito.ArgumentMatchers.any(Pageable.class)))
         .willReturn(bookingIds);
     given(
-            bookingRepository.expirePendingBookingsByIds(
-                bookingIds, BookingStatus.PENDING, BookingStatus.EXPIRED))
-        .willReturn(2);
+            bookingRepository.expirePendingBookingById(
+                1L, BookingStatus.PENDING, BookingStatus.EXPIRED))
+        .willReturn(1);
+    given(
+            bookingRepository.expirePendingBookingById(
+                2L, BookingStatus.PENDING, BookingStatus.EXPIRED))
+        .willReturn(0);
+    given(
+            bookingRepository.expirePendingBookingById(
+                3L, BookingStatus.PENDING, BookingStatus.EXPIRED))
+        .willReturn(1);
 
     // when
     int result = bookingExpireUseCase.execute();
 
     // then
     assertThat(result).isEqualTo(2);
+    verify(applicationEventPublisher)
+        .publishEvent(new BookingExpiredEvent(1L, LocalDateTime.of(2026, 5, 27, 15, 0)));
+    verify(applicationEventPublisher)
+        .publishEvent(new BookingExpiredEvent(3L, LocalDateTime.of(2026, 5, 27, 15, 0)));
+    verify(applicationEventPublisher, never())
+        .publishEvent(new BookingExpiredEvent(2L, LocalDateTime.of(2026, 5, 27, 15, 0)));
   }
 
   private List<Long> createBookingIds(long startInclusive, long endInclusive) {
@@ -165,5 +204,9 @@ class BookingExpireUseCaseTest {
       bookingIds.add(id);
     }
     return bookingIds;
+  }
+
+  private Integer executeTransaction(TransactionCallback<Integer> callback) {
+    return callback.doInTransaction(null);
   }
 }
