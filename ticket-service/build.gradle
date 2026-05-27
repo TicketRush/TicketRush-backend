@@ -48,6 +48,10 @@ dependencies {
 
 	// swagger
 	implementation 'org.springdoc:springdoc-openapi-starter-webmvc-ui:3.0.1'
+
+	// Kafka
+	implementation 'org.springframework.boot:spring-boot-starter-kafka'
+	testImplementation 'org.springframework.boot:spring-boot-starter-kafka-test'
 }
 
 dependencyManagement {
