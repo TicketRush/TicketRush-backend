@@ -1,4 +1,4 @@
-package com.ticketrush.user.app.usecase;
+package com.ticketrush.boundedcontext.app.usecase;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;

@@ -32,7 +32,7 @@ public class UserServiceClient {
 
   private static final String SOCIAL_LOGIN_PATH = "/api/v1/user/social-login";
   private static final String EMAIL_EXISTS_PATH = "/api/v1/user/exists/email?email={email}";
-  private static final String USER_AUTH_INFO_PATH = "/api/v1/user/auth-info";
+  private static final String USER_AUTH_INFO_PATH = "/api/v1/internal/user/auth-info";
 
   public UserServiceSocialLoginResponse socialLogin(UserServiceSocialLoginRequest request) {
 
