@@ -30,9 +30,9 @@ public interface BookingRepository extends JpaRepository<Booking, Long> {
   @Modifying(clearAutomatically = true, flushAutomatically = true)
   @Query(
       "UPDATE Booking b SET b.bookingStatus = :expiredStatus "
-          + "WHERE b.id IN :bookingIds AND b.bookingStatus = :pendingStatus")
-  int expirePendingBookingsByIds(
-      @Param("bookingIds") List<Long> bookingIds,
+          + "WHERE b.id = :bookingId AND b.bookingStatus = :pendingStatus")
+  int expirePendingBookingById(
+      @Param("bookingId") Long bookingId,
       @Param("pendingStatus") BookingStatus pendingStatus,
       @Param("expiredStatus") BookingStatus expiredStatus);
 }
