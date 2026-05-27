@@ -27,7 +27,11 @@ public class BookingCreateUseCase {
 
     BookingCreatedEvent event =
         new BookingCreatedEvent(
-            savedBooking.getId(), request.seatId(), request.performanceId(), request.userId());
+            savedBooking.getId(),
+            request.bookingNumber(),
+            request.seatId(),
+            request.performanceId(),
+            request.userId());
 
     applicationEventPublisher.publishEvent(event);
 

@@ -3,7 +3,8 @@ package com.ticketrush.shared.booking.event;
 import com.ticketrush.global.event.DomainEvent;
 import com.ticketrush.global.event.EventUtils;
 
-public record BookingCreatedEvent(Long bookingId, Long seatId, Long performanceId, Long userId)
+public record BookingCreatedEvent(
+    Long bookingId, String bookingNumber, Long seatId, Long performanceId, Long userId)
     implements DomainEvent {
 
   @Override

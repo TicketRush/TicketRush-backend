@@ -50,7 +50,8 @@ public class BookingCreatedEventListener {
       BookingCreatedEvent event =
           jsonConverter.deserialize(envelope.payload(), BookingCreatedEvent.class);
 
-      seatFacade.tryLockSeat(event.bookingId(), event.seatId(), event.userId());
+      seatFacade.tryLockSeat(
+          event.bookingId(), event.bookingNumber(), event.seatId(), event.userId());
 
     } catch (Exception e) {
       log.error("이벤트 처리 중 에러 발생. 재시도를 위해 멱등성 키를 롤백합니다. eventId: {}", eventId, e);

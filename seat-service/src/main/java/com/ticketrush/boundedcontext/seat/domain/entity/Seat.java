@@ -39,21 +39,30 @@ public class Seat extends AutoIdBaseEntity {
   @Column(name = "hold_expired_at")
   private LocalDateTime holdExpiredAt;
 
+  @Column(name = "booking_number", length = 50)
+  private String bookingNumber;
+
   @Builder
   public Seat(
       Long seatLayoutId,
       Long performanceId,
       String seatNumber,
       SeatStatus seatStatus,
-      LocalDateTime holdExpiredAt) {
+      LocalDateTime holdExpiredAt,
+      String bookingNumber) {
     this.seatLayoutId = seatLayoutId;
     this.performanceId = performanceId;
     this.seatNumber = seatNumber;
     this.seatStatus = seatStatus;
     this.holdExpiredAt = holdExpiredAt;
+    this.bookingNumber = bookingNumber;
   }
 
   public void hold(LocalDateTime expiredAt) {
+    hold(expiredAt, null);
+  }
+
+  public void hold(LocalDateTime expiredAt, String bookingNumber) {
     // 1. 상태 검증
     if (this.seatStatus != SeatStatus.AVAILABLE) {
       throw new BusinessException(ErrorStatus.SEAT_NOT_AVAILABLE);
@@ -67,12 +76,22 @@ public class Seat extends AutoIdBaseEntity {
     // 3. 상태 업데이트
     this.seatStatus = SeatStatus.HOLD;
     this.holdExpiredAt = expiredAt;
+    this.bookingNumber = bookingNumber;
   }
 
   public void releaseHold() {
     if (this.seatStatus == SeatStatus.HOLD) {
       this.seatStatus = SeatStatus.AVAILABLE;
       this.holdExpiredAt = null;
+      this.bookingNumber = null;
+    }
+  }
+
+  public void releaseReservation() {
+    if (this.seatStatus == SeatStatus.HOLD || this.seatStatus == SeatStatus.SOLD) {
+      this.seatStatus = SeatStatus.AVAILABLE;
+      this.holdExpiredAt = null;
+      this.bookingNumber = null;
     }
   }
 }

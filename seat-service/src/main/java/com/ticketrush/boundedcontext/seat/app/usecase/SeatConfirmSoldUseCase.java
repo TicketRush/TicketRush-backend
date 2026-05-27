@@ -24,7 +24,8 @@ public class SeatConfirmSoldUseCase {
 
   @Transactional
   public void execute(String bookingNumber, Long seatId) {
-    int updatedCount = seatRepository.confirmSoldById(seatId, SeatStatus.HOLD, SeatStatus.SOLD);
+    int updatedCount =
+        seatRepository.confirmSoldById(seatId, bookingNumber, SeatStatus.HOLD, SeatStatus.SOLD);
 
     if (updatedCount == 1) {
       Seat seat =
