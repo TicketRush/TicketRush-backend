@@ -1,6 +1,5 @@
 package com.ticketrush.boundedcontext.booking.app.usecase;
 
-import com.ticketrush.boundedcontext.booking.domain.entity.Booking;
 import com.ticketrush.boundedcontext.booking.domain.types.BookingStatus;
 import com.ticketrush.boundedcontext.booking.out.repository.BookingRepository;
 import java.time.Clock;
@@ -8,6 +7,8 @@ import java.time.LocalDateTime;
 import java.util.List;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -19,6 +20,7 @@ public class BookingExpireUseCase {
 
   private static final int PAYMENT_WAIT_MINUTES = 5;
   private static final int EXPIRE_BATCH_SIZE = 100;
+  private static final Pageable EXPIRE_BATCH_REQUEST = PageRequest.of(0, EXPIRE_BATCH_SIZE);
 
   private final BookingRepository bookingRepository;
   private final Clock clock;
@@ -28,21 +30,19 @@ public class BookingExpireUseCase {
     int totalExpiredCount = 0;
 
     while (true) {
-      List<Booking> expiredPendingBookings =
-          bookingRepository.findTop100ByBookingStatusAndCreatedAtLessThanEqual(
-              BookingStatus.PENDING, cutoff);
+      List<Long> expiredPendingBookingIds =
+          bookingRepository.findExpiredPendingBookingIds(
+              BookingStatus.PENDING, cutoff, EXPIRE_BATCH_REQUEST);
 
-      if (expiredPendingBookings.isEmpty()) {
+      if (expiredPendingBookingIds.isEmpty()) {
         break;
       }
 
-      for (Booking booking : expiredPendingBookings) {
-        if (booking.expire()) {
-          totalExpiredCount++;
-        }
-      }
+      totalExpiredCount +=
+          bookingRepository.expirePendingBookingsByIds(
+              expiredPendingBookingIds, BookingStatus.PENDING, BookingStatus.EXPIRED);
 
-      if (expiredPendingBookings.size() < EXPIRE_BATCH_SIZE) {
+      if (expiredPendingBookingIds.size() < EXPIRE_BATCH_SIZE) {
         break;
       }
     }

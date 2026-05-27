@@ -5,14 +5,12 @@ import static org.mockito.BDDMockito.given;
 import static org.mockito.Mockito.eq;
 import static org.mockito.Mockito.verify;
 
-import com.ticketrush.boundedcontext.booking.domain.entity.Booking;
 import com.ticketrush.boundedcontext.booking.domain.types.BookingStatus;
 import com.ticketrush.boundedcontext.booking.out.repository.BookingRepository;
 import java.time.Clock;
 import java.time.Instant;
 import java.time.LocalDateTime;
 import java.time.ZoneId;
-import java.util.ArrayList;
 import java.util.List;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -21,6 +19,7 @@ import org.mockito.ArgumentCaptor;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.data.domain.Pageable;
 
 @ExtendWith(MockitoExtension.class)
 class BookingExpireUseCaseTest {
@@ -38,27 +37,25 @@ class BookingExpireUseCaseTest {
   @DisplayName("성공: 생성 후 5분이 지난 PENDING 예매를 EXPIRED로 전이한다")
   void execute_success() {
     // given
-    Booking booking =
-        Booking.builder()
-            .userId(1L)
-            .performanceId(2L)
-            .seatId(3L)
-            .bookingNumber("BOOK-1234")
-            .bookingStatus(BookingStatus.PENDING)
-            .build();
+    List<Long> bookingIds = List.of(1L);
     given(clock.instant()).willReturn(NOW);
     given(clock.getZone()).willReturn(ZONE_ID);
     given(
-            bookingRepository.findTop100ByBookingStatusAndCreatedAtLessThanEqual(
-                BookingStatus.PENDING, LocalDateTime.of(2026, 5, 27, 14, 55)))
-        .willReturn(List.of(booking));
+            bookingRepository.findExpiredPendingBookingIds(
+                eq(BookingStatus.PENDING),
+                eq(LocalDateTime.of(2026, 5, 27, 14, 55)),
+                org.mockito.ArgumentMatchers.any(Pageable.class)))
+        .willReturn(bookingIds);
+    given(
+            bookingRepository.expirePendingBookingsByIds(
+                bookingIds, BookingStatus.PENDING, BookingStatus.EXPIRED))
+        .willReturn(1);
 
     // when
     int result = bookingExpireUseCase.execute();
 
     // then
     assertThat(result).isEqualTo(1);
-    assertThat(booking.getBookingStatus()).isEqualTo(BookingStatus.EXPIRED);
   }
 
   @Test
@@ -68,8 +65,10 @@ class BookingExpireUseCaseTest {
     given(clock.instant()).willReturn(NOW);
     given(clock.getZone()).willReturn(ZONE_ID);
     given(
-            bookingRepository.findTop100ByBookingStatusAndCreatedAtLessThanEqual(
-                BookingStatus.PENDING, LocalDateTime.of(2026, 5, 27, 14, 55)))
+            bookingRepository.findExpiredPendingBookingIds(
+                eq(BookingStatus.PENDING),
+                eq(LocalDateTime.of(2026, 5, 27, 14, 55)),
+                org.mockito.ArgumentMatchers.any(Pageable.class)))
         .willReturn(List.of());
 
     // when
@@ -78,8 +77,10 @@ class BookingExpireUseCaseTest {
     // then
     ArgumentCaptor<LocalDateTime> cutoffCaptor = ArgumentCaptor.forClass(LocalDateTime.class);
     verify(bookingRepository)
-        .findTop100ByBookingStatusAndCreatedAtLessThanEqual(
-            eq(BookingStatus.PENDING), cutoffCaptor.capture());
+        .findExpiredPendingBookingIds(
+            eq(BookingStatus.PENDING),
+            cutoffCaptor.capture(),
+            org.mockito.ArgumentMatchers.any(Pageable.class));
     assertThat(cutoffCaptor.getValue()).isEqualTo(LocalDateTime.of(2026, 5, 27, 14, 55));
   }
 
@@ -90,8 +91,10 @@ class BookingExpireUseCaseTest {
     given(clock.instant()).willReturn(NOW);
     given(clock.getZone()).willReturn(ZONE_ID);
     given(
-            bookingRepository.findTop100ByBookingStatusAndCreatedAtLessThanEqual(
-                BookingStatus.PENDING, LocalDateTime.of(2026, 5, 27, 14, 55)))
+            bookingRepository.findExpiredPendingBookingIds(
+                eq(BookingStatus.PENDING),
+                eq(LocalDateTime.of(2026, 5, 27, 14, 55)),
+                org.mockito.ArgumentMatchers.any(Pageable.class)))
         .willReturn(List.of());
 
     // when
@@ -105,40 +108,62 @@ class BookingExpireUseCaseTest {
   @DisplayName("성공: 만료 대상이 100건 이상이면 같은 실행에서 다음 배치를 이어서 처리한다")
   void execute_processes_next_batch_when_first_batch_is_full() {
     // given
-    List<Booking> firstBatch = createPendingBookings(100);
-    List<Booking> secondBatch = createPendingBookings(3);
+    List<Long> firstBatch = createBookingIds(1, 100);
+    List<Long> secondBatch = createBookingIds(101, 103);
     given(clock.instant()).willReturn(NOW);
     given(clock.getZone()).willReturn(ZONE_ID);
     given(
-            bookingRepository.findTop100ByBookingStatusAndCreatedAtLessThanEqual(
-                BookingStatus.PENDING, LocalDateTime.of(2026, 5, 27, 14, 55)))
+            bookingRepository.findExpiredPendingBookingIds(
+                eq(BookingStatus.PENDING),
+                eq(LocalDateTime.of(2026, 5, 27, 14, 55)),
+                org.mockito.ArgumentMatchers.any(Pageable.class)))
         .willReturn(firstBatch, secondBatch);
+    given(
+            bookingRepository.expirePendingBookingsByIds(
+                firstBatch, BookingStatus.PENDING, BookingStatus.EXPIRED))
+        .willReturn(100);
+    given(
+            bookingRepository.expirePendingBookingsByIds(
+                secondBatch, BookingStatus.PENDING, BookingStatus.EXPIRED))
+        .willReturn(3);
 
     // when
     int result = bookingExpireUseCase.execute();
 
     // then
     assertThat(result).isEqualTo(103);
-    assertThat(firstBatch)
-        .extracting(Booking::getBookingStatus)
-        .containsOnly(BookingStatus.EXPIRED);
-    assertThat(secondBatch)
-        .extracting(Booking::getBookingStatus)
-        .containsOnly(BookingStatus.EXPIRED);
   }
 
-  private List<Booking> createPendingBookings(int count) {
-    List<Booking> bookings = new ArrayList<>();
-    for (int i = 0; i < count; i++) {
-      bookings.add(
-          Booking.builder()
-              .userId(1L)
-              .performanceId(2L)
-              .seatId((long) i)
-              .bookingNumber("BOOK-" + i)
-              .bookingStatus(BookingStatus.PENDING)
-              .build());
+  @Test
+  @DisplayName("성공: 조회된 예매가 경합으로 이미 PENDING이 아니면 조건부 UPDATE 결과만 집계한다")
+  void execute_counts_only_conditionally_updated_rows() {
+    // given
+    List<Long> bookingIds = List.of(1L, 2L, 3L);
+    given(clock.instant()).willReturn(NOW);
+    given(clock.getZone()).willReturn(ZONE_ID);
+    given(
+            bookingRepository.findExpiredPendingBookingIds(
+                eq(BookingStatus.PENDING),
+                eq(LocalDateTime.of(2026, 5, 27, 14, 55)),
+                org.mockito.ArgumentMatchers.any(Pageable.class)))
+        .willReturn(bookingIds);
+    given(
+            bookingRepository.expirePendingBookingsByIds(
+                bookingIds, BookingStatus.PENDING, BookingStatus.EXPIRED))
+        .willReturn(2);
+
+    // when
+    int result = bookingExpireUseCase.execute();
+
+    // then
+    assertThat(result).isEqualTo(2);
+  }
+
+  private List<Long> createBookingIds(long startInclusive, long endInclusive) {
+    java.util.ArrayList<Long> bookingIds = new java.util.ArrayList<>();
+    for (long id = startInclusive; id <= endInclusive; id++) {
+      bookingIds.add(id);
     }
-    return bookings;
+    return bookingIds;
   }
 }

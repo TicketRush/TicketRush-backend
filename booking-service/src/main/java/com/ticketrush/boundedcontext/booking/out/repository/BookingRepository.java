@@ -7,6 +7,9 @@ import java.util.List;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Modifying;
+import org.springframework.data.jpa.repository.Query;
+import org.springframework.data.repository.query.Param;
 
 public interface BookingRepository extends JpaRepository<Booking, Long> {
 
@@ -15,6 +18,21 @@ public interface BookingRepository extends JpaRepository<Booking, Long> {
 
   long countByUserIdAndBookingStatus(Long userId, BookingStatus bookingStatus);
 
-  List<Booking> findTop100ByBookingStatusAndCreatedAtLessThanEqual(
-      BookingStatus bookingStatus, LocalDateTime cutoff);
+  @Query(
+      "SELECT b.id FROM Booking b "
+          + "WHERE b.bookingStatus = :bookingStatus AND b.createdAt <= :cutoff "
+          + "ORDER BY b.id ASC")
+  List<Long> findExpiredPendingBookingIds(
+      @Param("bookingStatus") BookingStatus bookingStatus,
+      @Param("cutoff") LocalDateTime cutoff,
+      Pageable pageable);
+
+  @Modifying(clearAutomatically = true, flushAutomatically = true)
+  @Query(
+      "UPDATE Booking b SET b.bookingStatus = :expiredStatus "
+          + "WHERE b.id IN :bookingIds AND b.bookingStatus = :pendingStatus")
+  int expirePendingBookingsByIds(
+      @Param("bookingIds") List<Long> bookingIds,
+      @Param("pendingStatus") BookingStatus pendingStatus,
+      @Param("expiredStatus") BookingStatus expiredStatus);
 }
