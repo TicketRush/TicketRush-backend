@@ -17,7 +17,7 @@ public record PaymentDetailResponse(
     @Schema(description = "결제 완료 시각") LocalDateTime paidAt,
     @Schema(description = "PG사 발급 결제 키") String paymentKey,
     @Schema(description = "PG사 응답 승인 번호") String approvalNumber,
-    @Schema(description = "환불 정보 (환불이 없으면 null)") RefundResponse refund) {
+    @Schema(description = "환불 정보 (환불이 있는 경우에만 포함)") RefundResponse refund) {
 
   public static PaymentDetailResponse of(Payment payment, Refund refund) {
     return new PaymentDetailResponse(

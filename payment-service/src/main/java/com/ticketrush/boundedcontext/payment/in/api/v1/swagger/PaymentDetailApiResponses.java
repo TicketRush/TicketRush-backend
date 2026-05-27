@@ -42,8 +42,7 @@ import java.lang.annotation.Target;
                               "status": "COMPLETED",
                               "paid_at": "2025-01-15 10:00:00",
                               "payment_key": "tgen_xxx",
-                              "approval_number": "00000001",
-                              "refund": null
+                              "approval_number": "00000001"
                             }
                           }
                           """))),
