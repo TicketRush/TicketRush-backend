@@ -19,8 +19,10 @@ import org.springframework.data.domain.Page;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.validation.annotation.Validated;
+import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.ModelAttribute;
+import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
@@ -71,5 +73,14 @@ public class BookingController {
     BookingCountResponse response = bookingFacade.countMyBookings(user.getUserId(), status);
 
     return ApiResponse.onSuccess(SuccessStatus.OK, response);
+  }
+
+  @Operation(summary = "내 예매 취소", description = "로그인한 사용자의 확정 예매를 취소하고 좌석 반환 이벤트를 발행합니다.")
+  @DeleteMapping("/{bookingNumber}")
+  public ResponseEntity<ApiResponse<Void>> cancelMyBooking(
+      @AuthenticationPrincipal CustomUserDetails user, @PathVariable String bookingNumber) {
+    bookingFacade.cancelMyBooking(user.getUserId(), bookingNumber);
+
+    return ApiResponse.onSuccess(SuccessStatus.NO_CONTENT);
   }
 }

@@ -63,6 +63,13 @@ public class Booking extends AutoIdBaseEntity {
     this.bookingStatus = BookingStatus.CANCELED;
   }
 
+  public void cancelConfirmed() {
+    if (this.bookingStatus != BookingStatus.CONFIRMED) {
+      throw new BusinessException(ErrorStatus.BOOKING_CANCEL_NOT_ALLOWED);
+    }
+    this.bookingStatus = BookingStatus.CANCELED;
+  }
+
   public void confirm(LocalDateTime confirmedAt) {
     if (this.bookingStatus == BookingStatus.CONFIRMED) {
       if (this.confirmedAt == null) {
