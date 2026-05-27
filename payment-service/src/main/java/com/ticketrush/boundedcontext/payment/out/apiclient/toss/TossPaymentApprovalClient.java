@@ -145,6 +145,7 @@ public class TossPaymentApprovalClient implements PaymentApprovalClient {
     try {
       return objectMapper.readValue(response.getBody(), TossErrorResponse.class);
     } catch (IOException e) {
+      log.warn("[PG-TOSS] 에러 응답 body 파싱 실패. message={}", e.getMessage());
       return null;
     }
   }
