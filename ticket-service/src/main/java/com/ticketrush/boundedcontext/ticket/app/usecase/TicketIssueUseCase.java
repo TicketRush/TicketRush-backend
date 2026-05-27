@@ -1,16 +1,16 @@
 package com.ticketrush.boundedcontext.ticket.app.usecase;
 
+import com.ticketrush.boundedcontext.ticket.app.dto.response.TicketIssueResponse;
 import com.ticketrush.boundedcontext.ticket.domain.entity.Ticket;
 import com.ticketrush.boundedcontext.ticket.domain.policy.TicketTokenGenerator;
 import com.ticketrush.boundedcontext.ticket.domain.policy.TicketTokenHasher;
 import com.ticketrush.boundedcontext.ticket.domain.types.TicketStatus;
 import com.ticketrush.boundedcontext.ticket.out.repository.TicketRepository;
 import lombok.RequiredArgsConstructor;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.stereotype.Service;
-import org.springframework.transaction.annotation.Transactional;
 
 @Service
-@Transactional
 @RequiredArgsConstructor
 public class TicketIssueUseCase {
 
@@ -18,9 +18,9 @@ public class TicketIssueUseCase {
   private final TicketTokenGenerator ticketTokenGenerator;
   private final TicketTokenHasher ticketTokenHasher;
 
-  public void execute(Long bookingId) {
+  public TicketIssueResponse execute(Long bookingId) {
     if (ticketRepository.existsByBookingId(bookingId)) {
-      return;
+      return TicketIssueResponse.alreadyIssued();
     }
 
     String token = ticketTokenGenerator.generate();
@@ -31,6 +31,11 @@ public class TicketIssueUseCase {
             .ticketStatus(TicketStatus.UNUSED)
             .build();
 
-    ticketRepository.save(ticket);
+    try {
+      ticketRepository.saveAndFlush(ticket);
+      return TicketIssueResponse.issued(token);
+    } catch (DataIntegrityViolationException e) {
+      return TicketIssueResponse.alreadyIssued();
+    }
   }
 }
