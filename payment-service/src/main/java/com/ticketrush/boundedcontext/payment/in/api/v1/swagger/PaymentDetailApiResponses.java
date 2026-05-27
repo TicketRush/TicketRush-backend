@@ -41,7 +41,6 @@ import java.lang.annotation.Target;
                               "amount": 55000,
                               "status": "COMPLETED",
                               "paid_at": "2025-01-15 10:00:00",
-                              "payment_key": "tgen_xxx",
                               "approval_number": "00000001"
                             }
                           }

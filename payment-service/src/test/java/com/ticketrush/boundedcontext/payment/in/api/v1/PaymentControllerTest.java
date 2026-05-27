@@ -221,7 +221,6 @@ class PaymentControllerTest {
             55_000L,
             PaymentStatus.COMPLETED,
             LocalDateTime.of(2026, 5, 1, 10, 0),
-            "pgKey_xyz",
             "APR-001",
             null);
     given(paymentFacade.getPayment(userId, paymentId)).willReturn(response);
@@ -236,7 +235,8 @@ class PaymentControllerTest {
         .andExpect(status().isOk())
         .andExpect(jsonPath("$.is_success").value(true))
         .andExpect(jsonPath("$.result.payment_id").value(1))
-        .andExpect(jsonPath("$.result.payment_key").value("pgKey_xyz"))
+        .andExpect(jsonPath("$.result.approval_number").value("APR-001"))
+        .andExpect(jsonPath("$.result.payment_key").doesNotExist())
         .andExpect(jsonPath("$.result.refund").doesNotExist());
   }
 

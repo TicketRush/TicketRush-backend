@@ -51,7 +51,7 @@ class PaymentGetDetailUseCaseTest {
     // then
     assertThat(response.paymentId()).isEqualTo(paymentId);
     assertThat(response.bookingId()).isEqualTo(bookingId);
-    assertThat(response.paymentKey()).isEqualTo("pgKey_xyz");
+    assertThat(response.approvalNumber()).isEqualTo("APR-001");
     assertThat(response.refund()).isNotNull();
     assertThat(response.refund().refundId()).isEqualTo(7L);
     assertThat(response.refund().status()).isEqualTo(RefundStatus.COMPLETED);

@@ -15,7 +15,6 @@ public record PaymentDetailResponse(
     @Schema(description = "결제 금액", example = "55000") Long amount,
     @Schema(description = "결제 상태", example = "COMPLETED") PaymentStatus status,
     @Schema(description = "결제 완료 시각") LocalDateTime paidAt,
-    @Schema(description = "PG사 발급 결제 키") String paymentKey,
     @Schema(description = "PG사 응답 승인 번호") String approvalNumber,
     @Schema(description = "환불 정보 (환불이 있는 경우에만 포함)") RefundResponse refund) {
 
@@ -27,7 +26,6 @@ public record PaymentDetailResponse(
         payment.getAmount(),
         payment.getStatus(),
         payment.getPaidAt(),
-        payment.getPaymentKey(),
         payment.getApprovalNumber(),
         refund == null ? null : RefundResponse.from(refund));
   }
