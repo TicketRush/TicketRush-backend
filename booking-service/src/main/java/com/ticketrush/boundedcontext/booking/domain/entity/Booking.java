@@ -83,13 +83,4 @@ public class Booking extends AutoIdBaseEntity {
     this.bookingStatus = BookingStatus.CONFIRMED;
     this.confirmedAt = confirmedAt;
   }
-
-  public boolean expire() {
-    if (this.bookingStatus != BookingStatus.PENDING) {
-      return false;
-    }
-
-    this.bookingStatus = BookingStatus.EXPIRED;
-    return true;
-  }
 }
