@@ -56,15 +56,16 @@ public class Booking extends AutoIdBaseEntity {
     this.bookingStatus = bookingStatus;
   }
 
-  public void cancel() {
-    if (this.bookingStatus != BookingStatus.PENDING) {
-      throw new BusinessException(ErrorStatus.BOOKING_CANCEL_NOT_ALLOWED);
-    }
-    this.bookingStatus = BookingStatus.CANCELED;
+  public void cancelPendingPayment() {
+    cancelIfStatus(BookingStatus.PENDING);
   }
 
-  public void cancelConfirmed() {
-    if (this.bookingStatus != BookingStatus.CONFIRMED) {
+  public void cancelConfirmedByUser() {
+    cancelIfStatus(BookingStatus.CONFIRMED);
+  }
+
+  private void cancelIfStatus(BookingStatus allowedStatus) {
+    if (this.bookingStatus != allowedStatus) {
       throw new BusinessException(ErrorStatus.BOOKING_CANCEL_NOT_ALLOWED);
     }
     this.bookingStatus = BookingStatus.CANCELED;

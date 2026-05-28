@@ -25,7 +25,7 @@ public class BookingCancelMyBookingUseCase {
             .findByBookingNumberAndUserId(bookingNumber, userId)
             .orElseThrow(() -> new BusinessException(ErrorStatus.BOOKING_NOT_FOUND));
 
-    booking.cancelConfirmed();
+    booking.cancelConfirmedByUser();
 
     eventPublisher.publish(
         new BookingCanceledEvent(

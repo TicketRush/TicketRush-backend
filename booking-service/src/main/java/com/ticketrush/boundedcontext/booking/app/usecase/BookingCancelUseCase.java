@@ -23,7 +23,7 @@ public class BookingCancelUseCase {
       return;
     }
 
-    booking.cancel();
+    booking.cancelPendingPayment();
 
     log.debug("보상 트랜잭션 정상 처리 : 예매가 취소(CANCELED) 되었습니다. bookingId: {}", bookingId);
   }
