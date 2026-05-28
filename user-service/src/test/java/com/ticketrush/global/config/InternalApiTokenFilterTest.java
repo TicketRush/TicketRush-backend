@@ -15,25 +15,28 @@ import com.ticketrush.boundedcontext.user.app.facade.UserFacade;
 import com.ticketrush.boundedcontext.user.in.api.v1.InternalUserController;
 import com.ticketrush.boundedcontext.user.in.api.v1.UserController;
 import com.ticketrush.global.security.GatewayHeaderFilter;
+import com.ticketrush.support.WebMvcSliceTest;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.boot.context.properties.EnableConfigurationProperties;
-import org.springframework.boot.webmvc.test.autoconfigure.WebMvcTest;
 import org.springframework.context.annotation.Import;
 import org.springframework.http.MediaType;
 import org.springframework.test.context.TestPropertySource;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
 
-@WebMvcTest(controllers = {InternalUserController.class, UserController.class})
-@Import({SecurityConfig.class, InternalApiTokenFilter.class, GatewayHeaderFilter.class})
+@WebMvcSliceTest({InternalUserController.class, UserController.class})
+@Import({
+  SecurityConfig.class,
+  InternalApiTokenFilter.class,
+  GatewayHeaderFilter.class,
+  CustomSecurityProperties.class
+})
 @TestPropertySource(
     properties = {
       "custom.security.internal-token=test-internal-token",
       "custom.security.permit-all=false"
     })
-@EnableConfigurationProperties(CustomSecurityProperties.class)
 class InternalApiTokenFilterTest {
 
   private static final String INTERNAL_TOKEN_HEADER = "X-Internal-Token";
