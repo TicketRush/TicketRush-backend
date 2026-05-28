@@ -2,14 +2,18 @@ package com.ticketrush.shared.booking.event;
 
 import com.ticketrush.global.event.DomainEvent;
 import com.ticketrush.global.event.EventUtils;
+import java.time.LocalDateTime;
 
-public record BookingCreatedEvent(
-    Long bookingId, String bookingNumber, Long seatId, Long performanceId, Long userId)
+public record BookingCanceledEvent(
+    Long bookingId, String bookingNumber, Long seatId, Long userId, LocalDateTime canceledAt)
     implements DomainEvent {
+
+  public static final String TOPIC = "booking-canceled-topic";
+  public static final String EVENT_NAME = "BookingCanceledEvent";
 
   @Override
   public String topic() {
-    return "booking-created-topic";
+    return TOPIC;
   }
 
   @Override
@@ -19,7 +23,7 @@ public record BookingCreatedEvent(
 
   @Override
   public String eventName() {
-    return "BookingCreatedEvent";
+    return EVENT_NAME;
   }
 
   @Override

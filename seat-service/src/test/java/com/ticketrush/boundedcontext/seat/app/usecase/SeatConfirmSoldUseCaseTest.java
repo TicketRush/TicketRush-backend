@@ -37,14 +37,15 @@ class SeatConfirmSoldUseCaseTest {
     Seat seat =
         Seat.builder().performanceId(1L).seatNumber("A-1").seatStatus(SeatStatus.SOLD).build();
 
-    given(seatRepository.confirmSoldById(seatId, SeatStatus.HOLD, SeatStatus.SOLD)).willReturn(1);
+    given(seatRepository.confirmSoldById(seatId, bookingNumber, SeatStatus.HOLD, SeatStatus.SOLD))
+        .willReturn(1);
     given(seatRepository.findById(seatId)).willReturn(Optional.of(seat));
 
     // when
     seatConfirmSoldUseCase.execute(bookingNumber, seatId);
 
     // then
-    verify(seatRepository).confirmSoldById(seatId, SeatStatus.HOLD, SeatStatus.SOLD);
+    verify(seatRepository).confirmSoldById(seatId, bookingNumber, SeatStatus.HOLD, SeatStatus.SOLD);
     verify(seatRepository).findById(seatId);
     verify(seatStatusEventPublisher).publishAfterCommit(seat);
     verify(seatUnlockUseCase).forceRelease(seatId);
@@ -55,17 +56,19 @@ class SeatConfirmSoldUseCaseTest {
   void execute_fail_seat_not_found() {
     // given
     Long seatId = 1L;
+    String bookingNumber = "X7B29-KLPW1";
 
-    given(seatRepository.confirmSoldById(seatId, SeatStatus.HOLD, SeatStatus.SOLD)).willReturn(0);
+    given(seatRepository.confirmSoldById(seatId, bookingNumber, SeatStatus.HOLD, SeatStatus.SOLD))
+        .willReturn(0);
     given(seatRepository.existsById(seatId)).willReturn(false);
 
     // when & then
-    assertThatThrownBy(() -> seatConfirmSoldUseCase.execute("X7B29-KLPW1", seatId))
+    assertThatThrownBy(() -> seatConfirmSoldUseCase.execute(bookingNumber, seatId))
         .isInstanceOf(BusinessException.class)
         .extracting("errorStatus")
         .isEqualTo(ErrorStatus.SEAT_NOT_FOUND);
 
-    verify(seatRepository).confirmSoldById(seatId, SeatStatus.HOLD, SeatStatus.SOLD);
+    verify(seatRepository).confirmSoldById(seatId, bookingNumber, SeatStatus.HOLD, SeatStatus.SOLD);
     verify(seatRepository).existsById(seatId);
     verifyNoMoreInteractions(seatRepository, seatUnlockUseCase);
   }
@@ -75,17 +78,19 @@ class SeatConfirmSoldUseCaseTest {
   void execute_fail_seat_not_hold() {
     // given
     Long seatId = 1L;
+    String bookingNumber = "X7B29-KLPW1";
 
-    given(seatRepository.confirmSoldById(seatId, SeatStatus.HOLD, SeatStatus.SOLD)).willReturn(0);
+    given(seatRepository.confirmSoldById(seatId, bookingNumber, SeatStatus.HOLD, SeatStatus.SOLD))
+        .willReturn(0);
     given(seatRepository.existsById(seatId)).willReturn(true);
 
     // when & then
-    assertThatThrownBy(() -> seatConfirmSoldUseCase.execute("X7B29-KLPW1", seatId))
+    assertThatThrownBy(() -> seatConfirmSoldUseCase.execute(bookingNumber, seatId))
         .isInstanceOf(BusinessException.class)
         .extracting("errorStatus")
         .isEqualTo(ErrorStatus.SEAT_NOT_AVAILABLE);
 
-    verify(seatRepository).confirmSoldById(seatId, SeatStatus.HOLD, SeatStatus.SOLD);
+    verify(seatRepository).confirmSoldById(seatId, bookingNumber, SeatStatus.HOLD, SeatStatus.SOLD);
     verify(seatRepository).existsById(seatId);
     verifyNoMoreInteractions(seatRepository, seatUnlockUseCase);
   }

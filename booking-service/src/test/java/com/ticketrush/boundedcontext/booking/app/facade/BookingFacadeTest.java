@@ -13,6 +13,7 @@ import com.ticketrush.boundedcontext.booking.app.dto.request.BookingCreateReques
 import com.ticketrush.boundedcontext.booking.app.dto.response.BookingCountResponse;
 import com.ticketrush.boundedcontext.booking.app.dto.response.BookingPendingResponse;
 import com.ticketrush.boundedcontext.booking.app.dto.response.BookingSummaryResponse;
+import com.ticketrush.boundedcontext.booking.app.usecase.BookingCancelMyBookingUseCase;
 import com.ticketrush.boundedcontext.booking.app.usecase.BookingCountUseCase;
 import com.ticketrush.boundedcontext.booking.app.usecase.BookingCreateUseCase;
 import com.ticketrush.boundedcontext.booking.app.usecase.BookingGetMyBookingsUseCase;
@@ -43,6 +44,7 @@ class BookingFacadeTest {
   @Mock private BookingCreateUseCase bookingCreateUseCase;
   @Mock private BookingGetMyBookingsUseCase bookingGetMyBookingsUseCase;
   @Mock private BookingCountUseCase bookingCountUseCase;
+  @Mock private BookingCancelMyBookingUseCase bookingCancelMyBookingUseCase;
   @Mock private BookingValidateReferencesUseCase bookingValidateReferencesUseCase;
   @Mock private BookingValidateSeatAvailableUseCase bookingValidateSeatAvailableUseCase;
 
@@ -167,5 +169,19 @@ class BookingFacadeTest {
     // then
     assertThat(result).isEqualTo(response);
     verify(bookingCountUseCase).execute(userId, BookingStatus.CONFIRMED);
+  }
+
+  @Test
+  @DisplayName("성공: 회원 예매 취소를 위임한다")
+  void cancelMyBooking_success() {
+    // given
+    Long userId = 1L;
+    String bookingNumber = "BOOK-1234";
+
+    // when
+    bookingFacade.cancelMyBooking(userId, bookingNumber);
+
+    // then
+    verify(bookingCancelMyBookingUseCase).execute(userId, bookingNumber);
   }
 }

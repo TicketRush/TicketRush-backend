@@ -4,6 +4,7 @@ import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.BDDMockito.given;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
@@ -144,6 +145,26 @@ class BookingControllerTest {
         .andExpect(jsonPath("$.result.count").value(3));
 
     verify(bookingFacade).countMyBookings(eq(userId), eq(BookingStatus.CONFIRMED));
+  }
+
+  @Test
+  @DisplayName("인증 principal의 userId로 내 예매 취소를 요청한다")
+  void cancelMyBooking_uses_authenticated_user_id() throws Exception {
+    // given
+    Long userId = 1L;
+    String bookingNumber = "BOOK-1234";
+
+    // when & then
+    mockMvc
+        .perform(
+            delete("/api/v1/booking/{bookingNumber}", bookingNumber)
+                .header("X-Internal-Token", INTERNAL_TOKEN)
+                .header("X-User-Id", userId)
+                .header("X-User-Role", "USER"))
+        .andExpect(status().isOk())
+        .andExpect(jsonPath("$.is_success").value(true));
+
+    verify(bookingFacade).cancelMyBooking(eq(userId), eq(bookingNumber));
   }
 
   @Test

@@ -4,6 +4,7 @@ import com.ticketrush.boundedcontext.booking.app.dto.request.BookingCreateReques
 import com.ticketrush.boundedcontext.booking.app.dto.response.BookingCountResponse;
 import com.ticketrush.boundedcontext.booking.app.dto.response.BookingPendingResponse;
 import com.ticketrush.boundedcontext.booking.app.dto.response.BookingSummaryResponse;
+import com.ticketrush.boundedcontext.booking.app.usecase.BookingCancelMyBookingUseCase;
 import com.ticketrush.boundedcontext.booking.app.usecase.BookingCountUseCase;
 import com.ticketrush.boundedcontext.booking.app.usecase.BookingCreateUseCase;
 import com.ticketrush.boundedcontext.booking.app.usecase.BookingGetMyBookingsUseCase;
@@ -27,6 +28,7 @@ public class BookingFacade {
   private final BookingCreateUseCase bookingCreateUseCase;
   private final BookingGetMyBookingsUseCase bookingGetMyBookingsUseCase;
   private final BookingCountUseCase bookingCountUseCase;
+  private final BookingCancelMyBookingUseCase bookingCancelMyBookingUseCase;
   private final BookingValidateReferencesUseCase bookingValidateReferencesUseCase;
   private final BookingValidateSeatAvailableUseCase bookingValidateSeatAvailableUseCase;
 
@@ -54,5 +56,9 @@ public class BookingFacade {
 
   public BookingCountResponse countMyBookings(Long userId, BookingStatus bookingStatus) {
     return bookingCountUseCase.execute(userId, bookingStatus);
+  }
+
+  public void cancelMyBooking(Long userId, String bookingNumber) {
+    bookingCancelMyBookingUseCase.execute(userId, bookingNumber);
   }
 }

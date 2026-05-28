@@ -11,6 +11,7 @@ import com.ticketrush.boundedcontext.seat.app.usecase.SeatGetSeatLayoutsUseCase;
 import com.ticketrush.boundedcontext.seat.app.usecase.SeatGetStatusCountsUseCase;
 import com.ticketrush.boundedcontext.seat.app.usecase.SeatHoldUseCase;
 import com.ticketrush.boundedcontext.seat.app.usecase.SeatLockUseCase;
+import com.ticketrush.boundedcontext.seat.app.usecase.SeatReleaseBookedSeatUseCase;
 import com.ticketrush.boundedcontext.seat.app.usecase.SeatUnlockUseCase;
 import com.ticketrush.boundedcontext.seat.out.repository.SeatLayoutRepository;
 import com.ticketrush.global.eventpublisher.EventPublisher;
@@ -36,6 +37,7 @@ public class SeatFacade {
   private final SeatConfirmSoldUseCase seatConfirmSoldUseCase;
   private final SeatHoldUseCase seatHoldUseCase;
   private final SeatLockUseCase seatLockUseCase;
+  private final SeatReleaseBookedSeatUseCase seatReleaseBookedSeatUseCase;
   private final SeatUnlockUseCase seatUnlockUseCase;
   private final SeatStatusStreamSubscriber seatStatusStreamSubscriber;
   private final SeatLayoutRepository seatLayoutRepository;
@@ -70,22 +72,22 @@ public class SeatFacade {
     }
   }
 
-  public void holdSeat(Long seatId, LocalDateTime holdExpiredAt) {
-    seatHoldUseCase.execute(seatId, holdExpiredAt);
-  }
-
   public void confirmSold(String bookingNumber, Long seatId) {
     seatConfirmSoldUseCase.execute(bookingNumber, seatId);
   }
 
-  public void tryLockSeat(Long bookingId, Long seatId, Long userId) {
+  public void releaseBookedSeat(Long seatId, String bookingNumber) {
+    seatReleaseBookedSeatUseCase.execute(seatId, bookingNumber);
+  }
+
+  public void tryLockSeat(Long bookingId, String bookingNumber, Long seatId, Long userId) {
     // 1. Redis 락 시도
     Optional<LocalDateTime> holdExpiredAtOpt = seatLockUseCase.execute(seatId, userId);
 
     if (holdExpiredAtOpt.isPresent()) {
       try {
         // 2-A. 성공: Seat DB 상태를 HOLD로 업데이트
-        seatHoldUseCase.execute(seatId, holdExpiredAtOpt.get());
+        seatHoldUseCase.execute(seatId, holdExpiredAtOpt.get(), bookingNumber);
 
       } catch (Exception e) {
         log.error("좌석 DB 업데이트 중 오류 발생. Redis 락 해제 및 보상 이벤트 발행. seatId: {}", seatId, e);

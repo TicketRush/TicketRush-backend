@@ -248,6 +248,7 @@ class SeatRepositoryTest {
             .seatNumber("A1")
             .seatStatus(SeatStatus.HOLD)
             .holdExpiredAt(holdExpiredAt)
+            .bookingNumber("BOOK-1234")
             .build();
 
     Seat availableSeat =
@@ -264,7 +265,8 @@ class SeatRepositoryTest {
 
     // when
     int updatedCount =
-        seatRepository.confirmSoldById(holdSeat1.getId(), SeatStatus.HOLD, SeatStatus.SOLD);
+        seatRepository.confirmSoldById(
+            holdSeat1.getId(), "BOOK-1234", SeatStatus.HOLD, SeatStatus.SOLD);
 
     // then
     assertThat(updatedCount).isEqualTo(1);

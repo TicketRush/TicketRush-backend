@@ -34,7 +34,7 @@ class BookingCancelUseCaseTest {
     bookingCancelUseCase.execute(bookingId);
 
     // then
-    verify(mockBooking).cancel();
+    verify(mockBooking).cancelPendingPayment();
   }
 
   @Test
