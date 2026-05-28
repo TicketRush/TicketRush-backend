@@ -70,8 +70,8 @@ class SeatReleaseReservationUseCaseTest {
   }
 
   @Test
-  @DisplayName("성공: 좌석의 예매 번호가 없으면 레거시 데이터로 보고 반환을 허용한다")
-  void execute_success_when_seat_booking_number_is_null() {
+  @DisplayName("성공: 좌석의 예매 번호가 없으면 안전하게 스킵한다")
+  void execute_skip_when_seat_booking_number_is_null() {
     // given
     Long seatId = 1L;
     Seat seat =
@@ -82,8 +82,8 @@ class SeatReleaseReservationUseCaseTest {
     seatReleaseReservationUseCase.execute(seatId, "BOOK-1234");
 
     // then
-    assertThat(seat.getSeatStatus()).isEqualTo(SeatStatus.AVAILABLE);
-    verify(seatStatusEventPublisher).publishAfterCommit(seat);
+    assertThat(seat.getSeatStatus()).isEqualTo(SeatStatus.SOLD);
+    verifyNoInteractions(seatStatusEventPublisher);
   }
 
   @Test

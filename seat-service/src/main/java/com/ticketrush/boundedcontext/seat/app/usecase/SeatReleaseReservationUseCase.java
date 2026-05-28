@@ -41,7 +41,8 @@ public class SeatReleaseReservationUseCase {
     }
 
     if (seat.getBookingNumber() == null) {
-      log.warn("예매 취소 좌석 반환: 좌석의 예매 번호가 없어 이벤트 예매 번호 검증을 생략합니다. seatId: {}", seatId);
+      log.warn("예매 취소 좌석 반환 스킵: 좌석의 예매 번호가 없어 이벤트 예매 번호를 검증할 수 없습니다. seatId: {}", seatId);
+      return;
     }
 
     seat.releaseReservation();
