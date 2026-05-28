@@ -1,6 +1,5 @@
 package com.ticketrush.global.security;
 
-import com.ticketrush.global.config.SecurityProperties;
 import java.util.ArrayList;
 import java.util.List;
 import lombok.Getter;
@@ -11,16 +10,8 @@ import org.springframework.stereotype.Component;
 @Getter
 @Setter
 @Component
-@ConfigurationProperties(prefix = "custom.security")
-public class AuthSecurityProperties extends SecurityProperties {
+@ConfigurationProperties(prefix = "custom.security.oauth2")
+public class AuthSecurityProperties {
 
-  private String internalToken;
-
-  private Oauth2 oauth2 = new Oauth2();
-
-  @Getter
-  @Setter
-  public static class Oauth2 {
-    private List<String> allowedRedirectDomains = new ArrayList<>();
-  }
+  private List<String> allowedRedirectDomains = new ArrayList<>();
 }
