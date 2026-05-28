@@ -16,7 +16,7 @@ app:
 
 custom:
   security:
-    internal-token: ${GATEWAY_INTERNAL_TOKEN:local-internal-token}
+    internal-token: ${GATEWAY_INTERNAL_TOKEN}
     permit-all: false
     permit-urls:
       # ========== 개발 도구 ==========
