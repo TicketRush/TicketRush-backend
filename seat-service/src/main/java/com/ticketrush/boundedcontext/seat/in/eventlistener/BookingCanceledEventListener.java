@@ -25,7 +25,7 @@ public class BookingCanceledEventListener {
 
     try {
       event = jsonConverter.deserialize(envelope.payload(), BookingCanceledEvent.class);
-      seatFacade.releaseReservation(event.seatId(), event.bookingNumber());
+      seatFacade.releaseBookedSeat(event.seatId(), event.bookingNumber());
     } catch (Exception e) {
       Long bookingId = event != null ? event.bookingId() : null;
       log.error("예매 취소 좌석 반환 이벤트 처리 실패. bookingId: {}", bookingId, e);

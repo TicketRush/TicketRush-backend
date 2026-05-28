@@ -4,6 +4,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.BDDMockito.given;
 import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.verifyNoInteractions;
 
 import com.ticketrush.boundedcontext.seat.app.support.SeatStatusEventPublisher;
 import com.ticketrush.boundedcontext.seat.domain.entity.Seat;
@@ -33,6 +34,7 @@ class SeatHoldUseCaseTest {
   void execute_success() {
     // given
     Long seatId = 1L;
+    String bookingNumber = "BOOK-1234";
     LocalDateTime expiredAt = LocalDateTime.now().plusMinutes(5);
 
     // mock() 대신 실제 Seat 객체 생성 (초기 상태: AVAILABLE)
@@ -47,13 +49,41 @@ class SeatHoldUseCaseTest {
     given(seatRepository.findById(seatId)).willReturn(Optional.of(seat));
 
     // when
-    seatHoldUseCase.execute(seatId, expiredAt);
+    seatHoldUseCase.execute(seatId, expiredAt, bookingNumber);
 
     // then
     // verify(mock) 대신 실제 객체의 상태가 변했는지 직접 확인
     assertThat(seat.getSeatStatus()).isEqualTo(SeatStatus.HOLD);
     assertThat(seat.getHoldExpiredAt()).isEqualTo(expiredAt);
+    assertThat(seat.getBookingNumber()).isEqualTo(bookingNumber);
     verify(seatStatusEventPublisher).publishAfterCommit(seat);
+  }
+
+  @Test
+  @DisplayName("실패: 예매 번호가 없으면 BusinessException(SEAT_BOOKING_NUMBER_REQUIRED)이 발생한다")
+  void execute_fail_booking_number_required() {
+    // given
+    Long seatId = 1L;
+    LocalDateTime expiredAt = LocalDateTime.now().plusMinutes(5);
+
+    Seat seat =
+        Seat.builder()
+            .seatLayoutId(10L)
+            .performanceId(100L)
+            .seatNumber("A-01")
+            .seatStatus(SeatStatus.AVAILABLE)
+            .build();
+
+    given(seatRepository.findById(seatId)).willReturn(Optional.of(seat));
+
+    // when & then
+    assertThatThrownBy(() -> seatHoldUseCase.execute(seatId, expiredAt, " "))
+        .isInstanceOf(BusinessException.class)
+        .extracting("errorStatus")
+        .isEqualTo(ErrorStatus.SEAT_BOOKING_NUMBER_REQUIRED);
+
+    assertThat(seat.getSeatStatus()).isEqualTo(SeatStatus.AVAILABLE);
+    verifyNoInteractions(seatStatusEventPublisher);
   }
 
   @Test
@@ -68,7 +98,7 @@ class SeatHoldUseCaseTest {
     given(seatRepository.findById(seatId)).willReturn(Optional.of(seat));
 
     // when & then
-    assertThatThrownBy(() -> seatHoldUseCase.execute(seatId, pastTime))
+    assertThatThrownBy(() -> seatHoldUseCase.execute(seatId, pastTime, "BOOK-1234"))
         .isInstanceOf(BusinessException.class)
         .extracting("errorStatus")
         .isEqualTo(ErrorStatus.SEAT_HOLD_TIME_INVALID);
@@ -84,7 +114,7 @@ class SeatHoldUseCaseTest {
     given(seatRepository.findById(seatId)).willReturn(Optional.empty());
 
     // when & then
-    assertThatThrownBy(() -> seatHoldUseCase.execute(seatId, expiredAt))
+    assertThatThrownBy(() -> seatHoldUseCase.execute(seatId, expiredAt, "BOOK-1234"))
         .isInstanceOf(BusinessException.class)
         .extracting("errorStatus")
         .isEqualTo(ErrorStatus.SEAT_NOT_FOUND);

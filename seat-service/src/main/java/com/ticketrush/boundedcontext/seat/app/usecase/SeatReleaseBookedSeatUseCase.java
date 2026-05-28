@@ -14,13 +14,18 @@ import org.springframework.transaction.annotation.Transactional;
 @Slf4j
 @Service
 @RequiredArgsConstructor
-public class SeatReleaseReservationUseCase {
+public class SeatReleaseBookedSeatUseCase {
 
   private final SeatRepository seatRepository;
   private final SeatStatusEventPublisher seatStatusEventPublisher;
 
   @Transactional
   public void execute(Long seatId, String bookingNumber) {
+    if (bookingNumber == null || bookingNumber.isBlank()) {
+      log.warn("예매 취소 좌석 반환 스킵: 이벤트 예매 번호가 없습니다. seatId: {}", seatId);
+      return;
+    }
+
     var seat =
         seatRepository
             .findById(seatId)
@@ -31,8 +36,12 @@ public class SeatReleaseReservationUseCase {
       return;
     }
 
-    if (seat.getBookingNumber() != null
-        && !Objects.equals(seat.getBookingNumber(), bookingNumber)) {
+    if (seat.getBookingNumber() == null) {
+      log.warn("예매 취소 좌석 반환 스킵: 좌석의 예매 번호가 없어 이벤트 예매 번호를 검증할 수 없습니다. seatId: {}", seatId);
+      return;
+    }
+
+    if (!Objects.equals(seat.getBookingNumber(), bookingNumber)) {
       log.warn(
           "예매 취소 좌석 반환 스킵: 좌석의 예매 번호가 이벤트와 다릅니다. seatId: {}, eventBookingNumber: {}",
           seatId,
@@ -40,12 +49,7 @@ public class SeatReleaseReservationUseCase {
       return;
     }
 
-    if (seat.getBookingNumber() == null) {
-      log.warn("예매 취소 좌석 반환 스킵: 좌석의 예매 번호가 없어 이벤트 예매 번호를 검증할 수 없습니다. seatId: {}", seatId);
-      return;
-    }
-
-    seat.releaseReservation();
+    seat.releaseBooking();
     seatStatusEventPublisher.publishAfterCommit(seat);
     log.info("예매 취소 좌석 반환 완료. seatId: {}", seatId);
   }

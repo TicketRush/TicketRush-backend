@@ -11,7 +11,7 @@ import com.ticketrush.boundedcontext.seat.app.usecase.SeatGetSeatLayoutsUseCase;
 import com.ticketrush.boundedcontext.seat.app.usecase.SeatGetStatusCountsUseCase;
 import com.ticketrush.boundedcontext.seat.app.usecase.SeatHoldUseCase;
 import com.ticketrush.boundedcontext.seat.app.usecase.SeatLockUseCase;
-import com.ticketrush.boundedcontext.seat.app.usecase.SeatReleaseReservationUseCase;
+import com.ticketrush.boundedcontext.seat.app.usecase.SeatReleaseBookedSeatUseCase;
 import com.ticketrush.boundedcontext.seat.app.usecase.SeatUnlockUseCase;
 import com.ticketrush.boundedcontext.seat.out.repository.SeatLayoutRepository;
 import com.ticketrush.global.eventpublisher.EventPublisher;
@@ -37,7 +37,7 @@ public class SeatFacade {
   private final SeatConfirmSoldUseCase seatConfirmSoldUseCase;
   private final SeatHoldUseCase seatHoldUseCase;
   private final SeatLockUseCase seatLockUseCase;
-  private final SeatReleaseReservationUseCase seatReleaseReservationUseCase;
+  private final SeatReleaseBookedSeatUseCase seatReleaseBookedSeatUseCase;
   private final SeatUnlockUseCase seatUnlockUseCase;
   private final SeatStatusStreamSubscriber seatStatusStreamSubscriber;
   private final SeatLayoutRepository seatLayoutRepository;
@@ -72,16 +72,12 @@ public class SeatFacade {
     }
   }
 
-  public void holdSeat(Long seatId, LocalDateTime holdExpiredAt) {
-    seatHoldUseCase.execute(seatId, holdExpiredAt);
-  }
-
   public void confirmSold(String bookingNumber, Long seatId) {
     seatConfirmSoldUseCase.execute(bookingNumber, seatId);
   }
 
-  public void releaseReservation(Long seatId, String bookingNumber) {
-    seatReleaseReservationUseCase.execute(seatId, bookingNumber);
+  public void releaseBookedSeat(Long seatId, String bookingNumber) {
+    seatReleaseBookedSeatUseCase.execute(seatId, bookingNumber);
   }
 
   public void tryLockSeat(Long bookingId, String bookingNumber, Long seatId, Long userId) {

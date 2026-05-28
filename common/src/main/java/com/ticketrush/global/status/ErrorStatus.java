@@ -87,6 +87,7 @@ public enum ErrorStatus {
 
   // Seat 400
   SEAT_HOLD_TIME_INVALID(HttpStatus.BAD_REQUEST, "SEAT_400_001", "선점 만료 시간은 현재 시간 이후여야 합니다."),
+  SEAT_BOOKING_NUMBER_REQUIRED(HttpStatus.BAD_REQUEST, "SEAT_400_002", "좌석 선점에는 예매 번호가 필요합니다."),
 
   // Seat 404
   SEAT_NOT_FOUND(HttpStatus.NOT_FOUND, "SEAT_404_001", "해당 좌석을 찾을 수 없습니다."),

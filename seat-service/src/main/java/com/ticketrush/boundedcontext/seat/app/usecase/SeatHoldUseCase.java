@@ -18,10 +18,6 @@ public class SeatHoldUseCase {
   private final SeatRepository seatRepository;
   private final SeatStatusEventPublisher seatStatusEventPublisher;
 
-  public void execute(Long seatId, LocalDateTime holdExpiredAt) {
-    execute(seatId, holdExpiredAt, null);
-  }
-
   public void execute(Long seatId, LocalDateTime holdExpiredAt, String bookingNumber) {
     Seat seat =
         seatRepository

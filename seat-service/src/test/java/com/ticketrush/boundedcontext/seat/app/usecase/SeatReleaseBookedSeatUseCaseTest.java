@@ -21,9 +21,9 @@ import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
 @ExtendWith(MockitoExtension.class)
-class SeatReleaseReservationUseCaseTest {
+class SeatReleaseBookedSeatUseCaseTest {
 
-  @InjectMocks private SeatReleaseReservationUseCase seatReleaseReservationUseCase;
+  @InjectMocks private SeatReleaseBookedSeatUseCase seatReleaseBookedSeatUseCase;
 
   @Mock private SeatRepository seatRepository;
   @Mock private SeatStatusEventPublisher seatStatusEventPublisher;
@@ -44,11 +44,21 @@ class SeatReleaseReservationUseCaseTest {
     given(seatRepository.findById(seatId)).willReturn(Optional.of(seat));
 
     // when
-    seatReleaseReservationUseCase.execute(seatId, bookingNumber);
+    seatReleaseBookedSeatUseCase.execute(seatId, bookingNumber);
 
     // then
     assertThat(seat.getSeatStatus()).isEqualTo(SeatStatus.AVAILABLE);
     verify(seatStatusEventPublisher).publishAfterCommit(seat);
+  }
+
+  @Test
+  @DisplayName("성공: 이벤트의 예매 번호가 없으면 안전하게 스킵한다")
+  void execute_skip_when_event_booking_number_is_blank() {
+    // when
+    seatReleaseBookedSeatUseCase.execute(1L, " ");
+
+    // then
+    verifyNoInteractions(seatRepository, seatStatusEventPublisher);
   }
 
   @Test
@@ -62,7 +72,7 @@ class SeatReleaseReservationUseCaseTest {
     given(seatRepository.findById(seatId)).willReturn(Optional.of(seat));
 
     // when
-    seatReleaseReservationUseCase.execute(seatId, bookingNumber);
+    seatReleaseBookedSeatUseCase.execute(seatId, bookingNumber);
 
     // then
     assertThat(seat.getSeatStatus()).isEqualTo(SeatStatus.AVAILABLE);
@@ -79,7 +89,7 @@ class SeatReleaseReservationUseCaseTest {
     given(seatRepository.findById(seatId)).willReturn(Optional.of(seat));
 
     // when
-    seatReleaseReservationUseCase.execute(seatId, "BOOK-1234");
+    seatReleaseBookedSeatUseCase.execute(seatId, "BOOK-1234");
 
     // then
     assertThat(seat.getSeatStatus()).isEqualTo(SeatStatus.SOLD);
@@ -101,7 +111,7 @@ class SeatReleaseReservationUseCaseTest {
     given(seatRepository.findById(seatId)).willReturn(Optional.of(seat));
 
     // when
-    seatReleaseReservationUseCase.execute(seatId, "BOOK-1234");
+    seatReleaseBookedSeatUseCase.execute(seatId, "BOOK-1234");
 
     // then
     assertThat(seat.getSeatStatus()).isEqualTo(SeatStatus.SOLD);
@@ -116,7 +126,7 @@ class SeatReleaseReservationUseCaseTest {
     given(seatRepository.findById(seatId)).willReturn(Optional.empty());
 
     // when & then
-    assertThatThrownBy(() -> seatReleaseReservationUseCase.execute(seatId, "BOOK-1234"))
+    assertThatThrownBy(() -> seatReleaseBookedSeatUseCase.execute(seatId, "BOOK-1234"))
         .isInstanceOf(BusinessException.class)
         .extracting(ex -> ((BusinessException) ex).getErrorStatus())
         .isEqualTo(SEAT_NOT_FOUND);
