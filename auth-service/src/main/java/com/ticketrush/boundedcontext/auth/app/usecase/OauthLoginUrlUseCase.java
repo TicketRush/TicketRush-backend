@@ -39,8 +39,7 @@ public class OauthLoginUrlUseCase {
       throw new BusinessException(ErrorStatus.AUTH_OAUTH_INVALID_REDIRECT_URI);
     }
 
-    List<String> allowedRedirectDomains =
-        securityProperties.getOauth2().getAllowedRedirectDomains();
+    List<String> allowedRedirectDomains = securityProperties.getAllowedRedirectDomains();
 
     if (allowedRedirectDomains == null || allowedRedirectDomains.isEmpty()) {
       throw new BusinessException(ErrorStatus.AUTH_OAUTH_INVALID_REDIRECT_URI);

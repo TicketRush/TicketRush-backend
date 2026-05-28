@@ -8,6 +8,7 @@ import com.ticketrush.boundedcontext.auth.app.dto.response.login.UserServiceAuth
 import com.ticketrush.boundedcontext.auth.app.dto.response.signup.UserServiceApiResponse;
 import com.ticketrush.boundedcontext.auth.app.dto.response.signup.UserServiceEmailExistsResponse;
 import com.ticketrush.boundedcontext.auth.app.dto.response.social.UserServiceSocialLoginResponse;
+import com.ticketrush.global.config.CustomSecurityProperties;
 import com.ticketrush.global.exception.BusinessException;
 import com.ticketrush.global.status.ErrorStatus;
 import lombok.RequiredArgsConstructor;
@@ -26,13 +27,15 @@ import org.springframework.web.client.RestClient;
 public class UserServiceClient {
 
   private final RestClient restClient;
+  private final CustomSecurityProperties customSecurityProperties;
 
   @Value("${service.user-service.base-url}")
   private String userServiceBaseUrl;
 
   private static final String SOCIAL_LOGIN_PATH = "/api/v1/user/social-login";
   private static final String EMAIL_EXISTS_PATH = "/api/v1/user/exists/email?email={email}";
-  private static final String USER_AUTH_INFO_PATH = "/api/v1/user/auth-info";
+  private static final String USER_AUTH_INFO_PATH = "/api/v1/internal/user/auth-info";
+  private static final String INTERNAL_TOKEN_HEADER = "X-Internal-Token";
 
   public UserServiceSocialLoginResponse socialLogin(UserServiceSocialLoginRequest request) {
 
@@ -127,6 +130,7 @@ public class UserServiceClient {
               .post()
               .uri(userServiceBaseUrl + USER_AUTH_INFO_PATH)
               .contentType(MediaType.APPLICATION_JSON)
+              .header(INTERNAL_TOKEN_HEADER, customSecurityProperties.getInternalToken())
               .body(request)
               .retrieve()
               .onStatus(

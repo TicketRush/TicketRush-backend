@@ -1,8 +1,7 @@
-package com.ticketrush.global.security;
+package com.ticketrush.global.config;
 
 import static java.nio.charset.StandardCharsets.UTF_8;
 
-import com.ticketrush.global.config.CustomSecurityProperties;
 import jakarta.servlet.FilterChain;
 import jakarta.servlet.ServletException;
 import jakarta.servlet.http.HttpServletRequest;
@@ -25,11 +24,7 @@ public class InternalApiTokenFilter extends OncePerRequestFilter {
 
   private static final String INTERNAL_TOKEN_HEADER = "X-Internal-Token";
 
-  private static final String SIGNUP_EMAIL_VERIFICATION_VERIFIED_PATH =
-      "/api/v1/auth/signup/email-verification/verified";
-
-  private static final String SIGNUP_EMAIL_VERIFICATION_CONSUME_PATH =
-      "/api/v1/auth/signup/email-verification/consume";
+  private static final String USER_AUTH_INFO_PATH = "/api/v1/internal/user/auth-info";
 
   private final CustomSecurityProperties securityProperties;
 
@@ -66,7 +61,6 @@ public class InternalApiTokenFilter extends OncePerRequestFilter {
     String path = request.getRequestURI();
     String method = request.getMethod();
 
-    return (HttpMethod.GET.matches(method) && SIGNUP_EMAIL_VERIFICATION_VERIFIED_PATH.equals(path))
-        || (HttpMethod.POST.matches(method) && SIGNUP_EMAIL_VERIFICATION_CONSUME_PATH.equals(path));
+    return HttpMethod.POST.matches(method) && USER_AUTH_INFO_PATH.equals(path);
   }
 }
