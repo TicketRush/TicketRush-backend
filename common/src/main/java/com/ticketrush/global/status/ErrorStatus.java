@@ -148,6 +148,9 @@ public enum ErrorStatus {
   // Payment 404
   PAYMENT_SESSION_NOT_FOUND(HttpStatus.NOT_FOUND, "PAYMENT_404_001", "결제 세션이 만료되었거나 존재하지 않습니다."),
 
+  // Payment 404
+  PAYMENT_NOT_FOUND(HttpStatus.NOT_FOUND, "PAYMENT_404_002", "결제 내역을 찾을 수 없습니다."),
+
   // Payment 409
   PAYMENT_ALREADY_COMPLETED(HttpStatus.CONFLICT, "PAYMENT_409_001", "이미 결제가 완료된 예매입니다."),
 
