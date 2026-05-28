@@ -141,12 +141,20 @@ public enum ErrorStatus {
   // Payment 400
   PAYMENT_AMOUNT_MISMATCH(HttpStatus.BAD_REQUEST, "PAYMENT_400_001", "결제 금액이 일치하지 않습니다."),
   PAYMENT_PROVIDER_NOT_SUPPORTED(HttpStatus.BAD_REQUEST, "PAYMENT_400_002", "지원하지 않는 결제 수단입니다."),
+  PAYMENT_METHOD_REJECTED(
+      HttpStatus.BAD_REQUEST, "PAYMENT_400_003", "결제가 거절되었습니다. 다른 결제수단으로 시도해주세요."),
+  PAYMENT_LIMIT_EXCEEDED(HttpStatus.BAD_REQUEST, "PAYMENT_400_004", "카드 한도 또는 결제 한도를 초과했습니다."),
+
+  // Payment 404
+  PAYMENT_SESSION_NOT_FOUND(HttpStatus.NOT_FOUND, "PAYMENT_404_001", "결제 세션이 만료되었거나 존재하지 않습니다."),
 
   // Payment 409
   PAYMENT_ALREADY_COMPLETED(HttpStatus.CONFLICT, "PAYMENT_409_001", "이미 결제가 완료된 예매입니다."),
 
   // Payment 502
   PAYMENT_APPROVAL_FAILED(HttpStatus.BAD_GATEWAY, "PAYMENT_502_001", "PG사 결제 승인에 실패했습니다."),
+  PAYMENT_PG_AUTH_FAILED(
+      HttpStatus.BAD_GATEWAY, "PAYMENT_502_002", "PG사 인증에 실패했습니다. 관리자에게 문의 바랍니다."),
 
   // Payment 503
   PAYMENT_PG_COMMUNICATION_FAILED(
