@@ -2,8 +2,6 @@ package com.ticketrush.global.config;
 
 import com.ticketrush.global.security.GatewayHeaderFilter;
 import lombok.RequiredArgsConstructor;
-import org.springframework.boot.context.properties.EnableConfigurationProperties;
-import org.springframework.boot.security.autoconfigure.SecurityProperties;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.http.HttpMethod;
@@ -16,7 +14,6 @@ import org.springframework.security.web.authentication.UsernamePasswordAuthentic
 @Configuration
 @EnableWebSecurity
 @EnableMethodSecurity
-@EnableConfigurationProperties(SecurityProperties.class)
 @RequiredArgsConstructor
 public class SecurityConfig {
 

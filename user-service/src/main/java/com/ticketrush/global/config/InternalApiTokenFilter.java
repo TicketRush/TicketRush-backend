@@ -26,7 +26,7 @@ public class InternalApiTokenFilter extends OncePerRequestFilter {
 
   private static final String USER_AUTH_INFO_PATH = "/api/v1/internal/user/auth-info";
 
-  private final SecurityProperties securityProperties;
+  private final CustomSecurityProperties securityProperties;
 
   @Override
   protected boolean shouldNotFilter(HttpServletRequest request) {

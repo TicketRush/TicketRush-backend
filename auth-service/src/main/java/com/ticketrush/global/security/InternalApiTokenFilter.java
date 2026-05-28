@@ -2,7 +2,7 @@ package com.ticketrush.global.security;
 
 import static java.nio.charset.StandardCharsets.UTF_8;
 
-import com.ticketrush.global.config.SecurityProperties;
+import com.ticketrush.global.config.CustomSecurityProperties;
 import jakarta.servlet.FilterChain;
 import jakarta.servlet.ServletException;
 import jakarta.servlet.http.HttpServletRequest;
@@ -31,7 +31,7 @@ public class InternalApiTokenFilter extends OncePerRequestFilter {
   private static final String SIGNUP_EMAIL_VERIFICATION_CONSUME_PATH =
       "/api/v1/auth/signup/email-verification/consume";
 
-  private final SecurityProperties securityProperties;
+  private final CustomSecurityProperties securityProperties;
 
   @Override
   protected boolean shouldNotFilter(HttpServletRequest request) {

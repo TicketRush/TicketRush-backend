@@ -33,7 +33,7 @@ import org.springframework.test.web.servlet.MockMvc;
       "custom.security.internal-token=test-internal-token",
       "custom.security.permit-all=false"
     })
-@EnableConfigurationProperties(SecurityProperties.class)
+@EnableConfigurationProperties(CustomSecurityProperties.class)
 class InternalApiTokenFilterTest {
 
   private static final String INTERNAL_TOKEN_HEADER = "X-Internal-Token";

@@ -12,7 +12,7 @@ import org.springframework.stereotype.Component;
 @Setter
 @Component
 @ConfigurationProperties(prefix = "custom.security")
-public class SecurityProperties {
+public class CustomSecurityProperties {
 
   private String internalToken;
 
