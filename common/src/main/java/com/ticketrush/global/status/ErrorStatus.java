@@ -133,6 +133,7 @@ public enum ErrorStatus {
       HttpStatus.BAD_REQUEST, "USER_400_007", "비밀번호는 소문자, 숫자, 특수문자를 포함하여 12자 이상이어야 합니다."),
   USER_EMAIL_ALREADY_EXISTS(HttpStatus.BAD_REQUEST, "USER_400_008", "이미 가입된 이메일입니다."),
   USER_NAME_REQUIRED(HttpStatus.BAD_REQUEST, "USER_400_009", "이름을 입력해주세요."),
+
   // User 401
   EMAIL_VERIFICATION_REQUIRED(HttpStatus.UNAUTHORIZED, "USER_401_001", "이메일 인증번호 일치 확인 인증이 필요합니다."),
 
