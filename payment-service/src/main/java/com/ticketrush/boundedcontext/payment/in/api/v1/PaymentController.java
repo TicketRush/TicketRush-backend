@@ -1,6 +1,8 @@
 package com.ticketrush.boundedcontext.payment.in.api.v1;
 
+import com.ticketrush.boundedcontext.payment.app.dto.request.PaymentCancelRequest;
 import com.ticketrush.boundedcontext.payment.app.dto.request.PaymentConfirmRequest;
+import com.ticketrush.boundedcontext.payment.app.dto.response.PaymentCancelResponse;
 import com.ticketrush.boundedcontext.payment.app.dto.response.PaymentConfirmResponse;
 import com.ticketrush.boundedcontext.payment.app.dto.response.PaymentDetailResponse;
 import com.ticketrush.boundedcontext.payment.app.dto.response.PaymentSummaryResponse;
@@ -53,6 +55,20 @@ public class PaymentController {
       @AuthenticationPrincipal CustomUserDetails user,
       @Valid @RequestBody PaymentConfirmRequest request) {
     PaymentConfirmResponse response = paymentFacade.confirm(user.getUserId(), request);
+    return ApiResponse.onSuccess(SuccessStatus.OK, response);
+  }
+
+  @Operation(
+      summary = "결제 취소(환불)",
+      description =
+          "본인의 완료된 결제를 취소하고 PG사 환불을 처리한다. "
+              + "성공 시 PaymentCanceledEvent를 발행하여 booking/seat 도메인이 후속 처리하도록 한다.")
+  @PostMapping("/{paymentId}/cancel")
+  public ResponseEntity<ApiResponse<PaymentCancelResponse>> cancel(
+      @AuthenticationPrincipal CustomUserDetails user,
+      @Parameter(description = "결제 ID") @Positive @PathVariable Long paymentId,
+      @Valid @RequestBody PaymentCancelRequest request) {
+    PaymentCancelResponse response = paymentFacade.cancel(user.getUserId(), paymentId, request);
     return ApiResponse.onSuccess(SuccessStatus.OK, response);
   }
 
