@@ -21,6 +21,10 @@ import lombok.NoArgsConstructor;
 @AttributeOverride(name = "id", column = @Column(name = "refund_id"))
 public class Refund extends AutoIdBaseEntity {
 
+  /* paymentId는 #22에서 환불-결제 매핑 및 멱등성 보장을 위해 도입. */
+  @Column(nullable = false)
+  private Long paymentId;
+
   @Column(nullable = false)
   private Long bookingId;
 
@@ -31,13 +35,33 @@ public class Refund extends AutoIdBaseEntity {
   @Column(name = "status", length = 20)
   private RefundStatus status; // 환불 상태 (PENDING, COMPLETED 등)
 
-  private LocalDateTime confirmedAt;
+  @Column(length = 200)
+  private String pgRefundKey; // PG사 환불 거래 식별자
+
+  @Column(length = 255)
+  private String reason; // 환불 사유
+
+  private LocalDateTime requestedAt; // 환불 요청 시점
+
+  private LocalDateTime confirmedAt; // 환불 확정 시점
 
   @Builder
-  private Refund(Long bookingId, Long price, RefundStatus status, LocalDateTime confirmedAt) {
+  private Refund(
+      Long paymentId,
+      Long bookingId,
+      Long price,
+      RefundStatus status,
+      String pgRefundKey,
+      String reason,
+      LocalDateTime requestedAt,
+      LocalDateTime confirmedAt) {
+    this.paymentId = paymentId;
     this.bookingId = bookingId;
     this.price = price;
     this.status = status;
+    this.pgRefundKey = pgRefundKey;
+    this.reason = reason;
+    this.requestedAt = requestedAt;
     this.confirmedAt = confirmedAt;
   }
 }

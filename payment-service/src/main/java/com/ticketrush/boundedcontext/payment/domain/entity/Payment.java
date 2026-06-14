@@ -28,6 +28,9 @@ public class Payment extends AutoIdBaseEntity {
   /* userId는 #207 시점 신규 도입. 기존 결제 row 호환을 위해 nullable. backfill 후 NOT NULL 전환 예정. */
   private Long userId;
 
+  /* seatId는 #22(환불) 시점 신규 도입. 환불 시 PaymentCanceledEvent로 좌석 복귀를 전파하기 위해 confirm 시 저장한다. */
+  private Long seatId;
+
   @Enumerated(EnumType.STRING)
   @Column(nullable = false)
   private PaymentProvider provider; // 결제 수단 (예: KAKAO, NAVER)
@@ -51,6 +54,7 @@ public class Payment extends AutoIdBaseEntity {
   private Payment(
       Long bookingId,
       Long userId,
+      Long seatId,
       PaymentProvider provider,
       Long amount,
       PaymentStatus status,
@@ -59,11 +63,17 @@ public class Payment extends AutoIdBaseEntity {
       LocalDateTime paidAt) {
     this.bookingId = bookingId;
     this.userId = userId;
+    this.seatId = seatId;
     this.provider = provider;
     this.amount = amount;
     this.status = status;
     this.paymentKey = paymentKey;
     this.approvalNumber = approvalNumber;
     this.paidAt = paidAt;
+  }
+
+  /** 환불 처리로 결제를 취소 상태로 전이한다. */
+  public void markCanceled() {
+    this.status = PaymentStatus.CANCELED;
   }
 }

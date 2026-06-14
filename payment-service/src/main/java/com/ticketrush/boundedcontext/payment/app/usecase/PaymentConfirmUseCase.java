@@ -49,6 +49,7 @@ public class PaymentConfirmUseCase {
         Payment.builder()
             .bookingId(request.bookingId())
             .userId(userId)
+            .seatId(request.seatId())
             .provider(request.provider())
             .amount(approval.approvedAmount())
             .status(PaymentStatus.COMPLETED)
