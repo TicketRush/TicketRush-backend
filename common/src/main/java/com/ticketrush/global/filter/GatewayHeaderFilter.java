@@ -1,5 +1,6 @@
-package com.ticketrush.global.security;
+package com.ticketrush.global.filter;
 
+import com.ticketrush.global.security.CustomUserDetails;
 import jakarta.servlet.FilterChain;
 import jakarta.servlet.ServletException;
 import jakarta.servlet.http.HttpServletRequest;

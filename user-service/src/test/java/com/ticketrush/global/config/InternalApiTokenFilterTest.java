@@ -14,7 +14,7 @@ import com.ticketrush.boundedcontext.user.app.dto.response.UserAuthInfoResponse;
 import com.ticketrush.boundedcontext.user.app.facade.UserFacade;
 import com.ticketrush.boundedcontext.user.in.api.v1.InternalUserController;
 import com.ticketrush.boundedcontext.user.in.api.v1.UserController;
-import com.ticketrush.global.security.GatewayHeaderFilter;
+import com.ticketrush.global.filter.GatewayHeaderFilter;
 import com.ticketrush.support.WebMvcSliceTest;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
