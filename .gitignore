@@ -140,6 +140,6 @@ build/
 # Ignore Kotlin plugin data
 .kotlin
 
-# Claude Code (local only)
-.claude/
-CLAUDE.md
+# Claude Code
+# 로컬 임시 worktree만 무시 (레포 전체 사본 + git 메타데이터 포함)
+.claude/worktrees/
