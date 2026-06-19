@@ -1,4 +1,4 @@
-package com.ticketrush.boundedcontext.in.app.v1;
+package com.ticketrush.boundedcontext.user.in.api.v1;
 
 import static org.mockito.BDDMockito.given;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
@@ -8,7 +8,6 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 
 import com.ticketrush.boundedcontext.user.app.dto.response.UserMeResponse;
 import com.ticketrush.boundedcontext.user.app.facade.UserFacade;
-import com.ticketrush.boundedcontext.user.in.api.v1.UserController;
 import com.ticketrush.global.config.CustomSecurityProperties;
 import com.ticketrush.global.config.InternalApiTokenFilter;
 import com.ticketrush.global.config.SecurityConfig;
