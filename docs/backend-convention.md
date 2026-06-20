@@ -172,13 +172,13 @@ API 응답은 `ApiResponse` 클래스를 통해 일관된 구조로 반환합니
 
 ```java
 // 1. 반환 데이터(DTO)가 없는 경우
-return ApiResponse.onSuccess(SuccessStatus._OK);
+return ApiResponse.onSuccess(SuccessStatus.OK);
 
 // 2. 반환 데이터(DTO)가 있는 경우
 ResponseDto response = memberService.getMember();
 return ApiResponse.
 
-onSuccess(SuccessStatus._OK, response);
+onSuccess(SuccessStatus.OK, response);
 
 ```
 
@@ -204,7 +204,7 @@ Diary diary = diaryRepository.findByDiaryIdAndUserId(diaryId, userId)
 
 ### 🏷 주석 컨벤션
 
-* **코드 길이 제한:** 120자
+* **코드 길이 제한:** 100자 (Checkstyle `LineLength max=100` 강제)
 * **1줄 주석:** `// 주석 내용`
 * **여러 줄 주석:**
     * 코드 블록 설명: `/* 주석 내용 */`
