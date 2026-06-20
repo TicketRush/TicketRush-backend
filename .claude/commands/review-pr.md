@@ -30,12 +30,12 @@ gh pr diff $ARGUMENTS
 - **동시성/성능**: N+1 쿼리, 불필요한 전체 조회, 인덱스 미고려
 - **예외 처리**: 예외 삼킴, `BusinessException` 미사용, 잘못된 HTTP 상태 코드
 - **보안**: 인가 없는 리소스 접근, 민감 데이터 노출, SQL Injection 가능성
-- **팀 컨벤션 위반**:
+- **팀 컨벤션 위반** (단일 출처: `docs/backend-convention.md`):
   - `@Transactional`은 Facade가 아닌 UseCase에만
   - `ApiResponse.onSuccess(...)` 응답 통일
   - `ErrorStatus` 형식: `모듈_상태코드_세자리번호`
   - URL prefix: `/api/{version}/{module}/` (모듈명 단수)
-  - 코드 줄 길이 120자 초과
+  - 코드 줄 길이 100자 초과 (Checkstyle `LineLength max=100`)
   - Swagger 어노테이션 별도 파일 분리
   - UseCase 파일명: `{Module}{Function}UseCase`
   - 커밋 메시지 형식: `[라벨] #이슈번호 {내용}`

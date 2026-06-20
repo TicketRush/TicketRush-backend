@@ -143,3 +143,5 @@ build/
 # Claude Code
 # 로컬 임시 worktree만 무시 (레포 전체 사본 + git 메타데이터 포함)
 .claude/worktrees/
+# 로컬 전용 설정 (개인 권한/환경값) — 공유하지 않음
+.claude/settings.local.json
