@@ -69,7 +69,7 @@ public class TossPaymentCancelClient implements PaymentCancelClient {
                     log.warn(
                         "[PG-TOSS] 결제 취소 거절. status={}, paymentKey={}",
                         res.getStatusCode(),
-                        command.paymentKey());
+                        mask(command.paymentKey()));
                     throw new BusinessException(ErrorStatus.PAYMENT_REFUND_FAILED);
                   })
               .onStatus(
@@ -78,7 +78,7 @@ public class TossPaymentCancelClient implements PaymentCancelClient {
                     log.error(
                         "[PG-TOSS] PG 서버 오류. status={}, paymentKey={}",
                         res.getStatusCode(),
-                        command.paymentKey());
+                        mask(command.paymentKey()));
                     throw new BusinessException(ErrorStatus.PAYMENT_PG_COMMUNICATION_FAILED);
                   })
               .body(TossCancelResponse.class);
@@ -88,23 +88,15 @@ public class TossPaymentCancelClient implements PaymentCancelClient {
     } catch (BusinessException e) {
       throw e;
     } catch (ResourceAccessException e) {
-      log.error(
-          "[PG-TOSS] PG 통신 실패(timeout 등). paymentKey={}, message={}",
-          command.paymentKey(),
-          e.getMessage());
-      throw new BusinessException(ErrorStatus.PAYMENT_PG_COMMUNICATION_FAILED);
+      throw toCommunicationFailure("PG 통신 실패(timeout 등)", command, e);
     } catch (RestClientException e) {
-      log.error(
-          "[PG-TOSS] PG 호출 중 예외 발생. paymentKey={}, message={}",
-          command.paymentKey(),
-          e.getMessage());
-      throw new BusinessException(ErrorStatus.PAYMENT_PG_COMMUNICATION_FAILED);
+      throw toCommunicationFailure("PG 호출 중 예외 발생", command, e);
     }
   }
 
   private PaymentCancelResult toResult(TossCancelResponse response, PaymentCancelCommand command) {
     if (response == null || response.cancels() == null || response.cancels().isEmpty()) {
-      log.error("[PG-TOSS] 취소 응답에 cancels 누락. paymentKey={}", command.paymentKey());
+      log.error("[PG-TOSS] 취소 응답에 cancels 누락. paymentKey={}", mask(command.paymentKey()));
       throw new BusinessException(ErrorStatus.PAYMENT_PG_COMMUNICATION_FAILED);
     }
 
@@ -112,7 +104,7 @@ public class TossPaymentCancelClient implements PaymentCancelClient {
     TossCancelResponse.Cancel latest = cancels.get(cancels.size() - 1);
 
     if (latest.canceledAt() == null) {
-      log.error("[PG-TOSS] 취소 응답에 canceledAt 누락. paymentKey={}", command.paymentKey());
+      log.error("[PG-TOSS] 취소 응답에 canceledAt 누락. paymentKey={}", mask(command.paymentKey()));
       throw new BusinessException(ErrorStatus.PAYMENT_PG_COMMUNICATION_FAILED);
     }
 
@@ -125,5 +117,24 @@ public class TossPaymentCancelClient implements PaymentCancelClient {
         latest.canceledAt().atZoneSameInstant(ZoneId.systemDefault()).toLocalDateTime();
 
     return new PaymentCancelResult(pgRefundKey, latest.cancelAmount(), canceledAt);
+  }
+
+  /** 동일하게 {@link ErrorStatus#PAYMENT_PG_COMMUNICATION_FAILED}로 매핑되는 통신 예외의 로깅·변환을 공통화한다. */
+  private BusinessException toCommunicationFailure(
+      String context, PaymentCancelCommand command, Exception e) {
+    log.error(
+        "[PG-TOSS] {}. paymentKey={}, message={}",
+        context,
+        mask(command.paymentKey()),
+        e.getMessage());
+    return new BusinessException(ErrorStatus.PAYMENT_PG_COMMUNICATION_FAILED);
+  }
+
+  /** 로그 노출 시 민감한 paymentKey를 앞 4자리만 남기고 마스킹한다. */
+  private String mask(String value) {
+    if (value == null || value.length() <= 4) {
+      return "****";
+    }
+    return value.substring(0, 4) + "****";
   }
 }
