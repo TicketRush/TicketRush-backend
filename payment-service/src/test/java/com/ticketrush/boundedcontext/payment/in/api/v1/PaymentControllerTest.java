@@ -19,7 +19,7 @@ import com.ticketrush.boundedcontext.payment.domain.types.PaymentProvider;
 import com.ticketrush.boundedcontext.payment.domain.types.PaymentStatus;
 import com.ticketrush.global.config.SecurityConfig;
 import com.ticketrush.global.exception.BusinessException;
-import com.ticketrush.global.security.GatewayHeaderFilter;
+import com.ticketrush.global.filter.GatewayHeaderFilter;
 import com.ticketrush.global.status.ErrorStatus;
 import com.ticketrush.support.WebMvcSliceTest;
 import java.time.LocalDateTime;

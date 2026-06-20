@@ -1,7 +1,7 @@
 package com.ticketrush.global.config;
 
 import com.ticketrush.global.dto.response.ApiResponse;
-import com.ticketrush.global.security.GatewayHeaderFilter;
+import com.ticketrush.global.filter.GatewayHeaderFilter;
 import com.ticketrush.global.status.ErrorStatus;
 import lombok.RequiredArgsConstructor;
 import org.springframework.boot.context.properties.EnableConfigurationProperties;

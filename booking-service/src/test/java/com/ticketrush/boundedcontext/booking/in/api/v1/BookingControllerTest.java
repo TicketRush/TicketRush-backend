@@ -18,7 +18,7 @@ import com.ticketrush.boundedcontext.booking.domain.types.BookingStatus;
 import com.ticketrush.global.config.JacksonConfig;
 import com.ticketrush.global.config.SecurityConfig;
 import com.ticketrush.global.dto.request.OffsetPageRequest;
-import com.ticketrush.global.security.GatewayHeaderFilter;
+import com.ticketrush.global.filter.GatewayHeaderFilter;
 import com.ticketrush.global.status.ErrorStatus;
 import java.time.LocalDateTime;
 import java.util.List;

@@ -1,6 +1,6 @@
 package com.ticketrush.global.config;
 
-import com.ticketrush.global.security.GatewayHeaderFilter;
+import com.ticketrush.global.filter.GatewayHeaderFilter;
 import lombok.RequiredArgsConstructor;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
@@ -32,6 +32,8 @@ public class SecurityConfig {
                     .permitAll()
                     .requestMatchers(HttpMethod.POST, "/api/v1/internal/user/auth-info")
                     .hasRole("INTERNAL")
+                    .requestMatchers(HttpMethod.GET, "/api/v1/user/me")
+                    .authenticated()
                     .anyRequest()
                     .permitAll());
 

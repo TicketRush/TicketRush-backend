@@ -1,4 +1,4 @@
-package com.ticketrush.boundedcontext.app.usecase;
+package com.ticketrush.boundedcontext.user.app.usecase;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
@@ -12,7 +12,6 @@ import static org.mockito.Mockito.verify;
 import com.ticketrush.boundedcontext.user.app.dto.request.SignupRequest;
 import com.ticketrush.boundedcontext.user.app.dto.response.SignupResponse;
 import com.ticketrush.boundedcontext.user.app.mapper.SignupMapper;
-import com.ticketrush.boundedcontext.user.app.usecase.SignupUseCase;
 import com.ticketrush.boundedcontext.user.domain.entity.User;
 import com.ticketrush.boundedcontext.user.domain.entity.UserAccount;
 import com.ticketrush.boundedcontext.user.out.apiclient.AuthRestClient;
