@@ -145,3 +145,4 @@ build/
 .claude/worktrees/
 # 로컬 전용 설정 (개인 권한/환경값) — 공유하지 않음
 .claude/settings.local.json
+.claude/settings.json
