@@ -160,6 +160,7 @@ public enum ErrorStatus {
   PAYMENT_APPROVAL_FAILED(HttpStatus.BAD_GATEWAY, "PAYMENT_502_001", "PG사 결제 승인에 실패했습니다."),
   PAYMENT_PG_AUTH_FAILED(
       HttpStatus.BAD_GATEWAY, "PAYMENT_502_002", "PG사 인증에 실패했습니다. 관리자에게 문의 바랍니다."),
+  PAYMENT_REFUND_FAILED(HttpStatus.BAD_GATEWAY, "PAYMENT_502_003", "PG사 환불 처리에 실패했습니다."),
 
   // Payment 503
   PAYMENT_PG_COMMUNICATION_FAILED(
