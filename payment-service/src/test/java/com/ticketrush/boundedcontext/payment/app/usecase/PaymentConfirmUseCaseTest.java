@@ -17,6 +17,7 @@ import com.ticketrush.boundedcontext.payment.domain.types.PaymentStatus;
 import com.ticketrush.boundedcontext.payment.out.apiclient.PaymentApprovalClientRouter;
 import com.ticketrush.boundedcontext.payment.out.apiclient.PaymentApprovalRequest;
 import com.ticketrush.boundedcontext.payment.out.apiclient.PaymentApprovalResponse;
+import com.ticketrush.boundedcontext.payment.out.repository.ExpiredBookingRepository;
 import com.ticketrush.boundedcontext.payment.out.repository.PaymentRepository;
 import com.ticketrush.global.exception.BusinessException;
 import com.ticketrush.global.status.ErrorStatus;
@@ -36,6 +37,7 @@ class PaymentConfirmUseCaseTest {
   @Mock private PaymentRepository paymentRepository;
   @Mock private PaymentApprovalClientRouter paymentApprovalClientRouter;
   @Mock private PaymentEventPublisher paymentEventPublisher;
+  @Mock private ExpiredBookingRepository expiredBookingRepository;
 
   @InjectMocks private PaymentConfirmUseCase paymentConfirmUseCase;
 
@@ -153,6 +155,31 @@ class PaymentConfirmUseCaseTest {
         .isInstanceOf(BusinessException.class)
         .extracting("errorStatus")
         .isEqualTo(ErrorStatus.PAYMENT_ALREADY_COMPLETED);
+
+    verify(paymentApprovalClientRouter, never()).approve(any());
+    verify(paymentRepository, never()).save(any(Payment.class));
+    verify(paymentEventPublisher, never())
+        .publishConfirmed(any(), any(), any(), any(), any(), any());
+  }
+
+  @Test
+  @DisplayName("만료된 booking이면 BOOKING_409_003 예외가 발생하고 PG 승인을 호출하지 않는다")
+  void execute_fail_when_booking_expired() {
+    // given
+    Long userId = 10L;
+    Long bookingId = 100L;
+    PaymentConfirmRequest request =
+        new PaymentConfirmRequest(bookingId, 200L, PaymentProvider.KAKAO, 55_000L, "pgKey_xyz");
+
+    given(paymentRepository.existsByBookingIdAndStatus(bookingId, PaymentStatus.COMPLETED))
+        .willReturn(false);
+    given(expiredBookingRepository.existsByBookingId(bookingId)).willReturn(true);
+
+    // when & then
+    assertThatThrownBy(() -> paymentConfirmUseCase.execute(userId, request))
+        .isInstanceOf(BusinessException.class)
+        .extracting("errorStatus")
+        .isEqualTo(ErrorStatus.BOOKING_EXPIRED);
 
     verify(paymentApprovalClientRouter, never()).approve(any());
     verify(paymentRepository, never()).save(any(Payment.class));

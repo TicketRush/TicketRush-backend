@@ -7,6 +7,8 @@ import com.ticketrush.boundedcontext.payment.app.dto.response.PaymentSummaryResp
 import com.ticketrush.boundedcontext.payment.app.usecase.PaymentConfirmUseCase;
 import com.ticketrush.boundedcontext.payment.app.usecase.PaymentGetDetailUseCase;
 import com.ticketrush.boundedcontext.payment.app.usecase.PaymentGetListUseCase;
+import com.ticketrush.boundedcontext.payment.app.usecase.RegisterExpiredBookingUseCase;
+import java.time.LocalDateTime;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
@@ -19,9 +21,14 @@ public class PaymentFacade {
   private final PaymentConfirmUseCase paymentConfirmUseCase;
   private final PaymentGetListUseCase paymentGetListUseCase;
   private final PaymentGetDetailUseCase paymentGetDetailUseCase;
+  private final RegisterExpiredBookingUseCase registerExpiredBookingUseCase;
 
   public PaymentConfirmResponse confirm(Long userId, PaymentConfirmRequest request) {
     return paymentConfirmUseCase.execute(userId, request);
+  }
+
+  public void registerExpiredBooking(Long bookingId, LocalDateTime expiredAt) {
+    registerExpiredBookingUseCase.execute(bookingId, expiredAt);
   }
 
   public Page<PaymentSummaryResponse> getPayments(Long userId, Pageable pageable) {

@@ -8,6 +8,7 @@ import com.ticketrush.boundedcontext.payment.domain.types.PaymentStatus;
 import com.ticketrush.boundedcontext.payment.out.apiclient.PaymentApprovalClientRouter;
 import com.ticketrush.boundedcontext.payment.out.apiclient.PaymentApprovalRequest;
 import com.ticketrush.boundedcontext.payment.out.apiclient.PaymentApprovalResponse;
+import com.ticketrush.boundedcontext.payment.out.repository.ExpiredBookingRepository;
 import com.ticketrush.boundedcontext.payment.out.repository.PaymentRepository;
 import com.ticketrush.global.exception.BusinessException;
 import com.ticketrush.global.status.ErrorStatus;
@@ -23,11 +24,17 @@ public class PaymentConfirmUseCase {
   private final PaymentRepository paymentRepository;
   private final PaymentApprovalClientRouter paymentApprovalClientRouter;
   private final PaymentEventPublisher paymentEventPublisher;
+  private final ExpiredBookingRepository expiredBookingRepository;
 
   public PaymentConfirmResponse execute(Long userId, PaymentConfirmRequest request) {
     if (paymentRepository.existsByBookingIdAndStatus(
         request.bookingId(), PaymentStatus.COMPLETED)) {
       throw new BusinessException(ErrorStatus.PAYMENT_ALREADY_COMPLETED);
+    }
+
+    // 만료 이벤트를 이미 수신한 booking이면 PG 호출 전 차단한다(best-effort 방어선, #224).
+    if (expiredBookingRepository.existsByBookingId(request.bookingId())) {
+      throw new BusinessException(ErrorStatus.BOOKING_EXPIRED);
     }
 
     String orderId = generateOrderId(request.bookingId());
