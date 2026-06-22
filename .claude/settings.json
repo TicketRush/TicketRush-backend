@@ -8,7 +8,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "powershell -NoProfile -ExecutionPolicy Bypass -File .claude/hooks/log.ps1 prompt"
+            "command": "powershell -NoProfile -ExecutionPolicy Bypass -File \".claude/hooks/log.ps1\" prompt"
           }
         ]
       }
@@ -19,7 +19,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "powershell -NoProfile -ExecutionPolicy Bypass -File .claude/hooks/log.ps1 tools"
+            "command": "powershell -NoProfile -ExecutionPolicy Bypass -File \".claude/hooks/log.ps1\" tools"
           }
         ]
       }

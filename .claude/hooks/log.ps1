@@ -24,12 +24,17 @@ $record = [ordered]@{
     event = $event
 }
 
-$logDir = Join-Path $PSScriptRoot "..\logs"
-if (-not (Test-Path $logDir)) {
-    New-Item -ItemType Directory -Force -Path $logDir | Out-Null
-}
+# 디렉토리 생성·파일 쓰기 실패(권한/경로/디스크 full 등)가 훅을 막지 않도록 감싼다.
+try {
+    $logDir = Join-Path $PSScriptRoot "..\logs"
+    if (-not (Test-Path $logDir)) {
+        New-Item -ItemType Directory -Force -Path $logDir | Out-Null
+    }
 
-$line = $record | ConvertTo-Json -Compress -Depth 30
-Add-Content -Path (Join-Path $logDir "$Kind.jsonl") -Value $line -Encoding utf8
+    $line = $record | ConvertTo-Json -Compress -Depth 30
+    Add-Content -Path (Join-Path $logDir "$Kind.jsonl") -Value $line -Encoding utf8
+} catch {
+    # 로깅 실패는 무시한다(로깅이 도구 실행을 막아서는 안 됨).
+}
 
 exit 0   # 훅이 작업을 막지 않도록 항상 성공 반환
