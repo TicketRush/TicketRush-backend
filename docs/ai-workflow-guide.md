@@ -25,7 +25,8 @@
 │   └── pr-creator.md
 ├── commands/              # 슬래시 커맨드
 │   ├── review-pr.md
-│   └── dev-cycle.md       # 이슈 기반 개발 사이클 자동 진행
+│   ├── dev-cycle.md       # 이슈 기반 개발 사이클 자동 진행
+│   └── commit.md          # 팀 형식으로 커밋 (브랜치명→이슈번호 자동)
 ├── hooks/
 │   └── log.ps1            # 프롬프트/도구 실행 로깅 스크립트
 └── logs/                  # 실행 로그 (gitignore, 런타임 데이터)
