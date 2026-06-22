@@ -169,6 +169,7 @@ researcher (조사)
                      → /commit  [Type] #이슈번호 요약
                         → /pr (PR 초안 → ⏸ 승인 → Draft PR 생성)
                            → /review-pr (PR 리뷰)
+                              → /apply-review (리뷰 코멘트 수용→수정 / 거절→사유)
 ```
 
 > 팀 규칙상 **이슈 생성 → 이슈 번호 기반 브랜치 → 커밋 → PR** 순서이므로, `/issue`로 이슈를 먼저 만든 뒤 `feature/{이슈번호}` 브랜치를
