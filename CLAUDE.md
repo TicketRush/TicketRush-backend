@@ -23,10 +23,9 @@
 | `gateway-service` | API Gateway |
 | `auth-service` | 인증/인가 (OAuth2, JWT) |
 | `user-service` | 회원 도메인 |
-| `performance-service` | 공연 도메인 (이슈 #19 현재 작업 중) |
+| `performance-service` | 공연 도메인 |
 | `seat-service` | 좌석 도메인 |
 | `booking-service` | 예매 도메인 |
-| `order-service` | 주문 도메인 |
 | `payment-service` | 결제 도메인 |
 | `ticket-service` | 티켓 도메인 |
 
