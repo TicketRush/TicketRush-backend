@@ -38,7 +38,23 @@ git status --short                      # 아직 커밋 안 한 변경
 선택한 템플릿(`cat .github/ISSUE_TEMPLATE/<type>.yml`)의 **모든 `label`(질문) 항목을 본문 섹션 헤더로** 사용하고, `required: true`는 반드시 채운다.
 
 ### 3단계: 본문 작성 & 생성 (공통)
-- 제목: 팀 규칙 `[라벨] {내용}` 형식 (템플릿 `title` 접두어 참고).
+- 제목: 팀 규칙 `[모듈명] {내용}` 형식. **`[ ]` 안에는 관련 모듈명**을 아래 표기대로 적고, **특정 모듈에 한정되지 않으면 `[공통]`**으로 적는다. 여러 모듈에 걸치면 `[공연/결제]`처럼 슬래시로 병기한다.
+
+  | 모듈 | 제목 표기 |
+  |---|---|
+  | `performance-service` | `[공연]` |
+  | `seat-service` | `[좌석]` |
+  | `booking-service` | `[예매]` |
+  | `payment-service` | `[결제]` |
+  | `ticket-service` | `[티켓]` |
+  | `user-service` | `[User]` |
+  | `auth-service` | `[Auth]` |
+  | `gateway-service` | `[Gateway]` |
+  | `common`·환경·문서·협업 설정 등 | `[공통]` |
+  | 배포(EC2·ECR·Docker·Actions 등) | `[CD]` |
+
+  - ⚠️ **주의:** 이슈 제목 `[ ]`에는 **모듈명**(`[공통]`·`[예매]` 등), PR 제목 `[ ]`에는 **작업 타입**(`[Refactor]`·`[Feat]`·`[Fix]` 등)을 적는다. 둘을 혼동하지 말 것. 작업 타입은 이슈에서는 `--label`로 표현한다.
+- **Assignees:** 이슈는 현재 작업 중인 사용자를 담당자로 지정한다. `gh issue create`에 `--assignee @me`를 붙이면 현재 gh 인증 계정(`gh api user --jq .login`로 확인 가능)이 자동 지정된다.
 - 본문은 템플릿 섹션(📝 요약 / 📌 상세 / 👀 참고 / ✅ 완료 조건)을 채운다. 완료 조건은 `- [ ]` 미체크 체크박스로(앞으로 만족해야 할 조건).
 - 팀 컨벤션(`docs/backend-convention.md` 단일 출처, `CLAUDE.md` 아키텍처) 용어를 쓴다.
 - 본문을 임시 파일에 쓴 뒤 생성한다:
@@ -46,9 +62,10 @@ git status --short                      # 아직 커밋 안 한 변경
 cat > /tmp/issue_body.md << 'EOF'
 ... 본문 ...
 EOF
-gh issue create --title "[라벨] 제목" --label <템플릿라벨> --body-file /tmp/issue_body.md
+gh issue create --title "[모듈명] 제목" --label <템플릿라벨> --assignee @me --body-file /tmp/issue_body.md
 ```
-  - `--label`에는 템플릿의 `labels:` 값을 넣는다(`gh label list`로 존재 확인 가능).
+  - `--title`의 `[ ]`에는 **모듈명**(위 표), `--label`에는 템플릿의 `labels:` 값(작업 타입)을 넣는다(`gh label list`로 존재 확인 가능).
+  - `--assignee @me`로 현재 사용자를 담당자로 지정한다.
 
 ## 보고 형식
 1. 사용한 모드(A/B) + 선택한 템플릿과 그 이유 (1줄)
