@@ -33,7 +33,18 @@ git diff --stat develop...HEAD          # 변경 파일 요약
 
 **3단계: 이슈번호 / 라벨 결정**
 - 브랜치명(`{label}/{번호}` 형식, 예: `refactor/250`)에서 **브랜치 단위와 무관하게 끝의 숫자를 이슈번호로** 추출한다. `gh issue view {번호}`로 제목·내용을 참조한다(이슈 없으면 커밋 기준).
-- **라벨**은 커밋 메시지 라벨 또는 변경 성격으로 7종 중 하나로 결정한다.
+- **라벨**은 커밋 메시지 라벨 또는 변경 성격으로 7종(`Feat`/`Fix`/`Refactor`/`Docs`/`Test`/`Chore`/`Infra`) 중 하나로 결정한다.
+- 결정한 제목 라벨을 **GitHub 라벨로 자동 매핑**해 PR에 `--label`로 붙인다(7단계). 제목 라벨(PascalCase) → GitHub 라벨(소문자) 매핑:
+
+  | 제목 라벨 | GitHub 라벨 |
+  |---|---|
+  | `Feat` | `feature` |
+  | `Fix` | `fix` |
+  | `Refactor` | `refactor` |
+  | `Docs` | `docs` |
+  | `Test` | `test` |
+  | `Chore` | `chore` |
+  | `Infra` | `infra` |
 
 **4단계: 본문 작성 (`.github/pull_request_template.md` 6개 섹션)**
 `cat .github/pull_request_template.md`로 읽어 섹션을 채운다:
@@ -49,7 +60,7 @@ git diff --stat develop...HEAD          # 변경 파일 요약
 - **assignee**는 작성자 본인 → `--assignee @me`.
 
 **6단계: 초안 제시 후 승인 대기 (⚠️ 여기서 멈춘다)**
-제목 / base / 리뷰어(기본 없음, 요청 시에만) / assignee / 본문 전문을 사용자에게 보여주고 **"승인하시면 PR을 생성합니다"** 라고 안내한 뒤 **사용자 응답을 기다린다. 이 시점에 절대 PR을 생성하지 않는다.**
+제목 / base / 라벨(자동 매핑) / 리뷰어(기본 없음, 요청 시에만) / assignee / 본문 전문을 사용자에게 보여주고 **"승인하시면 PR을 생성합니다"** 라고 안내한 뒤 **사용자 응답을 기다린다. 이 시점에 절대 PR을 생성하지 않는다.**
 
 **7단계: 승인 후 업로드 (승인 시에만)**
 미푸시 커밋이 있으면 먼저 `git push -u origin {브랜치}` 후:
@@ -60,10 +71,12 @@ EOF
 gh pr create --base develop \
   --title "[라벨] #번호 내용" \
   --body-file /tmp/pr_body.md \
+  --label <github라벨> \
   --assignee @me
+# 라벨은 3단계 매핑표대로 자동으로 붙인다(예: 제목 [Refactor] → --label refactor).
 # 리뷰어는 기본적으로 붙이지 않는다. 사용자가 명시 요청한 경우에만 --reviewer <username> 추가.
 ```
 
 ## 보고 형식
-**초안 단계(6단계):** 제목 / base / 리뷰어(기본 없음) / assignee / 본문 전문(테스트 항목은 비워 둠 — 사람이 작성) / 승인 안내
-**업로드 단계(7단계):** 생성된 PR URL·번호 / base / 리뷰어(지정 시) / assignee
+**초안 단계(6단계):** 제목 / base / 라벨(자동 매핑) / 리뷰어(기본 없음) / assignee / 본문 전문(테스트 항목은 비워 둠 — 사람이 작성) / 승인 안내
+**업로드 단계(7단계):** 생성된 PR URL·번호 / base / 라벨 / 리뷰어(지정 시) / assignee
