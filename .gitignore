@@ -145,3 +145,8 @@ build/
 .claude/worktrees/
 # 로컬 전용 설정 (개인 권한/환경값) — 공유하지 않음
 .claude/settings.local.json
+# AI 세션 작업 메모 — 실데이터는 개인 런타임(기기 로컬), .example 템플릿만 공유
+.claude/claude-progress.txt
+.claude/feature_list.json
+!.claude/claude-progress.txt.example
+!.claude/feature_list.json.example

@@ -28,15 +28,18 @@
 │   ├── commit.md          # 팀 형식으로 커밋 (브랜치명→이슈번호 자동)
 │   ├── issue.md           # 팀 템플릿으로 이슈 생성
 │   ├── pr.md              # 팀 템플릿으로 PR 생성 (검토 후 업로드)
-│   └── test.md            # 변경 모듈 테스트 실제 실행 → 결과 블록 생성
+│   ├── test.md            # 변경 모듈 테스트 실제 실행 → 결과 블록 생성
+│   └── resume.md          # 세션 재개 오리엔테이션 (read-only)
 ├── skills/                # 설치한 외부 스킬 (팀 공유, git 커밋)
 │   ├── grill-me/          # 계획을 캐묻는 대화형 인터뷰 (사용자가 /grill-me 입력)
 │   └── grilling/          # grill-me가 호출하는 실제 인터뷰 세션
 ├── hooks/
 │   └── log.ps1            # 프롬프트/도구 실행 로깅 스크립트
-└── logs/                  # 실행 로그 (gitignore, 런타임 데이터)
-    ├── prompt.jsonl
-    └── tools.jsonl
+├── logs/                  # 실행 로그 (gitignore, 런타임 데이터)
+│   ├── prompt.jsonl
+│   └── tools.jsonl
+├── claude-progress.txt.example   # 세션 작업 맥락 메모 템플릿 (실데이터는 gitignore)
+└── feature_list.json.example     # 세션 작업 항목·상태 템플릿 (실데이터는 gitignore)
 ```
 
 > `.claude/logs/`는 `.gitignore`의 `logs` 패턴으로 자동 제외되며, `settings.local.json`(개인 권한)도 커밋되지 않습니다.
@@ -146,6 +149,13 @@ GitHub에 올라간 **PR을 리뷰**하는 커맨드입니다.
 
 조사부터 PR까지 한 번에 진행하는 오케스트레이션 커맨드입니다 → **6.1절 참고.**
 
+### 4.8. `/resume` — 세션 재개 오리엔테이션 (read-only)
+
+끊긴 세션을 다시 시작할 때, 저장된 작업 메모(`.claude/claude-progress.txt`·`.claude/feature_list.json`)와 git 상태를 읽어 **"지금 어디서부터 무엇을 할지"** 를 파악하고 다음 작업 1개를 제안합니다. **코드/커밋/브랜치를 바꾸지 않는** read-only 커맨드이며, 실제 구현은 `/dev-cycle`로 위임합니다(역할 분리는 6.2절).
+
+* 6단계: progress 읽기 → feature_list 읽기 → `git status`/`branch`/`log` → 개발 서버 안내 → 다음 작업 1개 선정(`doing` 우선) → 컨텍스트 40%·포크 안내.
+* 예시: `/resume`
+
 ---
 
 ## 5. `reviewer` 에이전트 vs `/review-pr` — 언제 무엇을
@@ -199,6 +209,22 @@ researcher (조사)
 > ⚙️ **사전 준비 — `/grill-me` 설치:** 계획 단계의 grill-me는 외부 스킬입니다. 한 번만 설치하면 됩니다:
 > `npx skills@latest add mattpocock/skills` (설치 후 `/setup-matt-pocock-skills`로 초기 설정).
 > 미설치 상태면 `/dev-cycle`은 grill-me 대신 일반 질문(AskUserQuestion)으로 계획을 캐물어 진행합니다.
+
+### 6.2. 세션 영속화 — 작업 메모 + `/resume`
+
+세션이 끊겨도(컨텍스트 초과·종료·재시작) 다음 세션이 진행 상황을 이어받도록 **작업 메모**를 남기고 `/resume`(4.8절)으로 복원합니다.
+
+* **작업 메모 2종**(`.claude/` 하위, 실데이터는 gitignore — `.example` 템플릿만 커밋):
+    * `claude-progress.txt` — 현재 작업 맥락(지금/직전/다음/막힌 점) 자유 텍스트
+    * `feature_list.json` — 작업 항목·상태(`todo`/`doing`/`done`), 항목별 `issue`로 GitHub 이슈 연결
+* **컨텍스트 40% 임계**: 사용량이 40%를 넘으면 작업 메모를 갱신해 정리하고 **포크**하거나 새 세션으로 이어갑니다(메인 컨텍스트 오염 방지).
+* **기능 단위 커밋**: 작업은 기능(항목) 단위로 끊어 커밋해, 세션이 끊겨도 복원 지점이 명확하게 합니다.
+* **`/resume` ↔ `/dev-cycle` 역할 분리(중복 0)**: `/resume`은 **상태 파악 + 다음 작업 선정까지**(read-only), `/dev-cycle <번호>`는 **이슈 1개를 구현→PR→머지까지**. `/resume`으로 다음 이슈를 고른 뒤 `/dev-cycle`로 진행합니다.
+* **작업 메모 vs 메모리 역할 경계**:
+    * **작업 메모**(`feature_list`/`progress`) = *지금 이 작업의 진행 상태·할 일 큐*. repo 안(`.claude/`), 실데이터 gitignore, 작업이 끝나면 갱신·소거되는 휘발성.
+    * **메모리**(`~/.claude/projects/<프로젝트>/memory/`) = *오래 가는 교훈·환경·선호*. repo 밖, git 비추적, 작업이 끝나도 유지되는 일반 지식.
+    * **제품 SSOT는 GitHub 이슈**다. 작업 메모·메모리는 개인 보조 수단.
+* **2기기 사용 주의**: 작업 메모·메모리 실데이터는 **기기 로컬**이라 git으로 **2기기 자동 공유가 안 됩니다**. 기기를 전환할 땐 이어가야 할 핵심을 **GitHub 이슈(또는 메모리)** 에 남깁니다. 공유되는 것은 `.example` 템플릿과 커맨드 정의(커밋분)뿐입니다.
 
 ---
 
