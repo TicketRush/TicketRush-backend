@@ -37,6 +37,18 @@ git status --short                      # 아직 커밋 안 한 변경
 애매하면 가장 가까운 것을 고르고 이유를 한 줄로 보고한다.
 선택한 템플릿(`cat .github/ISSUE_TEMPLATE/<type>.yml`)의 **모든 `label`(질문) 항목을 본문 섹션 헤더로** 사용하고, `required: true`는 반드시 채운다.
 
+선택한 템플릿의 작업 타입(label)에 따라 **GitHub Issue Type**도 함께 정한다(`gh issue create --type`에 사용). org에 정의된 Issue Type은 `Task`/`Bug`/`Feature` 3종이며(`gh api orgs/TicketRush/issue-types`로 확인), label → Issue Type 매핑은 다음과 같다.
+
+  | label | Issue Type |
+  |---|---|
+  | `feature` | `Feature` |
+  | `fix` | `Bug` |
+  | `refactor`·`test`·`infra`·`docs`·`chore`·`design` | `Task` |
+
+  - 값은 org 정의명과 **동일 표기**(`Task`/`Bug`/`Feature`, 첫 글자 대문자)로 적는다.
+  - 한 이슈에 작업 타입 label이 여러 개라면 우선순위 **`Bug` > `Feature` > `Task`**로 단일 Issue Type을 정한다.
+  - 참고: 각 `.github/ISSUE_TEMPLATE/*.yml`에도 동일 매핑의 top-level `type:`이 지정돼 있어 GitHub UI 폼 생성 시엔 자동 적용된다. `/issue` 커맨드(CLI 생성)는 폼을 거치지 않으므로 아래 `--type`으로 직접 지정한다.
+
 ### 3단계: 본문 작성 & 생성 (공통)
 - 제목: 팀 규칙 `[모듈명] {내용}` 형식. **`[ ]` 안에는 관련 모듈명**을 아래 표기대로 적고, **특정 모듈에 한정되지 않으면 `[공통]`**으로 적는다. 여러 모듈에 걸치면 `[공연/결제]`처럼 슬래시로 병기한다.
 
@@ -53,7 +65,7 @@ git status --short                      # 아직 커밋 안 한 변경
   | `common`·환경·문서·협업 설정 등 | `[공통]` |
   | 배포(EC2·ECR·Docker·Actions 등) | `[CD]` |
 
-  - ⚠️ **주의:** 이슈 제목 `[ ]`에는 **모듈명**(`[공통]`·`[예매]` 등), PR 제목 `[ ]`에는 **작업 타입**(`[Refactor]`·`[Feat]`·`[Fix]` 등)을 적는다. 둘을 혼동하지 말 것. 작업 타입은 이슈에서는 `--label`로 표현한다.
+  - ⚠️ **주의 (3축 구분):** ① 이슈 제목 `[ ]`에는 **모듈명**(`[공통]`·`[예매]` 등), ② PR 제목 `[ ]`에는 **작업 타입**(`[Refactor]`·`[Feat]`·`[Fix]` 등)을 적는다. ③ 이슈에서 작업 타입은 **`--label`**(repo 라벨), GitHub Issue Type은 **`--type`**(org 정의 `Task`/`Bug`/`Feature`)으로 각각 지정한다. 셋을 혼동하지 말 것.
 - **Assignees:** 이슈는 현재 작업 중인 사용자를 담당자로 지정한다. `gh issue create`에 `--assignee @me`를 붙이면 현재 gh 인증 계정(`gh api user --jq .login`로 확인 가능)이 자동 지정된다.
 - 본문은 템플릿 섹션(📝 요약 / 📌 상세 / 👀 참고 / ✅ 완료 조건)을 채운다. 완료 조건은 `- [ ]` 미체크 체크박스로(앞으로 만족해야 할 조건).
 - 팀 컨벤션(`docs/backend-convention.md` 단일 출처, `CLAUDE.md` 아키텍처) 용어를 쓴다.
@@ -62,14 +74,15 @@ git status --short                      # 아직 커밋 안 한 변경
 cat > /tmp/issue_body.md << 'EOF'
 ... 본문 ...
 EOF
-gh issue create --title "[모듈명] 제목" --label <템플릿라벨> --assignee @me --body-file /tmp/issue_body.md
+gh issue create --title "[모듈명] 제목" --label <템플릿라벨> --type <IssueType> --assignee @me --body-file /tmp/issue_body.md
 ```
   - `--title`의 `[ ]`에는 **모듈명**(위 표), `--label`에는 템플릿의 `labels:` 값(작업 타입)을 넣는다(`gh label list`로 존재 확인 가능).
+  - `--type`에는 위 매핑표의 **GitHub Issue Type**(`Task`/`Bug`/`Feature`)을 넣는다. `--label`(작업 타입)과 `--type`(Issue Type)은 별개 축이라 이름이 달라도 된다(예: label `fix` ↔ Issue Type `Bug`).
   - `--assignee @me`로 현재 사용자를 담당자로 지정한다.
 
 ## 보고 형식
 1. 사용한 모드(A/B) + 선택한 템플릿과 그 이유 (1줄)
-2. 생성한 이슈 제목
+2. 생성한 이슈 제목 + 지정한 **label · Issue Type**
 3. **생성된 이슈 URL/번호** (`gh issue create` 출력)
 
 B 모드로 만든 이슈는 곧바로 `{이슈 label}/{번호}` 브랜치를 따 작업을 시작하거나 `/dev-cycle {번호}`로 이어갈 수 있음을 안내한다.
