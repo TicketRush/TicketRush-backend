@@ -25,7 +25,7 @@ TicketRush 백엔드의 **도구 중립 AI 진입점**입니다. Claude Code·Gi
 | [`docs/ddd.md`](docs/ddd.md) | 디렉토리 구조 · DDD 계층 |
 | [`docs/ai-workflow-guide.md`](docs/ai-workflow-guide.md) | AI 워크플로우(에이전트 / 커맨드 / 사이클 / 훅) |
 | [`docs/kafka-event-guide.md`](docs/kafka-event-guide.md) | Kafka 이벤트 설계 · 연동 |
-| [`docs/mapstruct_guide.md`](docs/mapstruct_guide.md) | MapStruct 매퍼 사용법 |
+| [`docs/mapstruct-guide.md`](docs/mapstruct-guide.md) | MapStruct 매퍼 사용법 |
 | `AGENTS.md` | 진입점 · 빌드 명령 · 문서 라우팅(이 표) |
 
 > **AI 행동 규칙(금지규칙)** 은 [`CLAUDE.md`](CLAUDE.md)의 "AI 금지규칙(Hard Rules)" 섹션을 따릅니다.

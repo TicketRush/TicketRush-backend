@@ -386,7 +386,7 @@ Select-String -Path .claude/logs/tools.jsonl -Pattern 'push --force|rm -rf'
 | `backend-convention.md` | doc | 코딩 컨벤션·검증 파이프라인 SSOT | — | 공유 |
 | `ddd.md` | doc | 디렉토리·DDD 계층 | — | 공유 |
 | `kafka-event-guide.md` | doc | Kafka 이벤트 설계 | — | 공유 |
-| `mapstruct_guide.md` | doc | MapStruct 매퍼 | — | 공유 |
+| `mapstruct-guide.md` | doc | MapStruct 매퍼 | — | 공유 |
 | `settings.json` | config | 플랜모드·로깅 훅 등록 | — | 공유 |
 | `settings.local.json` | config | 개인 권한 화이트리스트 | — | gitignore |
 | `claude-progress.txt.example` | template | 세션 맥락 메모 견본 | 상시 | example |
