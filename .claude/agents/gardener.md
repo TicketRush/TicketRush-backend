@@ -18,7 +18,7 @@ tools: Read, Grep, Glob, Bash
 
 - **(a) 문서–코드/설정 불일치**: 문서에 적힌 내용이 실제 파일과 어긋나는지. 예) `ai-workflow-guide.md` 1장 디렉토리 트리 vs 실제 `.claude/` 파일 목록, 8.2 도구 경계표 vs 각 에이전트 `tools:`, 하네스 인덱스 표(11.2) vs 실제 구성요소.
 - **(b) 컨벤션 위반**: 컨벤션 SSOT(`docs/backend-convention.md`)·`AGENTS.md` 라우팅 위반. **단, 프로덕션 코드 리뷰는 reviewer 영역이므로 하네스·문서 범위로 한정**(문서 파일명 kebab-case, 문서 위치/SSOT 분담 등).
-- **(c) 미사용 항목**: 정의는 있으나 `CLAUDE.md`·`AGENTS.md`·`ai-workflow-guide.md` **세 문서 중 하나 이상에서도 참조되지 않는** 커맨드/에이전트/스킬/문서.
+- **(c) 미사용 항목**: 정의는 있으나 `CLAUDE.md`·`AGENTS.md`·`ai-workflow-guide.md` **세 문서 어디에서도(셋 모두) 참조되지 않는** 커맨드/에이전트/스킬/문서.
 - **(d) 깨진 내부 링크**: `.md` 상호 링크와 앵커(`#소제목`)가 실존 파일/헤더로 해석되는지.
 - **(e) settings 권한 과다**: `settings.local.json`의 광범위 와일드카드(`Bash(gh *)`·`Bash(git push *)` 등)·일회성 잔존 항목을 8.3절 원칙 기준으로 점검. **`settings.local.json`은 gitignore된 개인 파일이므로 수정 제안만 하고 직접 변경하지 않는다(보고만).**
 
