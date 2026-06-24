@@ -335,7 +335,7 @@ Select-String -Path .claude/logs/tools.jsonl -Pattern 'push --force|rm -rf'
 | 피드백 루프 | 트리거 | 회복 동작 | dev-cycle 단계 |
 |---|---|---|---|
 | `/test` 실패 → 수정 | 변경 모듈 테스트 실패 | 고치고 다시 실행 | **5단계** |
-| `reviewer` 🔴 → 수정 → 재검증 | reviewer Must 지적 | 수정 후 reviewer 재실행 | **6단계** |
+| `reviewer` 지적 → 제시 → 승인 → 반영 | reviewer 지적(🔴/🟡/🔵) | 분류표 제시 → 사람 건별 승인 → 승인분만 수정 후 reviewer 재실행 | **6단계** |
 | CI 실패 → 수정 | `ci.yml`(spotless→checkstyle→test→build) 실패 | 실패한 step 수정 후 push로 재검증 | **PR 업로드(8단계 게이트2) 후 자동 트리거 → 9단계에서 그린 확인** |
 | `/apply-review` → 답글 | PR 리뷰 코멘트(Copilot·사람) | 수용=수정·커밋+답글 / 거절=사유 답글 | **9단계** |
 
