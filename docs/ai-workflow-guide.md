@@ -171,11 +171,11 @@ researcher (조사)
                   → reviewer (셀프 검증)
                      → /commit  [Type] #이슈번호 요약
                         → /pr (PR 초안 → ⏸ 승인 → PR 생성)
-                           → /review-pr (PR 리뷰 · 선택)
-                              → /apply-review (리뷰 코멘트 수용→수정 / 거절→사유 · 선택)
+                           → /apply-review (Copilot·사람 리뷰 대응 → 머지)
 ```
 
-> ※ `/review-pr`·`/apply-review`(코드 리뷰) 단계는 **선택(권장)** 입니다. 컨벤션상 **approve 없이도 머지할 수 있으므로** 리뷰 없이 `/pr`에서 곧장 머지로 진행해도 됩니다.
+> ※ PR 생성 시 **Copilot 리뷰가 항상 달리므로** `/apply-review`로 대응한 뒤 머지합니다(사이클의 일부). 사람 approve는 머지 필수 조건이 아닙니다(선택).
+> **`/review-pr`은 남이 올린 PR을 리뷰**하는 **독립 커맨드**로, 내 작업 사이클(`/dev-cycle`)에는 포함되지 않습니다.
 
 > 팀 규칙상 **이슈 생성 → 이슈 번호 기반 브랜치 → 커밋 → PR** 순서이므로, `/issue`로 이슈를 먼저 만든 뒤 `{이슈 label}/{이슈번호}` 브랜치를
 > 분기하고(브랜치 단위는 이슈 label과 일치, 상세는 `docs/backend-convention.md`), 그 브랜치 위에서 구현·검증·커밋을 진행합니다. 조사(`researcher`)·계획(`planner`)은 이슈 작성 전 사전 파악 단계에서 활용하거나, 브랜치 분기 이후
