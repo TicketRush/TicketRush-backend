@@ -263,17 +263,17 @@ Select-String -Path .claude/logs/tools.jsonl -Pattern 'push --force|rm -rf'
     5. **데이터 흐름** — 코드·데이터가 외부로 전송되는가?(공급망·기밀 유출)
     6. **설정 위치** — `.mcp.json`(팀 공유·커밋)으로 올려 PR 리뷰로 합의.
 * **CLI 우선** — `gh`/`git`/`./gradlew` 등 CLI를 우선 사용합니다. 결정적이고, 로깅 훅(7장)에 그대로 남아 재현·감사가 됩니다.
-* **`WebSearch`/`WebFetch`는 `researcher` 한정** — 외부 자료 조사 역할에만 부여하고, 다른 에이전트·일반 작업에서는 쓰지 않습니다.
+* **`WebSearch`/`WebFetch`는 `researcher` 한정** — 권한은 메인 `claude`도 보유할 수 있으나, **외부 자료 조사는 `researcher` 역할로 제한**하고 다른 에이전트·일반 작업에서는 쓰지 않습니다.
 
 ### 8.2. 에이전트별 도구 경계
 
-각 에이전트는 **역할에 필요한 도구만** 가집니다. 도구 종류는 `.claude/agents/*.md`의 `tools:`로 강제하고, **Bash의 "읽기 전용"(파일 변경 명령 금지)은 각 에이전트 본문 정책으로** 강제합니다.
+각 에이전트는 **역할에 필요한 도구만** 가집니다. **서브에이전트**(`researcher`/`planner`/`reviewer`)의 도구 종류는 `.claude/agents/*.md`의 `tools:`로 강제하고(메인 `claude`는 별도 에이전트 정의 파일 없이 전체 도구 보유), **Bash의 "읽기 전용"(파일 변경 명령 금지)은 각 에이전트 본문 정책으로** 강제합니다.
 
 | 에이전트 | Read·Grep·Glob | Bash | Edit·Write | WebSearch·WebFetch | 비고 |
 |---|:---:|:---:|:---:|:---:|---|
 | `claude`(메인) | ✅ | ✅ | ✅ | ✅ | 실제 구현·커밋 수행. 웹 도구는 보유하나 **조사는 `researcher`에 위임** |
 | `researcher` | ✅ | ✅(읽기) | ✗ | ✅ | 유일하게 웹 조사 허용 |
-| `planner` | ✅ | ✅(읽기) | ✗ | ✗ | 계획만, 코드 수정 불가 |
+| `planner` | ✅ | ✅ | ✗ | ✗ | 계획만 — "코드 수정 안 함" 정책 |
 | `reviewer` | ✅ | ✅(읽기) | ✗ | ✗ | 검증 독립성 — Edit/Write 미부여 |
 
 * 메인 `claude`만 Edit/Write를 가져 실제 변경을 하고, 서브에이전트는 **읽기 위주**입니다. `reviewer`의 "Bash 읽기 전용(파일 변경 명령 금지)"의 구체 의미는 3.3절을 참고하세요.
