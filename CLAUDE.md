@@ -23,10 +23,9 @@
 | `gateway-service` | API Gateway |
 | `auth-service` | 인증/인가 (OAuth2, JWT) |
 | `user-service` | 회원 도메인 |
-| `performance-service` | 공연 도메인 (이슈 #19 현재 작업 중) |
+| `performance-service` | 공연 도메인 |
 | `seat-service` | 좌석 도메인 |
 | `booking-service` | 예매 도메인 |
-| `order-service` | 주문 도메인 |
 | `payment-service` | 결제 도메인 |
 | `ticket-service` | 티켓 도메인 |
 
@@ -70,6 +69,10 @@ global/                  # 서비스별 전역 설정 (SecurityConfig 등)
 ### 워크플로우
 - 이슈/PR 조회: `gh issue view {번호}` 또는 `gh pr view {번호}` 로 직접 가져옴
 - 브랜치: `feature/{이슈번호}` 기준으로 작업
+- **개발 사이클 자동 진행:** 사용자가 **"이슈 N번 개발 진행하자"**(또는 "N번 이슈 개발 시작", "N번 작업하자" 등 이슈 번호 + 개발 시작 의도)라고 하면, `/dev-cycle N` 커맨드(`.claude/commands/dev-cycle.md`)를 실행해 권장 작업 사이클(조사→계획→승인→구현→검증→커밋→PR)을 순서대로 진행한다. 자세한 흐름은 `docs/ai-workflow-guide.md` 6장 참고.
+- **이슈 생성:** 사용자가 **"이슈 만들어줘"**(또는 "이번 작업 이슈로", "이슈 올려줘" 등 이슈 생성 의도)라고 하면 `/issue` 커맨드(`.claude/commands/issue.md`)를 실행한다.
+- **PR 생성:** 사용자가 **"PR 올려줘"**(또는 "PR 만들어줘", "풀리퀘 올려" 등 PR 생성 의도)라고 하면 `/pr` 커맨드(`.claude/commands/pr.md`)를 실행한다. 초안을 보여주고 승인받은 뒤에만 Draft PR을 생성한다.
+- **PR 리뷰 반영:** 사용자가 **"PR 리뷰 반영해줘"**(또는 "코드 리뷰 반영", "리뷰 코멘트 처리해줘" 등)라고 하면 `/apply-review` 커맨드(`.claude/commands/apply-review.md`)를 실행한다. 코멘트를 분류표로 제시하고, 사람이 건별 수용/거절을 결정하면 수용 건만 수정한다(승인 전 코드 수정·답글 금지).
 
 ---
 
