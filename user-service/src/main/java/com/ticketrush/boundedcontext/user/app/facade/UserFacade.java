@@ -9,6 +9,7 @@ import com.ticketrush.boundedcontext.user.app.dto.response.UserAuthInfoResponse;
 import com.ticketrush.boundedcontext.user.app.dto.response.UserMeResponse;
 import com.ticketrush.boundedcontext.user.app.usecase.EmailExistsUseCase;
 import com.ticketrush.boundedcontext.user.app.usecase.GetUserAuthInfoByEmailUseCase;
+import com.ticketrush.boundedcontext.user.app.usecase.GetUserAuthInfoByUserIdUseCase;
 import com.ticketrush.boundedcontext.user.app.usecase.GetUserMeUseCase;
 import com.ticketrush.boundedcontext.user.app.usecase.SignupUseCase;
 import com.ticketrush.boundedcontext.user.app.usecase.SocialLoginUseCase;
@@ -24,6 +25,7 @@ public class UserFacade {
   private final SignupUseCase signupUseCase;
   private final GetUserAuthInfoByEmailUseCase getUserAuthInfoByEmailUseCase;
   private final GetUserMeUseCase getUserMeUseCase;
+  private final GetUserAuthInfoByUserIdUseCase getUserAuthInfoByUserIdUseCase;
 
   // 소셜 로그인
   public SocialLoginResponse socialLogin(SocialLoginRequest request) {
@@ -48,5 +50,10 @@ public class UserFacade {
   // 회원정보 조회
   public UserMeResponse getMyInfo(Long userId) {
     return getUserMeUseCase.execute(userId);
+  }
+
+  // userId로 회원 인증 정보 조회
+  public UserAuthInfoResponse getUserAuthInfoByUserId(Long userId) {
+    return getUserAuthInfoByUserIdUseCase.execute(userId);
   }
 }
