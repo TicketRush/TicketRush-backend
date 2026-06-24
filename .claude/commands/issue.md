@@ -72,4 +72,4 @@ gh issue create --title "[모듈명] 제목" --label <템플릿라벨> --assigne
 2. 생성한 이슈 제목
 3. **생성된 이슈 URL/번호** (`gh issue create` 출력)
 
-B 모드로 만든 이슈는 곧바로 `feature/{번호}` 브랜치를 따 작업을 시작하거나 `/dev-cycle {번호}`로 이어갈 수 있음을 안내한다.
+B 모드로 만든 이슈는 곧바로 `{이슈 label}/{번호}` 브랜치를 따 작업을 시작하거나 `/dev-cycle {번호}`로 이어갈 수 있음을 안내한다.

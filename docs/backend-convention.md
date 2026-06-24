@@ -40,8 +40,12 @@
 
 
 * **브랜치 생성 방법:** `{브랜치 단위}/{이슈번호}`
-* 예: `feature/1`
-* 예: `fix/2`
+    * **`브랜치 단위`는 해당 이슈에 붙은 label과 동일하게 맞춥니다.** (label `refactor` → `refactor/{이슈번호}`)
+    * 항상 `feature/`가 아님에 유의합니다 — 이슈 label에 따라 접두어가 달라집니다.
+* 예: `feature/1` (label: feature)
+* 예: `fix/2` (label: fix)
+* 예: `refactor/250` (label: refactor)
+* 예: `docs/3` (label: docs)
 
 ### 📝 커밋(Commit) 메시지 규칙
 
@@ -192,9 +196,24 @@ onSuccess(SuccessStatus.OK, response);
 ```java
 // Service 내 에러 발생 예시
 Diary diary = diaryRepository.findByDiaryIdAndUserId(diaryId, userId)
-    .orElseThrow(() -> new GeneralException(ErrorStatus.DIARY_NOT_FOUND));
+    .orElseThrow(() -> new BusinessException(ErrorStatus.DIARY_NOT_FOUND));
 
 ```
+
+### 🧩 공통 모듈 주요 클래스 (빌딩블록)
+
+`common` 모듈이 제공하는, 전 서비스가 재사용하는 핵심 클래스입니다. (응답/에러 3종은 위 §3 참고)
+
+| 클래스 | 설명 |
+|--------|------|
+| `ApiResponse` | 응답 래퍼 (`onSuccess(status)`, `onSuccess(status, result)`, `onSuccess(status, Page<T>)`) — 상세 §3 |
+| `SuccessStatus` | 성공 코드 enum — 상세 §3 |
+| `ErrorStatus` | 에러 코드 enum (`모듈_상태코드_세자리번호`) — 상세 §3 |
+| `BusinessException` | 비즈니스 예외 — `GlobalExceptionHandler`가 자동으로 실패 응답으로 변환 |
+| `PageInfo` | 오프셋 페이징 정보 record (`pageIndex, size, hasNext, totalElements, totalPages`) |
+| `CursorInfo` | 커서 페이징 정보 record (`hasNext, nextCursor, size`) |
+| `AutoIdBaseEntity` | auto increment PK 기반 엔티티 상위 클래스 |
+| `BaseTimeEntity` | `createdAt`, `updatedAt` 포함 상위 클래스 |
 
 ## 4. 환경 및 기타 규칙
 

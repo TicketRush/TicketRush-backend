@@ -2,6 +2,37 @@
 
 각 모듈 내부는 DDD를 기반으로 다음과 같은 계층 구조를 가집니다.
 
+## 🗂 한눈에 보는 구조
+
+```
+boundedcontext/{도메인}/
+├── app/                    # 유스케이스 실행·계층 흐름 조율
+│   ├── facade/             # in 진입점, 여러 usecase 조합 (트랜잭션 없음)
+│   ├── usecase/            # 비즈니스 로직 + @Transactional
+│   ├── dto/
+│   │   ├── request/
+│   │   └── response/
+│   ├── mapper/             # DTO ↔ Entity 변환
+│   └── support/            # 파싱·검증·enum 변환 등 공통 보조 로직
+├── domain/                 # 순수 비즈니스 로직
+│   ├── entity/             # 비즈니스 규칙 구현
+│   ├── types/              # 도메인 ENUM
+│   └── policy/             # 도메인 정책
+├── in/                     # 외부 입력 진입점
+│   ├── api/                # REST Controller (v1, v2 등 버전 단위 분리)
+│   ├── eventlistener/      # 이벤트 수신 처리
+│   ├── scheduler/          # 주기 실행
+│   └── datainit/           # 초기 데이터 세팅
+└── out/                    # 외부로의 출력
+    ├── repository/         # 데이터 저장·조회
+    └── apiclient/          # 외부 서비스 연동
+
+global/                     # 특정 도메인에 종속되지 않는 전역 영역
+common (shared/)            # 모듈 공통 코드 (shared 디렉토리는 common에서만 사용)
+```
+
+> 각 계층의 상세 설명은 아래 절을 참고하세요.
+
 ## ⚙️ app
 
 **유스케이스를 실행하고 계층 간 흐름을 조율하는 영역입니다.**
