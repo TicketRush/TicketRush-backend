@@ -1,9 +1,7 @@
 # TicketRush 팀 컨벤션
 
-> **팀 컨벤션 단일 출처:** Git/이슈/PR, 네이밍·파일명, API, 응답 통일(ApiResponse), 주석,
-> `@Transactional`, Swagger 등 **모든 개발 컨벤션은 [`docs/backend-convention.md`](docs/backend-convention.md)
-> 를 단일 출처(SSOT)로 따른다.** 중복 관리를 피하기 위해 이 문서(CLAUDE.md)는 컨벤션을 다시 적지
-> 않고, Claude Code 작업에 필요한 **아키텍처·운영 정보만** 보강한다.
+> 이 문서(CLAUDE.md)는 Claude Code 작업에 필요한 **아키텍처·운영 정보**를 담는 진입점이다.
+> 코딩 컨벤션은 여기서 다루지 않는다(→ 아래 AI 금지규칙 4).
 > 도구 중립 진입점·문서 라우팅은 [`AGENTS.md`](AGENTS.md) 참고.
 
 ## 🚫 AI 금지규칙 (Hard Rules)
@@ -15,15 +13,14 @@
 
 ## 기술 스택
 
-- Java 21
-- Spring Boot 4.0.3 (LTS)
+Java · Spring Boot 기반. **버전 등 상세는 [`docs/backend-convention.md`](docs/backend-convention.md) §4 "버전 정보"를 SSOT로 따른다**(여기 중복 기재하지 않음).
 
 ---
 
 ## 프로젝트 아키텍처
 
 **MSA (Micro Service Architecture)** - Gradle 멀티 모듈. 서비스 내부는 DDD 계층(`app`/`domain`/`in`/`out`/`global`) 구조를 따른다.
-디렉토리·DDD 계층 상세는 [`docs/ddd.md`](docs/ddd.md), 공통 모듈 주요 클래스·코딩 컨벤션은 [`docs/backend-convention.md`](docs/backend-convention.md) 참고.
+디렉토리·DDD 계층 상세는 [`docs/ddd.md`](docs/ddd.md), 공통 모듈 주요 클래스는 [`docs/backend-convention.md`](docs/backend-convention.md) 참고.
 
 ### 모듈 목록
 | 모듈 | 역할 |
