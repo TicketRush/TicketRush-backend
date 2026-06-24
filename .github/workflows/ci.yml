@@ -5,6 +5,11 @@ on:
     branches: [ "develop" ]
     types: [opened, synchronize, reopened]
 
+# 같은 PR에 연속 push 시 진행 중이던 이전 run을 취소해 러너를 절약한다.
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   build:
     runs-on: ubuntu-latest

@@ -315,3 +315,5 @@ Select-String -Path .claude/logs/tools.jsonl -Pattern 'push --force|rm -rf'
 
 * CI는 **base가 `develop`인 PR에서만** 트리거됩니다(`.github/workflows/ci.yml`, `opened`/`synchronize`/`reopened`). 머지 전 **CI 그린**이 조건입니다(9단계).
 * 모든 루프가 끝나면(🔴·실패·코멘트 해소 + CI 그린) 비로소 머지합니다.
+
+> 📌 위 루프는 **AI 사이클 단계와의 매핑**만 다룹니다. **로컬 git 훅 활성화(`core.hooksPath`)·pre-commit 자동교정 루프·CI 게이트 구성·branch protection** 등 검증 파이프라인의 설정·운영은 [`backend-convention.md`](backend-convention.md) §1 "검증 파이프라인"이 SSOT입니다(여기 중복 기재하지 않음).

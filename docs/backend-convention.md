@@ -63,6 +63,46 @@
     * 우선적으로 `develop`에만 Push하며, `main`은 완벽히 준비되었을 때만 머지합니다.
     * 별도의 **Approve(코드 리뷰)는 머지 필수 조건이 아닙니다.**
 
+### 🔒 검증 파이프라인 (로컬 훅 + CI)
+
+커밋·PR이 팀 형식과 코드 스타일을 자동으로 지키도록 **로컬 git 훅**과 **CI 게이트** 2중으로 검증합니다.
+(AI 작업 사이클에서 이 파이프라인이 어떤 회복 루프로 도는지는 [`ai-workflow-guide.md`](ai-workflow-guide.md) 10장 참고.)
+
+#### ① 로컬 git 훅 활성화 (신규 합류자 1회 설정)
+
+훅은 `.githooks/`에 들어 있으며, **각자 로컬에서 한 번** 아래를 실행해야 동작합니다(빠뜨리면 커밋 시 검증이 돌지 않습니다).
+
+```bash
+git config core.hooksPath .githooks
+```
+
+> 저장소 클론 직후 한 번만 설정하면 됩니다. 설정 여부는 `git config core.hooksPath`로 확인할 수 있습니다(값이 `.githooks`면 활성).
+
+#### ② pre-commit — 자동교정 루프
+
+커밋 시 스테이징된 `.java` 파일이 있으면 다음 순서로 돕니다.
+
+1. **`./gradlew spotlessApply`** — 포맷을 **자동 수정**합니다.
+2. 자동 수정으로 바뀐 파일을 **다시 스테이징**합니다(원래 스테이징돼 있던 `.java`만).
+3. **`./gradlew checkstyleMain checkstyleTest`** — 통과해야 커밋이 진행됩니다.
+
+> 포맷 검증은 **자동으로 보장**됩니다 — pre-commit이 `spotlessApply`로 자동 교정하고, CI(`ci.yml`)가 `spotlessCheck`로 최종 검사합니다. 따라서 사람이 작업 완료 전 별도로 `spotlessCheck`를 돌릴 필요는 없습니다(원하면 로컬에서 `./gradlew spotlessCheck`로 미리 확인할 수는 있음).
+
+#### ③ commit-msg — 형식 검증
+
+커밋 메시지 첫 줄이 `[Type] #이슈번호 요약` 형식이어야 통과합니다(Merge/Revert/fixup/squash 커밋은 예외). 형식은 위 **커밋 메시지 규칙**(§1)과 동일합니다.
+
+#### ④ CI 게이트 (`.github/workflows/ci.yml`)
+
+`develop`을 대상으로 하는 PR(`opened`/`synchronize`/`reopened`)에서 자동 실행됩니다.
+
+* **단계:** `spotlessCheck` → `checkstyle` → `test` → `build` (job 이름 `build`).
+* **PR 제목 검증:** 별도 워크플로우 `pr-title.yml`(job `validate-title`)이 `[Type] #이슈번호 내용` 형식을 검사합니다.
+* **concurrency:** 같은 PR에 연속 push하면 진행 중이던 이전 run을 자동 취소해 러너를 절약합니다.
+* 머지 전 **CI 그린**이 조건입니다(Approve는 필수 아님 — 위 머지 규칙 참고).
+
+> `develop` 브랜치에는 **branch protection이 이미 적용**되어 `build`(`ci.yml`)·`validate-title`(`pr-title.yml`)가 필수 상태 체크로 요구됩니다(Approve는 강제하지 않음). 적용 변경은 admin 권한이 필요합니다.
+
 ## 2. 코드 및 네이밍 규칙
 
 ### 📁 디렉토리 구조 및 파일명
