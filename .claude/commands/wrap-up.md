@@ -13,7 +13,7 @@
 - `$ARGUMENTS` (선택) = 강조할 포인트·범위 힌트, 또는 전송 제어 지시.
   - 예: `결제 모듈 위주로`, `오늘 한 것만`
   - `바로전송` / `전송` 류 지시가 있으면 **3단계 확인을 생략**하고 곧장 전송한다.
-  - 없으면 대화 맥락 + git으로 추론한다.
+  - 없으면 대화 맥락 + git 기록에서 확인한 내용으로 정한다.
 
 ## 작업 순서
 
@@ -53,7 +53,7 @@ git log --oneline -15        # 이번 세션에 쌓인 커밋 식별
 ### 4단계 — 슬랙 전송
 
 - `$env:SLACK_WRAP_WEBHOOK`가 **비어 있으면 전송하지 않고**, "웹훅 URL 미설정(`settings.local.json`의 `env.SLACK_WRAP_WEBHOOK`)이라 전송을 스킵했다"고 안내한다(팀원 환경에서 안 깨지게).
-- 값이 있으면 아래로 POST한다. 한글 깨짐 방지를 위해 **본문을 UTF-8 바이트로 인코딩**한다.
+- 값이 있으면 아래로 POST한다. 한글 깨짐 방지를 위해 **본문을 UTF-8 바이트로 인코딩**한다. (아래 예시는 **PowerShell(pwsh) 기준** — 이 레포 기본 셸이 PowerShell이다. bash 환경이라면 `curl` 등으로 동등하게 옮긴다.)
   ```powershell
   # $summary = 2단계에서 만든 요약 문자열
   $payload = @{ text = $summary } | ConvertTo-Json -Depth 4
