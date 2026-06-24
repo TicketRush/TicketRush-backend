@@ -151,7 +151,7 @@ GitHub에 올라간 **PR을 리뷰**하는 커맨드입니다.
 
 ### 4.8. `/resume` — 세션 재개 오리엔테이션 (read-only)
 
-끊긴 세션을 다시 시작할 때, 저장된 작업 메모(`.claude/claude-progress.txt`·`feature_list.json`)와 git 상태를 읽어 **"지금 어디서부터 무엇을 할지"** 를 파악하고 다음 작업 1개를 제안합니다. **코드/커밋/브랜치를 바꾸지 않는** read-only 커맨드이며, 실제 구현은 `/dev-cycle`로 위임합니다(역할 분리는 6.2절).
+끊긴 세션을 다시 시작할 때, 저장된 작업 메모(`.claude/claude-progress.txt`·`.claude/feature_list.json`)와 git 상태를 읽어 **"지금 어디서부터 무엇을 할지"** 를 파악하고 다음 작업 1개를 제안합니다. **코드/커밋/브랜치를 바꾸지 않는** read-only 커맨드이며, 실제 구현은 `/dev-cycle`로 위임합니다(역할 분리는 6.2절).
 
 * 6단계: progress 읽기 → feature_list 읽기 → `git status`/`branch`/`log` → 개발 서버 안내 → 다음 작업 1개 선정(`doing` 우선) → 컨텍스트 40%·포크 안내.
 * 예시: `/resume`
