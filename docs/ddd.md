@@ -28,7 +28,7 @@ boundedcontext/{도메인}/
     └── apiclient/          # 외부 서비스 연동
 
 global/                     # 특정 도메인에 종속되지 않는 전역 영역
-common (shared/)            # 모듈 공통 코드 (shared 디렉토리는 common에서만 사용)
+common/                     # 모듈 공통 코드 (내부 shared/ 디렉토리는 common 모듈에서만 사용)
 ```
 
 > 각 계층의 상세 설명은 아래 절을 참고하세요.
