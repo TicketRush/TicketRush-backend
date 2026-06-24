@@ -90,7 +90,7 @@ git config core.hooksPath .githooks
 
 #### ③ commit-msg — 형식 검증
 
-커밋 메시지 첫 줄이 `[Type] #이슈번호 요약` 형식이어야 통과합니다(Merge/Revert/fixup/squash 커밋은 예외). 형식은 위 [커밋 메시지 규칙](#-커밋commit-메시지-규칙)과 동일합니다.
+커밋 메시지 첫 줄이 `[Type] #이슈번호 요약` 형식이어야 통과합니다(Merge/Revert/fixup/squash 커밋은 예외). 형식은 위 **커밋 메시지 규칙**(§1)과 동일합니다.
 
 #### ④ CI 게이트 (`.github/workflows/ci.yml`)
 
