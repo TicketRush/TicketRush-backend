@@ -379,6 +379,7 @@ Select-String -Path .claude/logs/tools.jsonl -Pattern 'push --force|rm -rf'
 | `apply-review.md` | command | PR 리뷰 코멘트 대응 | dev-cycle 9 | 공유 |
 | `review-pr.md` | command | 남의 PR 리뷰(사이클 외) | 독립 | 공유 |
 | `resume.md` | command | 세션 재개 오리엔테이션 | 상시 | 공유 |
+| `wrap-up.md` | command | 세션 작업 요약 슬랙 전송 | 상시 | 공유 |
 | `log.ps1` | hook | 프롬프트·도구 실행 로깅 | 상시 | 공유 |
 | `grill-me` | skill | 계획 캐묻기 트리거 | dev-cycle 3 | 공유 |
 | `grilling` | skill | 인터뷰 세션 | dev-cycle 3 | 공유 |
