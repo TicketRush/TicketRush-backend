@@ -379,6 +379,7 @@ Select-String -Path .claude/logs/tools.jsonl -Pattern 'push --force|rm -rf'
 | `apply-review.md` | command | PR 리뷰 코멘트 대응 | dev-cycle 9 | 공유 |
 | `review-pr.md` | command | 남의 PR 리뷰(사이클 외) | 독립 | 공유 |
 | `resume.md` | command | 세션 재개 오리엔테이션 | 상시 | 공유 |
+| `wrap-up.md` | command | 세션 작업 요약 슬랙 전송 | 상시 | 공유 |
 | `log.ps1` | hook | 프롬프트·도구 실행 로깅 | 상시 | 공유 |
 | `grill-me` | skill | 계획 캐묻기 트리거 | dev-cycle 3 | 공유 |
 | `grilling` | skill | 인터뷰 세션 | dev-cycle 3 | 공유 |
@@ -386,7 +387,7 @@ Select-String -Path .claude/logs/tools.jsonl -Pattern 'push --force|rm -rf'
 | `backend-convention.md` | doc | 코딩 컨벤션·검증 파이프라인 SSOT | — | 공유 |
 | `ddd.md` | doc | 디렉토리·DDD 계층 | — | 공유 |
 | `kafka-event-guide.md` | doc | Kafka 이벤트 설계 | — | 공유 |
-| `mapstruct_guide.md` | doc | MapStruct 매퍼 | — | 공유 |
+| `mapstruct-guide.md` | doc | MapStruct 매퍼 | — | 공유 |
 | `settings.json` | config | 플랜모드·로깅 훅 등록 | — | 공유 |
 | `settings.local.json` | config | 개인 권한 화이트리스트 | — | gitignore |
 | `claude-progress.txt.example` | template | 세션 맥락 메모 견본 | 상시 | example |
