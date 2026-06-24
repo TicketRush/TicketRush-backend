@@ -20,7 +20,8 @@
 ├── agents/                # 역할별 서브에이전트 정의
 │   ├── researcher.md
 │   ├── planner.md
-│   └── reviewer.md
+│   ├── reviewer.md
+│   └── gardener.md        # 하네스·문서 위생 상시 점검 (read-only)
 ├── commands/              # 슬래시 커맨드
 │   ├── review-pr.md       # 올라간 PR 리뷰 (코멘트 다는 방향)
 │   ├── apply-review.md    # PR에 달린 리뷰 코멘트 수용→수정 / 거절→사유
@@ -293,7 +294,7 @@ Select-String -Path .claude/logs/tools.jsonl -Pattern 'push --force|rm -rf'
 
 ### 8.2. 에이전트별 도구 경계
 
-각 에이전트는 **역할에 필요한 도구만** 가집니다. **서브에이전트**(`researcher`/`planner`/`reviewer`)의 도구 종류는 `.claude/agents/*.md`의 `tools:`로 강제하고(메인 `claude`는 별도 에이전트 정의 파일 없이 전체 도구 보유), **Bash의 "읽기 전용"(파일 변경 명령 금지)은 각 에이전트 본문 정책으로** 강제합니다.
+각 에이전트는 **역할에 필요한 도구만** 가집니다. **서브에이전트**(`researcher`/`planner`/`reviewer`/`gardener`)의 도구 종류는 `.claude/agents/*.md`의 `tools:`로 강제하고(메인 `claude`는 별도 에이전트 정의 파일 없이 전체 도구 보유), **Bash의 "읽기 전용"(파일 변경 명령 금지)은 각 에이전트 본문 정책으로** 강제합니다.
 
 | 에이전트 | Read·Grep·Glob | Bash | Edit·Write | WebSearch·WebFetch | 비고 |
 |---|:---:|:---:|:---:|:---:|---|
@@ -301,6 +302,7 @@ Select-String -Path .claude/logs/tools.jsonl -Pattern 'push --force|rm -rf'
 | `researcher` | ✅ | ✅(읽기) | ✗ | ✅ | 유일하게 웹 조사 허용 |
 | `planner` | ✅ | ✅ | ✗ | ✗ | 계획만 — "코드 수정 안 함" 정책 |
 | `reviewer` | ✅ | ✅(읽기) | ✗ | ✗ | 검증 독립성 — Edit/Write 미부여 |
+| `gardener` | ✅ | ✅(읽기) | ✗ | ✗ | 하네스·문서 위생 상시 점검(보고만) — `reviewer`는 프로덕션 코드 diff, `gardener`는 환경/문서 정합성 |
 
 * 메인 `claude`만 Edit/Write를 가져 실제 변경을 하고, 서브에이전트는 **읽기 위주**입니다. `reviewer`의 "Bash 읽기 전용(파일 변경 명령 금지)"의 구체 의미는 3.3절을 참고하세요.
 
@@ -343,3 +345,52 @@ Select-String -Path .claude/logs/tools.jsonl -Pattern 'push --force|rm -rf'
 * 모든 루프가 끝나면(🔴·실패·코멘트 해소 + CI 그린) 비로소 머지합니다.
 
 > 📌 위 루프는 **AI 사이클 단계와의 매핑**만 다룹니다. **로컬 git 훅 활성화(`core.hooksPath`)·pre-commit 자동교정 루프·CI 게이트 구성·branch protection** 등 검증 파이프라인의 설정·운영은 [`backend-convention.md`](backend-convention.md) §1 "검증 파이프라인"이 SSOT입니다(여기 중복 기재하지 않음).
+
+---
+
+## 11. 하네스 유지보수 (gardener)
+
+하네스(에이전트·커맨드·훅·스킬·문서·설정)가 늘어난 만큼, 시간이 지나며 문서와 실제가 어긋나거나 안 쓰는 항목이 쌓일 수 있습니다. 이를 **상시 점검**하는 것이 `gardener` 에이전트이며, 구성요소를 한눈에 보는 **인덱스 표**도 함께 둡니다.
+
+### 11.1. `gardener` — 하네스·문서 위생 점검 (read-only)
+
+`reviewer`가 **프로덕션 코드 diff**를 검증한다면, `gardener`는 **하네스·문서의 위생**을 점검합니다(책임 분리 — 9장 "멀티에이전트 설계 원칙"의 단일 책임). **Edit/Write가 없어 보고만** 하고, 수정은 사람이 승인한 뒤 별도로 합니다(정의: `.claude/agents/gardener.md`).
+
+* **점검 5종**: (a) 문서–코드/설정 불일치 (b) 컨벤션 위반(하네스·문서 범위로 한정) (c) 미사용 커맨드/에이전트/스킬/문서 (d) 깨진 내부 링크 (e) `settings.local.json` 권한 과다(gitignore 개인 파일 — 보고만).
+* **보고**: 🔴 Must / 🟡 Should / 🔵 Nit + 요약 테이블(`reviewer`와 동일 형식).
+* **실행 주기**: 스프린트 종료 시(정기) · 하네스를 크게 바꾸는 PR 전 · 필요 시 수동 호출.
+* **`reviewer`와의 경계**: 코드 버그·리스크는 `reviewer`(6단계), 환경/문서 정합성은 `gardener`(상시). 둘은 책임이 겹치지 않습니다.
+
+### 11.2. 하네스 구성요소 인덱스
+
+현재 하네스 구성요소를 한눈에 봅니다(상세는 각 절 참고 — 이 표는 **인덱스** 역할).
+
+| 구성요소 | 종류 | 역할 | 연결 단계 | 상태 |
+|---|---|---|---|---|
+| `researcher` | agent | 조사·근거 수집 | dev-cycle 2 | 공유 |
+| `planner` | agent | 계획·리스크 수립 | dev-cycle 3 | 공유 |
+| `reviewer` | agent | 프로덕션 코드 diff 검증 | dev-cycle 6 | 공유 |
+| `gardener` | agent | 하네스·문서 위생 점검 | 상시 | 공유 |
+| `issue.md` | command | 이슈 생성 | dev-cycle 1 전 | 공유 |
+| `dev-cycle.md` | command | 개발 사이클 오케스트레이션 | dev-cycle 전체 | 공유 |
+| `commit.md` | command | 팀 형식 커밋 | dev-cycle 7 | 공유 |
+| `test.md` | command | 변경 모듈 테스트 실행 | dev-cycle 5 | 공유 |
+| `pr.md` | command | PR 생성(승인 후) | dev-cycle 8 | 공유 |
+| `apply-review.md` | command | PR 리뷰 코멘트 대응 | dev-cycle 9 | 공유 |
+| `review-pr.md` | command | 남의 PR 리뷰(사이클 외) | 독립 | 공유 |
+| `resume.md` | command | 세션 재개 오리엔테이션 | 상시 | 공유 |
+| `log.ps1` | hook | 프롬프트·도구 실행 로깅 | 상시 | 공유 |
+| `grill-me` | skill | 계획 캐묻기 트리거 | dev-cycle 3 | 공유 |
+| `grilling` | skill | 인터뷰 세션 | dev-cycle 3 | 공유 |
+| `ai-workflow-guide.md` | doc | AI 워크플로우 SSOT | — | 공유 |
+| `backend-convention.md` | doc | 코딩 컨벤션·검증 파이프라인 SSOT | — | 공유 |
+| `ddd.md` | doc | 디렉토리·DDD 계층 | — | 공유 |
+| `kafka-event-guide.md` | doc | Kafka 이벤트 설계 | — | 공유 |
+| `mapstruct_guide.md` | doc | MapStruct 매퍼 | — | 공유 |
+| `settings.json` | config | 플랜모드·로깅 훅 등록 | — | 공유 |
+| `settings.local.json` | config | 개인 권한 화이트리스트 | — | gitignore |
+| `claude-progress.txt.example` | template | 세션 맥락 메모 견본 | 상시 | example |
+| `feature_list.json.example` | template | 세션 작업 항목 견본 | 상시 | example |
+
+> 이 표는 **한눈 인덱스**입니다. 새 구성요소를 추가하면 이 표·1장 트리·8.2 표(에이전트의 경우)를 함께 갱신하세요(정합성은 `gardener` (a) 점검 대상).
+> `.claude/logs/`(prompt.jsonl·tools.jsonl)는 런타임 로그 데이터(gitignore)라 구성요소 인덱스에서는 의도적으로 제외합니다(7장 참고).
