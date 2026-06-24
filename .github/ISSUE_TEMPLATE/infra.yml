@@ -2,6 +2,7 @@ name: Infra Template
 description: 서버 환경 세팅, Docker, K8s, CI/CD 파이프라인 등 인프라 작업용 템플릿
 title: "[인프라명] "
 labels: ["infra"]
+type: "Task"
 
 body:
   - type: input
