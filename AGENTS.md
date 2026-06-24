@@ -6,7 +6,7 @@ TicketRush 백엔드의 **도구 중립 AI 진입점**입니다. Claude Code·Gi
 ## 빌드 · 테스트
 
 ```bash
-./gradlew spotlessCheck   # 코드 포맷 검사 (작업 완료 전 필수)
+./gradlew spotlessCheck   # 코드 포맷 검사 (pre-commit·CI가 자동 검증; 로컬 사전 확인용)
 ./gradlew test            # 테스트 실행
 ./gradlew build           # 빌드
 ```

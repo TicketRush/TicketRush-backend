@@ -86,7 +86,7 @@ git config core.hooksPath .githooks
 2. 자동 수정으로 바뀐 파일을 **다시 스테이징**합니다(원래 스테이징돼 있던 `.java`만).
 3. **`./gradlew checkstyleMain checkstyleTest`** — 통과해야 커밋이 진행됩니다.
 
-> 자동 수정이 되더라도, 작업을 마무리하기 전에는 **반드시 직접 `./gradlew spotlessCheck`로 통과를 확인**합니다(MEMORY 규칙). 자동교정은 보조 장치이고, 최종 책임은 사람이 `spotlessCheck`로 확인하는 것입니다.
+> 포맷 검증은 **자동으로 보장**됩니다 — pre-commit이 `spotlessApply`로 자동 교정하고, CI(`ci.yml`)가 `spotlessCheck`로 최종 검사합니다. 따라서 사람이 작업 완료 전 별도로 `spotlessCheck`를 돌릴 필요는 없습니다(원하면 로컬에서 `./gradlew spotlessCheck`로 미리 확인할 수는 있음).
 
 #### ③ commit-msg — 형식 검증
 
