@@ -4,13 +4,8 @@
 
 ### 👥 코드 리뷰
 
-* 코드 리뷰는 **선택(권장)** 사항이며 **머지 필수 조건이 아닙니다.** 필요 시 아래 권장 리뷰어 매핑을 참고해 리뷰어를 지정할 수 있습니다.
-
-| 리뷰하는 사람 | 리뷰 받는 사람 |
-|---------|----------|
-| 혜림      | 민주       |
-| 민주      | 소희       |
-| 소희      | 혜림       |
+* 코드 리뷰는 **선택(권장)** 사항이며 **머지 필수 조건이 아닙니다.** 리뷰어가 필요하면 사람이 직접 지정합니다.
+* `/pr` 자동화는 **리뷰어를 자동 지정하지 않습니다.**(요청 시에만 부착)
 
 ### 💬 Discussion
 
@@ -40,8 +35,12 @@
 
 
 * **브랜치 생성 방법:** `{브랜치 단위}/{이슈번호}`
-* 예: `feature/1`
-* 예: `fix/2`
+    * **`브랜치 단위`는 해당 이슈에 붙은 label과 동일하게 맞춥니다.** (label `refactor` → `refactor/{이슈번호}`)
+    * 항상 `feature/`가 아님에 유의합니다 — 이슈 label에 따라 접두어가 달라집니다.
+* 예: `feature/1` (label: feature)
+* 예: `fix/2` (label: fix)
+* 예: `refactor/250` (label: refactor)
+* 예: `docs/3` (label: docs)
 
 ### 📝 커밋(Commit) 메시지 규칙
 
@@ -57,7 +56,7 @@
     * 예: `[Chore] #2, 3 이슈 및 PR 템플릿 생성` (다중 이슈는 쉼표로 구분)
 
 * **develop 머지 규칙:**
-    * `feature/1` 등의 브랜치를 `develop`으로 머지합니다.
+    * `{label}/1` 등의 브랜치를 `develop`으로 머지합니다.
     * 별도의 **Approve(코드 리뷰)는 머지 필수 조건이 아닙니다.** 리뷰는 선택(권장)이며, 받지 않고도 머지할 수 있습니다.
 
 * **main 머지 규칙:**
@@ -192,9 +191,24 @@ onSuccess(SuccessStatus.OK, response);
 ```java
 // Service 내 에러 발생 예시
 Diary diary = diaryRepository.findByDiaryIdAndUserId(diaryId, userId)
-    .orElseThrow(() -> new GeneralException(ErrorStatus.DIARY_NOT_FOUND));
+    .orElseThrow(() -> new BusinessException(ErrorStatus.DIARY_NOT_FOUND));
 
 ```
+
+### 🧩 공통 모듈 주요 클래스 (빌딩블록)
+
+`common` 모듈이 제공하는, 전 서비스가 재사용하는 핵심 클래스입니다. (응답/에러 3종은 위 §3 참고)
+
+| 클래스 | 설명 |
+|--------|------|
+| `ApiResponse` | 응답 래퍼 (`onSuccess(status)`, `onSuccess(status, result)`, `onSuccess(status, Page<T>)`) — 상세 §3 |
+| `SuccessStatus` | 성공 코드 enum — 상세 §3 |
+| `ErrorStatus` | 에러 코드 enum (`모듈_상태코드_세자리번호`) — 상세 §3 |
+| `BusinessException` | 비즈니스 예외 — `GlobalExceptionHandler`가 자동으로 실패 응답으로 변환 |
+| `PageInfo` | 오프셋 페이징 정보 record (`pageIndex, size, hasNext, totalElements, totalPages`) |
+| `CursorInfo` | 커서 페이징 정보 record (`hasNext, nextCursor, size`) |
+| `AutoIdBaseEntity` | auto increment PK 기반 엔티티 상위 클래스 |
+| `BaseTimeEntity` | `createdAt`, `updatedAt` 포함 상위 클래스 |
 
 ## 4. 환경 및 기타 규칙
 
