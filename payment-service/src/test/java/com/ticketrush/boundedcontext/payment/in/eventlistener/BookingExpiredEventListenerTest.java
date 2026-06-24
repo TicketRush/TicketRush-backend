@@ -1,9 +1,11 @@
 package com.ticketrush.boundedcontext.payment.in.eventlistener;
 
+import static org.assertj.core.api.Assertions.assertThatCode;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.BDDMockito.given;
+import static org.mockito.BDDMockito.willThrow;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 
@@ -19,6 +21,7 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.kafka.support.Acknowledgment;
 
 @ExtendWith(MockitoExtension.class)
@@ -81,5 +84,34 @@ class BookingExpiredEventListenerTest {
 
     verify(paymentFacade, never()).registerExpiredBooking(anyLong(), any());
     verify(acknowledgment, never()).acknowledge();
+  }
+
+  @Test
+  @DisplayName("이미 등록된 만료 booking(unique 제약 위반)은 중복으로 간주하고 정상 ack 한다")
+  void handleBookingExpired_acks_on_duplicate() {
+    // given
+    Long bookingId = 100L;
+    LocalDateTime expiredAt = LocalDateTime.of(2026, 6, 21, 10, 0);
+    String payload = "{\"bookingId\":100,\"expiredAt\":\"2026-06-21T10:00:00\"}";
+    DomainEventEnvelope envelope =
+        new DomainEventEnvelope(
+            "event-id",
+            BookingExpiredEvent.EVENT_NAME,
+            Instant.now(),
+            BookingExpiredEvent.TOPIC,
+            payload,
+            null);
+    BookingExpiredEvent event = new BookingExpiredEvent(bookingId, expiredAt);
+
+    given(jsonConverter.deserialize(payload, BookingExpiredEvent.class)).willReturn(event);
+    willThrow(new DataIntegrityViolationException("duplicate bookingId"))
+        .given(paymentFacade)
+        .registerExpiredBooking(bookingId, expiredAt);
+
+    // when & then
+    assertThatCode(() -> listener.handleBookingExpired(envelope, acknowledgment))
+        .doesNotThrowAnyException();
+
+    verify(acknowledgment).acknowledge();
   }
 }

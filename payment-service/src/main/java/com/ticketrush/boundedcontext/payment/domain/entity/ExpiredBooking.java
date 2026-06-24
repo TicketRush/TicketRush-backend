@@ -6,6 +6,7 @@ import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.Table;
 import java.time.LocalDateTime;
+import java.util.Objects;
 import lombok.AccessLevel;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
@@ -28,8 +29,8 @@ public class ExpiredBooking extends AutoIdBaseEntity {
   private LocalDateTime expiredAt; // booking이 EXPIRED로 전이된 시점
 
   private ExpiredBooking(Long bookingId, LocalDateTime expiredAt) {
-    this.bookingId = bookingId;
-    this.expiredAt = expiredAt;
+    this.bookingId = Objects.requireNonNull(bookingId, "bookingId는 null일 수 없습니다.");
+    this.expiredAt = Objects.requireNonNull(expiredAt, "expiredAt은 null일 수 없습니다.");
   }
 
   public static ExpiredBooking of(Long bookingId, LocalDateTime expiredAt) {
