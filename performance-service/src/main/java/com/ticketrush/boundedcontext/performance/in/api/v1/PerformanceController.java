@@ -55,7 +55,6 @@ public class PerformanceController {
           | BALLET | 발레/무용 |
           | FANMEETING | 팬미팅 |
           """)
-  @PerformanceListApiResponses
   @GetMapping
   public ResponseEntity<ApiResponse<List<PerformanceListResponse>>> getPerformances(
       @Parameter(description = "장르 필터 (미입력 시 전체 조회)") @RequestParam(required = false) Genre genre,
@@ -75,7 +74,6 @@ public class PerformanceController {
   }
 
   @Operation(summary = "공연 상세 조회", description = "공연 ID로 상세 정보를 조회합니다. 인증 없이 누구나 접근 가능합니다.")
-  @PerformanceDetailApiResponses
   @GetMapping("/{id}")
   public ResponseEntity<ApiResponse<PerformanceDetailResponse>> getPerformanceDetail(
       @Parameter(description = "공연 ID") @Positive @PathVariable Long id) {

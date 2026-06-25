@@ -21,7 +21,6 @@ public class PerformanceInternalController {
   private final PerformanceFacade performanceFacade;
 
   @Operation(summary = "공연 유효성 검증", description = "공연이 존재하고 예매 가능(ON_SALE) 상태인지 검증합니다.")
-  @PerformanceValidateApiResponses
   @GetMapping("/{id}/validate")
   public ResponseEntity<ApiResponse<Void>> validatePerformance(@PathVariable Long id) {
     performanceFacade.validatePerformance(id);
