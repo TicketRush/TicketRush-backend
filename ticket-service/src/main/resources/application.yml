@@ -8,6 +8,13 @@ spring:
   application:
     name: ticket-service
 
+service:
+  booking:
+    url: ${BOOKING_SERVICE_URL:http://localhost:8084}
+  http:
+    connect-timeout-ms: ${SERVICE_HTTP_CONNECT_TIMEOUT_MS:3000}
+    read-timeout-ms: ${SERVICE_HTTP_READ_TIMEOUT_MS:10000}
+
 custom:
   global:
     internalBackUrl: http://localhost:${server.port:8087}
@@ -22,3 +29,9 @@ springdoc:
 
 gateway:
   internal-token: ${GATEWAY_INTERNAL_TOKEN:test-token}
+
+ticket:
+  qr:
+    # QR 토큰 서명 시크릿. 기본값을 두지 않아 미주입 시 기동을 실패시킨다(공개 시크릿으로 서명되는 사고 방지).
+    secret: ${TICKET_QR_SECRET}
+    ttl-millis: ${TICKET_QR_TTL_MILLIS:300000}
