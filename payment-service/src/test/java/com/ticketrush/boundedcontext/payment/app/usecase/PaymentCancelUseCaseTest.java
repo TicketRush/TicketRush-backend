@@ -119,7 +119,6 @@ class PaymentCancelUseCaseTest {
     // given
     Long userId = 10L;
     Long paymentId = 1L;
-    PaymentCancelRequest request = new PaymentCancelRequest("단순 변심");
 
     Payment payment = completedPayment(paymentId, userId, 100L, 200L, 55_000L);
     payment.markCanceled();
@@ -135,6 +134,8 @@ class PaymentCancelUseCaseTest {
 
     given(paymentRepository.findByIdAndUserId(paymentId, userId)).willReturn(Optional.of(payment));
     given(refundRepository.findByPaymentId(paymentId)).willReturn(Optional.of(existing));
+
+    PaymentCancelRequest request = new PaymentCancelRequest("단순 변심");
 
     // when
     PaymentCancelResponse response = paymentCancelUseCase.execute(userId, paymentId, request);
