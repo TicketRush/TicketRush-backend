@@ -31,6 +31,8 @@ public class InternalApiTokenFilter extends OncePerRequestFilter {
   private static final String SIGNUP_EMAIL_VERIFICATION_CONSUME_PATH =
       "/api/v1/auth/signup/email-verification/consume";
 
+  private static final String INTERNAL_USER_API_PREFIX = "/api/v1/internal/user";
+
   private final CustomSecurityProperties securityProperties;
 
   @Override
@@ -63,10 +65,15 @@ public class InternalApiTokenFilter extends OncePerRequestFilter {
   }
 
   private boolean isInternalApi(HttpServletRequest request) {
-    String path = request.getRequestURI();
+    String path = request.getServletPath();
     String method = request.getMethod();
 
-    return (HttpMethod.GET.matches(method) && SIGNUP_EMAIL_VERIFICATION_VERIFIED_PATH.equals(path))
+    return isInternalUserApi(path)
+        || (HttpMethod.GET.matches(method) && SIGNUP_EMAIL_VERIFICATION_VERIFIED_PATH.equals(path))
         || (HttpMethod.POST.matches(method) && SIGNUP_EMAIL_VERIFICATION_CONSUME_PATH.equals(path));
+  }
+
+  private boolean isInternalUserApi(String path) {
+    return INTERNAL_USER_API_PREFIX.equals(path) || path.startsWith(INTERNAL_USER_API_PREFIX + "/");
   }
 }

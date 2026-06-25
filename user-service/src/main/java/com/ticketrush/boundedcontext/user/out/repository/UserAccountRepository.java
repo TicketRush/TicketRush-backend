@@ -10,4 +10,7 @@ public interface UserAccountRepository extends JpaRepository<UserAccount, Long> 
 
   @Query("select ua from UserAccount ua join fetch ua.user u where u.email = :email")
   Optional<UserAccount> findByEmail(@Param("email") String email);
+
+  @Query("select ua from UserAccount ua join fetch ua.user u where u.id = :userId")
+  Optional<UserAccount> findByUserId(@Param("userId") Long userId);
 }

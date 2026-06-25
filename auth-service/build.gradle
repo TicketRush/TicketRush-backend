@@ -46,6 +46,7 @@ dependencies {
 	testImplementation 'org.springframework.boot:spring-boot-starter-security-test'
 	testImplementation 'org.springframework.boot:spring-boot-starter-webmvc-test'
 	testRuntimeOnly 'org.junit.platform:junit-platform-launcher'
+	testImplementation testFixtures(project(":common"))
 
 	// swagger
 	implementation 'org.springdoc:springdoc-openapi-starter-webmvc-ui:3.0.1'
