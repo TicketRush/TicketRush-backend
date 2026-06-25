@@ -1,0 +1,60 @@
+name: Weekly Scrum
+
+on:
+  schedule:
+    # 매주 목요일 09:00 UTC = 목요일 오후 6시(18:00) KST
+    - cron: '0 9 * * 4'
+  workflow_dispatch:   # GitHub Actions 탭에서 수동 실행(테스트)도 가능
+
+permissions:
+  contents: read
+  issues: read
+  pull-requests: read
+
+jobs:
+  scrum:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Build & send weekly scrum to Slack
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
+        run: |
+          set -euo pipefail
+          SINCE=$(date -u -d '7 days ago' +%Y-%m-%d)
+          TODAY=$(date -u +%Y-%m-%d)
+
+          # 1) 이번 주 develop에 머지된 PR — 작성자(author)별로 그룹핑
+          PR_COUNT=$(gh pr list --state merged --base develop \
+                  --search "merged:>=$SINCE" --json number --jq 'length')
+          PR_SECTION=$(gh pr list --state merged --base develop \
+                  --search "merged:>=$SINCE" \
+                  --json number,title,author \
+                  --jq 'group_by(.author.login)
+                        | map("*@\(.[0].author.login) (\(length)건)*\n"
+                              + (map("• #\(.number) \(.title)") | join("\n")))
+                        | join("\n\n")')
+
+          # 2) 진행 중(열린) 이슈 — 최대 15개
+          OPEN=$(gh issue list --state open --limit 15 \
+                  --json number,title \
+                  --jq '[.[] | "• #\(.number) \(.title)"] | join("\n")')
+
+          # 메시지 조립
+          MESSAGE="<!channel> 🗓 *주간 스크럼* — $TODAY (최근 7일 진행상황)
+
+          *📦 이번 주 머지된 PR (${PR_COUNT}건)*
+          ${PR_SECTION:-• 없음}
+
+          *🚧 진행 중인 이슈*
+          ${OPEN:-• 없음}
+
+          ──────────
+          👋 *팀원 여러분, 이 스레드에 댓글로 이번 주 진행상황을 남겨주세요!*
+          • 이번 주 한 일 / 다음 주 할 일 / 막힌 점"
+
+          # Slack 전송 (jq로 JSON escape)
+          curl -sS -X POST -H 'Content-type: application/json' \
+            --data "$(jq -nc --arg t "$MESSAGE" '{text:$t}')" \
+            "$SLACK_WEBHOOK_URL"
