@@ -72,8 +72,16 @@ public class Payment extends AutoIdBaseEntity {
     this.paidAt = paidAt;
   }
 
-  /** 환불 처리로 결제를 취소 상태로 전이한다. */
+  /**
+   * 환불 처리로 결제를 취소 상태로 전이한다.
+   *
+   * <p>COMPLETED 상태에서만 취소로 전이할 수 있다. 그 외 상태에서 호출되면 도메인 불변식 위반이므로 {@link IllegalStateException}을
+   * 던진다. (정상 흐름에서는 UseCase의 상태 검증과 환불 unique 제약이 먼저 막으므로 이 가드는 방어선이다.)
+   */
   public void markCanceled() {
+    if (this.status != PaymentStatus.COMPLETED) {
+      throw new IllegalStateException("결제 취소는 COMPLETED 상태에서만 가능합니다. 현재 상태=" + this.status);
+    }
     this.status = PaymentStatus.CANCELED;
   }
 }
