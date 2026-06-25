@@ -36,10 +36,13 @@ public class PaymentConfirmedEventListener {
     } catch (Exception e) {
       // 결제는 이미 완료된 상태라 재시도해도 예매 상태가 바뀌지 않는다.
       // 무한 재시도/파티션 블로킹을 피하고, 강한 로그를 남겨 수동 복구가 가능하도록 조치한다.
+      // 역직렬화 실패 시 event가 null이라 bookingId를 못 얻으므로, 항상 살아있는
+      // envelope.eventId()를 함께 남겨 어떤 메시지가 실패했는지 추적할 수 있게 한다.
       Long failedBookingId = (event != null) ? event.bookingId() : null;
       log.error(
           "[CRITICAL] 결제 완료 이벤트로 예매 확정 중 치명적 오류 발생! "
-              + "결제는 완료되었으나 예매 확정에 실패했습니다. 확인이 필요합니다. bookingId: {}",
+              + "결제는 완료되었으나 예매 확정에 실패했습니다. 확인이 필요합니다. eventId: {}, bookingId: {}",
+          envelope.eventId(),
           failedBookingId,
           e);
 
