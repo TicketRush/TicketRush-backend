@@ -33,26 +33,43 @@ public class SecurityConfig {
         .addFilterBefore(gatewayHeaderFilter, UsernamePasswordAuthenticationFilter.class)
         .exceptionHandling(
             exception ->
-                exception.authenticationEntryPoint(
-                    (request, response, authException) -> {
-                      response.setStatus(ErrorStatus.UNAUTHORIZED.getHttpStatus().value());
-                      response.setContentType(MediaType.APPLICATION_JSON_VALUE);
-                      response
-                          .getWriter()
-                          .write(
-                              """
+                exception
+                    .authenticationEntryPoint(
+                        (request, response, authException) -> {
+                          response.setStatus(ErrorStatus.UNAUTHORIZED.getHttpStatus().value());
+                          response.setContentType(MediaType.APPLICATION_JSON_VALUE);
+                          response
+                              .getWriter()
+                              .write(
+                                  """
                               {"is_success":false,"code":"%s","message":"%s"}
                               """
-                                  .formatted(
-                                      ErrorStatus.UNAUTHORIZED.getCode(),
-                                      ErrorStatus.UNAUTHORIZED.getMessage()));
-                    }))
+                                      .formatted(
+                                          ErrorStatus.UNAUTHORIZED.getCode(),
+                                          ErrorStatus.UNAUTHORIZED.getMessage()));
+                        })
+                    .accessDeniedHandler(
+                        (request, response, accessDeniedException) -> {
+                          response.setStatus(ErrorStatus.FORBIDDEN.getHttpStatus().value());
+                          response.setContentType(MediaType.APPLICATION_JSON_VALUE);
+                          response
+                              .getWriter()
+                              .write(
+                                  """
+                                  {"is_success":false,"code":"%s","message":"%s"}
+                                  """
+                                      .formatted(
+                                          ErrorStatus.FORBIDDEN.getCode(),
+                                          ErrorStatus.FORBIDDEN.getMessage()));
+                        }))
         .authorizeHttpRequests(
             auth ->
                 auth.requestMatchers("/v3/api-docs/**", "/swagger-ui/**", "/swagger-ui.html")
                     .permitAll()
                     .requestMatchers(HttpMethod.GET, "/api/v1/ticket/bookings/*/qr")
                     .authenticated()
+                    .requestMatchers(HttpMethod.POST, "/api/v1/entries/**")
+                    .hasRole("ADMIN")
                     .anyRequest()
                     .permitAll());
 
