@@ -278,10 +278,9 @@ class TossPaymentApprovalClientTest {
   }
 
   @Test
-  @DisplayName("TOSS provider만 지원한다")
-  void supports_toss_only() {
-    assertThat(client.supports(PaymentProvider.TOSS)).isTrue();
-    assertThat(client.supports(PaymentProvider.KAKAO)).isFalse();
-    assertThat(client.supports(PaymentProvider.NAVER)).isFalse();
+  @DisplayName("TOSS provider를 담당한다")
+  void provider_is_toss() {
+    assertThat(client.provider()).isEqualTo(PaymentProvider.TOSS);
+    assertThat(client.isFallback()).isFalse();
   }
 }

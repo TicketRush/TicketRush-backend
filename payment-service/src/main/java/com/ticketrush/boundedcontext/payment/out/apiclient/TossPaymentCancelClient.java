@@ -9,7 +9,6 @@ import java.util.List;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
-import org.springframework.core.annotation.Order;
 import org.springframework.http.HttpStatusCode;
 import org.springframework.http.MediaType;
 import org.springframework.stereotype.Component;
@@ -29,7 +28,6 @@ import org.springframework.web.client.RestClientException;
  */
 @Slf4j
 @Component
-@Order(0)
 @ConditionalOnProperty(prefix = "payment.pg.toss", name = "enabled", havingValue = "true")
 public class TossPaymentCancelClient implements PaymentCancelClient {
 
@@ -43,8 +41,8 @@ public class TossPaymentCancelClient implements PaymentCancelClient {
   }
 
   @Override
-  public boolean supports(PaymentProvider provider) {
-    return provider == PaymentProvider.TOSS;
+  public PaymentProvider provider() {
+    return PaymentProvider.TOSS;
   }
 
   @Override

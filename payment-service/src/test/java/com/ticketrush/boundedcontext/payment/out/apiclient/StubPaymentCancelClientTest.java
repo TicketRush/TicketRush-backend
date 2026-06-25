@@ -1,6 +1,7 @@
 package com.ticketrush.boundedcontext.payment.out.apiclient;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import com.ticketrush.boundedcontext.payment.domain.types.PaymentProvider;
 import org.junit.jupiter.api.DisplayName;
@@ -11,11 +12,15 @@ class StubPaymentCancelClientTest {
   private final StubPaymentCancelClient client = new StubPaymentCancelClient();
 
   @Test
-  @DisplayName("모든 provider를 지원한다 (fallback 클라이언트)")
-  void supports_all_providers() {
-    assertThat(client.supports(PaymentProvider.TOSS)).isTrue();
-    assertThat(client.supports(PaymentProvider.KAKAO)).isTrue();
-    assertThat(client.supports(PaymentProvider.NAVER)).isTrue();
+  @DisplayName("fallback 클라이언트로 표시된다")
+  void is_fallback() {
+    assertThat(client.isFallback()).isTrue();
+  }
+
+  @Test
+  @DisplayName("fallback 이므로 단일 provider 매핑 조회 시 예외를 던진다")
+  void provider_throws() {
+    assertThatThrownBy(client::provider).isInstanceOf(UnsupportedOperationException.class);
   }
 
   @Test
