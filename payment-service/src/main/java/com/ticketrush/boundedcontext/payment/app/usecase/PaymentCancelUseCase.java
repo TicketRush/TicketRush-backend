@@ -84,7 +84,7 @@ public class PaymentCancelUseCase {
         payment.getSeatId(),
         saved.getId(),
         saved.getPrice(),
-        request.reason(),
+        saved.getReason(),
         saved.getConfirmedAt());
 
     return PaymentCancelResponse.of(payment, saved);
