@@ -1,10 +1,7 @@
-package com.ticketrush.boundedcontext.payment.out.apiclient.toss;
+package com.ticketrush.boundedcontext.payment.out.apiclient;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.ticketrush.boundedcontext.payment.domain.types.PaymentProvider;
-import com.ticketrush.boundedcontext.payment.out.apiclient.PaymentApprovalClient;
-import com.ticketrush.boundedcontext.payment.out.apiclient.PaymentApprovalRequest;
-import com.ticketrush.boundedcontext.payment.out.apiclient.PaymentApprovalResponse;
 import com.ticketrush.global.exception.BusinessException;
 import com.ticketrush.global.status.ErrorStatus;
 import java.io.IOException;

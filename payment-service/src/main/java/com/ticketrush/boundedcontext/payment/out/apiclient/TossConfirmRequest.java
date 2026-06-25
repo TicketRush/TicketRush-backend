@@ -1,4 +1,4 @@
-package com.ticketrush.boundedcontext.payment.out.apiclient.toss;
+package com.ticketrush.boundedcontext.payment.out.apiclient;
 
 /**
  * Toss Payments 결제 승인 API 요청 페이로드.

@@ -1,9 +1,6 @@
-package com.ticketrush.boundedcontext.payment.out.apiclient.toss;
+package com.ticketrush.boundedcontext.payment.out.apiclient;
 
 import com.ticketrush.boundedcontext.payment.domain.types.PaymentProvider;
-import com.ticketrush.boundedcontext.payment.out.apiclient.PaymentCancelClient;
-import com.ticketrush.boundedcontext.payment.out.apiclient.PaymentCancelCommand;
-import com.ticketrush.boundedcontext.payment.out.apiclient.PaymentCancelResult;
 import com.ticketrush.global.exception.BusinessException;
 import com.ticketrush.global.status.ErrorStatus;
 import java.time.LocalDateTime;
