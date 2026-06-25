@@ -4,11 +4,8 @@
 
 ### 👥 코드 리뷰
 
-| 리뷰하는 사람 | 리뷰 받는 사람 |
-|---------|----------|
-| 혜림      | 민주       |
-| 민주      | 소희       |
-| 소희      | 혜림       |
+* 코드 리뷰는 **선택(권장)** 사항이며 **머지 필수 조건이 아닙니다.** 리뷰어가 필요하면 사람이 직접 지정합니다.
+* `/pr` 자동화는 **리뷰어를 자동 지정하지 않습니다.**(요청 시에만 부착)
 
 ### 💬 Discussion
 
@@ -38,8 +35,12 @@
 
 
 * **브랜치 생성 방법:** `{브랜치 단위}/{이슈번호}`
-* 예: `feature/1`
-* 예: `fix/2`
+    * **`브랜치 단위`는 해당 이슈에 붙은 label과 동일하게 맞춥니다.** (label `refactor` → `refactor/{이슈번호}`)
+    * 항상 `feature/`가 아님에 유의합니다 — 이슈 label에 따라 접두어가 달라집니다.
+* 예: `feature/1` (label: feature)
+* 예: `fix/2` (label: fix)
+* 예: `refactor/250` (label: refactor)
+* 예: `docs/3` (label: docs)
 
 ### 📝 커밋(Commit) 메시지 규칙
 
@@ -55,13 +56,52 @@
     * 예: `[Chore] #2, 3 이슈 및 PR 템플릿 생성` (다중 이슈는 쉼표로 구분)
 
 * **develop 머지 규칙:**
-    * `feature/1` 등의 브랜치를 `develop`으로 머지합니다.
-    * 리뷰어를 반드시 지목하고, 리뷰어는 **무조건 코멘트를 작성**합니다.
-    * **Approve 1명 이상**이면 Merge 가능합니다.
+    * `{label}/1` 등의 브랜치를 `develop`으로 머지합니다.
+    * 별도의 **Approve(코드 리뷰)는 머지 필수 조건이 아닙니다.** 리뷰는 선택(권장)이며, 받지 않고도 머지할 수 있습니다.
 
 * **main 머지 규칙:**
     * 우선적으로 `develop`에만 Push하며, `main`은 완벽히 준비되었을 때만 머지합니다.
-    * **Approve 1명 이상**이면 Merge 가능합니다.
+    * 별도의 **Approve(코드 리뷰)는 머지 필수 조건이 아닙니다.**
+
+### 🔒 검증 파이프라인 (로컬 훅 + CI)
+
+커밋·PR이 팀 형식과 코드 스타일을 자동으로 지키도록 **로컬 git 훅**과 **CI 게이트** 2중으로 검증합니다.
+(AI 작업 사이클에서 이 파이프라인이 어떤 회복 루프로 도는지는 [`ai-workflow-guide.md`](ai-workflow-guide.md) 10장 참고.)
+
+#### ① 로컬 git 훅 활성화 (신규 합류자 1회 설정)
+
+훅은 `.githooks/`에 들어 있으며, **각자 로컬에서 한 번** 아래를 실행해야 동작합니다(빠뜨리면 커밋 시 검증이 돌지 않습니다).
+
+```bash
+git config core.hooksPath .githooks
+```
+
+> 저장소 클론 직후 한 번만 설정하면 됩니다. 설정 여부는 `git config core.hooksPath`로 확인할 수 있습니다(값이 `.githooks`면 활성).
+
+#### ② pre-commit — 자동교정 루프
+
+커밋 시 스테이징된 `.java` 파일이 있으면 다음 순서로 돕니다.
+
+1. **`./gradlew spotlessApply`** — 포맷을 **자동 수정**합니다.
+2. 자동 수정으로 바뀐 파일을 **다시 스테이징**합니다(원래 스테이징돼 있던 `.java`만).
+3. **`./gradlew checkstyleMain checkstyleTest`** — 통과해야 커밋이 진행됩니다.
+
+> 포맷 검증은 **자동으로 보장**됩니다 — pre-commit이 `spotlessApply`로 자동 교정하고, CI(`ci.yml`)가 `spotlessCheck`로 최종 검사합니다. 따라서 사람이 작업 완료 전 별도로 `spotlessCheck`를 돌릴 필요는 없습니다(원하면 로컬에서 `./gradlew spotlessCheck`로 미리 확인할 수는 있음).
+
+#### ③ commit-msg — 형식 검증
+
+커밋 메시지 첫 줄이 `[Type] #이슈번호 요약` 형식이어야 통과합니다(Merge/Revert/fixup/squash 커밋은 예외). 형식은 위 **커밋 메시지 규칙**(§1)과 동일합니다.
+
+#### ④ CI 게이트 (`.github/workflows/ci.yml`)
+
+`develop`을 대상으로 하는 PR(`opened`/`synchronize`/`reopened`)에서 자동 실행됩니다.
+
+* **단계:** `spotlessCheck` → `checkstyle` → `test` → `build` (job 이름 `build`).
+* **PR 제목 검증:** 별도 워크플로우 `pr-title.yml`(job `validate-title`)이 `[Type] #이슈번호 내용` 형식을 검사합니다.
+* **concurrency:** 같은 PR에 연속 push하면 진행 중이던 이전 run을 자동 취소해 러너를 절약합니다.
+* 머지 전 **CI 그린**이 조건입니다(Approve는 필수 아님 — 위 머지 규칙 참고).
+
+> `develop` 브랜치에는 **branch protection이 이미 적용**되어 `build`(`ci.yml`)·`validate-title`(`pr-title.yml`)가 필수 상태 체크로 요구됩니다(Approve는 강제하지 않음). 적용 변경은 admin 권한이 필요합니다.
 
 ## 2. 코드 및 네이밍 규칙
 
@@ -191,9 +231,24 @@ onSuccess(SuccessStatus.OK, response);
 ```java
 // Service 내 에러 발생 예시
 Diary diary = diaryRepository.findByDiaryIdAndUserId(diaryId, userId)
-    .orElseThrow(() -> new GeneralException(ErrorStatus.DIARY_NOT_FOUND));
+    .orElseThrow(() -> new BusinessException(ErrorStatus.DIARY_NOT_FOUND));
 
 ```
+
+### 🧩 공통 모듈 주요 클래스 (빌딩블록)
+
+`common` 모듈이 제공하는, 전 서비스가 재사용하는 핵심 클래스입니다. (응답/에러 3종은 위 §3 참고)
+
+| 클래스 | 설명 |
+|--------|------|
+| `ApiResponse` | 응답 래퍼 (`onSuccess(status)`, `onSuccess(status, result)`, `onSuccess(status, Page<T>)`) — 상세 §3 |
+| `SuccessStatus` | 성공 코드 enum — 상세 §3 |
+| `ErrorStatus` | 에러 코드 enum (`모듈_상태코드_세자리번호`) — 상세 §3 |
+| `BusinessException` | 비즈니스 예외 — `GlobalExceptionHandler`가 자동으로 실패 응답으로 변환 |
+| `PageInfo` | 오프셋 페이징 정보 record (`pageIndex, size, hasNext, totalElements, totalPages`) |
+| `CursorInfo` | 커서 페이징 정보 record (`hasNext, nextCursor, size`) |
+| `AutoIdBaseEntity` | auto increment PK 기반 엔티티 상위 클래스 |
+| `BaseTimeEntity` | `createdAt`, `updatedAt` 포함 상위 클래스 |
 
 ## 4. 환경 및 기타 규칙
 

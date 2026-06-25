@@ -1,0 +1,10 @@
+{
+  "_schema": "세션 작업 항목 목록. updated_at=마지막 갱신일(YYYY-MM-DD), current_branch=현재 작업 브랜치, items[].status=todo/doing/done, items[].issue=연결된 GitHub 이슈 번호(선택). 실데이터(.claude/feature_list.json)는 gitignore되므로 이 .example을 복사해 값을 채워 쓴다.",
+  "updated_at": "YYYY-MM-DD",
+  "current_branch": "<현재 작업 브랜치>",
+  "items": [
+    { "id": 1, "desc": "예: /resume 커맨드 6단계 루틴 작성", "status": "doing", "issue": 254 },
+    { "id": 2, "desc": "예: .gitignore에 실데이터 2종 추가", "status": "todo", "issue": 254 },
+    { "id": 3, "desc": "예: 진입점 문서 정비(완료 항목 예시)", "status": "done", "issue": 250 }
+  ]
+}
