@@ -14,11 +14,6 @@ app:
   event-publisher:
     type: kafka
 
-ticket:
-  qr:
-    # 로컬 개발 전용 시크릿. 운영 프로파일에는 기본값이 없어 TICKET_QR_SECRET 주입을 강제한다.
-    secret: ticketrush-qr-local-dev-secret-0123456789
-
 custom:
   security:
     permit-all: false
