@@ -19,7 +19,7 @@ public class EmailVerificationClient {
 
   private final RestClient restClient;
 
-  @Value("${service.auth.base-url}")
+  @Value("${service.auth.url}")
   private String authServiceUrl;
 
   public boolean isVerified(String email) {

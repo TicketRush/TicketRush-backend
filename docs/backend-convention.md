@@ -138,10 +138,10 @@ git config core.hooksPath .githooks
 
 다른 서비스를 동기 호출(`RestClient`)할 때 `application.yml` 의 프로퍼티 키와 값을 아래 규칙으로 통일합니다.
 
-* **서비스 URL 키:** `service.<name>.base-url`
+* **서비스 URL 키:** `service.<name>.url`
     * `<name>` 은 호출 대상 서비스의 **단축명**(`-service` 접미사 제외): `auth`, `user`, `seat` 등
     * 값은 **환경변수 오버라이드** 형태: `${<NAME>_SERVICE_URL:http://localhost:<port>}`
-    * 예: `service.auth.base-url: ${AUTH_SERVICE_URL:http://localhost:8082}`
+    * 예: `service.auth.url: ${AUTH_SERVICE_URL:http://localhost:8082}`
 * **공통 타임아웃 키:** 모듈당 호출 대상이 1개이므로 모듈 공통 1쌍으로 둡니다.
     * `service.http.connect-timeout-ms: ${SERVICE_HTTP_CONNECT_TIMEOUT_MS:3000}`
     * `service.http.read-timeout-ms: ${SERVICE_HTTP_READ_TIMEOUT_MS:10000}`
@@ -150,7 +150,7 @@ git config core.hooksPath .githooks
 ```yaml
 service:
   auth:
-    base-url: ${AUTH_SERVICE_URL:http://localhost:8082}
+    url: ${AUTH_SERVICE_URL:http://localhost:8082}
   http:
     connect-timeout-ms: ${SERVICE_HTTP_CONNECT_TIMEOUT_MS:3000}
     read-timeout-ms: ${SERVICE_HTTP_READ_TIMEOUT_MS:10000}
