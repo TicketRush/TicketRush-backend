@@ -8,6 +8,10 @@ spring:
   application:
     name: booking-service
 
+service:
+  seat:
+    url: http://localhost:8086
+
 custom:
   global:
     internalBackUrl: http://localhost:${server.port:8084}
