@@ -1,4 +1,4 @@
-package com.ticketrush.boundedcontext.payment.out.apiclient.toss;
+package com.ticketrush.boundedcontext.payment.out.apiclient;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
@@ -12,8 +12,6 @@ import static org.springframework.test.web.client.response.MockRestResponseCreat
 import static org.springframework.test.web.client.response.MockRestResponseCreators.withSuccess;
 
 import com.ticketrush.boundedcontext.payment.domain.types.PaymentProvider;
-import com.ticketrush.boundedcontext.payment.out.apiclient.PaymentCancelCommand;
-import com.ticketrush.boundedcontext.payment.out.apiclient.PaymentCancelResult;
 import com.ticketrush.global.exception.BusinessException;
 import com.ticketrush.global.status.ErrorStatus;
 import org.junit.jupiter.api.BeforeEach;
@@ -202,11 +200,10 @@ class TossPaymentCancelClientTest {
   }
 
   @Test
-  @DisplayName("TOSS provider만 지원한다")
-  void supports_toss_only() {
-    assertThat(client.supports(PaymentProvider.TOSS)).isTrue();
-    assertThat(client.supports(PaymentProvider.KAKAO)).isFalse();
-    assertThat(client.supports(PaymentProvider.NAVER)).isFalse();
+  @DisplayName("TOSS provider를 담당한다")
+  void provider_is_toss() {
+    assertThat(client.provider()).isEqualTo(PaymentProvider.TOSS);
+    assertThat(client.isFallback()).isFalse();
   }
 
   private PaymentCancelCommand command() {

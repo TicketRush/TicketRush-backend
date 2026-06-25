@@ -1,10 +1,7 @@
-package com.ticketrush.boundedcontext.payment.out.apiclient.toss;
+package com.ticketrush.boundedcontext.payment.out.apiclient;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.ticketrush.boundedcontext.payment.domain.types.PaymentProvider;
-import com.ticketrush.boundedcontext.payment.out.apiclient.PaymentApprovalClient;
-import com.ticketrush.boundedcontext.payment.out.apiclient.PaymentApprovalRequest;
-import com.ticketrush.boundedcontext.payment.out.apiclient.PaymentApprovalResponse;
 import com.ticketrush.global.exception.BusinessException;
 import com.ticketrush.global.status.ErrorStatus;
 import java.io.IOException;
@@ -13,7 +10,6 @@ import java.time.ZoneId;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
-import org.springframework.core.annotation.Order;
 import org.springframework.http.HttpStatusCode;
 import org.springframework.http.MediaType;
 import org.springframework.http.client.ClientHttpResponse;
@@ -30,7 +26,6 @@ import org.springframework.web.client.RestClientException;
  */
 @Slf4j
 @Component
-@Order(0)
 @ConditionalOnProperty(prefix = "payment.pg.toss", name = "enabled", havingValue = "true")
 public class TossPaymentApprovalClient implements PaymentApprovalClient {
 
@@ -46,8 +41,8 @@ public class TossPaymentApprovalClient implements PaymentApprovalClient {
   }
 
   @Override
-  public boolean supports(PaymentProvider provider) {
-    return provider == PaymentProvider.TOSS;
+  public PaymentProvider provider() {
+    return PaymentProvider.TOSS;
   }
 
   @Override

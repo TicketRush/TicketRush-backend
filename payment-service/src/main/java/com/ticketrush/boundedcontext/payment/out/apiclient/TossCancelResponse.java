@@ -1,4 +1,4 @@
-package com.ticketrush.boundedcontext.payment.out.apiclient.toss;
+package com.ticketrush.boundedcontext.payment.out.apiclient;
 
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import java.time.OffsetDateTime;
