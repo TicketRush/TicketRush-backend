@@ -1,0 +1,93 @@
+name: Weekly Scrum
+
+on:
+  schedule:
+    # 매주 목요일 09:00 UTC = 목요일 오후 6시(18:00) KST
+    - cron: '0 9 * * 4'
+  workflow_dispatch:   # GitHub Actions 탭에서 수동 실행(테스트)도 가능
+
+permissions:
+  contents: read
+  issues: read
+  pull-requests: read
+
+jobs:
+  scrum:
+    runs-on: ubuntu-latest
+    env:
+      # 두 레포 모두 PUBLIC이므로 기본 토큰으로 교차 조회 가능.
+      # (private로 전환되면 두 레포 read 권한을 가진 PAT를 secrets로 주입해야 함)
+      GH_TOKEN: ${{ github.token }}
+      SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
+      BACKEND_REPO: TicketRush/TicketRush-backend
+      FRONTEND_REPO: TicketRush/TicketRush-frontend
+      MAX_PER_AUTHOR: 5          # 사람당 표시할 머지 PR 최대 개수 (초과분은 '…외 N건')
+      MAX_ISSUES_PER_PERSON: 7   # 사람당 표시할 진행 중 이슈 최대 개수 (초과분은 '…외 N건')
+    steps:
+      - name: Build & send weekly scrum to Slack
+        run: |
+          set -euo pipefail
+          SINCE=$(date -u -d '7 days ago' +%Y-%m-%d)
+          TODAY=$(date -u +%Y-%m-%d)
+
+          # 두 레포에서 원시 데이터 수집 (PR=머지/최근 7일, 이슈=열림 전체)
+          be_pr=$(gh pr list -R "$BACKEND_REPO"  --state merged --base develop \
+                    --search "merged:>=$SINCE" --json number,title,author)
+          fe_pr=$(gh pr list -R "$FRONTEND_REPO" --state merged --base develop \
+                    --search "merged:>=$SINCE" --json number,title,author)
+          be_is=$(gh issue list -R "$BACKEND_REPO"  --state open --limit 200 \
+                    --json number,title,updatedAt,assignees)
+          fe_is=$(gh issue list -R "$FRONTEND_REPO" --state open --limit 200 \
+                    --json number,title,updatedAt,assignees)
+
+          # 사람(=PR 작성자 / 이슈 담당자)별로 묶어 본문 생성.
+          #  - PR: author.login 기준, 사람당 최대 $k건 + '…외 N건'
+          #  - 이슈: 담당자별, 최근 7일 내 업데이트된 열린 이슈만 (cap 없음)
+          #  - 각 항목에 [BE]/[FE] 태그로 레포 표시, 활동량(PR+이슈 수) 많은 순 정렬
+          BODY=$(jq -nr --argjson k "$MAX_PER_AUTHOR" --argjson ki "$MAX_ISSUES_PER_PERSON" --arg since "$SINCE" \
+            --argjson bp "$be_pr" --argjson fp "$fe_pr" \
+            --argjson bi "$be_is" --argjson fi "$fe_is" '
+            ( ($bp|map(.+{repo:"BE"})) + ($fp|map(.+{repo:"FE"})) )
+              | map({login:.author.login, number, title, repo}) as $prs
+            | ( ( ($bi|map(.+{repo:"BE"})) + ($fi|map(.+{repo:"FE"})) )
+                | map(select(.updatedAt >= $since))
+                | map(. as $x
+                      | (if (.assignees|length)==0 then [{login:"_unassigned"}] else .assignees end)
+                      | map({login:.login, number:$x.number, title:$x.title, repo:$x.repo, updatedAt:$x.updatedAt}))
+                | add // [] ) as $iss
+            | def pcount($l): ($prs|map(select(.login==$l))|length);
+              def icount($l): ($iss|map(select(.login==$l))|length);
+              def block($l):
+                ($prs|map(select(.login==$l))) as $p
+                | ($iss|map(select(.login==$l))|sort_by(.updatedAt)|reverse) as $i
+                | "*👤 @\($l)*\n📦 머지 PR (\($p|length)건)\n"
+                  + (if ($p|length)==0 then "• 없음"
+                     else ($p[0:$k]|map("• [\(.repo)] #\(.number) \(.title)")|join("\n"))
+                          + (if ($p|length)>$k then "\n  …외 \(($p|length)-$k)건" else "" end) end)
+                  + "\n🚧 진행 중 이슈 (\($i|length)건)\n"
+                  + (if ($i|length)==0 then "• 없음"
+                     else ($i[0:$ki]|map("• [\(.repo)] #\(.number) \(.title)")|join("\n"))
+                          + (if ($i|length)>$ki then "\n  …외 \(($i|length)-$ki)건" else "" end) end);
+              ( ( [ $prs[].login ] + [ $iss[].login ] )
+                | map(select(. != "_unassigned")) | unique
+                | sort_by( -(pcount(.) + icount(.)) )
+                | map(block(.)) | join("\n\n") ) as $main
+            | ($iss|map(select(.login=="_unassigned"))) as $u
+            | $main
+              + (if ($u|length)>0
+                 then "\n\n*👤 (담당자 미지정 이슈)*\n" + ($u|map("• [\(.repo)] #\(.number) \(.title)")|join("\n"))
+                 else "" end)
+            ')
+
+          MESSAGE="<!channel> 🗓 *주간 스크럼* — $TODAY (최근 7일 진행상황)
+
+          $BODY
+
+          ──────────
+          👋 *팀원 여러분, 이 스레드에 댓글로 이번 주 진행상황을 보충해주세요!*
+          • 이번 주 한 일 / 다음 주 할 일 / 막힌 점"
+
+          # Slack 전송 (jq로 JSON escape)
+          curl -sS -X POST -H 'Content-type: application/json' \
+            --data "$(jq -nc --arg t "$MESSAGE" '{text:$t}')" \
+            "$SLACK_WEBHOOK_URL"
