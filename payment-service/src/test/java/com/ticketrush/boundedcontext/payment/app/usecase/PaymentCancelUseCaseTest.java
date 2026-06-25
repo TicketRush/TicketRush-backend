@@ -33,6 +33,7 @@ import org.mockito.ArgumentCaptor;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.dao.DataIntegrityViolationException;
 
 @ExtendWith(MockitoExtension.class)
 class PaymentCancelUseCaseTest {
@@ -61,7 +62,7 @@ class PaymentCancelUseCaseTest {
     given(paymentRepository.findByIdAndUserId(paymentId, userId)).willReturn(Optional.of(payment));
     given(paymentCancelClientRouter.cancel(any()))
         .willReturn(new PaymentCancelResult("PG-REFUND-1", amount, canceledAt));
-    given(refundRepository.save(any(Refund.class)))
+    given(refundRepository.saveAndFlush(any(Refund.class)))
         .willAnswer(
             invocation -> {
               Refund r = invocation.getArgument(0);
@@ -91,7 +92,7 @@ class PaymentCancelUseCaseTest {
     assertThat(command.idempotencyKey()).isEqualTo("REFUND-0000001");
 
     ArgumentCaptor<Refund> refundCaptor = ArgumentCaptor.forClass(Refund.class);
-    verify(refundRepository).save(refundCaptor.capture());
+    verify(refundRepository).saveAndFlush(refundCaptor.capture());
     Refund savedRefund = refundCaptor.getValue();
     assertThat(savedRefund.getPaymentId()).isEqualTo(paymentId);
     assertThat(savedRefund.getBookingId()).isEqualTo(bookingId);
@@ -142,7 +143,7 @@ class PaymentCancelUseCaseTest {
     assertThat(response.refundId()).isEqualTo(999L);
     assertThat(response.status()).isEqualTo("CANCELED");
     verify(paymentCancelClientRouter, never()).cancel(any());
-    verify(refundRepository, never()).save(any(Refund.class));
+    verify(refundRepository, never()).saveAndFlush(any(Refund.class));
     verify(paymentEventPublisher, never())
         .publishCanceled(any(), any(), any(), any(), any(), any(), any());
   }
@@ -163,7 +164,7 @@ class PaymentCancelUseCaseTest {
         .isEqualTo(ErrorStatus.PAYMENT_NOT_FOUND);
 
     verify(paymentCancelClientRouter, never()).cancel(any());
-    verify(refundRepository, never()).save(any(Refund.class));
+    verify(refundRepository, never()).saveAndFlush(any(Refund.class));
   }
 
   @Test
@@ -194,7 +195,7 @@ class PaymentCancelUseCaseTest {
         .isEqualTo(ErrorStatus.PAYMENT_NOT_CANCELABLE);
 
     verify(paymentCancelClientRouter, never()).cancel(any());
-    verify(refundRepository, never()).save(any(Refund.class));
+    verify(refundRepository, never()).saveAndFlush(any(Refund.class));
   }
 
   @Test
@@ -217,9 +218,64 @@ class PaymentCancelUseCaseTest {
         .isEqualTo(ErrorStatus.PAYMENT_REFUND_FAILED);
 
     assertThat(payment.getStatus()).isEqualTo(PaymentStatus.COMPLETED);
-    verify(refundRepository, never()).save(any(Refund.class));
+    verify(refundRepository, never()).saveAndFlush(any(Refund.class));
     verify(paymentEventPublisher, never())
         .publishCanceled(any(), any(), any(), any(), any(), any(), any());
+  }
+
+  @Test
+  @DisplayName("동시 취소로 paymentId unique 제약이 위반되면 예외가 전파되고 이벤트를 발행하지 않는다")
+  void execute_propagates_constraint_violation_without_publishing() throws Exception {
+    // given
+    Long userId = 10L;
+    Long paymentId = 1L;
+    PaymentCancelRequest request = new PaymentCancelRequest("단순 변심");
+
+    Payment payment = completedPayment(paymentId, userId, 100L, 200L, 55_000L);
+    given(paymentRepository.findByIdAndUserId(paymentId, userId)).willReturn(Optional.of(payment));
+    given(paymentCancelClientRouter.cancel(any()))
+        .willReturn(new PaymentCancelResult("PG-REFUND-1", 55_000L, LocalDateTime.now()));
+    given(refundRepository.saveAndFlush(any(Refund.class)))
+        .willThrow(new DataIntegrityViolationException("duplicate paymentId"));
+
+    // when & then
+    assertThatThrownBy(() -> paymentCancelUseCase.execute(userId, paymentId, request))
+        .isInstanceOf(DataIntegrityViolationException.class);
+
+    verify(paymentEventPublisher, never())
+        .publishCanceled(any(), any(), any(), any(), any(), any(), any());
+  }
+
+  @Test
+  @DisplayName("getCanceledResponse 는 기존 환불 내역을 멱등하게 반환한다")
+  void getCanceledResponse_returns_existing_refund() throws Exception {
+    // given
+    Long userId = 10L;
+    Long paymentId = 1L;
+
+    Payment payment = completedPayment(paymentId, userId, 100L, 200L, 55_000L);
+    payment.markCanceled();
+    Refund existing =
+        Refund.builder()
+            .paymentId(paymentId)
+            .bookingId(100L)
+            .price(55_000L)
+            .status(RefundStatus.COMPLETED)
+            .confirmedAt(LocalDateTime.of(2026, 5, 22, 10, 0))
+            .build();
+    setId(existing, 999L);
+
+    given(paymentRepository.findByIdAndUserId(paymentId, userId)).willReturn(Optional.of(payment));
+    given(refundRepository.findByPaymentId(paymentId)).willReturn(Optional.of(existing));
+
+    // when
+    PaymentCancelResponse response = paymentCancelUseCase.getCanceledResponse(userId, paymentId);
+
+    // then
+    assertThat(response.refundId()).isEqualTo(999L);
+    assertThat(response.status()).isEqualTo("CANCELED");
+    verify(paymentCancelClientRouter, never()).cancel(any());
+    verify(refundRepository, never()).saveAndFlush(any(Refund.class));
   }
 
   private Payment completedPayment(

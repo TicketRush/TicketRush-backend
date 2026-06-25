@@ -45,11 +45,7 @@ public class PaymentCancelUseCase {
 
     // 이미 취소된 결제는 기존 환불 내역을 그대로 반환하여 멱등 처리한다.
     if (payment.getStatus() == PaymentStatus.CANCELED) {
-      Refund existing =
-          refundRepository
-              .findByPaymentId(paymentId)
-              .orElseThrow(() -> new BusinessException(ErrorStatus.PAYMENT_REFUND_FAILED));
-      return PaymentCancelResponse.of(payment, existing);
+      return toExistingRefundResponse(payment, paymentId);
     }
 
     if (payment.getStatus() != PaymentStatus.COMPLETED) {
@@ -77,7 +73,9 @@ public class PaymentCancelUseCase {
             .confirmedAt(result.canceledAt())
             .build();
 
-    Refund saved = refundRepository.save(refund);
+    // 동시 취소 요청 시 paymentId unique 제약 위반을 이벤트 발행·상태 전이 이전에 표면화하기 위해 즉시 flush 한다.
+    // 위반(DataIntegrityViolationException)은 트랜잭션 경계 밖(PaymentFacade)에서 멱등 처리한다.
+    Refund saved = refundRepository.saveAndFlush(refund);
     payment.markCanceled();
 
     paymentEventPublisher.publishCanceled(
@@ -90,6 +88,27 @@ public class PaymentCancelUseCase {
         saved.getConfirmedAt());
 
     return PaymentCancelResponse.of(payment, saved);
+  }
+
+  /**
+   * 동시 취소 요청이 unique 제약에 막혀 별도 트랜잭션에서 먼저 환불이 확정된 경우, 그 환불 내역을 멱등하게 반환한다. PaymentFacade가 {@code
+   * DataIntegrityViolationException}을 잡은 뒤 호출한다.
+   */
+  @Transactional(readOnly = true)
+  public PaymentCancelResponse getCanceledResponse(Long userId, Long paymentId) {
+    Payment payment =
+        paymentRepository
+            .findByIdAndUserId(paymentId, userId)
+            .orElseThrow(() -> new BusinessException(ErrorStatus.PAYMENT_NOT_FOUND));
+    return toExistingRefundResponse(payment, paymentId);
+  }
+
+  private PaymentCancelResponse toExistingRefundResponse(Payment payment, Long paymentId) {
+    Refund existing =
+        refundRepository
+            .findByPaymentId(paymentId)
+            .orElseThrow(() -> new BusinessException(ErrorStatus.PAYMENT_REFUND_FAILED));
+    return PaymentCancelResponse.of(payment, existing);
   }
 
   /* 동일 결제의 재요청 시 PG 측 중복 취소를 막기 위해 paymentId 기반 고정 멱등 키를 생성한다. */

@@ -21,8 +21,8 @@ import lombok.NoArgsConstructor;
 @AttributeOverride(name = "id", column = @Column(name = "refund_id"))
 public class Refund extends AutoIdBaseEntity {
 
-  /* paymentId는 #22에서 환불-결제 매핑 및 멱등성 보장을 위해 도입. */
-  @Column(nullable = false)
+  /* paymentId는 #22에서 환불-결제 매핑에 사용. unique 제약으로 동일 결제의 중복 환불을 DB 레벨에서 멱등 보장한다. */
+  @Column(nullable = false, unique = true)
   private Long paymentId;
 
   @Column(nullable = false)

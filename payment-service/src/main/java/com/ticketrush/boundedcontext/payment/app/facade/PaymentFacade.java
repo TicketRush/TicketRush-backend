@@ -11,6 +11,7 @@ import com.ticketrush.boundedcontext.payment.app.usecase.PaymentConfirmUseCase;
 import com.ticketrush.boundedcontext.payment.app.usecase.PaymentGetDetailUseCase;
 import com.ticketrush.boundedcontext.payment.app.usecase.PaymentGetListUseCase;
 import lombok.RequiredArgsConstructor;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
@@ -29,7 +30,12 @@ public class PaymentFacade {
   }
 
   public PaymentCancelResponse cancel(Long userId, Long paymentId, PaymentCancelRequest request) {
-    return paymentCancelUseCase.execute(userId, paymentId, request);
+    try {
+      return paymentCancelUseCase.execute(userId, paymentId, request);
+    } catch (DataIntegrityViolationException e) {
+      // 동시 취소 요청이 paymentId unique 제약에 막힌 경우, 먼저 확정된 환불을 멱등 반환한다.
+      return paymentCancelUseCase.getCanceledResponse(userId, paymentId);
+    }
   }
 
   public Page<PaymentSummaryResponse> getPayments(Long userId, Pageable pageable) {
