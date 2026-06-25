@@ -23,6 +23,7 @@ class PaymentApprovalClientRouterTest {
 
   @Mock private PaymentApprovalClient tossClient;
   @Mock private PaymentApprovalClient stubClient;
+  @Mock private PaymentApprovalClient duplicateTossClient;
 
   private PaymentApprovalRequest request(PaymentProvider provider) {
     return new PaymentApprovalRequest(provider, "key", "BKG-0000001", 1L, 1_000L);
@@ -94,5 +95,18 @@ class PaymentApprovalClientRouterTest {
         .isInstanceOf(BusinessException.class)
         .extracting("errorStatus")
         .isEqualTo(ErrorStatus.PAYMENT_PROVIDER_NOT_SUPPORTED);
+  }
+
+  @Test
+  @DisplayName("같은 provider 구현체가 둘 이상이면 기동(생성자) 시점에 실패한다")
+  void fails_fast_on_duplicate_provider() {
+    given(tossClient.isFallback()).willReturn(false);
+    given(tossClient.provider()).willReturn(PaymentProvider.TOSS);
+    given(duplicateTossClient.isFallback()).willReturn(false);
+    given(duplicateTossClient.provider()).willReturn(PaymentProvider.TOSS);
+
+    assertThatThrownBy(
+            () -> new PaymentApprovalClientRouter(List.of(tossClient, duplicateTossClient)))
+        .isInstanceOf(IllegalStateException.class);
   }
 }
