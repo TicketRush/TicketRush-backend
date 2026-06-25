@@ -150,6 +150,30 @@ class PaymentCancelUseCaseTest {
   }
 
   @Test
+  @DisplayName("CANCELED 결제인데 환불 내역이 없으면 정합성 오류(PAYMENT_500_001)를 던진다")
+  void execute_fail_when_canceled_but_refund_missing() throws Exception {
+    // given
+    Long userId = 10L;
+    Long paymentId = 1L;
+
+    Payment payment = completedPayment(paymentId, userId, 100L, 200L, 55_000L);
+    payment.markCanceled();
+    given(paymentRepository.findByIdAndUserId(paymentId, userId)).willReturn(Optional.of(payment));
+    given(refundRepository.findByPaymentId(paymentId)).willReturn(Optional.empty());
+
+    PaymentCancelRequest request = new PaymentCancelRequest("단순 변심");
+
+    // when & then
+    assertThatThrownBy(() -> paymentCancelUseCase.execute(userId, paymentId, request))
+        .isInstanceOf(BusinessException.class)
+        .extracting("errorStatus")
+        .isEqualTo(ErrorStatus.PAYMENT_REFUND_INCONSISTENT);
+
+    verify(paymentCancelClientRouter, never()).cancel(any());
+    verify(refundRepository, never()).saveAndFlush(any(Refund.class));
+  }
+
+  @Test
   @DisplayName("본인 결제가 아니거나 존재하지 않으면 PAYMENT_404_002 예외가 발생한다")
   void execute_fail_when_not_found() {
     // given

@@ -161,6 +161,12 @@ public enum ErrorStatus {
   PAYMENT_ALREADY_COMPLETED(HttpStatus.CONFLICT, "PAYMENT_409_001", "이미 결제가 완료된 예매입니다."),
   PAYMENT_NOT_CANCELABLE(HttpStatus.CONFLICT, "PAYMENT_409_002", "환불 가능한 결제 상태가 아닙니다."),
 
+  // Payment 500
+  PAYMENT_REFUND_INCONSISTENT(
+      HttpStatus.INTERNAL_SERVER_ERROR,
+      "PAYMENT_500_001",
+      "취소된 결제의 환불 내역을 찾을 수 없습니다. 관리자에게 문의 바랍니다."),
+
   // Payment 502
   PAYMENT_APPROVAL_FAILED(HttpStatus.BAD_GATEWAY, "PAYMENT_502_001", "PG사 결제 승인에 실패했습니다."),
   PAYMENT_PG_AUTH_FAILED(

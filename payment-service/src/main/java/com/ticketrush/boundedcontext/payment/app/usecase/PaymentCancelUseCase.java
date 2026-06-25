@@ -107,7 +107,7 @@ public class PaymentCancelUseCase {
     Refund existing =
         refundRepository
             .findByPaymentId(paymentId)
-            .orElseThrow(() -> new BusinessException(ErrorStatus.PAYMENT_REFUND_FAILED));
+            .orElseThrow(() -> new BusinessException(ErrorStatus.PAYMENT_REFUND_INCONSISTENT));
     return PaymentCancelResponse.of(payment, existing);
   }
 
