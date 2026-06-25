@@ -177,11 +177,18 @@ public enum ErrorStatus {
   PAYMENT_PG_COMMUNICATION_FAILED(
       HttpStatus.SERVICE_UNAVAILABLE, "PAYMENT_503_001", "PG사와 통신에 실패했습니다."),
 
+  // Ticket 400
+  TICKET_QR_INVALID(HttpStatus.BAD_REQUEST, "TICKET_400_001", "유효하지 않은 QR입니다."),
+
+  // Ticket 401
+  TICKET_QR_EXPIRED(HttpStatus.UNAUTHORIZED, "TICKET_401_001", "만료된 QR입니다. 다시 발급받아 주세요."),
+
   // Ticket 404
   TICKET_NOT_FOUND(HttpStatus.NOT_FOUND, "TICKET_404_001", "입장권을 찾을 수 없습니다."),
 
   // Ticket 409
   TICKET_NOT_USABLE(HttpStatus.CONFLICT, "TICKET_409_001", "확정된 예매가 아니어서 입장권을 조회할 수 없습니다."),
+  TICKET_ALREADY_USED(HttpStatus.CONFLICT, "TICKET_409_002", "이미 입장 처리된 입장권입니다."),
 
   // Ticket 503
   TICKET_BOOKING_COMMUNICATION_FAILED(
