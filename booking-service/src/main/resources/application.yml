@@ -10,7 +10,10 @@ spring:
 
 service:
   seat:
-    url: http://localhost:8086
+    base-url: ${SEAT_SERVICE_URL:http://localhost:8086}
+  http:
+    connect-timeout-ms: ${SERVICE_HTTP_CONNECT_TIMEOUT_MS:3000}
+    read-timeout-ms: ${SERVICE_HTTP_READ_TIMEOUT_MS:10000}
 
 custom:
   global:
