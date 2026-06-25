@@ -25,16 +25,21 @@ jobs:
           SINCE=$(date -u -d '7 days ago' +%Y-%m-%d)
           TODAY=$(date -u +%Y-%m-%d)
 
-          # 1) 이번 주 develop에 머지된 PR — 작성자(author)별로 그룹핑
-          PR_COUNT=$(gh pr list --state merged --base develop \
-                  --search "merged:>=$SINCE" --json number --jq 'length')
-          PR_SECTION=$(gh pr list --state merged --base develop \
-                  --search "merged:>=$SINCE" \
-                  --json number,title,author \
-                  --jq 'group_by(.author.login)
-                        | map("*@\(.[0].author.login) (\(length)건)*\n"
-                              + (map("• #\(.number) \(.title)") | join("\n")))
-                        | join("\n\n")')
+          # 1) 이번 주 develop에 머지된 PR — 작성자(author)별로 그룹핑, 작성자당 최대 N건만 표시
+          MAX_PER_AUTHOR=5
+          PR_JSON=$(gh pr list --state merged --base develop \
+                  --search "merged:>=$SINCE" --json number,title,author)
+          PR_COUNT=$(echo "$PR_JSON" | jq 'length')
+          PR_SECTION=$(echo "$PR_JSON" | jq -r --argjson k "$MAX_PER_AUTHOR" '
+                  group_by(.author.login)
+                  | map(
+                      length as $n
+                      | (.[0].author.login) as $login
+                      | "*@\($login) (\($n)건)*\n"
+                        + (.[0:$k] | map("• #\(.number) \(.title)") | join("\n"))
+                        + (if $n > $k then "\n  …외 \($n - $k)건" else "" end)
+                    )
+                  | join("\n\n")')
 
           # 2) 진행 중(열린) 이슈 — 최대 15개
           OPEN=$(gh issue list --state open --limit 15 \
