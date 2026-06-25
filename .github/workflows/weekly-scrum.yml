@@ -22,7 +22,6 @@ jobs:
       BACKEND_REPO: TicketRush/TicketRush-backend
       FRONTEND_REPO: TicketRush/TicketRush-frontend
       MAX_PER_AUTHOR: 5      # 작성자당 표시할 PR 최대 개수
-      MAX_ISSUES: 10         # 레포당 표시할 진행 중 이슈 최대 개수
     steps:
       - name: Build & send weekly scrum to Slack
         run: |
@@ -49,12 +48,15 @@ jobs:
             printf '*📦 %s — 이번 주 머지된 PR (%s건)*\n%s' "$2" "$count" "${body:-• 없음}"
           }
 
-          # 한 레포의 진행 중(열린) 이슈 블록 생성 ($1=repo, $2=표시 라벨)
+          # 한 레포의 진행 중 이슈 블록 생성 ($1=repo, $2=표시 라벨)
+          # "진행 중" = 최근 7일 내 업데이트된 열린 이슈 (별도 cap 없음, 활동 기준 필터)
           issue_block() {
-            local body
-            body=$(gh issue list -R "$1" --state open --limit "$MAX_ISSUES" \
-                    --json number,title \
-                    --jq '[.[] | "• #\(.number) \(.title)"] | join("\n")')
+            local json body
+            json=$(gh issue list -R "$1" --state open --limit 200 \
+                    --json number,title,updatedAt)
+            body=$(echo "$json" | jq -r --arg since "$SINCE" '
+                    [.[] | select(.updatedAt >= $since) | "• #\(.number) \(.title)"]
+                    | join("\n")')
             printf '*%s*\n%s' "$2" "${body:-• 없음}"
           }
 
@@ -69,7 +71,7 @@ jobs:
 
           $FE_PR
 
-          *🚧 진행 중인 이슈*
+          *🚧 진행 중인 이슈 (최근 7일 업데이트)*
           $BE_ISSUE
 
           $FE_ISSUE
