@@ -52,6 +52,14 @@ dependencies {
 	// Kafka
 	implementation 'org.springframework.boot:spring-boot-starter-kafka'
 	testImplementation 'org.springframework.boot:spring-boot-starter-kafka-test'
+
+	// JWT (QR payload 서명)
+	implementation 'io.jsonwebtoken:jjwt-api:0.12.5'
+	runtimeOnly 'io.jsonwebtoken:jjwt-impl:0.12.5'
+	runtimeOnly 'io.jsonwebtoken:jjwt-jackson:0.12.5'
+
+	// 공통 테스트 픽스처(WebMvcSliceTest 등)
+	testImplementation(testFixtures(project(":common")))
 }
 
 dependencyManagement {

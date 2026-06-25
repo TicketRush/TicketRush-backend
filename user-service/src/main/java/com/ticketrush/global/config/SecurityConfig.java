@@ -30,7 +30,7 @@ public class SecurityConfig {
             auth ->
                 auth.requestMatchers("/v3/api-docs/**", "/swagger-ui/**", "/swagger-ui.html")
                     .permitAll()
-                    .requestMatchers(HttpMethod.POST, "/api/v1/internal/user/auth-info")
+                    .requestMatchers("/api/v1/internal/user/**")
                     .hasRole("INTERNAL")
                     .requestMatchers(HttpMethod.GET, "/api/v1/user/me")
                     .authenticated()

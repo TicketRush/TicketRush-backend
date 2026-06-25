@@ -71,4 +71,9 @@ public class Payment extends AutoIdBaseEntity {
     this.approvalNumber = approvalNumber;
     this.paidAt = paidAt;
   }
+
+  /** 환불 처리로 결제를 취소 상태로 전이한다. */
+  public void markCanceled() {
+    this.status = PaymentStatus.CANCELED;
+  }
 }

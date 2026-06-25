@@ -64,7 +64,6 @@ public class PerformanceAdminController {
           | BALLET | 발레/무용 |
           | FANMEETING | 팬미팅 |
           """)
-  @PerformanceCreateApiResponses
   @RequestBody(
       content =
           @Content(
@@ -86,7 +85,6 @@ public class PerformanceAdminController {
   }
 
   @Operation(summary = "공연 상태 변경", description = "공연의 상태를 변경합니다.")
-  @PerformanceChangeStatusApiResponses
   @PatchMapping("/{id}/status")
   public ResponseEntity<ApiResponse<Void>> changePerformanceStatus(
       @PathVariable Long id,
@@ -99,7 +97,6 @@ public class PerformanceAdminController {
   }
 
   @Operation(summary = "공연 정보 수정", description = "공연 정보를 부분 수정합니다. null 필드는 수정하지 않습니다.")
-  @PerformancePatchApiResponses
   @PatchMapping("/{id}")
   public ResponseEntity<ApiResponse<Void>> patchPerformance(
       @Parameter(description = "공연 ID") @Positive @PathVariable Long id,
@@ -111,7 +108,6 @@ public class PerformanceAdminController {
   }
 
   @Operation(summary = "공연 삭제", description = "공연을 논리 삭제합니다. 삭제된 공연은 모든 조회에서 제외됩니다.")
-  @PerformanceDeleteApiResponses
   @DeleteMapping("/{id}")
   public ResponseEntity<ApiResponse<Void>> deletePerformance(
       @Parameter(description = "공연 ID") @Positive @PathVariable Long id) {

@@ -29,13 +29,15 @@ public class UserServiceClient {
   private final RestClient restClient;
   private final CustomSecurityProperties customSecurityProperties;
 
-  @Value("${service.user-service.base-url}")
+  @Value("${service.user.url}")
   private String userServiceBaseUrl;
 
   private static final String SOCIAL_LOGIN_PATH = "/api/v1/user/social-login";
   private static final String EMAIL_EXISTS_PATH = "/api/v1/user/exists/email?email={email}";
   private static final String USER_AUTH_INFO_PATH = "/api/v1/internal/user/auth-info";
   private static final String INTERNAL_TOKEN_HEADER = "X-Internal-Token";
+  private static final String USER_AUTH_INFO_BY_USER_ID_PATH =
+      "/api/v1/internal/user/{userId}/auth-info";
 
   public UserServiceSocialLoginResponse socialLogin(UserServiceSocialLoginRequest request) {
 
@@ -161,6 +163,51 @@ public class UserServiceClient {
       throw e;
     } catch (Exception e) {
       log.error("user-service 로그인용 회원 정보 조회 통신 실패 email={}", email, e);
+      throw new BusinessException(ErrorStatus.AUTH_USER_COMMUNICATION_FAILED);
+    }
+  }
+
+  // 테스트 토큰 발급용 회원 정보 조회
+  public UserServiceAuthInfoResponse getUserAuthInfoByUserId(Long userId) {
+    if (userId == null) {
+      throw new BusinessException(ErrorStatus.AUTH_LOGIN_BAD_REQUEST);
+    }
+
+    try {
+      UserServiceApiResponse<UserServiceAuthInfoResponse> response =
+          restClient
+              .get()
+              .uri(userServiceBaseUrl + USER_AUTH_INFO_BY_USER_ID_PATH, userId)
+              .header(INTERNAL_TOKEN_HEADER, customSecurityProperties.getInternalToken())
+              .retrieve()
+              .onStatus(
+                  HttpStatusCode::is4xxClientError,
+                  (req, res) -> {
+                    log.error(
+                        "user-service 테스트 토큰용 회원 정보 조회 4xx 에러 발생: status={}", res.getStatusCode());
+                    throw new BusinessException(ErrorStatus.AUTH_LOGIN_FAILED);
+                  })
+              .onStatus(
+                  HttpStatusCode::is5xxServerError,
+                  (req, res) -> {
+                    log.error(
+                        "user-service 테스트 토큰용 회원 정보 조회 5xx 에러 발생: status={}", res.getStatusCode());
+                    throw new BusinessException(ErrorStatus.AUTH_USER_SERVER_ERROR);
+                  })
+              .body(
+                  new ParameterizedTypeReference<
+                      UserServiceApiResponse<UserServiceAuthInfoResponse>>() {});
+
+      if (response == null || response.result() == null) {
+        throw new BusinessException(ErrorStatus.AUTH_USER_COMMUNICATION_FAILED);
+      }
+
+      return response.result();
+
+    } catch (BusinessException e) {
+      throw e;
+    } catch (Exception e) {
+      log.error("user-service 테스트 토큰용 회원 정보 조회 통신 실패 userId={}", userId, e);
       throw new BusinessException(ErrorStatus.AUTH_USER_COMMUNICATION_FAILED);
     }
   }
