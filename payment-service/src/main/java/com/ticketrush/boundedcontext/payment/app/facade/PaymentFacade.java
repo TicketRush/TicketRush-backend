@@ -10,6 +10,8 @@ import com.ticketrush.boundedcontext.payment.app.usecase.PaymentCancelUseCase;
 import com.ticketrush.boundedcontext.payment.app.usecase.PaymentConfirmUseCase;
 import com.ticketrush.boundedcontext.payment.app.usecase.PaymentGetDetailUseCase;
 import com.ticketrush.boundedcontext.payment.app.usecase.PaymentGetListUseCase;
+import com.ticketrush.boundedcontext.payment.app.usecase.RegisterExpiredBookingUseCase;
+import java.time.LocalDateTime;
 import lombok.RequiredArgsConstructor;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.data.domain.Page;
@@ -24,9 +26,14 @@ public class PaymentFacade {
   private final PaymentCancelUseCase paymentCancelUseCase;
   private final PaymentGetListUseCase paymentGetListUseCase;
   private final PaymentGetDetailUseCase paymentGetDetailUseCase;
+  private final RegisterExpiredBookingUseCase registerExpiredBookingUseCase;
 
   public PaymentConfirmResponse confirm(Long userId, PaymentConfirmRequest request) {
     return paymentConfirmUseCase.execute(userId, request);
+  }
+
+  public void registerExpiredBooking(Long bookingId, LocalDateTime expiredAt) {
+    registerExpiredBookingUseCase.execute(bookingId, expiredAt);
   }
 
   public PaymentCancelResponse cancel(Long userId, Long paymentId, PaymentCancelRequest request) {
