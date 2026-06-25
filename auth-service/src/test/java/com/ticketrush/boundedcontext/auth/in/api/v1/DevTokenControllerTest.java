@@ -9,7 +9,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 
 import com.ticketrush.boundedcontext.auth.app.dto.request.DevTokenIssueRequest;
 import com.ticketrush.boundedcontext.auth.app.dto.response.login.LoginResponse;
-import com.ticketrush.boundedcontext.auth.app.facade.AuthFacade;
+import com.ticketrush.boundedcontext.auth.app.facade.DevAuthFacade;
 import com.ticketrush.global.config.CustomSecurityProperties;
 import com.ticketrush.global.config.SecurityConfig;
 import com.ticketrush.global.filter.GatewayHeaderFilter;
@@ -46,7 +46,7 @@ class DevTokenControllerTest {
 
   @Autowired private MockMvc mockMvc;
 
-  @MockitoBean private AuthFacade authFacade;
+  @MockitoBean private DevAuthFacade devAuthFacade;
 
   @Test
   @DisplayName("userId를 전달하면 테스트용 토큰을 발급한다")
@@ -57,7 +57,7 @@ class DevTokenControllerTest {
     LoginResponse response =
         new LoginResponse(userId, "test@example.com", "USER", "access-token", "refresh-token");
 
-    given(authFacade.issueDevToken(any(DevTokenIssueRequest.class))).willReturn(response);
+    given(devAuthFacade.issueDevToken(any(DevTokenIssueRequest.class))).willReturn(response);
 
     // when & then
     mockMvc

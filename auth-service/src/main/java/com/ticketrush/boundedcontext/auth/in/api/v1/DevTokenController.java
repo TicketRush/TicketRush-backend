@@ -2,7 +2,7 @@ package com.ticketrush.boundedcontext.auth.in.api.v1;
 
 import com.ticketrush.boundedcontext.auth.app.dto.request.DevTokenIssueRequest;
 import com.ticketrush.boundedcontext.auth.app.dto.response.login.LoginResponse;
-import com.ticketrush.boundedcontext.auth.app.facade.AuthFacade;
+import com.ticketrush.boundedcontext.auth.app.facade.DevAuthFacade;
 import com.ticketrush.global.dto.response.ApiResponse;
 import com.ticketrush.global.status.SuccessStatus;
 import io.swagger.v3.oas.annotations.Operation;
@@ -23,7 +23,7 @@ import org.springframework.web.bind.annotation.RestController;
 @RequiredArgsConstructor
 public class DevTokenController {
 
-  private final AuthFacade authFacade;
+  private final DevAuthFacade devAuthFacade;
 
   @Operation(
       summary = "테스트용 토큰 발급",
@@ -31,7 +31,7 @@ public class DevTokenController {
   @PostMapping("/token")
   public ResponseEntity<ApiResponse<LoginResponse>> issueDevToken(
       @Valid @RequestBody DevTokenIssueRequest request) {
-    LoginResponse response = authFacade.issueDevToken(request);
+    LoginResponse response = devAuthFacade.issueDevToken(request);
 
     return ApiResponse.onSuccess(SuccessStatus.OK, response);
   }
