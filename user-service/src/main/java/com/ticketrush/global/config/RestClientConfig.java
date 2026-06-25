@@ -9,7 +9,13 @@ import org.springframework.web.client.RestClient;
 public class RestClientConfig {
 
   @Bean
-  public RestClient authServiceRestClient(@Value("${service.auth.url}") String authServiceUrl) {
-    return RestClient.builder().baseUrl(authServiceUrl).build();
+  public RestClient authServiceRestClient(
+      @Value("${service.auth.url}") String authServiceUrl,
+      @Value("${service.http.connect-timeout-ms:3000}") long connectTimeoutMs,
+      @Value("${service.http.read-timeout-ms:10000}") long readTimeoutMs) {
+    return RestClient.builder()
+        .baseUrl(authServiceUrl)
+        .requestFactory(RestClientFactorySupport.withTimeouts(connectTimeoutMs, readTimeoutMs))
+        .build();
   }
 }

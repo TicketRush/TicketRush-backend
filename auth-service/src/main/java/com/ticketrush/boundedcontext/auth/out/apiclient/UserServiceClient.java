@@ -29,7 +29,7 @@ public class UserServiceClient {
   private final RestClient restClient;
   private final CustomSecurityProperties customSecurityProperties;
 
-  @Value("${service.user-service.base-url}")
+  @Value("${service.user.url}")
   private String userServiceBaseUrl;
 
   private static final String SOCIAL_LOGIN_PATH = "/api/v1/user/social-login";
