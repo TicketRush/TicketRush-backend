@@ -14,46 +14,65 @@ permissions:
 jobs:
   scrum:
     runs-on: ubuntu-latest
+    env:
+      # 두 레포 모두 PUBLIC이므로 기본 토큰으로 교차 조회 가능.
+      # (private로 전환되면 두 레포 read 권한을 가진 PAT를 secrets로 주입해야 함)
+      GH_TOKEN: ${{ github.token }}
+      SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
+      BACKEND_REPO: TicketRush/TicketRush-backend
+      FRONTEND_REPO: TicketRush/TicketRush-frontend
+      MAX_PER_AUTHOR: 5      # 작성자당 표시할 PR 최대 개수
+      MAX_ISSUES: 10         # 레포당 표시할 진행 중 이슈 최대 개수
     steps:
       - name: Build & send weekly scrum to Slack
-        env:
-          GH_TOKEN: ${{ github.token }}
-          GH_REPO: ${{ github.repository }}
-          SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
         run: |
           set -euo pipefail
           SINCE=$(date -u -d '7 days ago' +%Y-%m-%d)
           TODAY=$(date -u +%Y-%m-%d)
 
-          # 1) 이번 주 develop에 머지된 PR — 작성자(author)별로 그룹핑, 작성자당 최대 N건만 표시
-          MAX_PER_AUTHOR=5
-          PR_JSON=$(gh pr list --state merged --base develop \
-                  --search "merged:>=$SINCE" --json number,title,author)
-          PR_COUNT=$(echo "$PR_JSON" | jq 'length')
-          PR_SECTION=$(echo "$PR_JSON" | jq -r --argjson k "$MAX_PER_AUTHOR" '
-                  group_by(.author.login)
-                  | map(
-                      length as $n
-                      | (.[0].author.login) as $login
-                      | "*@\($login) (\($n)건)*\n"
-                        + (.[0:$k] | map("• #\(.number) \(.title)") | join("\n"))
-                        + (if $n > $k then "\n  …외 \($n - $k)건" else "" end)
-                    )
-                  | join("\n\n")')
+          # 한 레포의 머지 PR 블록 생성 ($1=repo, $2=표시 라벨)
+          pr_block() {
+            local json count body
+            json=$(gh pr list -R "$1" --state merged --base develop \
+                    --search "merged:>=$SINCE" --json number,title,author)
+            count=$(echo "$json" | jq 'length')
+            body=$(echo "$json" | jq -r --argjson k "$MAX_PER_AUTHOR" '
+                    group_by(.author.login)
+                    | map(
+                        length as $n
+                        | (.[0].author.login) as $login
+                        | "*@\($login) (\($n)건)*\n"
+                          + (.[0:$k] | map("• #\(.number) \(.title)") | join("\n"))
+                          + (if $n > $k then "\n  …외 \($n - $k)건" else "" end)
+                      )
+                    | join("\n\n")')
+            printf '*📦 %s — 이번 주 머지된 PR (%s건)*\n%s' "$2" "$count" "${body:-• 없음}"
+          }
 
-          # 2) 진행 중(열린) 이슈 — 최대 15개
-          OPEN=$(gh issue list --state open --limit 15 \
-                  --json number,title \
-                  --jq '[.[] | "• #\(.number) \(.title)"] | join("\n")')
+          # 한 레포의 진행 중(열린) 이슈 블록 생성 ($1=repo, $2=표시 라벨)
+          issue_block() {
+            local body
+            body=$(gh issue list -R "$1" --state open --limit "$MAX_ISSUES" \
+                    --json number,title \
+                    --jq '[.[] | "• #\(.number) \(.title)"] | join("\n")')
+            printf '*%s*\n%s' "$2" "${body:-• 없음}"
+          }
 
-          # 메시지 조립
+          BE_PR=$(pr_block "$BACKEND_REPO" "백엔드")
+          FE_PR=$(pr_block "$FRONTEND_REPO" "프론트엔드")
+          BE_ISSUE=$(issue_block "$BACKEND_REPO" "백엔드")
+          FE_ISSUE=$(issue_block "$FRONTEND_REPO" "프론트엔드")
+
           MESSAGE="<!channel> 🗓 *주간 스크럼* — $TODAY (최근 7일 진행상황)
 
-          *📦 이번 주 머지된 PR (${PR_COUNT}건)*
-          ${PR_SECTION:-• 없음}
+          $BE_PR
+
+          $FE_PR
 
           *🚧 진행 중인 이슈*
-          ${OPEN:-• 없음}
+          $BE_ISSUE
+
+          $FE_ISSUE
 
           ──────────
           👋 *팀원 여러분, 이 스레드에 댓글로 이번 주 진행상황을 남겨주세요!*
