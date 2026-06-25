@@ -147,6 +147,9 @@ public enum ErrorStatus {
   PAYMENT_METHOD_REJECTED(
       HttpStatus.BAD_REQUEST, "PAYMENT_400_003", "결제가 거절되었습니다. 다른 결제수단으로 시도해주세요."),
   PAYMENT_LIMIT_EXCEEDED(HttpStatus.BAD_REQUEST, "PAYMENT_400_004", "카드 한도 또는 결제 한도를 초과했습니다."),
+  /* 환불 가능 기한 검증은 공연 시작 시간(performance 도메인) 연동 후속 작업에서 사용 예정. (#22 보류) */
+  PAYMENT_REFUND_DEADLINE_EXCEEDED(
+      HttpStatus.BAD_REQUEST, "PAYMENT_400_005", "환불 가능 기한이 지나 환불할 수 없습니다."),
 
   // Payment 404
   PAYMENT_SESSION_NOT_FOUND(HttpStatus.NOT_FOUND, "PAYMENT_404_001", "결제 세션이 만료되었거나 존재하지 않습니다."),
@@ -156,6 +159,7 @@ public enum ErrorStatus {
 
   // Payment 409
   PAYMENT_ALREADY_COMPLETED(HttpStatus.CONFLICT, "PAYMENT_409_001", "이미 결제가 완료된 예매입니다."),
+  PAYMENT_NOT_CANCELABLE(HttpStatus.CONFLICT, "PAYMENT_409_002", "환불 가능한 결제 상태가 아닙니다."),
 
   // Payment 502
   PAYMENT_APPROVAL_FAILED(HttpStatus.BAD_GATEWAY, "PAYMENT_502_001", "PG사 결제 승인에 실패했습니다."),

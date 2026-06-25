@@ -10,7 +10,9 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
+import com.ticketrush.boundedcontext.payment.app.dto.request.PaymentCancelRequest;
 import com.ticketrush.boundedcontext.payment.app.dto.request.PaymentConfirmRequest;
+import com.ticketrush.boundedcontext.payment.app.dto.response.PaymentCancelResponse;
 import com.ticketrush.boundedcontext.payment.app.dto.response.PaymentConfirmResponse;
 import com.ticketrush.boundedcontext.payment.app.dto.response.PaymentDetailResponse;
 import com.ticketrush.boundedcontext.payment.app.dto.response.PaymentSummaryResponse;
@@ -174,6 +176,95 @@ class PaymentControllerTest {
         .andExpect(jsonPath("$.code").value(ErrorStatus.PAYMENT_AMOUNT_MISMATCH.getCode()));
 
     verify(paymentFacade).confirm(eq(userId), any(PaymentConfirmRequest.class));
+  }
+
+  @Test
+  @DisplayName("결제 취소(환불) 요청을 성공하고 200 OK를 반환한다")
+  void cancel_success() throws Exception {
+    // given
+    Long userId = 10L;
+    Long paymentId = 1L;
+    LocalDateTime canceledAt = LocalDateTime.of(2026, 5, 22, 10, 0);
+    PaymentCancelResponse response =
+        new PaymentCancelResponse(paymentId, "CANCELED", 5L, 55_000L, canceledAt);
+    given(paymentFacade.cancel(eq(userId), eq(paymentId), any(PaymentCancelRequest.class)))
+        .willReturn(response);
+
+    String requestBody =
+        """
+        {
+          "reason": "단순 변심"
+        }
+        """;
+
+    // when & then
+    mockMvc
+        .perform(
+            post("/api/v1/payment/{paymentId}/cancel", paymentId)
+                .header("X-Internal-Token", INTERNAL_TOKEN)
+                .header("X-User-Id", userId)
+                .header("X-User-Role", "USER")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(requestBody))
+        .andExpect(status().isOk())
+        .andExpect(jsonPath("$.is_success").value(true))
+        .andExpect(jsonPath("$.result.payment_id").value(1))
+        .andExpect(jsonPath("$.result.status").value("CANCELED"))
+        .andExpect(jsonPath("$.result.refund_id").value(5))
+        .andExpect(jsonPath("$.result.refunded_amount").value(55000))
+        .andExpect(jsonPath("$.result.canceled_at").value("2026-05-22 10:00:00"));
+
+    verify(paymentFacade).cancel(eq(userId), eq(paymentId), any(PaymentCancelRequest.class));
+  }
+
+  @Test
+  @DisplayName("환불 사유가 비어있으면 400 Bad Request를 반환한다")
+  void cancel_fails_when_reason_missing() throws Exception {
+    // given - reason 누락
+    String requestBody = "{}";
+
+    // when & then
+    mockMvc
+        .perform(
+            post("/api/v1/payment/{paymentId}/cancel", 1L)
+                .header("X-Internal-Token", INTERNAL_TOKEN)
+                .header("X-User-Id", 10L)
+                .header("X-User-Role", "USER")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(requestBody))
+        .andExpect(status().isBadRequest());
+
+    verifyNoInteractions(paymentFacade);
+  }
+
+  @Test
+  @DisplayName("본인 결제가 아니면 PAYMENT_404_002로 실패한다")
+  void cancel_fails_when_not_found() throws Exception {
+    // given
+    Long userId = 10L;
+    Long paymentId = 999L;
+    given(paymentFacade.cancel(eq(userId), eq(paymentId), any(PaymentCancelRequest.class)))
+        .willThrow(new BusinessException(ErrorStatus.PAYMENT_NOT_FOUND));
+
+    String requestBody =
+        """
+        {
+          "reason": "단순 변심"
+        }
+        """;
+
+    // when & then
+    mockMvc
+        .perform(
+            post("/api/v1/payment/{paymentId}/cancel", paymentId)
+                .header("X-Internal-Token", INTERNAL_TOKEN)
+                .header("X-User-Id", userId)
+                .header("X-User-Role", "USER")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(requestBody))
+        .andExpect(status().isNotFound())
+        .andExpect(jsonPath("$.is_success").value(false))
+        .andExpect(jsonPath("$.code").value(ErrorStatus.PAYMENT_NOT_FOUND.getCode()));
   }
 
   @Test

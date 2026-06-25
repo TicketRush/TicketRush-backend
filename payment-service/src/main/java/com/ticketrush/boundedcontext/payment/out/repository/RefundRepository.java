@@ -7,4 +7,6 @@ import org.springframework.data.jpa.repository.JpaRepository;
 public interface RefundRepository extends JpaRepository<Refund, Long> {
 
   Optional<Refund> findByBookingId(Long bookingId);
+
+  Optional<Refund> findByPaymentId(Long paymentId);
 }
