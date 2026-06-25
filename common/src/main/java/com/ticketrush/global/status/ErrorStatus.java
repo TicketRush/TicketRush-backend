@@ -169,7 +169,17 @@ public enum ErrorStatus {
 
   // Payment 503
   PAYMENT_PG_COMMUNICATION_FAILED(
-      HttpStatus.SERVICE_UNAVAILABLE, "PAYMENT_503_001", "PG사와 통신에 실패했습니다.");
+      HttpStatus.SERVICE_UNAVAILABLE, "PAYMENT_503_001", "PG사와 통신에 실패했습니다."),
+
+  // Ticket 404
+  TICKET_NOT_FOUND(HttpStatus.NOT_FOUND, "TICKET_404_001", "입장권을 찾을 수 없습니다."),
+
+  // Ticket 409
+  TICKET_NOT_USABLE(HttpStatus.CONFLICT, "TICKET_409_001", "확정된 예매가 아니어서 입장권을 조회할 수 없습니다."),
+
+  // Ticket 503
+  TICKET_BOOKING_COMMUNICATION_FAILED(
+      HttpStatus.SERVICE_UNAVAILABLE, "TICKET_503_001", "예매 정보 조회에 실패했습니다. 잠시 후 다시 시도해 주세요.");
 
   private final HttpStatus httpStatus;
   private final String code;
