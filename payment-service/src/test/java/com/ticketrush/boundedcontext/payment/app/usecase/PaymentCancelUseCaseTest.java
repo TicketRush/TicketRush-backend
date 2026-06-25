@@ -5,6 +5,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.BDDMockito.given;
+import static org.mockito.Mockito.inOrder;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 
@@ -30,6 +31,7 @@ import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
+import org.mockito.InOrder;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
@@ -41,12 +43,13 @@ class PaymentCancelUseCaseTest {
   @Mock private PaymentRepository paymentRepository;
   @Mock private RefundRepository refundRepository;
   @Mock private PaymentCancelClientRouter paymentCancelClientRouter;
+  @Mock private PaymentCancelPersister paymentCancelPersister;
   @Mock private PaymentEventPublisher paymentEventPublisher;
 
   @InjectMocks private PaymentCancelUseCase paymentCancelUseCase;
 
   @Test
-  @DisplayName("COMPLETED 결제 환불 성공 시 PG 취소 호출 + Refund 저장 + 결제 CANCELED 전이 + 이벤트를 발행한다")
+  @DisplayName("COMPLETED 결제 환불 성공 시 PG 취소 호출 + 영속화 위임 + 이벤트를 발행한다")
   void execute_success() throws Exception {
     // given
     Long userId = 10L;
@@ -54,20 +57,23 @@ class PaymentCancelUseCaseTest {
     Long bookingId = 100L;
     Long seatId = 200L;
     Long amount = 55_000L;
-    Long savedRefundId = 999L;
+    final Long savedRefundId = 999L;
     LocalDateTime canceledAt = LocalDateTime.of(2026, 5, 22, 10, 0);
-    PaymentCancelRequest request = new PaymentCancelRequest("단순 변심");
+    final PaymentCancelRequest request = new PaymentCancelRequest("단순 변심");
 
     Payment payment = completedPayment(paymentId, userId, bookingId, seatId, amount);
     given(paymentRepository.findByIdAndUserId(paymentId, userId)).willReturn(Optional.of(payment));
     given(paymentCancelClientRouter.cancel(any()))
         .willReturn(new PaymentCancelResult("PG-REFUND-1", amount, canceledAt));
-    given(refundRepository.saveAndFlush(any(Refund.class)))
+
+    Payment canceled = completedPayment(paymentId, userId, bookingId, seatId, amount);
+    canceled.markCanceled();
+    given(paymentCancelPersister.persist(eq(paymentId), any(Refund.class)))
         .willAnswer(
             invocation -> {
-              Refund r = invocation.getArgument(0);
+              Refund r = invocation.getArgument(1);
               setId(r, savedRefundId);
-              return r;
+              return new PaymentCancelPersister.CancelPersisted(canceled, r);
             });
 
     // when
@@ -79,7 +85,6 @@ class PaymentCancelUseCaseTest {
     assertThat(response.refundId()).isEqualTo(savedRefundId);
     assertThat(response.refundedAmount()).isEqualTo(amount);
     assertThat(response.canceledAt()).isEqualTo(canceledAt);
-    assertThat(payment.getStatus()).isEqualTo(PaymentStatus.CANCELED);
 
     ArgumentCaptor<PaymentCancelCommand> commandCaptor =
         ArgumentCaptor.forClass(PaymentCancelCommand.class);
@@ -92,15 +97,15 @@ class PaymentCancelUseCaseTest {
     assertThat(command.idempotencyKey()).isEqualTo("REFUND-0000001");
 
     ArgumentCaptor<Refund> refundCaptor = ArgumentCaptor.forClass(Refund.class);
-    verify(refundRepository).saveAndFlush(refundCaptor.capture());
-    Refund savedRefund = refundCaptor.getValue();
-    assertThat(savedRefund.getPaymentId()).isEqualTo(paymentId);
-    assertThat(savedRefund.getBookingId()).isEqualTo(bookingId);
-    assertThat(savedRefund.getPrice()).isEqualTo(amount);
-    assertThat(savedRefund.getStatus()).isEqualTo(RefundStatus.COMPLETED);
-    assertThat(savedRefund.getPgRefundKey()).isEqualTo("PG-REFUND-1");
-    assertThat(savedRefund.getReason()).isEqualTo("단순 변심");
-    assertThat(savedRefund.getConfirmedAt()).isEqualTo(canceledAt);
+    verify(paymentCancelPersister).persist(eq(paymentId), refundCaptor.capture());
+    Refund builtRefund = refundCaptor.getValue();
+    assertThat(builtRefund.getPaymentId()).isEqualTo(paymentId);
+    assertThat(builtRefund.getBookingId()).isEqualTo(bookingId);
+    assertThat(builtRefund.getPrice()).isEqualTo(amount);
+    assertThat(builtRefund.getStatus()).isEqualTo(RefundStatus.COMPLETED);
+    assertThat(builtRefund.getPgRefundKey()).isEqualTo("PG-REFUND-1");
+    assertThat(builtRefund.getReason()).isEqualTo("단순 변심");
+    assertThat(builtRefund.getConfirmedAt()).isEqualTo(canceledAt);
 
     verify(paymentEventPublisher)
         .publishCanceled(
@@ -111,6 +116,13 @@ class PaymentCancelUseCaseTest {
             eq(amount),
             eq("단순 변심"),
             eq(canceledAt));
+
+    // 이벤트는 영속화(persist) 커밋 이후에 발행되어야 한다.
+    InOrder inOrder = inOrder(paymentCancelPersister, paymentEventPublisher);
+    inOrder.verify(paymentCancelPersister).persist(eq(paymentId), any(Refund.class));
+    inOrder
+        .verify(paymentEventPublisher)
+        .publishCanceled(any(), any(), any(), any(), any(), any(), any());
   }
 
   @Test
@@ -144,7 +156,7 @@ class PaymentCancelUseCaseTest {
     assertThat(response.refundId()).isEqualTo(999L);
     assertThat(response.status()).isEqualTo("CANCELED");
     verify(paymentCancelClientRouter, never()).cancel(any());
-    verify(refundRepository, never()).saveAndFlush(any(Refund.class));
+    verify(paymentCancelPersister, never()).persist(any(), any(Refund.class));
     verify(paymentEventPublisher, never())
         .publishCanceled(any(), any(), any(), any(), any(), any(), any());
   }
@@ -170,7 +182,7 @@ class PaymentCancelUseCaseTest {
         .isEqualTo(ErrorStatus.PAYMENT_REFUND_INCONSISTENT);
 
     verify(paymentCancelClientRouter, never()).cancel(any());
-    verify(refundRepository, never()).saveAndFlush(any(Refund.class));
+    verify(paymentCancelPersister, never()).persist(any(), any(Refund.class));
   }
 
   @Test
@@ -189,7 +201,7 @@ class PaymentCancelUseCaseTest {
         .isEqualTo(ErrorStatus.PAYMENT_NOT_FOUND);
 
     verify(paymentCancelClientRouter, never()).cancel(any());
-    verify(refundRepository, never()).saveAndFlush(any(Refund.class));
+    verify(paymentCancelPersister, never()).persist(any(), any(Refund.class));
   }
 
   @Test
@@ -220,7 +232,7 @@ class PaymentCancelUseCaseTest {
         .isEqualTo(ErrorStatus.PAYMENT_NOT_CANCELABLE);
 
     verify(paymentCancelClientRouter, never()).cancel(any());
-    verify(refundRepository, never()).saveAndFlush(any(Refund.class));
+    verify(paymentCancelPersister, never()).persist(any(), any(Refund.class));
   }
 
   @Test
@@ -243,7 +255,7 @@ class PaymentCancelUseCaseTest {
         .isEqualTo(ErrorStatus.PAYMENT_REFUND_FAILED);
 
     assertThat(payment.getStatus()).isEqualTo(PaymentStatus.COMPLETED);
-    verify(refundRepository, never()).saveAndFlush(any(Refund.class));
+    verify(paymentCancelPersister, never()).persist(any(), any(Refund.class));
     verify(paymentEventPublisher, never())
         .publishCanceled(any(), any(), any(), any(), any(), any(), any());
   }
@@ -260,7 +272,7 @@ class PaymentCancelUseCaseTest {
     given(paymentRepository.findByIdAndUserId(paymentId, userId)).willReturn(Optional.of(payment));
     given(paymentCancelClientRouter.cancel(any()))
         .willReturn(new PaymentCancelResult("PG-REFUND-1", 55_000L, LocalDateTime.now()));
-    given(refundRepository.saveAndFlush(any(Refund.class)))
+    given(paymentCancelPersister.persist(eq(paymentId), any(Refund.class)))
         .willThrow(new DataIntegrityViolationException("duplicate paymentId"));
 
     // when & then
@@ -300,7 +312,7 @@ class PaymentCancelUseCaseTest {
     assertThat(response.refundId()).isEqualTo(999L);
     assertThat(response.status()).isEqualTo("CANCELED");
     verify(paymentCancelClientRouter, never()).cancel(any());
-    verify(refundRepository, never()).saveAndFlush(any(Refund.class));
+    verify(paymentCancelPersister, never()).persist(any(), any(Refund.class));
   }
 
   private Payment completedPayment(

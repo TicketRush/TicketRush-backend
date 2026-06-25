@@ -5,6 +5,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.BDDMockito.given;
+import static org.mockito.Mockito.inOrder;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 
@@ -27,6 +28,7 @@ import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
+import org.mockito.InOrder;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
@@ -101,6 +103,13 @@ class PaymentConfirmUseCaseTest {
     verify(paymentEventPublisher)
         .publishConfirmed(
             eq(savedPaymentId), eq(bookingId), eq(seatId), eq(userId), eq(amount), eq(approvedAt));
+
+    // 이벤트는 save(커밋) 성공 이후에 발행되어야 한다.
+    InOrder inOrder = inOrder(paymentRepository, paymentEventPublisher);
+    inOrder.verify(paymentRepository).save(any(Payment.class));
+    inOrder
+        .verify(paymentEventPublisher)
+        .publishConfirmed(any(), any(), any(), any(), any(), any());
   }
 
   private void setId(Payment payment, Long id) throws Exception {

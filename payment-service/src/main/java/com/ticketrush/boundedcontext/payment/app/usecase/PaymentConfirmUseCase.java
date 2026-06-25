@@ -14,10 +14,14 @@ import com.ticketrush.global.exception.BusinessException;
 import com.ticketrush.global.status.ErrorStatus;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
-import org.springframework.transaction.annotation.Transactional;
 
+/**
+ * 결제 승인(confirm) UseCase.
+ *
+ * <p>쓰기가 {@code paymentRepository.save} 단건뿐이라 여러 문장을 묶는 트랜잭션이 필요 없다. 따라서 PG 승인(외부 왕복)을 트랜잭션 안에 가두지
+ * 않아 DB 커넥션을 장시간 점유하지 않는다. 이벤트는 save(자체 트랜잭션 커밋) 성공 이후에 호출되므로, 커밋에 성공한 데이터만 외부로 전파된다.
+ */
 @Service
-@Transactional
 @RequiredArgsConstructor
 public class PaymentConfirmUseCase {
 

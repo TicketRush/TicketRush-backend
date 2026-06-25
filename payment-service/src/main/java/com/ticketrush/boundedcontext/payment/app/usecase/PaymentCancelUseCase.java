@@ -3,6 +3,7 @@ package com.ticketrush.boundedcontext.payment.app.usecase;
 import com.ticketrush.boundedcontext.payment.app.dto.request.PaymentCancelRequest;
 import com.ticketrush.boundedcontext.payment.app.dto.response.PaymentCancelResponse;
 import com.ticketrush.boundedcontext.payment.app.support.PaymentEventPublisher;
+import com.ticketrush.boundedcontext.payment.app.usecase.PaymentCancelPersister.CancelPersisted;
 import com.ticketrush.boundedcontext.payment.domain.entity.Payment;
 import com.ticketrush.boundedcontext.payment.domain.entity.Refund;
 import com.ticketrush.boundedcontext.payment.domain.types.PaymentStatus;
@@ -25,16 +26,19 @@ import org.springframework.transaction.annotation.Transactional;
  * <p>본인 결제 검증 → 상태 검증 → PG 취소 호출 → {@link Refund} 영속화 → {@code PaymentStatus.CANCELED} 전이 → {@code
  * PaymentCanceledEvent} 발행까지의 happy path를 담당한다. 동일 결제에 대한 중복 요청은 기존 환불 내역을 반환하여 멱등하게 처리한다.
  *
+ * <p>PG 취소(외부 왕복)는 트랜잭션 밖에서 호출해 DB 커넥션 장시간 점유를 피하고, 영속화(refund 저장 + 상태 전이)만 {@link
+ * PaymentCancelPersister}의 짧은 트랜잭션으로 분리한다. 이벤트는 영속화 커밋 이후(트랜잭션 밖)에 발행하므로, 커밋에 성공한 데이터만 외부로 전파된다.
+ *
  * <p>환불 기한 검증(공연 시작 시간 기준)과 환불 실패 시 보상 트랜잭션(#91)은 본 UseCase 범위 밖이다.
  */
 @Service
-@Transactional
 @RequiredArgsConstructor
 public class PaymentCancelUseCase {
 
   private final PaymentRepository paymentRepository;
   private final RefundRepository refundRepository;
   private final PaymentCancelClientRouter paymentCancelClientRouter;
+  private final PaymentCancelPersister paymentCancelPersister;
   private final PaymentEventPublisher paymentEventPublisher;
 
   public PaymentCancelResponse execute(Long userId, Long paymentId, PaymentCancelRequest request) {
@@ -52,6 +56,7 @@ public class PaymentCancelUseCase {
       throw new BusinessException(ErrorStatus.PAYMENT_NOT_CANCELABLE);
     }
 
+    // PG 취소는 트랜잭션 밖에서 호출한다(외부 왕복 동안 DB 커넥션을 점유하지 않기 위함).
     PaymentCancelResult result =
         paymentCancelClientRouter.cancel(
             new PaymentCancelCommand(
@@ -73,21 +78,22 @@ public class PaymentCancelUseCase {
             .confirmedAt(result.canceledAt())
             .build();
 
-    // 동시 취소 요청 시 paymentId unique 제약 위반을 이벤트 발행·상태 전이 이전에 표면화하기 위해 즉시 flush 한다.
-    // 위반(DataIntegrityViolationException)은 트랜잭션 경계 밖(PaymentFacade)에서 멱등 처리한다.
-    Refund saved = refundRepository.saveAndFlush(refund);
-    payment.markCanceled();
+    // 영속화(refund 저장 + 상태 전이)만 짧은 트랜잭션으로 분리한다. 동시 취소 시 unique 위반은 PaymentFacade가 멱등 처리한다.
+    CancelPersisted persisted = paymentCancelPersister.persist(paymentId, refund);
 
+    // 발행은 영속화 커밋 이후(트랜잭션 밖)에 호출한다 → 커밋에 성공한 데이터만 전파된다.
+    Payment canceled = persisted.payment();
+    Refund saved = persisted.refund();
     paymentEventPublisher.publishCanceled(
-        payment.getId(),
-        payment.getBookingId(),
-        payment.getSeatId(),
+        canceled.getId(),
+        canceled.getBookingId(),
+        canceled.getSeatId(),
         saved.getId(),
         saved.getPrice(),
         saved.getReason(),
         saved.getConfirmedAt());
 
-    return PaymentCancelResponse.of(payment, saved);
+    return PaymentCancelResponse.of(canceled, saved);
   }
 
   /**
