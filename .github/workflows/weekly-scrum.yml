@@ -21,7 +21,8 @@ jobs:
       SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
       BACKEND_REPO: TicketRush/TicketRush-backend
       FRONTEND_REPO: TicketRush/TicketRush-frontend
-      MAX_PER_AUTHOR: 5      # 사람당 표시할 머지 PR 최대 개수 (초과분은 '…외 N건')
+      MAX_PER_AUTHOR: 5          # 사람당 표시할 머지 PR 최대 개수 (초과분은 '…외 N건')
+      MAX_ISSUES_PER_PERSON: 7   # 사람당 표시할 진행 중 이슈 최대 개수 (초과분은 '…외 N건')
     steps:
       - name: Build & send weekly scrum to Slack
         run: |
@@ -43,7 +44,7 @@ jobs:
           #  - PR: author.login 기준, 사람당 최대 $k건 + '…외 N건'
           #  - 이슈: 담당자별, 최근 7일 내 업데이트된 열린 이슈만 (cap 없음)
           #  - 각 항목에 [BE]/[FE] 태그로 레포 표시, 활동량(PR+이슈 수) 많은 순 정렬
-          BODY=$(jq -nr --argjson k "$MAX_PER_AUTHOR" --arg since "$SINCE" \
+          BODY=$(jq -nr --argjson k "$MAX_PER_AUTHOR" --argjson ki "$MAX_ISSUES_PER_PERSON" --arg since "$SINCE" \
             --argjson bp "$be_pr" --argjson fp "$fe_pr" \
             --argjson bi "$be_is" --argjson fi "$fe_is" '
             ( ($bp|map(.+{repo:"BE"})) + ($fp|map(.+{repo:"FE"})) )
@@ -52,20 +53,21 @@ jobs:
                 | map(select(.updatedAt >= $since))
                 | map(. as $x
                       | (if (.assignees|length)==0 then [{login:"_unassigned"}] else .assignees end)
-                      | map({login:.login, number:$x.number, title:$x.title, repo:$x.repo}))
+                      | map({login:.login, number:$x.number, title:$x.title, repo:$x.repo, updatedAt:$x.updatedAt}))
                 | add // [] ) as $iss
             | def pcount($l): ($prs|map(select(.login==$l))|length);
               def icount($l): ($iss|map(select(.login==$l))|length);
               def block($l):
                 ($prs|map(select(.login==$l))) as $p
-                | ($iss|map(select(.login==$l))) as $i
+                | ($iss|map(select(.login==$l))|sort_by(.updatedAt)|reverse) as $i
                 | "*👤 @\($l)*\n📦 머지 PR (\($p|length)건)\n"
                   + (if ($p|length)==0 then "• 없음"
                      else ($p[0:$k]|map("• [\(.repo)] #\(.number) \(.title)")|join("\n"))
                           + (if ($p|length)>$k then "\n  …외 \(($p|length)-$k)건" else "" end) end)
-                  + "\n🚧 진행 중 이슈\n"
+                  + "\n🚧 진행 중 이슈 (\($i|length)건)\n"
                   + (if ($i|length)==0 then "• 없음"
-                     else ($i|map("• [\(.repo)] #\(.number) \(.title)")|join("\n")) end);
+                     else ($i[0:$ki]|map("• [\(.repo)] #\(.number) \(.title)")|join("\n"))
+                          + (if ($i|length)>$ki then "\n  …외 \(($i|length)-$ki)건" else "" end) end);
               ( ( [ $prs[].login ] + [ $iss[].login ] )
                 | map(select(. != "_unassigned")) | unique
                 | sort_by( -(pcount(.) + icount(.)) )
