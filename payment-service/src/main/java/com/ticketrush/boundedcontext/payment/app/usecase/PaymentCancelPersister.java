@@ -28,8 +28,11 @@ public class PaymentCancelPersister {
   /**
    * 환불을 저장하고 결제를 CANCELED로 전이한다.
    *
-   * <p>{@code payment}는 트랜잭션 밖에서 조회된 detached 엔티티이므로, 트랜잭션 안에서 다시 조회해 managed 상태로 만든 뒤 상태를 전이한다.
-   * {@code saveAndFlush}를 먼저 호출해 동시 취소 시 paymentId unique 위반을 상태 전이/이벤트 발행 이전에 표면화한다. 위반({@code
+   * <p>{@code paymentId}만으로 결제를 재조회하므로 본인 결제 검증(인가)을 수행하지 않는다. <b>반드시 호출자({@link
+   * PaymentCancelUseCase})가 {@code userId} 기반 인가·상태 검증을 마친 뒤에만 호출해야 한다.</b>
+   *
+   * <p>트랜잭션 안에서 결제를 다시 조회해 managed 상태로 만든 뒤 상태를 전이한다(호출자가 트랜잭션 밖에서 읽은 엔티티는 detached이기 때문). {@code
+   * saveAndFlush}를 먼저 호출해 동시 취소 시 paymentId unique 위반을 상태 전이/이벤트 발행 이전에 표면화한다. 위반({@code
    * DataIntegrityViolationException})은 트랜잭션 경계 밖({@link
    * com.ticketrush.boundedcontext.payment.app.facade.PaymentFacade})에서 멱등 처리한다.
    */
