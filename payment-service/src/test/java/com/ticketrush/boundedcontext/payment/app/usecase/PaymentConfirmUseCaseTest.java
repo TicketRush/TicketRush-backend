@@ -24,6 +24,7 @@ import com.ticketrush.global.exception.BusinessException;
 import com.ticketrush.global.status.ErrorStatus;
 import java.lang.reflect.Field;
 import java.time.LocalDateTime;
+import java.util.Optional;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -194,5 +195,49 @@ class PaymentConfirmUseCaseTest {
     verify(paymentRepository, never()).save(any(Payment.class));
     verify(paymentEventPublisher, never())
         .publishConfirmed(any(), any(), any(), any(), any(), any());
+  }
+
+  @Test
+  @DisplayName("getConfirmedResponse는 paymentKey로 기존 결제를 찾아 멱등 응답을 반환한다")
+  void getConfirmedResponse_returns_existing() throws Exception {
+    // given
+    String paymentKey = "pgKey_xyz";
+    LocalDateTime paidAt = LocalDateTime.of(2026, 5, 22, 10, 0);
+    Payment existing =
+        Payment.builder()
+            .bookingId(100L)
+            .userId(10L)
+            .seatId(200L)
+            .provider(PaymentProvider.TOSS)
+            .amount(55_000L)
+            .status(PaymentStatus.COMPLETED)
+            .paymentKey(paymentKey)
+            .approvalNumber("APR-1")
+            .paidAt(paidAt)
+            .build();
+    setId(existing, 999L);
+    given(paymentRepository.findByPaymentKey(paymentKey)).willReturn(Optional.of(existing));
+
+    // when
+    PaymentConfirmResponse response = paymentConfirmUseCase.getConfirmedResponse(paymentKey);
+
+    // then
+    assertThat(response.paymentId()).isEqualTo(999L);
+    assertThat(response.status()).isEqualTo("COMPLETED");
+    assertThat(response.paidAt()).isEqualTo(paidAt);
+  }
+
+  @Test
+  @DisplayName("getConfirmedResponse는 결제를 찾지 못하면 PAYMENT_404_002 예외가 발생한다")
+  void getConfirmedResponse_throws_when_absent() {
+    // given
+    String paymentKey = "pgKey_unknown";
+    given(paymentRepository.findByPaymentKey(paymentKey)).willReturn(Optional.empty());
+
+    // when & then
+    assertThatThrownBy(() -> paymentConfirmUseCase.getConfirmedResponse(paymentKey))
+        .isInstanceOf(BusinessException.class)
+        .extracting("errorStatus")
+        .isEqualTo(ErrorStatus.PAYMENT_NOT_FOUND);
   }
 }

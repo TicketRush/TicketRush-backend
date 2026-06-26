@@ -57,4 +57,23 @@ class PaymentTest {
     // expect
     assertThatThrownBy(payment::markCanceled).isInstanceOf(IllegalStateException.class);
   }
+
+  @Test
+  @DisplayName("COMPLETED 결제는 isAlreadyProcessed가 true다")
+  void isAlreadyProcessed_true_when_completed() {
+    // given
+    Payment payment = payment(PaymentStatus.COMPLETED);
+
+    // expect
+    assertThat(payment.isAlreadyProcessed()).isTrue();
+  }
+
+  @Test
+  @DisplayName("COMPLETED가 아닌 결제는 isAlreadyProcessed가 false다")
+  void isAlreadyProcessed_false_when_not_completed() {
+    // expect
+    assertThat(payment(PaymentStatus.PENDING).isAlreadyProcessed()).isFalse();
+    assertThat(payment(PaymentStatus.CANCELED).isAlreadyProcessed()).isFalse();
+    assertThat(payment(PaymentStatus.FAILED).isAlreadyProcessed()).isFalse();
+  }
 }

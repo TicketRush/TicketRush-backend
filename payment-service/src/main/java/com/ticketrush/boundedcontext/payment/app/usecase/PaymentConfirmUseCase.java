@@ -82,6 +82,20 @@ public class PaymentConfirmUseCase {
     return PaymentConfirmResponse.from(saved);
   }
 
+  /**
+   * 이미 확정된 결제를 paymentKey로 조회해 멱등 응답으로 반환한다.
+   *
+   * <p>동시 confirm 요청이 paymentKey unique 제약에 막혔을 때, 먼저 확정된 결제를 돌려주기 위해 {@link
+   * com.ticketrush.boundedcontext.payment.app.facade.PaymentFacade}의 멱등 fallback에서 호출한다.
+   */
+  public PaymentConfirmResponse getConfirmedResponse(String paymentKey) {
+    Payment payment =
+        paymentRepository
+            .findByPaymentKey(paymentKey)
+            .orElseThrow(() -> new BusinessException(ErrorStatus.PAYMENT_NOT_FOUND));
+    return PaymentConfirmResponse.from(payment);
+  }
+
   /* PG 공통 orderId 규격(6~64자, 영문/숫자/_/-, 현재 Toss 기준)을 만족하기 위해 zero-padding 한다. */
   private String generateOrderId(Long bookingId) {
     return "BKG-%07d".formatted(bookingId);
