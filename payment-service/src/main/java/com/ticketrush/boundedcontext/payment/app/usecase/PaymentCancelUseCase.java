@@ -2,6 +2,7 @@ package com.ticketrush.boundedcontext.payment.app.usecase;
 
 import com.ticketrush.boundedcontext.payment.app.dto.request.PaymentCancelRequest;
 import com.ticketrush.boundedcontext.payment.app.dto.response.PaymentCancelResponse;
+import com.ticketrush.boundedcontext.payment.app.mapper.PaymentMapper;
 import com.ticketrush.boundedcontext.payment.app.support.PaymentEventPublisher;
 import com.ticketrush.boundedcontext.payment.app.usecase.PaymentCancelPersister.CancelPersisted;
 import com.ticketrush.boundedcontext.payment.domain.entity.Payment;
@@ -40,6 +41,7 @@ public class PaymentCancelUseCase {
   private final PaymentCancelClientRouter paymentCancelClientRouter;
   private final PaymentCancelPersister paymentCancelPersister;
   private final PaymentEventPublisher paymentEventPublisher;
+  private final PaymentMapper paymentMapper;
 
   public PaymentCancelResponse execute(Long userId, Long paymentId, PaymentCancelRequest request) {
     Payment payment =
@@ -93,7 +95,7 @@ public class PaymentCancelUseCase {
         saved.getReason(),
         saved.getConfirmedAt());
 
-    return PaymentCancelResponse.of(canceled, saved);
+    return paymentMapper.toCancelResponse(canceled, saved);
   }
 
   /**
@@ -114,7 +116,7 @@ public class PaymentCancelUseCase {
         refundRepository
             .findByPaymentId(paymentId)
             .orElseThrow(() -> new BusinessException(ErrorStatus.PAYMENT_REFUND_INCONSISTENT));
-    return PaymentCancelResponse.of(payment, existing);
+    return paymentMapper.toCancelResponse(payment, existing);
   }
 
   /* 동일 결제의 재요청 시 PG 측 중복 취소를 막기 위해 paymentId 기반 고정 멱등 키를 생성한다. */

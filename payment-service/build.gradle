@@ -35,11 +35,17 @@ dependencies {
 	implementation 'org.springframework.boot:spring-boot-starter-data-jpa'
 	implementation 'org.springframework.boot:spring-boot-starter-security'
 	implementation 'org.springframework.boot:spring-boot-starter-webmvc'
+	// MapStruct
+	implementation 'org.mapstruct:mapstruct:1.5.5.Final'
+
 	compileOnly 'org.projectlombok:lombok'
 	developmentOnly 'org.springframework.boot:spring-boot-devtools'
 	runtimeOnly 'com.mysql:mysql-connector-j'
 	annotationProcessor 'org.springframework.boot:spring-boot-configuration-processor'
 	annotationProcessor 'org.projectlombok:lombok'
+	// Lombok과 MapStruct의 순서 및 바인딩을 위한 필수 설정
+	annotationProcessor 'org.projectlombok:lombok-mapstruct-binding:0.2.0'
+	annotationProcessor 'org.mapstruct:mapstruct-processor:1.5.5.Final'
 
 	// Kafka
 	implementation 'org.springframework.boot:spring-boot-starter-kafka'
@@ -52,6 +58,8 @@ dependencies {
 	testImplementation 'org.springframework.boot:spring-boot-starter-webmvc-test'
 	testImplementation testFixtures(project(":common"))
 	testRuntimeOnly 'org.junit.platform:junit-platform-launcher'
+
+	testAnnotationProcessor 'org.mapstruct:mapstruct-processor:1.5.5.Final'
 
 	// swagger
 	implementation 'org.springdoc:springdoc-openapi-starter-webmvc-ui:3.0.1'

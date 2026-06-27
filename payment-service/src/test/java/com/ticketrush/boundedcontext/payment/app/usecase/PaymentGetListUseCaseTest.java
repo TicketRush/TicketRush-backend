@@ -4,6 +4,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.BDDMockito.given;
 
 import com.ticketrush.boundedcontext.payment.app.dto.response.PaymentSummaryResponse;
+import com.ticketrush.boundedcontext.payment.app.mapper.PaymentMapper;
 import com.ticketrush.boundedcontext.payment.domain.entity.Payment;
 import com.ticketrush.boundedcontext.payment.domain.types.PaymentProvider;
 import com.ticketrush.boundedcontext.payment.domain.types.PaymentStatus;
@@ -14,8 +15,10 @@ import java.util.List;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.mapstruct.factory.Mappers;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
+import org.mockito.Spy;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageImpl;
@@ -27,6 +30,8 @@ import org.springframework.data.domain.Sort;
 class PaymentGetListUseCaseTest {
 
   @Mock private PaymentRepository paymentRepository;
+
+  @Spy private PaymentMapper paymentMapper = Mappers.getMapper(PaymentMapper.class);
 
   @InjectMocks private PaymentGetListUseCase paymentGetListUseCase;
 

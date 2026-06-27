@@ -1,6 +1,5 @@
 package com.ticketrush.boundedcontext.payment.app.dto.response;
 
-import com.ticketrush.boundedcontext.payment.domain.entity.Payment;
 import com.ticketrush.boundedcontext.payment.domain.types.PaymentProvider;
 import com.ticketrush.boundedcontext.payment.domain.types.PaymentStatus;
 import io.swagger.v3.oas.annotations.media.Schema;
@@ -13,15 +12,4 @@ public record PaymentSummaryResponse(
     @Schema(description = "결제 수단", example = "TOSS") PaymentProvider provider,
     @Schema(description = "결제 금액", example = "55000") Long amount,
     @Schema(description = "결제 상태", example = "COMPLETED") PaymentStatus status,
-    @Schema(description = "결제 완료 시각") LocalDateTime paidAt) {
-
-  public static PaymentSummaryResponse from(Payment payment) {
-    return new PaymentSummaryResponse(
-        payment.getId(),
-        payment.getBookingId(),
-        payment.getProvider(),
-        payment.getAmount(),
-        payment.getStatus(),
-        payment.getPaidAt());
-  }
-}
+    @Schema(description = "결제 완료 시각") LocalDateTime paidAt) {}
