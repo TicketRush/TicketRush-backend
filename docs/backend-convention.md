@@ -176,57 +176,30 @@ service:
 
 ### 📜 Swagger 설정 규칙
 
-* **Class 레벨:** `@Tag` 어노테이션 사용
+API 문서화는 **`@Tag`(클래스) + `@Operation`(메서드)** 만 사용합니다. 모든 도메인(user / auth / booking / ticket / performance / payment 등)이 동일한 방식을 따릅니다.
+
+* **Class 레벨:** `@Tag` 어노테이션으로 도메인 단위 그룹을 지정합니다.
 
 ```java
-
 @Tag(name = "Member", description = "회원 도메인 API")
 @RestController
 @RequestMapping("/api/v1/member")
 public class MemberController { ...
 }
-
 ```
 
-* **성공 응답 예시 (Method 레벨):** `@Operation` 어노테이션 사용
+* **Method 레벨:** `@Operation(summary, description)` 으로 각 API의 요약과 설명을 작성합니다.
 
 ```java
-  @Operation(
-  summary = "일기 얼굴 사진 Presigned Download URL 발급",
-  description = "사용자의 일기 얼굴 사진을 바로 볼 수 있는 presigned download url을 발급합니다.")
-
+@Operation(summary = "소셜 로그인", description = "인가 코드를 통해 사용자 인증 후 JWT 토큰(access, refresh)을 발급합니다.")
+@PostMapping("/social/login")
+public ResponseEntity<ApiResponse<OauthLoginResponse>> socialLogin(
+    @RequestBody @Valid SocialOauthLoginRequest request) { ... }
 ```
 
-* **실패 응답 예시:** 공통 어노테이션을 생성하여 Controller 메서드에 부착
+* **실패 응답:** 컨트롤러에 `@ApiResponse` / 커스텀 `*ApiResponses` 분리 파일을 **부착하지 않습니다.** 에러는 전역 `ApiResponse` 구조와 `ErrorStatus`(전역 예외 처리)로 일관되게 반환되므로, 엔드포인트별 실패 응답을 Swagger 어노테이션으로 중복 기술하지 않습니다. (전역 응답 구조는 아래 **🔄 전역 응답 통일 (ApiResponse)** 섹션 참고)
 
-```java
-  // 1. 공통 어노테이션 생성
-@Target({ElementType.METHOD})
-@Retention(RetentionPolicy.RUNTIME)
-@Documented
-@ApiResponses({
-  @ApiResponse(
-    responseCode = "404",
-    description = "존재하지 않는 일기를 요청했을 때 발생하는 에러입니다.",
-    content = @Content(
-      mediaType = "application/json",
-      schema = @Schema(implementation = ApiResponse.class),
-      examples = @ExampleObject(
-        name = "DiaryNotFound",
-        summary = "존재하지 않는 일기",
-        value = SwaggerExamples.DIARY_NOT_FOUND_ERROR
-      )
-    )
-  )
-})
-public @interface DiaryNotFoundApiResponse {
-
-}
-
-// 2. Controller에서 사용
-@DiaryNotFoundApiResponse
-
-```
+* **파라미터 설명(선택):** 경로/쿼리 파라미터에 부연 설명이 필요한 경우에만 `@Parameter` 를 사용합니다.
 
 ### 🔄 전역 응답 통일 (ApiResponse)
 
