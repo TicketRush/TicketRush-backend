@@ -42,7 +42,9 @@ public class Payment extends AutoIdBaseEntity {
   @Column(nullable = false)
   private PaymentStatus status; // 결제 상태 (PENDING, COMPLETED 등)
 
-  @Column(length = 200)
+  /* paymentKey는 PG사가 결제 건마다 유일하게 발급한다. confirm 중복 요청·webhook 재수신이 동일 결제를 중복
+   * 생성하지 못하도록 unique 제약을 둔다. (멱등성 최종 방어선, #90) NULL은 MySQL에서 중복으로 보지 않는다. */
+  @Column(length = 200, unique = true)
   private String paymentKey; // PG사 발급 결제 키
 
   @Column(length = 100)
@@ -83,5 +85,10 @@ public class Payment extends AutoIdBaseEntity {
       throw new IllegalStateException("결제 취소는 COMPLETED 상태에서만 가능합니다. 현재 상태=" + this.status);
     }
     this.status = PaymentStatus.CANCELED;
+  }
+
+  /** 이미 결제가 확정(COMPLETED)된 상태인지 여부. webhook 재수신/중복 confirm 시 멱등 판정에 사용한다. */
+  public boolean isAlreadyProcessed() {
+    return this.status == PaymentStatus.COMPLETED;
   }
 }

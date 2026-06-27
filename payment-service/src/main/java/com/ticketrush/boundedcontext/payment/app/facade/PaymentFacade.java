@@ -10,7 +10,9 @@ import com.ticketrush.boundedcontext.payment.app.usecase.PaymentCancelUseCase;
 import com.ticketrush.boundedcontext.payment.app.usecase.PaymentConfirmUseCase;
 import com.ticketrush.boundedcontext.payment.app.usecase.PaymentGetDetailUseCase;
 import com.ticketrush.boundedcontext.payment.app.usecase.PaymentGetListUseCase;
+import com.ticketrush.boundedcontext.payment.app.usecase.PaymentWebhookUseCase;
 import com.ticketrush.boundedcontext.payment.app.usecase.RegisterExpiredBookingUseCase;
+import com.ticketrush.global.exception.BusinessException;
 import java.time.LocalDateTime;
 import lombok.RequiredArgsConstructor;
 import org.springframework.dao.DataIntegrityViolationException;
@@ -27,9 +29,24 @@ public class PaymentFacade {
   private final PaymentGetListUseCase paymentGetListUseCase;
   private final PaymentGetDetailUseCase paymentGetDetailUseCase;
   private final RegisterExpiredBookingUseCase registerExpiredBookingUseCase;
+  private final PaymentWebhookUseCase paymentWebhookUseCase;
 
   public PaymentConfirmResponse confirm(Long userId, PaymentConfirmRequest request) {
-    return paymentConfirmUseCase.execute(userId, request);
+    try {
+      return paymentConfirmUseCase.execute(userId, request);
+    } catch (DataIntegrityViolationException e) {
+      // 동시 confirm 요청이 paymentKey unique 제약에 막힌 경우, 먼저 확정된 결제를 멱등 반환한다.
+      // paymentKey 충돌이 아닌 다른 무결성 위반이라 조회되지 않으면, 원인을 숨기지 않도록 원래 예외를 재던진다.
+      try {
+        return paymentConfirmUseCase.getConfirmedResponse(request.paymentKey());
+      } catch (BusinessException lookupFailure) {
+        throw e;
+      }
+    }
+  }
+
+  public void handleWebhook(byte[] rawBody, String signature) {
+    paymentWebhookUseCase.handle(rawBody, signature);
   }
 
   public void registerExpiredBooking(Long bookingId, LocalDateTime expiredAt) {
