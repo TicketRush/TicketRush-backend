@@ -1,6 +1,7 @@
 package com.ticketrush.boundedcontext.payment.app.usecase;
 
 import com.ticketrush.boundedcontext.payment.app.dto.response.PaymentDetailResponse;
+import com.ticketrush.boundedcontext.payment.app.mapper.PaymentMapper;
 import com.ticketrush.boundedcontext.payment.domain.entity.Payment;
 import com.ticketrush.boundedcontext.payment.domain.entity.Refund;
 import com.ticketrush.boundedcontext.payment.out.repository.PaymentRepository;
@@ -17,6 +18,7 @@ public class PaymentGetDetailUseCase {
 
   private final PaymentRepository paymentRepository;
   private final RefundRepository refundRepository;
+  private final PaymentMapper paymentMapper;
 
   @Transactional(readOnly = true)
   public PaymentDetailResponse execute(Long userId, Long paymentId) {
@@ -28,6 +30,6 @@ public class PaymentGetDetailUseCase {
 
     Refund refund = refundRepository.findByBookingId(payment.getBookingId()).orElse(null);
 
-    return PaymentDetailResponse.of(payment, refund);
+    return paymentMapper.toDetailResponse(payment, refund);
   }
 }

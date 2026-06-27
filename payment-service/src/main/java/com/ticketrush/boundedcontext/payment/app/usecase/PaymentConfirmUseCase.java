@@ -2,6 +2,7 @@ package com.ticketrush.boundedcontext.payment.app.usecase;
 
 import com.ticketrush.boundedcontext.payment.app.dto.request.PaymentConfirmRequest;
 import com.ticketrush.boundedcontext.payment.app.dto.response.PaymentConfirmResponse;
+import com.ticketrush.boundedcontext.payment.app.mapper.PaymentMapper;
 import com.ticketrush.boundedcontext.payment.app.support.PaymentEventPublisher;
 import com.ticketrush.boundedcontext.payment.domain.entity.Payment;
 import com.ticketrush.boundedcontext.payment.domain.types.PaymentStatus;
@@ -29,6 +30,7 @@ public class PaymentConfirmUseCase {
   private final PaymentApprovalClientRouter paymentApprovalClientRouter;
   private final PaymentEventPublisher paymentEventPublisher;
   private final ExpiredBookingRepository expiredBookingRepository;
+  private final PaymentMapper paymentMapper;
 
   public PaymentConfirmResponse execute(Long userId, PaymentConfirmRequest request) {
     if (paymentRepository.existsByBookingIdAndStatus(
@@ -79,7 +81,7 @@ public class PaymentConfirmUseCase {
         saved.getAmount(),
         saved.getPaidAt());
 
-    return PaymentConfirmResponse.from(saved);
+    return paymentMapper.toConfirmResponse(saved);
   }
 
   /**
@@ -93,7 +95,7 @@ public class PaymentConfirmUseCase {
         paymentRepository
             .findByPaymentKey(paymentKey)
             .orElseThrow(() -> new BusinessException(ErrorStatus.PAYMENT_NOT_FOUND));
-    return PaymentConfirmResponse.from(payment);
+    return paymentMapper.toConfirmResponse(payment);
   }
 
   /* PG 공통 orderId 규격(6~64자, 영문/숫자/_/-, 현재 Toss 기준)을 만족하기 위해 zero-padding 한다. */

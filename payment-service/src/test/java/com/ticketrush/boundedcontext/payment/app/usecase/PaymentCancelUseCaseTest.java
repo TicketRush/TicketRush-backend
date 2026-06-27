@@ -11,6 +11,7 @@ import static org.mockito.Mockito.verify;
 
 import com.ticketrush.boundedcontext.payment.app.dto.request.PaymentCancelRequest;
 import com.ticketrush.boundedcontext.payment.app.dto.response.PaymentCancelResponse;
+import com.ticketrush.boundedcontext.payment.app.mapper.PaymentMapper;
 import com.ticketrush.boundedcontext.payment.app.support.PaymentEventPublisher;
 import com.ticketrush.boundedcontext.payment.domain.entity.Payment;
 import com.ticketrush.boundedcontext.payment.domain.entity.Refund;
@@ -30,10 +31,12 @@ import java.util.Optional;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.mapstruct.factory.Mappers;
 import org.mockito.ArgumentCaptor;
 import org.mockito.InOrder;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
+import org.mockito.Spy;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.dao.DataIntegrityViolationException;
 
@@ -45,6 +48,8 @@ class PaymentCancelUseCaseTest {
   @Mock private PaymentCancelClientRouter paymentCancelClientRouter;
   @Mock private PaymentCancelPersister paymentCancelPersister;
   @Mock private PaymentEventPublisher paymentEventPublisher;
+
+  @Spy private PaymentMapper paymentMapper = Mappers.getMapper(PaymentMapper.class);
 
   @InjectMocks private PaymentCancelUseCase paymentCancelUseCase;
 

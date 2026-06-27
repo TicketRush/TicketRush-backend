@@ -6,6 +6,7 @@ import static org.mockito.BDDMockito.given;
 import static org.mockito.Mockito.verifyNoInteractions;
 
 import com.ticketrush.boundedcontext.payment.app.dto.response.PaymentDetailResponse;
+import com.ticketrush.boundedcontext.payment.app.mapper.PaymentMapper;
 import com.ticketrush.boundedcontext.payment.domain.entity.Payment;
 import com.ticketrush.boundedcontext.payment.domain.entity.Refund;
 import com.ticketrush.boundedcontext.payment.domain.types.PaymentProvider;
@@ -21,8 +22,10 @@ import java.util.Optional;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.mapstruct.factory.Mappers;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
+import org.mockito.Spy;
 import org.mockito.junit.jupiter.MockitoExtension;
 
 @ExtendWith(MockitoExtension.class)
@@ -30,6 +33,8 @@ class PaymentGetDetailUseCaseTest {
 
   @Mock private PaymentRepository paymentRepository;
   @Mock private RefundRepository refundRepository;
+
+  @Spy private PaymentMapper paymentMapper = Mappers.getMapper(PaymentMapper.class);
 
   @InjectMocks private PaymentGetDetailUseCase paymentGetDetailUseCase;
 

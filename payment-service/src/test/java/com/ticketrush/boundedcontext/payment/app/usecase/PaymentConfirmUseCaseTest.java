@@ -11,6 +11,7 @@ import static org.mockito.Mockito.verify;
 
 import com.ticketrush.boundedcontext.payment.app.dto.request.PaymentConfirmRequest;
 import com.ticketrush.boundedcontext.payment.app.dto.response.PaymentConfirmResponse;
+import com.ticketrush.boundedcontext.payment.app.mapper.PaymentMapper;
 import com.ticketrush.boundedcontext.payment.app.support.PaymentEventPublisher;
 import com.ticketrush.boundedcontext.payment.domain.entity.Payment;
 import com.ticketrush.boundedcontext.payment.domain.types.PaymentProvider;
@@ -28,10 +29,12 @@ import java.util.Optional;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.mapstruct.factory.Mappers;
 import org.mockito.ArgumentCaptor;
 import org.mockito.InOrder;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
+import org.mockito.Spy;
 import org.mockito.junit.jupiter.MockitoExtension;
 
 @ExtendWith(MockitoExtension.class)
@@ -41,6 +44,8 @@ class PaymentConfirmUseCaseTest {
   @Mock private PaymentApprovalClientRouter paymentApprovalClientRouter;
   @Mock private PaymentEventPublisher paymentEventPublisher;
   @Mock private ExpiredBookingRepository expiredBookingRepository;
+
+  @Spy private PaymentMapper paymentMapper = Mappers.getMapper(PaymentMapper.class);
 
   @InjectMocks private PaymentConfirmUseCase paymentConfirmUseCase;
 
