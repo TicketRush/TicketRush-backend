@@ -28,4 +28,18 @@ public interface TicketRepository extends JpaRepository<Ticket, Long> {
       @Param("now") LocalDateTime now,
       @Param("used") TicketStatus used,
       @Param("unused") TicketStatus unused);
+
+  /**
+   * 입장권을 UNUSED -> CANCELED로 전이시키는 조건부 UPDATE. 결제 취소(환불) 이벤트는 bookingId만 전달하므로 bookingId 기준으로 갱신한다.
+   * {@code AND ticketStatus = :unused}가 가드 역할을 하여, 이미 USED(입장 완료)인 입장권은 0행이 되어 덮어쓰지 않고, 동일 취소 이벤트를
+   * 중복 수신해도 (이미 CANCELED) 0행이 되어 멱등하게 동작한다.
+   */
+  @Modifying(clearAutomatically = true, flushAutomatically = true)
+  @Query(
+      "UPDATE Ticket t SET t.ticketStatus = :canceled "
+          + "WHERE t.bookingId = :bookingId AND t.ticketStatus = :unused")
+  int markCanceledByBookingId(
+      @Param("bookingId") Long bookingId,
+      @Param("canceled") TicketStatus canceled,
+      @Param("unused") TicketStatus unused);
 }

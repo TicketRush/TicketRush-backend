@@ -150,3 +150,6 @@ build/
 .claude/feature_list.json
 !.claude/claude-progress.txt.example
 !.claude/feature_list.json.example
+
+# oh-my-claudecode
+.omc/
