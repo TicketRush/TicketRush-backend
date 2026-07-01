@@ -35,10 +35,11 @@ public class PaymentFacade {
     try {
       return paymentConfirmUseCase.execute(userId, request);
     } catch (DataIntegrityViolationException e) {
-      // 동시 confirm 요청이 paymentKey unique 제약에 막힌 경우, 먼저 확정된 결제를 멱등 반환한다.
-      // paymentKey 충돌이 아닌 다른 무결성 위반이라 조회되지 않으면, 원인을 숨기지 않도록 원래 예외를 재던진다.
+      // 동시 confirm 요청이 unique 제약에 막힌 경우, 먼저 확정된 결제를 멱등 반환한다. bookingId 조회는 paymentKey 충돌과
+      // 동일 booking·다른 paymentKey 충돌(uk_payment_completed_booking, #296)을 모두 흡수하는 상위집합이다. 유니크
+      // 충돌이 아닌 다른 무결성 위반이라 조회되지 않으면, 원인을 숨기지 않도록 원래 예외를 재던진다.
       try {
-        return paymentConfirmUseCase.getConfirmedResponse(request.paymentKey());
+        return paymentConfirmUseCase.getConfirmedResponseByBookingId(request.bookingId());
       } catch (BusinessException lookupFailure) {
         throw e;
       }

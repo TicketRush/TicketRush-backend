@@ -68,7 +68,7 @@ class PaymentConfirmUseCaseTest {
         .willReturn(false);
     given(paymentApprovalClientRouter.approve(any()))
         .willReturn(new PaymentApprovalResponse(approvalNumber, amount, approvedAt));
-    given(paymentRepository.save(any(Payment.class)))
+    given(paymentRepository.saveAndFlush(any(Payment.class)))
         .willAnswer(
             invocation -> {
               Payment p = invocation.getArgument(0);
@@ -95,7 +95,7 @@ class PaymentConfirmUseCaseTest {
     assertThat(sentApproval.amount()).isEqualTo(amount);
 
     ArgumentCaptor<Payment> paymentCaptor = ArgumentCaptor.forClass(Payment.class);
-    verify(paymentRepository).save(paymentCaptor.capture());
+    verify(paymentRepository).saveAndFlush(paymentCaptor.capture());
     Payment savedPayment = paymentCaptor.getValue();
     assertThat(savedPayment.getBookingId()).isEqualTo(bookingId);
     assertThat(savedPayment.getUserId()).isEqualTo(userId);
@@ -110,9 +110,9 @@ class PaymentConfirmUseCaseTest {
         .publishConfirmed(
             eq(savedPaymentId), eq(bookingId), eq(seatId), eq(userId), eq(amount), eq(approvedAt));
 
-    // 이벤트는 save(커밋) 성공 이후에 발행되어야 한다.
+    // 이벤트는 saveAndFlush(커밋) 성공 이후에 발행되어야 한다.
     InOrder inOrder = inOrder(paymentRepository, paymentEventPublisher);
-    inOrder.verify(paymentRepository).save(any(Payment.class));
+    inOrder.verify(paymentRepository).saveAndFlush(any(Payment.class));
     inOrder
         .verify(paymentEventPublisher)
         .publishConfirmed(any(), any(), any(), any(), any(), any());
@@ -148,7 +148,7 @@ class PaymentConfirmUseCaseTest {
         .extracting("errorStatus")
         .isEqualTo(ErrorStatus.PAYMENT_AMOUNT_MISMATCH);
 
-    verify(paymentRepository, never()).save(any(Payment.class));
+    verify(paymentRepository, never()).saveAndFlush(any(Payment.class));
     verify(paymentEventPublisher, never())
         .publishConfirmed(any(), any(), any(), any(), any(), any());
   }
@@ -172,7 +172,7 @@ class PaymentConfirmUseCaseTest {
         .isEqualTo(ErrorStatus.PAYMENT_ALREADY_COMPLETED);
 
     verify(paymentApprovalClientRouter, never()).approve(any());
-    verify(paymentRepository, never()).save(any(Payment.class));
+    verify(paymentRepository, never()).saveAndFlush(any(Payment.class));
     verify(paymentEventPublisher, never())
         .publishConfirmed(any(), any(), any(), any(), any(), any());
   }
@@ -197,34 +197,36 @@ class PaymentConfirmUseCaseTest {
         .isEqualTo(ErrorStatus.BOOKING_EXPIRED);
 
     verify(paymentApprovalClientRouter, never()).approve(any());
-    verify(paymentRepository, never()).save(any(Payment.class));
+    verify(paymentRepository, never()).saveAndFlush(any(Payment.class));
     verify(paymentEventPublisher, never())
         .publishConfirmed(any(), any(), any(), any(), any(), any());
   }
 
   @Test
-  @DisplayName("getConfirmedResponse는 paymentKey로 기존 결제를 찾아 멱등 응답을 반환한다")
-  void getConfirmedResponse_returns_existing() throws Exception {
+  @DisplayName("getConfirmedResponseByBookingId는 bookingId로 먼저 확정된 COMPLETED 결제를 찾아 멱등 응답을 반환한다")
+  void getConfirmedResponseByBookingId_returns_existing() throws Exception {
     // given
-    String paymentKey = "pgKey_xyz";
+    Long bookingId = 100L;
     LocalDateTime paidAt = LocalDateTime.of(2026, 5, 22, 10, 0);
     Payment existing =
         Payment.builder()
-            .bookingId(100L)
+            .bookingId(bookingId)
             .userId(10L)
             .seatId(200L)
             .provider(PaymentProvider.TOSS)
             .amount(55_000L)
             .status(PaymentStatus.COMPLETED)
-            .paymentKey(paymentKey)
+            .paymentKey("pgKey_xyz")
             .approvalNumber("APR-1")
             .paidAt(paidAt)
             .build();
     setId(existing, 999L);
-    given(paymentRepository.findByPaymentKey(paymentKey)).willReturn(Optional.of(existing));
+    given(paymentRepository.findFirstByBookingIdAndStatus(bookingId, PaymentStatus.COMPLETED))
+        .willReturn(Optional.of(existing));
 
     // when
-    PaymentConfirmResponse response = paymentConfirmUseCase.getConfirmedResponse(paymentKey);
+    PaymentConfirmResponse response =
+        paymentConfirmUseCase.getConfirmedResponseByBookingId(bookingId);
 
     // then
     assertThat(response.paymentId()).isEqualTo(999L);
@@ -233,14 +235,15 @@ class PaymentConfirmUseCaseTest {
   }
 
   @Test
-  @DisplayName("getConfirmedResponse는 결제를 찾지 못하면 PAYMENT_404_002 예외가 발생한다")
-  void getConfirmedResponse_throws_when_absent() {
+  @DisplayName("getConfirmedResponseByBookingId는 결제를 찾지 못하면 PAYMENT_404_002 예외가 발생한다")
+  void getConfirmedResponseByBookingId_throws_when_absent() {
     // given
-    String paymentKey = "pgKey_unknown";
-    given(paymentRepository.findByPaymentKey(paymentKey)).willReturn(Optional.empty());
+    Long bookingId = 404L;
+    given(paymentRepository.findFirstByBookingIdAndStatus(bookingId, PaymentStatus.COMPLETED))
+        .willReturn(Optional.empty());
 
     // when & then
-    assertThatThrownBy(() -> paymentConfirmUseCase.getConfirmedResponse(paymentKey))
+    assertThatThrownBy(() -> paymentConfirmUseCase.getConfirmedResponseByBookingId(bookingId))
         .isInstanceOf(BusinessException.class)
         .extracting("errorStatus")
         .isEqualTo(ErrorStatus.PAYMENT_NOT_FOUND);
