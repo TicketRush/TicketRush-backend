@@ -102,8 +102,11 @@ public class OutboxEntity extends AutoIdBaseEntity {
   /**
    * 발행 대기 상태({@link OutboxStatus#PENDING}, retryCount=0)의 Outbox row를 생성한다.
    *
-   * <p>{@link DomainEventEnvelope}가 담은 메시징 메타데이터(eventId/eventType/topic/payload/traceId)를 그대로 복원해
-   * 저장하고, envelope에 없는 애그리거트 정보와 파티션 키는 별도로 받는다.
+   * <p>{@link DomainEventEnvelope}의 메시징 메타데이터(eventId/eventType/topic/payload/traceId)를 컬럼으로 저장하고,
+   * envelope에 없는 애그리거트 정보와 파티션 키는 별도로 받는다.
+   *
+   * <p>단, envelope의 {@code createdAt}(Instant, 이벤트 생성 시각)은 별도 컬럼으로 보존하지 않고, 같은 트랜잭션에서 채워지는 auditing
+   * {@code created_at}(행 저장 시각)으로 근사한다.
    */
   public static OutboxEntity from(
       DomainEventEnvelope envelope, String aggregateType, String aggregateId, String messageKey) {
