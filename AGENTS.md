@@ -6,9 +6,11 @@ TicketRush 백엔드의 **도구 중립 AI 진입점**입니다. Claude Code·Gi
 ## 빌드 · 테스트
 
 ```bash
-./gradlew spotlessCheck   # 코드 포맷 검사 (pre-commit·CI가 자동 검증; 로컬 사전 확인용)
-./gradlew test            # 테스트 실행
-./gradlew build           # 빌드
+./gradlew spotlessCheck                 # 코드 포맷 검사 (CI가 자동 검증; 로컬 사전 확인용)
+./gradlew spotlessApply                 # 코드 포맷 자동 수정 (spotlessCheck 실패 시)
+./gradlew checkstyleMain checkstyleTest # Checkstyle 검사 (CI 필수 단계; maxWarnings=0)
+./gradlew test                          # 테스트 실행
+./gradlew build                         # 빌드 (검증 전체 포함)
 ```
 
 > Windows PowerShell에서는 `.\gradlew` 또는 `gradlew.bat`을 사용합니다.
