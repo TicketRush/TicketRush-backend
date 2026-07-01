@@ -100,40 +100,40 @@ class PaymentFacadeTest {
 
     // then
     assertThat(response).isSameAs(expected);
-    verify(paymentConfirmUseCase, never()).getConfirmedResponse(any());
+    verify(paymentConfirmUseCase, never()).getConfirmedResponseByBookingId(any());
   }
 
   @Test
-  @DisplayName("동시 confirm으로 paymentKey unique 제약이 위반되면 먼저 확정된 결제를 멱등 반환한다")
+  @DisplayName("동시 confirm으로 booking unique 제약이 위반되면 먼저 확정된 결제를 멱등 반환한다")
   void confirm_falls_back_to_existing_on_constraint_violation() {
     // given
     Long userId = 10L;
-    String paymentKey = "pgKey_xyz";
-    PaymentConfirmRequest request = confirmRequest(paymentKey);
+    Long bookingId = 100L;
+    PaymentConfirmRequest request = confirmRequest("pgKey_xyz");
     PaymentConfirmResponse existing =
         new PaymentConfirmResponse(1L, "COMPLETED", LocalDateTime.now());
     given(paymentConfirmUseCase.execute(userId, request))
-        .willThrow(new DataIntegrityViolationException("duplicate paymentKey"));
-    given(paymentConfirmUseCase.getConfirmedResponse(paymentKey)).willReturn(existing);
+        .willThrow(new DataIntegrityViolationException("duplicate completed_booking_id"));
+    given(paymentConfirmUseCase.getConfirmedResponseByBookingId(bookingId)).willReturn(existing);
 
     // when
     PaymentConfirmResponse response = paymentFacade.confirm(userId, request);
 
     // then
     assertThat(response).isSameAs(existing);
-    verify(paymentConfirmUseCase).getConfirmedResponse(eq(paymentKey));
+    verify(paymentConfirmUseCase).getConfirmedResponseByBookingId(eq(bookingId));
   }
 
   @Test
-  @DisplayName("paymentKey 충돌이 아닌 무결성 위반으로 조회되지 않으면 원래 예외를 재던진다")
+  @DisplayName("유니크 충돌이 아닌 무결성 위반으로 조회되지 않으면 원래 예외를 재던진다")
   void confirm_rethrows_original_when_lookup_fails() {
     // given
     Long userId = 10L;
-    String paymentKey = "pgKey_xyz";
-    PaymentConfirmRequest request = confirmRequest(paymentKey);
+    Long bookingId = 100L;
+    PaymentConfirmRequest request = confirmRequest("pgKey_xyz");
     DataIntegrityViolationException original = new DataIntegrityViolationException("not null 위반");
     given(paymentConfirmUseCase.execute(userId, request)).willThrow(original);
-    given(paymentConfirmUseCase.getConfirmedResponse(paymentKey))
+    given(paymentConfirmUseCase.getConfirmedResponseByBookingId(bookingId))
         .willThrow(new BusinessException(ErrorStatus.PAYMENT_NOT_FOUND));
 
     // when & then

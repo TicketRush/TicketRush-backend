@@ -52,6 +52,14 @@ public class Payment extends AutoIdBaseEntity {
 
   private LocalDateTime paidAt; // 결제 완료 시점
 
+  /* completedBookingId는 status=COMPLETED일 때만 booking_id 값을 갖는 DB generated 컬럼이다(그 외 NULL). 이 컬럼의
+   * unique 제약(uk_payment_completed_booking)으로 동일 booking에 서로 다른 paymentKey를 가진 confirm이 동시에 들어와도
+   * COMPLETED 결제가 2건 생성되지 못하게 DB 레벨에서 막는다(#296, TOCTOU 최종 방어선). MySQL은 NULL을 unique 중복으로 보지 않으므로
+   * CANCELED/FAILED 후 재결제는 허용된다. 값 계산과 unique 제약은 수동 DDL로만 관리하고(ddl-auto=update가 generated 컬럼을
+   * 만들지 못한다) 애플리케이션은 읽기만 하므로, insertable=false·updatable=false로 매핑한다. */
+  @Column(name = "completed_booking_id", insertable = false, updatable = false)
+  private Long completedBookingId;
+
   @Builder
   private Payment(
       Long bookingId,
