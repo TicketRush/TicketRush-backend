@@ -116,4 +116,20 @@ class OutboxRelayServiceTest {
         .findByAggregateTypeInAndStatusInOrderByIdAsc(any(), any(), any());
     verify(kafkaTemplate, never()).send(any(Message.class));
   }
+
+  @Test
+  @DisplayName("batchSize가 1 미만이면 PageRequest 예외 대신 조회를 건너뛴다")
+  void relayBatch_skips_when_batch_size_is_not_positive() {
+    // given
+    given(outboxProperties.getAggregateTypes()).willReturn(List.of("Booking"));
+    given(outboxProperties.getBatchSize()).willReturn(0);
+
+    // when
+    outboxRelayService.relayBatch();
+
+    // then
+    verify(outboxRepository, never())
+        .findByAggregateTypeInAndStatusInOrderByIdAsc(any(), any(), any());
+    verify(kafkaTemplate, never()).send(any(Message.class));
+  }
 }

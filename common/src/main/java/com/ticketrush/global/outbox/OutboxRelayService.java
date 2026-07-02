@@ -47,11 +47,15 @@ public class OutboxRelayService {
       return;
     }
 
+    int batchSize = outboxProperties.getBatchSize();
+    if (batchSize < 1) {
+      log.warn("Outbox relay batchSize가 1 미만으로 설정되어 실행을 건너뜁니다. batchSize={}", batchSize);
+      return;
+    }
+
     List<OutboxEntity> rows =
         outboxRepository.findByAggregateTypeInAndStatusInOrderByIdAsc(
-            aggregateTypes,
-            RELAY_TARGET_STATUSES,
-            PageRequest.of(0, outboxProperties.getBatchSize()));
+            aggregateTypes, RELAY_TARGET_STATUSES, PageRequest.of(0, batchSize));
 
     for (OutboxEntity row : rows) {
       relayOne(row);
@@ -100,6 +104,8 @@ public class OutboxRelayService {
   }
 
   private String errorMessage(Exception e) {
-    return e.getMessage() == null ? e.getClass().getSimpleName() : e.getMessage();
+    // send().get() 실패는 보통 ExecutionException으로 감싸지므로 근본 원인(cause)을 우선 남긴다.
+    Throwable cause = e.getCause() != null ? e.getCause() : e;
+    return cause.getMessage() == null ? cause.getClass().getSimpleName() : cause.getMessage();
   }
 }
