@@ -1,11 +1,24 @@
 package com.ticketrush.global.outbox;
 
+import java.util.Collection;
+import java.util.List;
+import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
 
 /**
  * {@link OutboxEntity}에 대한 JPA 저장소.
  *
- * <p>이 이슈(#101) 범위에서는 발행 시 Outbox row를 저장하는 {@code save()}만 사용한다. 폴링 relay용 조회/상태 전이 쿼리는 후속
- * 이슈(#102)에서 추가된다.
+ * <p>발행 시 Outbox row를 저장하는 {@code save()}(#101)와, relay 폴링용 미발송/실패 row 조회(#102)를 제공한다.
  */
-public interface OutboxRepository extends JpaRepository<OutboxEntity, Long> {}
+public interface OutboxRepository extends JpaRepository<OutboxEntity, Long> {
+
+  /**
+   * relay 폴링 대상 row를 오래된 순(PK 오름차순)으로 조회한다.
+   *
+   * <p>여러 서비스가 같은 outbox 테이블을 공유하므로, 호출 서비스는 자기 소유 {@code aggregateTypes}만 넘겨 자신의 이벤트만 발행한다. {@code
+   * statuses}에는 보통 {@link OutboxStatus#PENDING}(미발송)과 {@link OutboxStatus#FAILED}(재시도 대상)를 넘기고,
+   * {@code pageable}로 배치 크기를 제한한다.
+   */
+  List<OutboxEntity> findByAggregateTypeInAndStatusInOrderByIdAsc(
+      Collection<String> aggregateTypes, Collection<OutboxStatus> statuses, Pageable pageable);
+}

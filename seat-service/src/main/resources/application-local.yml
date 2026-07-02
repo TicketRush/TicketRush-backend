@@ -13,6 +13,10 @@ spring:
 app:
   event-publisher:
     type: kafka
+  outbox:
+    aggregate-types:
+      - Seat
+    batch-size: 100
 
 custom:
   security:
