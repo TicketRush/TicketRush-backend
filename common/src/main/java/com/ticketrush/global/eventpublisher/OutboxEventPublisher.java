@@ -1,0 +1,67 @@
+package com.ticketrush.global.eventpublisher;
+
+import com.ticketrush.global.event.DomainEvent;
+import com.ticketrush.global.event.DomainEventEnvelope;
+import com.ticketrush.global.json.JsonConverter;
+import com.ticketrush.global.outbox.OutboxEntity;
+import com.ticketrush.global.outbox.OutboxRepository;
+import lombok.RequiredArgsConstructor;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnExpression;
+import org.springframework.stereotype.Component;
+
+/**
+ * 트랜잭셔널 Outbox 패턴의 이벤트 발행자.
+ *
+ * <p>도메인 이벤트를 즉시 Kafka로 보내지 않고, 호출자(유즈케이스)의 <b>활성 트랜잭션에 참여</b>해 {@link OutboxEntity}로 저장한다. 비즈니스 상태
+ * 변경과 Outbox INSERT가 같은 커밋으로 원자성(Atomicity)을 가지며, 커밋 이후 별도 폴링 relay가 {@code PENDING} row를 Kafka로
+ * 발행한다.
+ *
+ * <p>{@link KafkaDomainEventPublisher}와 상호배타적으로 활성화되며({@code app.event-publisher.type}), Kafka 구현과
+ * 달리 {@code afterCommit} 지연 전송이나 {@code @Transactional}을 두지 않는 것이 핵심 차이다.
+ */
+@Component
+@ConditionalOnExpression("'${app.event-publisher.type}' == 'outbox'")
+@RequiredArgsConstructor
+public class OutboxEventPublisher implements EventPublisher {
+
+  private static final String EVENT_BASE_PACKAGE_MARKER = ".shared.";
+
+  private final OutboxRepository outboxRepository;
+  private final JsonConverter jsonConverter;
+
+  @Override
+  public void publish(DomainEvent event) {
+    String payload = jsonConverter.serialize(event);
+    DomainEventEnvelope envelope = DomainEventEnvelope.of(event, payload);
+
+    String aggregateType = resolveAggregateType(event);
+    String aggregateId = event.key(); // 애그리거트 식별자 (bookingId/performanceId 등)
+    String messageKey = event.key(); // Kafka 파티션 키
+
+    outboxRepository.save(OutboxEntity.from(envelope, aggregateType, aggregateId, messageKey));
+  }
+
+  /**
+   * 이벤트 클래스 패키지에서 애그리거트 타입을 유도한다.
+   *
+   * <p>이벤트는 모두 {@code com.ticketrush.shared.<aggregate>.event.XxxEvent} 구조로 일관되므로, {@code shared.}
+   * 다음 세그먼트를 추출해 첫 글자를 대문자화한다 (예: {@code booking} → {@code "Booking"}). 패턴에 맞지 않으면 이벤트의 단순 클래스명으로
+   * 폴백한다.
+   */
+  private String resolveAggregateType(DomainEvent event) {
+    String packageName = event.getClass().getPackageName();
+    int markerIndex = packageName.indexOf(EVENT_BASE_PACKAGE_MARKER);
+    if (markerIndex < 0) {
+      return event.getClass().getSimpleName();
+    }
+
+    String afterMarker = packageName.substring(markerIndex + EVENT_BASE_PACKAGE_MARKER.length());
+    int nextDot = afterMarker.indexOf('.');
+    String aggregate = nextDot < 0 ? afterMarker : afterMarker.substring(0, nextDot);
+    if (aggregate.isEmpty()) {
+      return event.getClass().getSimpleName();
+    }
+
+    return Character.toUpperCase(aggregate.charAt(0)) + aggregate.substring(1);
+  }
+}

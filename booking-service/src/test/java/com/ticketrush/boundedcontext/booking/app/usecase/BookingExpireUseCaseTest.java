@@ -10,6 +10,7 @@ import static org.mockito.Mockito.verify;
 
 import com.ticketrush.boundedcontext.booking.domain.types.BookingStatus;
 import com.ticketrush.boundedcontext.booking.out.repository.BookingRepository;
+import com.ticketrush.global.eventpublisher.EventPublisher;
 import com.ticketrush.shared.booking.event.BookingExpiredEvent;
 import java.time.Clock;
 import java.time.Instant;
@@ -24,7 +25,6 @@ import org.mockito.ArgumentCaptor;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
-import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.data.domain.Pageable;
 import org.springframework.transaction.support.TransactionCallback;
 import org.springframework.transaction.support.TransactionTemplate;
@@ -41,7 +41,7 @@ class BookingExpireUseCaseTest {
 
   @Mock private TransactionTemplate transactionTemplate;
 
-  @Mock private ApplicationEventPublisher applicationEventPublisher;
+  @Mock private EventPublisher eventPublisher;
 
   @Mock private Clock clock;
 
@@ -75,8 +75,8 @@ class BookingExpireUseCaseTest {
 
     // then
     assertThat(result).isEqualTo(1);
-    verify(applicationEventPublisher)
-        .publishEvent(new BookingExpiredEvent(1L, LocalDateTime.of(2026, 5, 27, 15, 0)));
+    verify(eventPublisher)
+        .publish(new BookingExpiredEvent(1L, LocalDateTime.of(2026, 5, 27, 15, 0)));
   }
 
   @Test
@@ -190,12 +190,12 @@ class BookingExpireUseCaseTest {
 
     // then
     assertThat(result).isEqualTo(2);
-    verify(applicationEventPublisher)
-        .publishEvent(new BookingExpiredEvent(1L, LocalDateTime.of(2026, 5, 27, 15, 0)));
-    verify(applicationEventPublisher)
-        .publishEvent(new BookingExpiredEvent(3L, LocalDateTime.of(2026, 5, 27, 15, 0)));
-    verify(applicationEventPublisher, never())
-        .publishEvent(new BookingExpiredEvent(2L, LocalDateTime.of(2026, 5, 27, 15, 0)));
+    verify(eventPublisher)
+        .publish(new BookingExpiredEvent(1L, LocalDateTime.of(2026, 5, 27, 15, 0)));
+    verify(eventPublisher)
+        .publish(new BookingExpiredEvent(3L, LocalDateTime.of(2026, 5, 27, 15, 0)));
+    verify(eventPublisher, never())
+        .publish(new BookingExpiredEvent(2L, LocalDateTime.of(2026, 5, 27, 15, 0)));
   }
 
   private List<Long> createBookingIds(long startInclusive, long endInclusive) {

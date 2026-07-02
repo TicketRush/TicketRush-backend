@@ -4,9 +4,9 @@ import com.ticketrush.boundedcontext.booking.app.dto.request.BookingCreateReques
 import com.ticketrush.boundedcontext.booking.app.mapper.BookingMapper;
 import com.ticketrush.boundedcontext.booking.domain.entity.Booking;
 import com.ticketrush.boundedcontext.booking.out.repository.BookingRepository;
+import com.ticketrush.global.eventpublisher.EventPublisher;
 import com.ticketrush.shared.booking.event.BookingCreatedEvent;
 import lombok.RequiredArgsConstructor;
-import org.springframework.context.ApplicationEventPublisher; // 변경된 부분
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -18,8 +18,8 @@ public class BookingCreateUseCase {
   private final BookingRepository bookingRepository;
   private final BookingMapper bookingMapper;
 
-  // 비동기적으로 이벤트를 발행하기 위해 기존 EventPublisher 대신 Spring 기본 퍼블리셔 사용
-  private final ApplicationEventPublisher applicationEventPublisher;
+  // 비즈니스 트랜잭션 내부에서 직접 발행해 상태 변경과 이벤트 기록의 원자성을 보장한다.
+  private final EventPublisher eventPublisher;
 
   public Booking execute(BookingCreateRequest request) {
     Booking booking = bookingMapper.toEntity(request);
@@ -33,7 +33,7 @@ public class BookingCreateUseCase {
             request.performanceId(),
             request.userId());
 
-    applicationEventPublisher.publishEvent(event);
+    eventPublisher.publish(event);
 
     return savedBooking;
   }
