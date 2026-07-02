@@ -21,9 +21,8 @@ public class OutboxRelayScheduler {
   private final OutboxRelayService outboxRelayService;
 
   @Scheduled(fixedDelay = 5000)
-  // lockAtMostFor는 배치 최악 소요(batch-size * SEND_TIMEOUT_SECONDS)를 넉넉히 상회해야 실행 중 lock 만료로 인한 중복 실행을
-  // 막는다.
-  @SchedulerLock(name = "outboxRelay-booking", lockAtLeastFor = "3s", lockAtMostFor = "10m")
+  // 발행은 비동기(콜백)라 dispatch가 빠르게 끝나므로 lock은 짧게 유지한다(장애 시 failover 지연 단축).
+  @SchedulerLock(name = "outboxRelay-booking", lockAtLeastFor = "3s", lockAtMostFor = "1m")
   public void relay() {
     outboxRelayService.relayBatch();
   }

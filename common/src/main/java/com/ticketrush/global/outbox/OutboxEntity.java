@@ -131,12 +131,12 @@ public class OutboxEntity extends AutoIdBaseEntity {
   }
 
   /**
-   * Kafka 발행 실패 시 호출한다. 상태를 {@link OutboxStatus#FAILED}로 전이하고 재시도 횟수를 증가시키며 마지막 실패 사유를 기록한다. 다음
-   * 폴링에서 재발행 대상이 된다.
+   * Kafka 발행 실패 시 호출한다. 재시도 횟수를 증가시키고 마지막 실패 사유를 기록한다. 누적 실패가 {@code maxRetries}에 도달하면 {@link
+   * OutboxStatus#DEAD}(재폴링 제외)로, 그 전이면 {@link OutboxStatus#FAILED}(다음 폴링 재시도 대상)로 전이한다.
    */
-  public void markFailed(String lastError) {
-    this.status = OutboxStatus.FAILED;
+  public void markFailed(String lastError, int maxRetries) {
     this.retryCount++;
+    this.status = this.retryCount >= maxRetries ? OutboxStatus.DEAD : OutboxStatus.FAILED;
     this.lastError = lastError;
   }
 }

@@ -17,6 +17,8 @@ app:
     aggregate-types:
       - Booking
     batch-size: 100
+    max-retries: 3
+    retention-hours: 72
 
 custom:
   security:
