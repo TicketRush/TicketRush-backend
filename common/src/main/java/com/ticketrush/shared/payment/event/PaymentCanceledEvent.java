@@ -28,6 +28,11 @@ public record PaymentCanceledEvent(
   }
 
   @Override
+  public String aggregateId() {
+    return String.valueOf(paymentId);
+  }
+
+  @Override
   public String eventName() {
     return EVENT_NAME;
   }

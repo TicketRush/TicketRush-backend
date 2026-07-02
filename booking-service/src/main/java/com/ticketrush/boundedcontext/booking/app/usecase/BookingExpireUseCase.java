@@ -2,13 +2,13 @@ package com.ticketrush.boundedcontext.booking.app.usecase;
 
 import com.ticketrush.boundedcontext.booking.domain.types.BookingStatus;
 import com.ticketrush.boundedcontext.booking.out.repository.BookingRepository;
+import com.ticketrush.global.eventpublisher.EventPublisher;
 import com.ticketrush.shared.booking.event.BookingExpiredEvent;
 import java.time.Clock;
 import java.time.LocalDateTime;
 import java.util.List;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
@@ -26,7 +26,7 @@ public class BookingExpireUseCase {
 
   private final BookingRepository bookingRepository;
   private final TransactionTemplate transactionTemplate;
-  private final ApplicationEventPublisher applicationEventPublisher;
+  private final EventPublisher eventPublisher;
   private final Clock clock;
 
   public int execute() {
@@ -75,7 +75,7 @@ public class BookingExpireUseCase {
                     bookingId, BookingStatus.PENDING, BookingStatus.EXPIRED);
             if (updated == 1) {
               expiredCount++;
-              applicationEventPublisher.publishEvent(new BookingExpiredEvent(bookingId, expiredAt));
+              eventPublisher.publish(new BookingExpiredEvent(bookingId, expiredAt));
             }
           }
 

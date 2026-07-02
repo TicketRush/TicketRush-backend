@@ -20,6 +20,11 @@ public record BookingExpiredEvent(Long bookingId, LocalDateTime expiredAt) imple
   }
 
   @Override
+  public String aggregateId() {
+    return String.valueOf(bookingId);
+  }
+
+  @Override
   public String eventName() {
     return EVENT_NAME;
   }

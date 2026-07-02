@@ -10,6 +10,7 @@ import com.ticketrush.boundedcontext.booking.app.mapper.BookingMapper;
 import com.ticketrush.boundedcontext.booking.domain.entity.Booking;
 import com.ticketrush.boundedcontext.booking.domain.types.BookingStatus;
 import com.ticketrush.boundedcontext.booking.out.repository.BookingRepository;
+import com.ticketrush.global.eventpublisher.EventPublisher;
 import com.ticketrush.shared.booking.event.BookingCreatedEvent;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -17,7 +18,6 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
-import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.test.util.ReflectionTestUtils;
 
 @ExtendWith(MockitoExtension.class)
@@ -27,7 +27,7 @@ class BookingCreateUseCaseTest {
 
   @Mock private BookingRepository bookingRepository;
   @Mock private BookingMapper bookingMapper;
-  @Mock private ApplicationEventPublisher applicationEventPublisher;
+  @Mock private EventPublisher eventPublisher;
 
   @Test
   @DisplayName("성공: 예약 요청을 받아 저장하고 내부 이벤트를 발행한다")
@@ -70,7 +70,7 @@ class BookingCreateUseCaseTest {
     // 2. 저장(save) 로직이 정상 호출되었는지 검증
     verify(bookingRepository).save(mappedBooking);
 
-    // 3. 스프링 내부 이벤트가 정상적으로 발행되었는지 검증
-    verify(applicationEventPublisher).publishEvent(any(BookingCreatedEvent.class));
+    // 3. 도메인 이벤트가 트랜잭션 내부에서 정상적으로 발행되었는지 검증
+    verify(eventPublisher).publish(any(BookingCreatedEvent.class));
   }
 }
