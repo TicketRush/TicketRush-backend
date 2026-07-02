@@ -73,6 +73,19 @@ class OutboxStatusUpdaterTest {
   }
 
   @Test
+  @DisplayName("이미 SENT면 늦게 도착한 실패 콜백이 상태를 역전시키지 않는다")
+  void markFail_does_not_revert_already_sent_row() {
+    OutboxEntity row = row();
+    given(outboxRepository.findById(1L)).willReturn(Optional.of(row));
+
+    outboxStatusUpdater.markSuccess(1L);
+    outboxStatusUpdater.markFail(1L, "late failure");
+
+    assertThat(row.getStatus()).isEqualTo(OutboxStatus.SENT);
+    assertThat(row.getRetryCount()).isZero();
+  }
+
+  @Test
   @DisplayName("row가 없으면 예외 없이 무시한다")
   void ignores_when_row_not_found() {
     given(outboxRepository.findById(99L)).willReturn(Optional.empty());

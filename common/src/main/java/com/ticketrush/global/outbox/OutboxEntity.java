@@ -124,8 +124,16 @@ public class OutboxEntity extends AutoIdBaseEntity {
         .build();
   }
 
-  /** Kafka 발행 성공 시 호출한다. 상태를 {@link OutboxStatus#SENT}로 전이하고 발행 시각을 기록한다. */
+  /**
+   * Kafka 발행 성공 시 호출한다. 상태를 {@link OutboxStatus#SENT}로 전이하고 발행 시각을 기록한다.
+   *
+   * <p>비동기 콜백이 경쟁(중복 dispatch 등)할 수 있어, 비터미널({@link OutboxStatus#PENDING}/{@link
+   * OutboxStatus#FAILED}) 상태일 때만 전이한다. 이미 종단 상태면 무시해 상태 역전을 막는다.
+   */
   public void markSent(LocalDateTime publishedAt) {
+    if (isNotRelayable()) {
+      return;
+    }
     this.status = OutboxStatus.SENT;
     this.publishedAt = publishedAt;
   }
@@ -133,10 +141,20 @@ public class OutboxEntity extends AutoIdBaseEntity {
   /**
    * Kafka 발행 실패 시 호출한다. 재시도 횟수를 증가시키고 마지막 실패 사유를 기록한다. 누적 실패가 {@code maxRetries}에 도달하면 {@link
    * OutboxStatus#DEAD}(재폴링 제외)로, 그 전이면 {@link OutboxStatus#FAILED}(다음 폴링 재시도 대상)로 전이한다.
+   *
+   * <p>{@link #markSent}와 마찬가지로 비터미널 상태일 때만 전이해, 늦게 도착한 실패 콜백이 이미 SENT 처리된 row를 되돌리지 않도록 한다.
    */
   public void markFailed(String lastError, int maxRetries) {
+    if (isNotRelayable()) {
+      return;
+    }
     this.retryCount++;
     this.status = this.retryCount >= maxRetries ? OutboxStatus.DEAD : OutboxStatus.FAILED;
     this.lastError = lastError;
+  }
+
+  /** 종단 상태(SENT/DEAD)면 더는 상태를 전이하지 않는다. */
+  private boolean isNotRelayable() {
+    return this.status != OutboxStatus.PENDING && this.status != OutboxStatus.FAILED;
   }
 }
