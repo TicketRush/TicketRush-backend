@@ -8,6 +8,7 @@ import com.ticketrush.global.outbox.OutboxRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnExpression;
 import org.springframework.stereotype.Component;
+import org.springframework.transaction.support.TransactionSynchronizationManager;
 
 /**
  * 트랜잭셔널 Outbox 패턴의 이벤트 발행자.
@@ -31,6 +32,14 @@ public class OutboxEventPublisher implements EventPublisher {
 
   @Override
   public void publish(DomainEvent event) {
+    // 활성 트랜잭션이 없으면 Outbox INSERT가 자체 트랜잭션으로 커밋돼 비즈니스 변경과의 원자성이 깨진다.
+    // 반드시 호출부의 트랜잭션 내부에서 사용하도록 강제한다.
+    if (!TransactionSynchronizationManager.isActualTransactionActive()) {
+      throw new IllegalStateException(
+          "OutboxEventPublisher.publish()는 활성 트랜잭션 내부에서만 호출해야 합니다. "
+              + "비즈니스 변경과 Outbox 저장의 원자성을 보장하려면 호출부를 @Transactional 등으로 감싸세요.");
+    }
+
     String payload = jsonConverter.serialize(event);
     DomainEventEnvelope envelope = DomainEventEnvelope.of(event, payload);
 

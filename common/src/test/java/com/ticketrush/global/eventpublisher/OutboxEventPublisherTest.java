@@ -1,7 +1,9 @@
 package com.ticketrush.global.eventpublisher;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.BDDMockito.given;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 
 import com.ticketrush.global.json.JsonConverter;
@@ -9,6 +11,7 @@ import com.ticketrush.global.outbox.OutboxEntity;
 import com.ticketrush.global.outbox.OutboxRepository;
 import com.ticketrush.global.outbox.OutboxStatus;
 import com.ticketrush.shared.booking.event.BookingCreatedEvent;
+import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -16,6 +19,7 @@ import org.mockito.ArgumentCaptor;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.transaction.support.TransactionSynchronizationManager;
 
 @ExtendWith(MockitoExtension.class)
 class OutboxEventPublisherTest {
@@ -25,10 +29,17 @@ class OutboxEventPublisherTest {
   @Mock private OutboxRepository outboxRepository;
   @Mock private JsonConverter jsonConverter;
 
+  @AfterEach
+  void tearDown() {
+    // 정적 ThreadLocal 상태가 다른 테스트로 새지 않도록 정리한다.
+    TransactionSynchronizationManager.setActualTransactionActive(false);
+  }
+
   @Test
-  @DisplayName("성공: 도메인 이벤트를 PENDING 상태의 Outbox row로 저장한다")
+  @DisplayName("성공: 활성 트랜잭션 내에서 도메인 이벤트를 PENDING 상태의 Outbox row로 저장한다")
   void publish_saves_pending_outbox_row() {
     // given
+    TransactionSynchronizationManager.setActualTransactionActive(true);
     BookingCreatedEvent event = new BookingCreatedEvent(100L, "BOOK-1234", 3L, 2L, 1L);
     String payload = "{\"booking_id\":100}";
     given(jsonConverter.serialize(event)).willReturn(payload);
@@ -52,5 +63,17 @@ class OutboxEventPublisherTest {
     assertThat(saved.getStatus()).isEqualTo(OutboxStatus.PENDING);
     assertThat(saved.getRetryCount()).isZero();
     assertThat(saved.getEventId()).isNotBlank();
+  }
+
+  @Test
+  @DisplayName("실패: 활성 트랜잭션이 없으면 원자성 보장을 위해 예외를 던지고 저장하지 않는다")
+  void publish_throws_when_no_active_transaction() {
+    // given: 활성 트랜잭션 없음 (기본 상태)
+    BookingCreatedEvent event = new BookingCreatedEvent(100L, "BOOK-1234", 3L, 2L, 1L);
+
+    // when & then
+    assertThatThrownBy(() -> outboxEventPublisher.publish(event))
+        .isInstanceOf(IllegalStateException.class);
+    verify(outboxRepository, never()).save(org.mockito.ArgumentMatchers.any());
   }
 }
