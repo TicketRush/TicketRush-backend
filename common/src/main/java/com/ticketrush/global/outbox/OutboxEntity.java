@@ -123,4 +123,20 @@ public class OutboxEntity extends AutoIdBaseEntity {
         .retryCount(0)
         .build();
   }
+
+  /** Kafka 발행 성공 시 호출한다. 상태를 {@link OutboxStatus#SENT}로 전이하고 발행 시각을 기록한다. */
+  public void markSent(LocalDateTime publishedAt) {
+    this.status = OutboxStatus.SENT;
+    this.publishedAt = publishedAt;
+  }
+
+  /**
+   * Kafka 발행 실패 시 호출한다. 상태를 {@link OutboxStatus#FAILED}로 전이하고 재시도 횟수를 증가시키며 마지막 실패 사유를 기록한다. 다음
+   * 폴링에서 재발행 대상이 된다.
+   */
+  public void markFailed(String lastError) {
+    this.status = OutboxStatus.FAILED;
+    this.retryCount++;
+    this.lastError = lastError;
+  }
 }
