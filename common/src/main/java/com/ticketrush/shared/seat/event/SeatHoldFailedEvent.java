@@ -17,6 +17,11 @@ public record SeatHoldFailedEvent(Long bookingId, Long seatId, String reason)
   }
 
   @Override
+  public String aggregateId() {
+    return String.valueOf(seatId);
+  }
+
+  @Override
   public String eventName() {
     return "SeatHoldFailedEvent";
   }

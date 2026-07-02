@@ -11,6 +11,8 @@ import com.ticketrush.global.outbox.OutboxEntity;
 import com.ticketrush.global.outbox.OutboxRepository;
 import com.ticketrush.global.outbox.OutboxStatus;
 import com.ticketrush.shared.booking.event.BookingCreatedEvent;
+import com.ticketrush.shared.payment.event.PaymentConfirmedEvent;
+import java.time.LocalDateTime;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -63,6 +65,28 @@ class OutboxEventPublisherTest {
     assertThat(saved.getStatus()).isEqualTo(OutboxStatus.PENDING);
     assertThat(saved.getRetryCount()).isZero();
     assertThat(saved.getEventId()).isNotBlank();
+  }
+
+  @Test
+  @DisplayName("성공: aggregateId는 애그리거트 PK, messageKey는 파티션 키로 분리 저장한다")
+  void publish_separates_aggregate_id_from_message_key() {
+    // given: Payment 이벤트는 aggregateId=paymentId, key=bookingId로 서로 다르다.
+    TransactionSynchronizationManager.setActualTransactionActive(true);
+    PaymentConfirmedEvent event =
+        new PaymentConfirmedEvent(500L, 100L, 3L, 1L, 10000L, LocalDateTime.of(2026, 5, 27, 15, 0));
+    given(jsonConverter.serialize(event)).willReturn("{\"payment_id\":500}");
+
+    // when
+    outboxEventPublisher.publish(event);
+
+    // then
+    ArgumentCaptor<OutboxEntity> captor = ArgumentCaptor.forClass(OutboxEntity.class);
+    verify(outboxRepository).save(captor.capture());
+
+    OutboxEntity saved = captor.getValue();
+    assertThat(saved.getAggregateType()).isEqualTo("Payment");
+    assertThat(saved.getAggregateId()).isEqualTo("500"); // paymentId
+    assertThat(saved.getMessageKey()).isEqualTo("100"); // bookingId(파티션 키)
   }
 
   @Test

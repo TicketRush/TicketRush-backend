@@ -28,6 +28,11 @@ public record PerformanceCreatedEvent(
   }
 
   @Override
+  public String aggregateId() {
+    return String.valueOf(performanceId);
+  }
+
+  @Override
   public String eventName() {
     return EVENT_NAME;
   }

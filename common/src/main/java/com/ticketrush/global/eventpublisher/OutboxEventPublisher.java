@@ -44,8 +44,8 @@ public class OutboxEventPublisher implements EventPublisher {
     DomainEventEnvelope envelope = DomainEventEnvelope.of(event, payload);
 
     String aggregateType = resolveAggregateType(event);
-    String aggregateId = event.key(); // 애그리거트 식별자 (bookingId/performanceId 등)
-    String messageKey = event.key(); // Kafka 파티션 키
+    String aggregateId = event.aggregateId(); // 이벤트를 발생시킨 애그리거트의 PK
+    String messageKey = event.key(); // Kafka 파티션 키 (aggregateId와 다를 수 있음)
 
     outboxRepository.save(OutboxEntity.from(envelope, aggregateType, aggregateId, messageKey));
   }

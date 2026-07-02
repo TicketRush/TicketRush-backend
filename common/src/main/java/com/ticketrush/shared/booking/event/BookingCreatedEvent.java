@@ -18,6 +18,11 @@ public record BookingCreatedEvent(
   }
 
   @Override
+  public String aggregateId() {
+    return String.valueOf(bookingId);
+  }
+
+  @Override
   public String eventName() {
     return "BookingCreatedEvent";
   }
