@@ -5,7 +5,6 @@ import java.time.Instant;
 import java.time.LocalDateTime;
 import java.time.ZoneId;
 import java.util.List;
-import java.util.concurrent.TimeUnit;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnExpression;
@@ -15,7 +14,6 @@ import org.springframework.kafka.support.KafkaHeaders;
 import org.springframework.messaging.Message;
 import org.springframework.messaging.support.MessageBuilder;
 import org.springframework.stereotype.Service;
-import org.springframework.transaction.annotation.Transactional;
 
 /**
  * Outbox 테이블의 미발송/실패 이벤트를 폴링해 실제 Kafka로 발행하는 relay.
@@ -23,8 +21,8 @@ import org.springframework.transaction.annotation.Transactional;
  * <p>{@code app.event-publisher.type=outbox}일 때만 활성화되며, 서비스별 스케줄러가 {@link #relayBatch()}를 주기적으로
  * 호출한다. 여러 서비스가 같은 outbox 테이블을 공유하므로 {@link OutboxProperties#getAggregateTypes()}로 자기 소유 이벤트만 발행한다.
  *
- * <p>발행 성공 시 {@link OutboxStatus#SENT}, 실패 시 {@link OutboxStatus#FAILED}(다음 폴링에서 재시도)로 전이한다. 발행은
- * at-least-once이며, 중복은 컨슈머가 {@code eventId}로 멱등 처리한다.
+ * <p>발행은 비동기(`whenComplete`)로 수행하고, 결과에 따른 상태 전이는 {@link OutboxStatusUpdater}가 별도 트랜잭션에서 처리한다(콜백이
+ * relay 트랜잭션 밖 프로듀서 IO 스레드에서 실행되기 때문). 발행은 at-least-once이며, 중복은 컨슈머가 {@code eventId}로 멱등 처리한다.
  */
 @Slf4j
 @Service
@@ -32,16 +30,14 @@ import org.springframework.transaction.annotation.Transactional;
 @RequiredArgsConstructor
 public class OutboxRelayService {
 
-  // 건당 최대 대기(초). 배치 최악 소요(batchSize * 이 값)가 스케줄러 lockAtMostFor 안에 들어오도록 유지한다.
-  private static final long SEND_TIMEOUT_SECONDS = 5L;
   private static final List<OutboxStatus> RELAY_TARGET_STATUSES =
       List.of(OutboxStatus.PENDING, OutboxStatus.FAILED);
 
   private final OutboxRepository outboxRepository;
   private final KafkaTemplate<String, DomainEventEnvelope> kafkaTemplate;
   private final OutboxProperties outboxProperties;
+  private final OutboxStatusUpdater outboxStatusUpdater;
 
-  @Transactional
   public void relayBatch() {
     List<String> aggregateTypes = outboxProperties.getAggregateTypes();
     if (aggregateTypes == null || aggregateTypes.isEmpty()) {
@@ -59,24 +55,27 @@ public class OutboxRelayService {
             aggregateTypes, RELAY_TARGET_STATUSES, PageRequest.of(0, batchSize));
 
     for (OutboxEntity row : rows) {
-      relayOne(row);
+      dispatch(row);
     }
   }
 
-  private void relayOne(OutboxEntity row) {
-    try {
-      // 발행 결과에 따라 상태를 전이해야 하므로 동기 대기한다. batchSize가 작아 허용 가능하며,
-      // 필요 시 비동기 일괄 발행으로 최적화할 수 있다.
-      kafkaTemplate.send(toMessage(row)).get(SEND_TIMEOUT_SECONDS, TimeUnit.SECONDS);
-      row.markSent(LocalDateTime.now());
-    } catch (InterruptedException e) {
-      Thread.currentThread().interrupt();
-      row.markFailed(errorMessage(e));
-      log.error("Outbox relay interrupted. eventId={}", row.getEventId(), e);
-    } catch (Exception e) {
-      row.markFailed(errorMessage(e));
-      log.error("Outbox relay failed. eventId={}, topic={}", row.getEventId(), row.getTopic(), e);
-    }
+  private void dispatch(OutboxEntity row) {
+    Long id = row.getId();
+    String eventId = row.getEventId();
+    String topic = row.getTopic();
+    // 비동기 발행 후 완료 콜백에서 상태를 전이한다. 콜백은 프로듀서 IO 스레드(relay tx 밖)에서 실행되므로
+    // OutboxStatusUpdater가 REQUIRES_NEW 트랜잭션으로 처리한다.
+    kafkaTemplate
+        .send(toMessage(row))
+        .whenComplete(
+            (result, ex) -> {
+              if (ex == null) {
+                outboxStatusUpdater.markSuccess(id);
+              } else {
+                outboxStatusUpdater.markFail(id, errorMessage(ex));
+                log.error("Outbox relay failed. eventId={}, topic={}", eventId, topic, ex);
+              }
+            });
   }
 
   private Message<DomainEventEnvelope> toMessage(OutboxEntity row) {
@@ -104,9 +103,9 @@ public class OutboxRelayService {
     return createdAt == null ? Instant.now() : createdAt.atZone(ZoneId.systemDefault()).toInstant();
   }
 
-  private String errorMessage(Exception e) {
-    // send().get() 실패는 보통 ExecutionException으로 감싸지므로 근본 원인(cause)을 우선 남긴다.
-    Throwable cause = e.getCause() != null ? e.getCause() : e;
+  private String errorMessage(Throwable ex) {
+    // 완료 예외는 래핑(CompletionException 등)될 수 있으므로 근본 원인(cause)을 우선 남긴다.
+    Throwable cause = ex.getCause() != null ? ex.getCause() : ex;
     return cause.getMessage() == null ? cause.getClass().getSimpleName() : cause.getMessage();
   }
 }

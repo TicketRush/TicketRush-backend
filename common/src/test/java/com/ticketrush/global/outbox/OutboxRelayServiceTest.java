@@ -2,6 +2,7 @@ package com.ticketrush.global.outbox;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.argThat;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.BDDMockito.given;
 import static org.mockito.Mockito.never;
@@ -23,6 +24,7 @@ import org.springframework.kafka.core.KafkaTemplate;
 import org.springframework.kafka.support.KafkaHeaders;
 import org.springframework.kafka.support.SendResult;
 import org.springframework.messaging.Message;
+import org.springframework.test.util.ReflectionTestUtils;
 
 @ExtendWith(MockitoExtension.class)
 class OutboxRelayServiceTest {
@@ -32,8 +34,9 @@ class OutboxRelayServiceTest {
   @Mock private OutboxRepository outboxRepository;
   @Mock private KafkaTemplate<String, DomainEventEnvelope> kafkaTemplate;
   @Mock private OutboxProperties outboxProperties;
+  @Mock private OutboxStatusUpdater outboxStatusUpdater;
 
-  private OutboxEntity pendingRow(String eventId) {
+  private OutboxEntity pendingRow(Long id, String eventId) {
     DomainEventEnvelope envelope =
         new DomainEventEnvelope(
             eventId,
@@ -42,15 +45,17 @@ class OutboxRelayServiceTest {
             "booking-created-topic",
             "{\"booking_id\":100}",
             "trace-1");
-    return OutboxEntity.from(envelope, "Booking", "100", "100");
+    OutboxEntity row = OutboxEntity.from(envelope, "Booking", "100", "100");
+    ReflectionTestUtils.setField(row, "id", id);
+    return row;
   }
 
   @Test
-  @DisplayName("성공: 발행에 성공하면 SENT로 전이하고 eventId를 보존해 전송한다")
+  @DisplayName("성공: 발행 완료 콜백에서 markSuccess를 호출하고 eventId를 보존해 전송한다")
   @SuppressWarnings("unchecked")
-  void relayBatch_marks_sent_on_success() {
+  void relayBatch_marks_success_via_callback() {
     // given
-    OutboxEntity row = pendingRow("evt-1");
+    OutboxEntity row = pendingRow(1L, "evt-1");
     given(outboxProperties.getAggregateTypes()).willReturn(List.of("Booking"));
     given(outboxProperties.getBatchSize()).willReturn(100);
     given(
@@ -67,8 +72,7 @@ class OutboxRelayServiceTest {
     outboxRelayService.relayBatch();
 
     // then
-    assertThat(row.getStatus()).isEqualTo(OutboxStatus.SENT);
-    assertThat(row.getPublishedAt()).isNotNull();
+    verify(outboxStatusUpdater).markSuccess(1L);
 
     ArgumentCaptor<Message<DomainEventEnvelope>> captor = ArgumentCaptor.forClass(Message.class);
     verify(kafkaTemplate).send(captor.capture());
@@ -79,11 +83,11 @@ class OutboxRelayServiceTest {
   }
 
   @Test
-  @DisplayName("실패: 발행에 실패하면 FAILED로 전이하고 retryCount 증가·사유를 기록한다")
+  @DisplayName("실패: 발행 실패 콜백에서 근본 원인을 담아 markFail을 호출한다")
   @SuppressWarnings("unchecked")
-  void relayBatch_marks_failed_on_error() {
+  void relayBatch_marks_fail_via_callback() {
     // given
-    OutboxEntity row = pendingRow("evt-2");
+    OutboxEntity row = pendingRow(2L, "evt-2");
     given(outboxProperties.getAggregateTypes()).willReturn(List.of("Booking"));
     given(outboxProperties.getBatchSize()).willReturn(100);
     given(
@@ -97,9 +101,8 @@ class OutboxRelayServiceTest {
     outboxRelayService.relayBatch();
 
     // then
-    assertThat(row.getStatus()).isEqualTo(OutboxStatus.FAILED);
-    assertThat(row.getRetryCount()).isEqualTo(1);
-    assertThat(row.getLastError()).contains("kaboom");
+    verify(outboxStatusUpdater).markFail(eq(2L), argThat(msg -> msg.contains("kaboom")));
+    verify(outboxStatusUpdater, never()).markSuccess(any());
   }
 
   @Test

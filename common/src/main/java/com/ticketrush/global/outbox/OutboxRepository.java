@@ -1,14 +1,19 @@
 package com.ticketrush.global.outbox;
 
+import java.time.LocalDateTime;
 import java.util.Collection;
 import java.util.List;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Modifying;
+import org.springframework.data.jpa.repository.Query;
+import org.springframework.data.repository.query.Param;
 
 /**
  * {@link OutboxEntity}에 대한 JPA 저장소.
  *
- * <p>발행 시 Outbox row를 저장하는 {@code save()}(#101)와, relay 폴링용 미발송/실패 row 조회(#102)를 제공한다.
+ * <p>발행 시 Outbox row를 저장하는 {@code save()}(#101), relay 폴링용 미발송/실패 row 조회(#102), 발행 완료 row의
+ * retention 삭제(#103)를 제공한다.
  */
 public interface OutboxRepository extends JpaRepository<OutboxEntity, Long> {
 
@@ -21,4 +26,18 @@ public interface OutboxRepository extends JpaRepository<OutboxEntity, Long> {
    */
   List<OutboxEntity> findByAggregateTypeInAndStatusInOrderByIdAsc(
       Collection<String> aggregateTypes, Collection<OutboxStatus> statuses, Pageable pageable);
+
+  /**
+   * retention 대상 row를 벌크 삭제한다. 자기 소유 {@code aggregateTypes} 중 {@code status}(보통 {@link
+   * OutboxStatus#SENT})이면서 {@code threshold} 이전에 발행된 row만 지운다.
+   */
+  @Modifying(clearAutomatically = true)
+  @Query(
+      "DELETE FROM OutboxEntity o "
+          + "WHERE o.aggregateType IN :aggregateTypes AND o.status = :status "
+          + "AND o.publishedAt < :threshold")
+  int deleteSentBefore(
+      @Param("aggregateTypes") Collection<String> aggregateTypes,
+      @Param("status") OutboxStatus status,
+      @Param("threshold") LocalDateTime threshold);
 }

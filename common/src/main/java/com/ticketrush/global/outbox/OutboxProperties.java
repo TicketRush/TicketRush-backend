@@ -22,4 +22,6 @@ public class OutboxProperties {
 
   private List<String> aggregateTypes = new ArrayList<>();
   private int batchSize = 100;
+  private int maxRetries = 3; // 이 횟수만큼 실패하면 DEAD로 전환해 자동 재발행을 멈춘다.
+  private long retentionHours = 72; // SENT row를 이 시간 이후 retention 배치가 삭제한다.
 }

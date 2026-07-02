@@ -19,15 +19,17 @@ import lombok.NoArgsConstructor;
  * 트랜잭셔널 Outbox 패턴의 이벤트 저장 엔티티.
  *
  * <p>비즈니스 트랜잭션과 동일한 커밋으로 이 row가 저장되고, 폴링 스케줄러가 {@link OutboxStatus#PENDING} 상태의 row를 읽어 Kafka로
- * 발행한다. 폴링 조회가 빠르도록 {@code (status, created_at)} 복합 인덱스를 둔다.
- *
- * <p>이 이슈(#100) 범위는 엔티티와 스키마 설계까지이며, Repository·발행자·폴링 스케줄러·상태 전이 실행 로직은 후속 이슈에서 추가된다.
+ * 발행한다. 폴링 조회가 빠르도록 {@code (status, created_at)} 복합 인덱스를 두고, retention 삭제 조회를 위해 {@code
+ * (aggregate_type, status, published_at)} 복합 인덱스를 둔다.
  */
 @Entity
 @Table(
     name = "outbox",
     indexes = {
       @Index(name = "idx_outbox_status_created_at", columnList = "status, created_at"),
+      @Index(
+          name = "idx_outbox_aggtype_status_published",
+          columnList = "aggregate_type, status, published_at"),
       @Index(name = "uk_outbox_event_id", columnList = "event_id", unique = true)
     })
 @Getter
@@ -124,19 +126,37 @@ public class OutboxEntity extends AutoIdBaseEntity {
         .build();
   }
 
-  /** Kafka 발행 성공 시 호출한다. 상태를 {@link OutboxStatus#SENT}로 전이하고 발행 시각을 기록한다. */
+  /**
+   * Kafka 발행 성공 시 호출한다. 상태를 {@link OutboxStatus#SENT}로 전이하고 발행 시각을 기록한다.
+   *
+   * <p>비동기 콜백이 경쟁(중복 dispatch 등)할 수 있어, 비터미널({@link OutboxStatus#PENDING}/{@link
+   * OutboxStatus#FAILED}) 상태일 때만 전이한다. 이미 종단 상태면 무시해 상태 역전을 막는다.
+   */
   public void markSent(LocalDateTime publishedAt) {
+    if (isNotRelayable()) {
+      return;
+    }
     this.status = OutboxStatus.SENT;
     this.publishedAt = publishedAt;
   }
 
   /**
-   * Kafka 발행 실패 시 호출한다. 상태를 {@link OutboxStatus#FAILED}로 전이하고 재시도 횟수를 증가시키며 마지막 실패 사유를 기록한다. 다음
-   * 폴링에서 재발행 대상이 된다.
+   * Kafka 발행 실패 시 호출한다. 재시도 횟수를 증가시키고 마지막 실패 사유를 기록한다. 누적 실패가 {@code maxRetries}에 도달하면 {@link
+   * OutboxStatus#DEAD}(재폴링 제외)로, 그 전이면 {@link OutboxStatus#FAILED}(다음 폴링 재시도 대상)로 전이한다.
+   *
+   * <p>{@link #markSent}와 마찬가지로 비터미널 상태일 때만 전이해, 늦게 도착한 실패 콜백이 이미 SENT 처리된 row를 되돌리지 않도록 한다.
    */
-  public void markFailed(String lastError) {
-    this.status = OutboxStatus.FAILED;
+  public void markFailed(String lastError, int maxRetries) {
+    if (isNotRelayable()) {
+      return;
+    }
     this.retryCount++;
+    this.status = this.retryCount >= maxRetries ? OutboxStatus.DEAD : OutboxStatus.FAILED;
     this.lastError = lastError;
+  }
+
+  /** 종단 상태(SENT/DEAD)면 더는 상태를 전이하지 않는다. */
+  private boolean isNotRelayable() {
+    return this.status != OutboxStatus.PENDING && this.status != OutboxStatus.FAILED;
   }
 }
