@@ -19,15 +19,17 @@ import lombok.NoArgsConstructor;
  * 트랜잭셔널 Outbox 패턴의 이벤트 저장 엔티티.
  *
  * <p>비즈니스 트랜잭션과 동일한 커밋으로 이 row가 저장되고, 폴링 스케줄러가 {@link OutboxStatus#PENDING} 상태의 row를 읽어 Kafka로
- * 발행한다. 폴링 조회가 빠르도록 {@code (status, created_at)} 복합 인덱스를 둔다.
- *
- * <p>이 이슈(#100) 범위는 엔티티와 스키마 설계까지이며, Repository·발행자·폴링 스케줄러·상태 전이 실행 로직은 후속 이슈에서 추가된다.
+ * 발행한다. 폴링 조회가 빠르도록 {@code (status, created_at)} 복합 인덱스를 두고, retention 삭제 조회를 위해 {@code
+ * (aggregate_type, status, published_at)} 복합 인덱스를 둔다.
  */
 @Entity
 @Table(
     name = "outbox",
     indexes = {
       @Index(name = "idx_outbox_status_created_at", columnList = "status, created_at"),
+      @Index(
+          name = "idx_outbox_aggtype_status_published",
+          columnList = "aggregate_type, status, published_at"),
       @Index(name = "uk_outbox_event_id", columnList = "event_id", unique = true)
     })
 @Getter
