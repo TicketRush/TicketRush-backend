@@ -32,7 +32,8 @@ import org.springframework.transaction.annotation.Transactional;
 @RequiredArgsConstructor
 public class OutboxRelayService {
 
-  private static final long SEND_TIMEOUT_SECONDS = 10L;
+  // 건당 최대 대기(초). 배치 최악 소요(batchSize * 이 값)가 스케줄러 lockAtMostFor 안에 들어오도록 유지한다.
+  private static final long SEND_TIMEOUT_SECONDS = 5L;
   private static final List<OutboxStatus> RELAY_TARGET_STATUSES =
       List.of(OutboxStatus.PENDING, OutboxStatus.FAILED);
 
