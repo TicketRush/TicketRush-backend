@@ -29,3 +29,14 @@ springdoc:
 
 gateway:
   internal-token: ${GATEWAY_INTERNAL_TOKEN:test-token}
+
+# DLT 모니터링/운영 알림(#50). 모든 .DLT를 이 서비스 한 곳에서 소비·저장한다.
+# 기본은 비활성이며, 운영 환경에서 환경변수로 켠다(DLT_MONITOR_ENABLED=true, SLACK_ENABLED=true, SLACK_WEBHOOK_URL=...).
+# local/test는 미설정(기본 false)으로 비활성.
+app:
+  dlt:
+    monitor:
+      enabled: ${DLT_MONITOR_ENABLED:false}
+  slack:
+    enabled: ${SLACK_ENABLED:false}
+    webhook-url: ${SLACK_WEBHOOK_URL:}
