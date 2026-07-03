@@ -114,9 +114,11 @@ public class DeadLetterConsumer {
         sanitize(eventType),
         sanitize(eventId),
         sanitize(exceptionFqcn),
-        sanitize(exceptionMessage));
+        // #307: 로그 수집기 경로 PII 유출 방지 — 마스킹 후 로그 인젝션 sanitize 순으로 적용한다.
+        sanitize(DltPayloadMasker.mask(exceptionMessage)));
 
     try {
+      // #307: 저장 직전 PII를 보수적으로 마스킹한다(미래 PII 유입 방어). exceptionFqcn은 클래스명이라 마스킹 대상 아님.
       deadLetterRecordRepository.save(
           DeadLetterRecord.builder()
               .originalTopic(originalTopic)
@@ -125,9 +127,9 @@ public class DeadLetterConsumer {
               .messageKey(record.key())
               .eventType(eventType)
               .eventId(eventId)
-              .payload(payload)
+              .payload(DltPayloadMasker.mask(payload))
               .exceptionFqcn(exceptionFqcn)
-              .exceptionMessage(exceptionMessage)
+              .exceptionMessage(DltPayloadMasker.mask(exceptionMessage))
               .build());
     } catch (Exception e) {
       // 저장 실패는 ack하지 않고 예외를 던져 재시도되게 한다(실패 정책은 클래스 Javadoc 참조).

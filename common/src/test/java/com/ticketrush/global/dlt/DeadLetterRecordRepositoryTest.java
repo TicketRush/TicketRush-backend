@@ -3,6 +3,7 @@ package com.ticketrush.global.dlt;
 import static org.assertj.core.api.Assertions.assertThat;
 
 import com.ticketrush.global.jpa.config.JpaConfig;
+import java.time.LocalDateTime;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -73,5 +74,48 @@ class DeadLetterRecordRepositoryTest {
     assertThat(found.getEventId()).isNull();
     assertThat(found.getMessageKey()).isNull();
     assertThat(found.getPayload()).isEqualTo("raw-broken-payload");
+  }
+
+  @Test
+  @DisplayName("threshold 이전에 저장된 레코드는 deleteCreatedBefore로 삭제된다")
+  void deleteCreatedBefore_removes_records_before_threshold() {
+    // given: createdAt은 Auditing으로 저장 시점(now)에 자동 세팅된다.
+    DeadLetterRecord record =
+        DeadLetterRecord.builder()
+            .originalTopic("some-topic")
+            .originalPartition(0)
+            .originalOffset(1L)
+            .payload("{\"booking_id\":1}")
+            .build();
+    DeadLetterRecord saved = deadLetterRecordRepository.saveAndFlush(record);
+
+    // when: 방금 저장분의 createdAt보다 미래(now+1분) threshold로 삭제
+    int deleted =
+        deadLetterRecordRepository.deleteCreatedBefore(LocalDateTime.now().plusMinutes(1));
+
+    // then
+    assertThat(deleted).isEqualTo(1);
+    assertThat(deadLetterRecordRepository.findById(saved.getId())).isEmpty();
+  }
+
+  @Test
+  @DisplayName("threshold 이후에 저장된 레코드는 deleteCreatedBefore로 삭제되지 않는다")
+  void deleteCreatedBefore_keeps_records_after_threshold() {
+    // given
+    DeadLetterRecord record =
+        DeadLetterRecord.builder()
+            .originalTopic("some-topic")
+            .originalPartition(0)
+            .originalOffset(2L)
+            .payload("{\"booking_id\":2}")
+            .build();
+    DeadLetterRecord saved = deadLetterRecordRepository.saveAndFlush(record);
+
+    // when: 방금 저장분의 createdAt보다 과거(now-1년) threshold로는 삭제되지 않아야 한다.
+    int deleted = deadLetterRecordRepository.deleteCreatedBefore(LocalDateTime.now().minusYears(1));
+
+    // then
+    assertThat(deleted).isZero();
+    assertThat(deadLetterRecordRepository.findById(saved.getId())).isPresent();
   }
 }

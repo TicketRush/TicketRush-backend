@@ -290,3 +290,12 @@ class SeatControllerTest {
   value(8))
 }
 ```
+
+### 🔐 이벤트 payload · DLT 보안 규칙
+
+* **이벤트 payload에 PII(이메일·카드번호·개인정보) 금지** — 이벤트에는 식별자(ID)·금액·시간 등 최소 정보만 담습니다. **payload에 PII를 넣지 않는 것이 1차 통제**이며 마스킹은 보조 수단입니다.
+* **DLT 저장 전 마스킹** — 재시도 상한을 초과해 `dead_letter_record`에 적재되는 실패 메시지는 저장 직전 `DltPayloadMasker`로
+  PII(이메일·카드·전화·주민번호)를 마스킹합니다. **보수적 best-effort 패턴만** 커버하며 전수 보장이 아닙니다(정상 ID 오탐 방지 우선).
+* **DLT 자동 보존/삭제** — `dead_letter_record`는 기본 **30일** 보존 후 retention 배치가 자동 삭제합니다.
+  보존 기간은 `app.dlt.monitor.retention-days`(환경변수 `DLT_RETENTION_DAYS`)로 조정합니다.
+* **Kafka .DLT 토픽 잔존 주의** — DB 저장값은 마스킹되지만 원본 메시지는 Kafka `.DLT` 토픽에 해당 토픽의 retention 기간 동안 잔존합니다. 운영 환경에서는 Kafka 토픽 retention 설정도 함께 관리하세요.

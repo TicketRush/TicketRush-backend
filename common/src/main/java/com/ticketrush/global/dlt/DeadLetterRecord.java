@@ -16,7 +16,7 @@ import lombok.NoArgsConstructor;
  *
  * <p>{@code DeadLetterConsumer}가 DLT 헤더/원본 payload에서 값을 뽑아 저장한다. 실패 원인 추적·운영자 조회·수동 복구의 근거가 된다. 이벤트
  * 타입별/원본 토픽별 조회를 위해 {@code (event_type, created_at)}, {@code (original_topic, created_at)} 복합 인덱스를
- * 둔다.
+ * 두고, retention 배치의 {@code created_at} 범위 삭제를 위해 {@code (created_at)} 단독 인덱스를 둔다.
  *
  * <p>저장 시각은 {@link com.ticketrush.global.jpa.entity.BaseTimeEntity}가 관리하는 {@code created_at}(JPA
  * Auditing)으로 기록된다. 별도 {@code occurred_at} 컬럼은 중복이므로 두지 않는다(#9).
@@ -29,7 +29,8 @@ import lombok.NoArgsConstructor;
     name = "dead_letter_record",
     indexes = {
       @Index(name = "idx_dlr_event_type_created_at", columnList = "event_type, created_at"),
-      @Index(name = "idx_dlr_original_topic_created_at", columnList = "original_topic, created_at")
+      @Index(name = "idx_dlr_original_topic_created_at", columnList = "original_topic, created_at"),
+      @Index(name = "idx_dlr_created_at", columnList = "created_at")
     })
 @Getter
 @NoArgsConstructor(access = AccessLevel.PROTECTED)

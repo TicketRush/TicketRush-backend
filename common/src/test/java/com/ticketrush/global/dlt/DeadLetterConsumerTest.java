@@ -94,6 +94,45 @@ class DeadLetterConsumerTest {
   }
 
   @Test
+  @DisplayName("payload에 PII(이메일)가 있으면 마스킹된 값으로 저장한다")
+  void consume_masks_pii_in_payload_before_saving() {
+    // given: payload에 이메일이 포함된 envelope
+    DomainEventEnvelope envelope =
+        new DomainEventEnvelope(
+            "evt-1",
+            "BookingCreatedEvent",
+            Instant.parse("2026-05-27T06:00:00Z"),
+            "booking-created-topic",
+            "{\"email\":\"user@example.com\"}",
+            "trace-1");
+    ConsumerRecord<String, Object> record =
+        new ConsumerRecord<>("booking-created-topic.DLT", 0, 42L, "100", envelope);
+
+    given(deadLetterRecordRepository.save(any(DeadLetterRecord.class)))
+        .willAnswer(invocation -> invocation.getArgument(0));
+
+    // when
+    deadLetterConsumer.consume(
+        record,
+        str("booking-created-topic"),
+        intBytes(3),
+        longBytes(99L),
+        str("java.lang.IllegalStateException"),
+        str("user@example.com 처리 실패"),
+        ack);
+
+    // then
+    ArgumentCaptor<DeadLetterRecord> captor = ArgumentCaptor.forClass(DeadLetterRecord.class);
+    verify(deadLetterRecordRepository).save(captor.capture());
+    DeadLetterRecord saved = captor.getValue();
+
+    assertThat(saved.getPayload()).doesNotContain("user@example.com");
+    assertThat(saved.getPayload()).contains("u***@***");
+    assertThat(saved.getExceptionMessage()).doesNotContain("user@example.com");
+    assertThat(saved.getExceptionMessage()).contains("u***@***");
+  }
+
+  @Test
   @DisplayName("역직렬화 실패(value=null)일 때 springDeserializerExceptionValue 헤더에서 원본 payload를 추출한다")
   void consume_extracts_raw_payload_from_deserialization_exception_header() {
     // given: ErrorHandlingDeserializer가 실제로 생성하는 헤더와 동일한 형식으로 구성한다.
