@@ -1,6 +1,7 @@
 package com.ticketrush.global.dlt;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import com.ticketrush.global.jpa.config.JpaConfig;
 import java.time.LocalDateTime;
@@ -9,6 +10,7 @@ import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.data.jpa.test.autoconfigure.DataJpaTest;
 import org.springframework.context.annotation.Import;
+import org.springframework.dao.DataIntegrityViolationException;
 
 /** {@link JpaConfig}를 임포트해 {@code @EnableJpaAuditing}을 활성화한 뒤 {@code createdAt} 필드 단언을 포함한다. */
 @DataJpaTest
@@ -117,5 +119,82 @@ class DeadLetterRecordRepositoryTest {
     // then
     assertThat(deleted).isZero();
     assertThat(deadLetterRecordRepository.findById(saved.getId())).isPresent();
+  }
+
+  @Test
+  @DisplayName(
+      "동일 (originalTopic, originalPartition, originalOffset)로 두 번 저장하면 멱등 제약 위반 예외가 발생한다(#308)")
+  void duplicate_topic_partition_offset_violates_unique_constraint() {
+    // given: 동일 좌표(booking-created-topic, 2, 123)를 가진 두 레코드
+    deadLetterRecordRepository.saveAndFlush(
+        DeadLetterRecord.builder()
+            .originalTopic("booking-created-topic")
+            .originalPartition(2)
+            .originalOffset(123L)
+            .payload("{\"booking_id\":100}")
+            .build());
+
+    DeadLetterRecord duplicate =
+        DeadLetterRecord.builder()
+            .originalTopic("booking-created-topic")
+            .originalPartition(2)
+            .originalOffset(123L)
+            .payload("{\"booking_id\":100}")
+            .build();
+
+    // when & then: 두 번째 저장(flush)에서 unique 제약 위반이 발생한다.
+    assertThatThrownBy(() -> deadLetterRecordRepository.saveAndFlush(duplicate))
+        .isInstanceOf(DataIntegrityViolationException.class);
+  }
+
+  @Test
+  @DisplayName("좌표 중 하나라도 다르면 동일 토픽이어도 정상 저장된다(#308)")
+  void different_offset_is_saved_normally() {
+    // given
+    deadLetterRecordRepository.saveAndFlush(
+        DeadLetterRecord.builder()
+            .originalTopic("booking-created-topic")
+            .originalPartition(2)
+            .originalOffset(123L)
+            .payload("{\"booking_id\":100}")
+            .build());
+
+    // when: offset만 다른 레코드
+    DeadLetterRecord other =
+        deadLetterRecordRepository.saveAndFlush(
+            DeadLetterRecord.builder()
+                .originalTopic("booking-created-topic")
+                .originalPartition(2)
+                .originalOffset(124L)
+                .payload("{\"booking_id\":101}")
+                .build());
+
+    // then
+    assertThat(deadLetterRecordRepository.findById(other.getId())).isPresent();
+  }
+
+  @Test
+  @DisplayName("저장된 좌표엔 existsBy=true, 없는 좌표엔 false를 반환한다(#308)")
+  void existsByOriginalTopicAndOriginalPartitionAndOriginalOffset_returns_correct_result() {
+    // given
+    deadLetterRecordRepository.saveAndFlush(
+        DeadLetterRecord.builder()
+            .originalTopic("booking-created-topic")
+            .originalPartition(2)
+            .originalOffset(123L)
+            .payload("{\"booking_id\":100}")
+            .build());
+
+    // when & then: 동일 좌표 → true
+    assertThat(
+            deadLetterRecordRepository.existsByOriginalTopicAndOriginalPartitionAndOriginalOffset(
+                "booking-created-topic", 2, 123L))
+        .isTrue();
+
+    // 다른 offset → false
+    assertThat(
+            deadLetterRecordRepository.existsByOriginalTopicAndOriginalPartitionAndOriginalOffset(
+                "booking-created-topic", 2, 999L))
+        .isFalse();
   }
 }

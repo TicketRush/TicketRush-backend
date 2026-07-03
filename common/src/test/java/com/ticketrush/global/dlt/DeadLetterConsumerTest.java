@@ -205,4 +205,49 @@ class DeadLetterConsumerTest {
     org.mockito.Mockito.verify(notifier, org.mockito.Mockito.never())
         .send(any(), any(), any(Map.class));
   }
+
+  @Test
+  @DisplayName("중복 수신(save가 DIVE, existsBy=true)이면 예외 없이 ack하고 재알림하지 않는다(#308 멱등)")
+  void consume_skips_notify_and_acks_on_duplicate() {
+    // given: 동일 DLT 메시지 재전달 → unique 제약 위반으로 save가 DIVE를 던지고, existsBy는 true를 반환한다.
+    ConsumerRecord<String, Object> record =
+        new ConsumerRecord<>("some-topic.DLT", 0, 1L, null, "payload");
+    given(deadLetterRecordRepository.save(any(DeadLetterRecord.class)))
+        .willThrow(new org.springframework.dao.DataIntegrityViolationException("duplicate key"));
+    given(
+            deadLetterRecordRepository.existsByOriginalTopicAndOriginalPartitionAndOriginalOffset(
+                "some-topic", 0, 1L))
+        .willReturn(true);
+
+    // when: 예외가 밖으로 전파되지 않아야 한다.
+    deadLetterConsumer.consume(record, null, null, null, null, null, ack);
+
+    // then: 중복은 멱등 스킵 → ack만 하고 재알림하지 않는다.
+    verify(deadLetterRecordRepository).save(any(DeadLetterRecord.class));
+    verify(ack).acknowledge();
+    org.mockito.Mockito.verify(notifier, org.mockito.Mockito.never()).send(any(), any(), any());
+  }
+
+  @Test
+  @DisplayName("save가 DIVE인데 existsBy=false(비중복 무결성 위반)이면 예외를 rethrow하고 ack하지 않는다(#308)")
+  void consume_rethrows_on_non_duplicate_integrity_violation() {
+    // given: 길이초과 등 unique 위반이 아닌 DIVE → save가 DIVE를 던지고, existsBy는 false를 반환한다.
+    ConsumerRecord<String, Object> record =
+        new ConsumerRecord<>("some-topic.DLT", 0, 1L, null, "payload");
+    org.springframework.dao.DataIntegrityViolationException dive =
+        new org.springframework.dao.DataIntegrityViolationException("column too long");
+    given(deadLetterRecordRepository.save(any(DeadLetterRecord.class))).willThrow(dive);
+    given(
+            deadLetterRecordRepository.existsByOriginalTopicAndOriginalPartitionAndOriginalOffset(
+                "some-topic", 0, 1L))
+        .willReturn(false);
+
+    // when & then: 예외가 밖으로 전파되어야 한다(재시도).
+    org.assertj.core.api.Assertions.assertThatThrownBy(
+            () -> deadLetterConsumer.consume(record, null, null, null, null, null, ack))
+        .isInstanceOf(org.springframework.dao.DataIntegrityViolationException.class);
+
+    org.mockito.Mockito.verify(ack, org.mockito.Mockito.never()).acknowledge();
+    org.mockito.Mockito.verify(notifier, org.mockito.Mockito.never()).send(any(), any(), any());
+  }
 }

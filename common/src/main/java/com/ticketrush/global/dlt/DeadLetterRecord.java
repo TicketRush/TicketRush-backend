@@ -6,6 +6,7 @@ import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.Index;
 import jakarta.persistence.Table;
+import jakarta.persistence.UniqueConstraint;
 import lombok.AccessLevel;
 import lombok.Builder;
 import lombok.Getter;
@@ -23,6 +24,9 @@ import lombok.NoArgsConstructor;
  *
  * <p>원본 컨슈머가 {@code DeserializationException}으로 실패한 경우 DLT value가 {@code DomainEventEnvelope}로
  * 역직렬화되지 않을 수 있어, eventType/eventId/payload는 nullable로 두고 최대 보존 저장한다.
+ *
+ * <p>{@code (original_topic, original_partition, original_offset)}는 DLT 메시지의 멱등 키로, 재전달 시 중복 적재를
+ * 막는다(#308).
  */
 @Entity
 @Table(
@@ -31,6 +35,11 @@ import lombok.NoArgsConstructor;
       @Index(name = "idx_dlr_event_type_created_at", columnList = "event_type, created_at"),
       @Index(name = "idx_dlr_original_topic_created_at", columnList = "original_topic, created_at"),
       @Index(name = "idx_dlr_created_at", columnList = "created_at")
+    },
+    uniqueConstraints = {
+      @UniqueConstraint(
+          name = "uk_dlr_topic_partition_offset",
+          columnNames = {"original_topic", "original_partition", "original_offset"})
     })
 @Getter
 @NoArgsConstructor(access = AccessLevel.PROTECTED)
