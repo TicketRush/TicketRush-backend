@@ -2,7 +2,6 @@ package com.ticketrush.global.notification;
 
 import com.ticketrush.global.config.RestClientFactorySupport;
 import com.ticketrush.global.json.JsonConverter;
-import java.util.LinkedHashMap;
 import java.util.Map;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -60,7 +59,7 @@ public class SlackNotifier implements Notifier {
   @Override
   public void send(String title, String message, Map<String, String> metadata) {
     try {
-      String payload = jsonConverter.serialize(buildBody(buildText(title, message, metadata)));
+      String payload = jsonConverter.serialize(Map.of("text", buildText(title, message, metadata)));
       restClient
           .post()
           .uri(slackProperties.getWebhookUrl())
@@ -72,18 +71,6 @@ public class SlackNotifier implements Notifier {
       // 알림 실패는 본 흐름(저장/상태 전이)을 깨지 않도록 삼키고 로그만 남긴다.
       log.warn("[SLACK] 알림 전송 실패. title={}, error={}", title, e.getMessage());
     }
-  }
-
-  /**
-   * Slack incoming-webhook 페이로드({@code {"text": ..., "channel": ...}})를 구성한다. channel은 설정 시에만 포함한다.
-   */
-  private Map<String, String> buildBody(String text) {
-    Map<String, String> body = new LinkedHashMap<>();
-    body.put("text", text);
-    if (slackProperties.getChannel() != null && !slackProperties.getChannel().isBlank()) {
-      body.put("channel", slackProperties.getChannel());
-    }
-    return body;
   }
 
   /** 제목/본문/메타데이터를 사람이 읽기 좋은 단일 텍스트로 합친다. */

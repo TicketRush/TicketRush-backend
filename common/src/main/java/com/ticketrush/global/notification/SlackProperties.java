@@ -19,7 +19,6 @@ public class SlackProperties {
 
   private boolean enabled = false;
   private String webhookUrl;
-  private String channel;
   private long connectTimeoutMs = 3000;
   private long readTimeoutMs = 5000;
 }
