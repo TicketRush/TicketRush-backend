@@ -18,4 +18,5 @@ import org.springframework.stereotype.Component;
 public class DltMonitorProperties {
 
   private boolean enabled = false;
+  private int retentionDays = 30; // dead_letter_record를 이 기간 이후 retention 배치가 삭제한다.
 }

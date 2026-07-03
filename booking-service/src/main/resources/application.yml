@@ -37,6 +37,8 @@ app:
   dlt:
     monitor:
       enabled: ${DLT_MONITOR_ENABLED:false}
+      # dead_letter_record 보존 기간(일). 이 기간이 지난 레코드는 retention 배치가 자동 삭제한다(#307).
+      retention-days: ${DLT_RETENTION_DAYS:30}
   slack:
     enabled: ${SLACK_ENABLED:false}
     webhook-url: ${SLACK_WEBHOOK_URL:}
