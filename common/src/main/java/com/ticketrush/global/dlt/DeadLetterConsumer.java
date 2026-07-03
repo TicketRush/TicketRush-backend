@@ -11,6 +11,7 @@ import lombok.extern.slf4j.Slf4j;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.core.log.LogAccessor;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.kafka.annotation.KafkaListener;
 import org.springframework.kafka.support.Acknowledgment;
 import org.springframework.kafka.support.KafkaHeaders;
@@ -131,6 +132,33 @@ public class DeadLetterConsumer {
               .exceptionFqcn(exceptionFqcn)
               .exceptionMessage(DltPayloadMasker.mask(exceptionMessage))
               .build());
+    } catch (DataIntegrityViolationException e) {
+      // #308: DIVE가 unique 위반(중복 수신)인지 다른 무결성 위반(길이초과 등)인지 구분한다.
+      // existsBy 조회는 save가 자체 트랜잭션에서 롤백된 후 새 쿼리로 실행되므로 안전하다.
+      boolean isDuplicate =
+          deadLetterRecordRepository.existsByOriginalTopicAndOriginalPartitionAndOriginalOffset(
+              originalTopic, originalPartition, originalOffset);
+      if (!isDuplicate) {
+        // unique 위반이 아닌 다른 무결성 위반(길이초과 등) = 실제 저장 실패. 유실 방지 위해 재시도.
+        log.error(
+            "[DLT] DeadLetterRecord 저장 실패(비중복 무결성 위반). 재시도한다. originalTopic={}, offset={}",
+            originalTopic,
+            originalOffset,
+            e);
+        throw e;
+      }
+      // 진짜 중복(멱등). 최초 수신 시 이미 저장했고 알림을 시도했으므로 재저장/재알림 없이 ack만 한다.
+      // (최초 알림 실패 시 유실 가능은 수용된 트레이드오프 — #308)
+      log.info(
+          "[DLT] 중복 DeadLetterRecord 수신(멱등 스킵). originalTopic={}, partition={}, offset={},"
+              + " eventType={}, eventId={}",
+          originalTopic,
+          originalPartition,
+          originalOffset,
+          eventType,
+          eventId);
+      ack.acknowledge();
+      return;
     } catch (Exception e) {
       // 저장 실패는 ack하지 않고 예외를 던져 재시도되게 한다(실패 정책은 클래스 Javadoc 참조).
       log.error(

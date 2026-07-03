@@ -13,4 +13,13 @@ public interface DeadLetterRecordRepository extends JpaRepository<DeadLetterReco
   @Modifying(clearAutomatically = true)
   @Query("DELETE FROM DeadLetterRecord d WHERE d.createdAt < :threshold")
   int deleteCreatedBefore(@Param("threshold") LocalDateTime threshold);
+
+  /**
+   * 동일 DLT 원본 좌표 {@code (originalTopic, originalPartition, originalOffset)}로 저장된 레코드가 있는지 확인한다.
+   *
+   * <p>{@link com.ticketrush.global.dlt.DeadLetterConsumer}가 {@code
+   * DataIntegrityViolationException} 발생 시 unique 위반(중복 수신)인지 다른 무결성 위반인지 구분하는 데 사용한다(#308).
+   */
+  boolean existsByOriginalTopicAndOriginalPartitionAndOriginalOffset(
+      String originalTopic, int originalPartition, long originalOffset);
 }
