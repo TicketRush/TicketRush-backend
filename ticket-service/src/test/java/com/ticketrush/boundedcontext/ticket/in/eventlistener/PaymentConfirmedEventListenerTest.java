@@ -1,6 +1,7 @@
 package com.ticketrush.boundedcontext.ticket.in.eventlistener;
 
 import static org.assertj.core.api.Assertions.assertThatCode;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.BDDMockito.given;
 import static org.mockito.BDDMockito.willThrow;
@@ -10,8 +11,10 @@ import static org.mockito.Mockito.verify;
 import com.ticketrush.boundedcontext.ticket.app.dto.response.TicketIssueResponse;
 import com.ticketrush.boundedcontext.ticket.app.usecase.TicketIssueUseCase;
 import com.ticketrush.global.event.DomainEventEnvelope;
+import com.ticketrush.global.exception.BusinessException;
 import com.ticketrush.global.json.DeserializationException;
 import com.ticketrush.global.json.JsonConverter;
+import com.ticketrush.global.status.ErrorStatus;
 import com.ticketrush.shared.payment.event.PaymentConfirmedEvent;
 import java.time.Instant;
 import java.time.LocalDateTime;
@@ -89,18 +92,37 @@ class PaymentConfirmedEventListenerTest {
   }
 
   @Test
-  @DisplayName("티켓 발급 유스케이스가 예외를 던져도 예외를 전파하지 않고 오프셋을 커밋한다")
-  void handlePaymentConfirmedSwallowsIssueFailure() {
-    // given
+  @DisplayName("일시적(인프라) 예외가 발생하면 예외를 전파하고 오프셋을 커밋하지 않는다(재시도→DLT 위임)")
+  void handlePaymentConfirmedRethrowsTransientFailure() {
+    // given: 일반 RuntimeException은 일시 실패로 분류된다
     DomainEventEnvelope envelope = envelope();
     given(jsonConverter.deserialize(PAYLOAD, PaymentConfirmedEvent.class)).willReturn(event());
-    willThrow(new RuntimeException("티켓 발급 실패")).given(ticketIssueUseCase).execute(BOOKING_ID);
+    willThrow(new RuntimeException("DB 일시 장애")).given(ticketIssueUseCase).execute(BOOKING_ID);
 
-    // when & then: 발급 실패가 리스너 밖으로 전파되지 않는다(파티션 블로킹 방지)
+    // when & then: 일시 실패는 리스너 밖으로 전파되어 컨테이너 재시도→DLT 파이프라인을 태운다
+    assertThatThrownBy(() -> listener.handlePaymentConfirmed(envelope, acknowledgment))
+        .isInstanceOf(RuntimeException.class);
+
+    // then: 발급은 시도되었으나 오프셋은 커밋되지 않는다
+    verify(ticketIssueUseCase).execute(BOOKING_ID);
+    verify(acknowledgment, never()).acknowledge();
+  }
+
+  @Test
+  @DisplayName("영구(비즈니스) 예외가 발생하면 예외를 전파하지 않고 오프셋을 커밋한다")
+  void handlePaymentConfirmedAcksPermanentFailure() {
+    // given: BusinessException은 영구 실패로 분류된다(재시도 무의미)
+    DomainEventEnvelope envelope = envelope();
+    given(jsonConverter.deserialize(PAYLOAD, PaymentConfirmedEvent.class)).willReturn(event());
+    willThrow(new BusinessException(ErrorStatus.BOOKING_NOT_FOUND))
+        .given(ticketIssueUseCase)
+        .execute(BOOKING_ID);
+
+    // when & then: 영구 실패는 로그 후 커밋되어 파티션 블로킹을 막는다
     assertThatCode(() -> listener.handlePaymentConfirmed(envelope, acknowledgment))
         .doesNotThrowAnyException();
 
-    // then: 발급은 시도되었고, 실패와 무관하게 오프셋은 커밋된다
+    // then
     verify(ticketIssueUseCase).execute(BOOKING_ID);
     verify(acknowledgment).acknowledge();
   }

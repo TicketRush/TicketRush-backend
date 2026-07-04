@@ -291,6 +291,10 @@ class SeatControllerTest {
 }
 ```
 
+### 📨 Kafka 컨슈머 에러 처리 · 상수화
+
+* **컨슈머 에러 처리 정책(일시/영구 예외 구분, ack vs re-throw)과 groupId/topic 상수화 컨벤션의 SSOT는 [`kafka-event-guide.md`](kafka-event-guide.md) §2**입니다. `@KafkaListener` 리스너를 추가·수정할 때 그 표준(영구→ack, 일시→re-throw→DLT, `KafkaConsumerErrorPolicy`·`KafkaConsumerGroup` 상수)을 따릅니다. 여기에 재기술하지 않습니다.
+
 ### 🔐 이벤트 payload · DLT 보안 규칙
 
 * **이벤트 payload에 PII(이메일·카드번호·개인정보) 금지** — 이벤트에는 식별자(ID)·금액·시간 등 최소 정보만 담습니다. **payload에 PII를 넣지 않는 것이 1차 통제**이며 마스킹은 보조 수단입니다.

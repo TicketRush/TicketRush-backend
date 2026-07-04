@@ -7,9 +7,11 @@ public record BookingCreatedEvent(
     Long bookingId, String bookingNumber, Long seatId, Long performanceId, Long userId)
     implements DomainEvent {
 
+  public static final String TOPIC = "booking-created-topic";
+
   @Override
   public String topic() {
-    return "booking-created-topic";
+    return TOPIC;
   }
 
   @Override

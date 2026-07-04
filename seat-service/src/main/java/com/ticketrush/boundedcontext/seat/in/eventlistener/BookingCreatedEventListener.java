@@ -2,6 +2,8 @@ package com.ticketrush.boundedcontext.seat.in.eventlistener;
 
 import com.ticketrush.boundedcontext.seat.app.facade.SeatFacade;
 import com.ticketrush.global.event.DomainEventEnvelope;
+import com.ticketrush.global.event.KafkaConsumerErrorPolicy;
+import com.ticketrush.global.event.KafkaConsumerGroup;
 import com.ticketrush.global.json.JsonConverter;
 import com.ticketrush.shared.booking.event.BookingCreatedEvent;
 import java.time.Duration;
@@ -26,7 +28,7 @@ public class BookingCreatedEventListener {
   // 이벤트 중복을 방어할 유효 기간
   private static final int IDEMPOTENCY_TTL_HOURS = 24;
 
-  @KafkaListener(topics = "booking-created-topic", groupId = "seat-group")
+  @KafkaListener(topics = BookingCreatedEvent.TOPIC, groupId = KafkaConsumerGroup.SEAT)
   public void handleBookingCreated(@Payload DomainEventEnvelope envelope, Acknowledgment ack) {
 
     // 1. 멱등성 키 생성
@@ -53,13 +55,25 @@ public class BookingCreatedEventListener {
       seatFacade.tryLockSeat(
           event.bookingId(), event.bookingNumber(), event.seatId(), event.userId());
 
-    } catch (Exception e) {
-      log.error("이벤트 처리 중 에러 발생. 재시도를 위해 멱등성 키를 롤백합니다. eventId: {}", eventId, e);
-      redisTemplate.delete(idempotencyKey);
-      throw e; // 예외를 다시 던져 스프링 카프카의 재시도(Retry) 정책을 태움
-    }
+      // 4. 예외 없이 성공적으로 완료되었을 때만 오프셋 수동 커밋
+      ack.acknowledge();
 
-    // 4. 예외 없이 성공적으로 완료되었을 때만 오프셋 수동 커밋
-    ack.acknowledge();
+    } catch (Exception e) {
+      // #269 표준: 영구(비즈니스/결정적) 실패는 로그 후 ack, 일시(인프라) 실패는 멱등키 롤백 후 re-throw 하여 재시도→DLT로 보존.
+      if (KafkaConsumerErrorPolicy.isPermanent(e)) {
+        if (KafkaConsumerErrorPolicy.isExpectedConflict(e)) {
+          log.warn("좌석 선점 이벤트 처리 중 예상된 상태충돌(멱등 처리). eventId: {}", eventId, e);
+        } else {
+          log.error("[CRITICAL] 좌석 선점 이벤트 처리 중 치명적 오류 발생! 확인이 필요합니다. eventId: {}", eventId, e);
+        }
+        // 영구 실패는 재처리해도 결과가 같으므로 멱등키를 유지(처리됨)하고 커밋한다.
+        ack.acknowledge();
+      } else {
+        // 일시 실패는 재시도가 다시 처리할 수 있도록 멱등키를 롤백한 뒤 예외를 다시 던진다.
+        log.warn("좌석 선점 이벤트 처리 중 일시적 오류. 멱등키를 롤백하고 재시도합니다. eventId: {}", eventId, e);
+        redisTemplate.delete(idempotencyKey);
+        throw e;
+      }
+    }
   }
 }

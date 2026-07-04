@@ -1,6 +1,7 @@
 package com.ticketrush.global.dlt;
 
 import com.ticketrush.global.event.DomainEventEnvelope;
+import com.ticketrush.global.event.KafkaConsumerGroup;
 import com.ticketrush.global.notification.Notifier;
 import java.nio.ByteBuffer;
 import java.nio.charset.StandardCharsets;
@@ -70,7 +71,7 @@ public class DeadLetterConsumer {
    * <p>검증: {@code "X.DLT".matches(".*(?<!\\.DLT)\\.DLT")} → true, {@code
    * "X.DLT.DLT".matches(".*(?<!\\.DLT)\\.DLT")} → false.
    */
-  @KafkaListener(topicPattern = ".*(?<!\\.DLT)\\.DLT", groupId = "dlt-monitor-group")
+  @KafkaListener(topicPattern = ".*(?<!\\.DLT)\\.DLT", groupId = KafkaConsumerGroup.DLT_MONITOR)
   public void consume(
       ConsumerRecord<String, Object> record,
       @Header(name = KafkaHeaders.DLT_ORIGINAL_TOPIC, required = false) byte[] originalTopicHeader,

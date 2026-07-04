@@ -6,9 +6,11 @@ import com.ticketrush.global.event.EventUtils;
 public record SeatHoldFailedEvent(Long bookingId, Long seatId, String reason)
     implements DomainEvent {
 
+  public static final String TOPIC = "seat-hold-failed-topic";
+
   @Override
   public String topic() {
-    return "seat-hold-failed-topic";
+    return TOPIC;
   }
 
   @Override

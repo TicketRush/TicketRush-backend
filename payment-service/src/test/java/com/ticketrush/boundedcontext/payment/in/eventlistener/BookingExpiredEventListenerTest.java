@@ -11,7 +11,9 @@ import static org.mockito.Mockito.verify;
 
 import com.ticketrush.boundedcontext.payment.app.facade.PaymentFacade;
 import com.ticketrush.global.event.DomainEventEnvelope;
+import com.ticketrush.global.exception.BusinessException;
 import com.ticketrush.global.json.JsonConverter;
+import com.ticketrush.global.status.ErrorStatus;
 import com.ticketrush.shared.booking.event.BookingExpiredEvent;
 import java.time.Instant;
 import java.time.LocalDateTime;
@@ -105,6 +107,35 @@ class BookingExpiredEventListenerTest {
 
     given(jsonConverter.deserialize(payload, BookingExpiredEvent.class)).willReturn(event);
     willThrow(new DataIntegrityViolationException("duplicate bookingId"))
+        .given(paymentFacade)
+        .registerExpiredBooking(bookingId, expiredAt);
+
+    // when & then
+    assertThatCode(() -> listener.handleBookingExpired(envelope, acknowledgment))
+        .doesNotThrowAnyException();
+
+    verify(acknowledgment).acknowledge();
+  }
+
+  @Test
+  @DisplayName("영구(비즈니스) 예외가 발생하면 예외를 전파하지 않고 오프셋을 커밋한다")
+  void handleBookingExpired_acks_on_permanent_failure() {
+    // given: BusinessException은 영구 실패로 분류되어 커밋된다(재시도 무의미)
+    Long bookingId = 100L;
+    LocalDateTime expiredAt = LocalDateTime.of(2026, 6, 21, 10, 0);
+    String payload = "{\"bookingId\":100,\"expiredAt\":\"2026-06-21T10:00:00\"}";
+    DomainEventEnvelope envelope =
+        new DomainEventEnvelope(
+            "event-id",
+            BookingExpiredEvent.EVENT_NAME,
+            Instant.now(),
+            BookingExpiredEvent.TOPIC,
+            payload,
+            null);
+    BookingExpiredEvent event = new BookingExpiredEvent(bookingId, expiredAt);
+
+    given(jsonConverter.deserialize(payload, BookingExpiredEvent.class)).willReturn(event);
+    willThrow(new BusinessException(ErrorStatus.PAYMENT_NOT_FOUND))
         .given(paymentFacade)
         .registerExpiredBooking(bookingId, expiredAt);
 
