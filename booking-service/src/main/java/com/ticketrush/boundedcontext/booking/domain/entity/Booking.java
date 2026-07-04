@@ -91,4 +91,25 @@ public class Booking extends AutoIdBaseEntity {
     this.bookingStatus = BookingStatus.CONFIRMED;
     this.confirmedAt = confirmedAt;
   }
+
+  /**
+   * 환불 성공(결제 취소) 시 예매를 REFUNDED로 종결한다 (#49).
+   *
+   * <p>이미 REFUNDED면 멱등 처리(전이 없이 {@code true}). CONFIRMED/REFUNDING에서만 REFUNDED로 전이한다. 그 외
+   * 상태(CANCELED/PENDING/EXPIRED)는 교차 경로/비정상이므로 전이하지 않고 {@code false}를 반환한다(예외는 던지지 않아 호출 측이 ack
+   * 하도록).
+   *
+   * @return 종결(또는 이미 종결)됐으면 {@code true}, 종결 불가 상태라 전이하지 않았으면 {@code false}
+   */
+  public boolean markRefunded() {
+    if (this.bookingStatus == BookingStatus.REFUNDED) {
+      return true;
+    }
+    if (this.bookingStatus == BookingStatus.CONFIRMED
+        || this.bookingStatus == BookingStatus.REFUNDING) {
+      this.bookingStatus = BookingStatus.REFUNDED;
+      return true;
+    }
+    return false;
+  }
 }
