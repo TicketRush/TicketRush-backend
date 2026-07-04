@@ -6,7 +6,7 @@
 세 가지 축으로 구성됩니다.
 
 1. **Plan-First + Human Approval** — 코드 수정 전 계획·리스크를 정리하고 사람이 승인
-2. **역할 분리** — 조사 / 계획 / 검증은 독립된 **서브에이전트**로, 이슈·PR·커밋·사이클은 **슬래시 커맨드**로 분리
+2. **역할 분리** — 조사 / 계획 / 검증은 독립된 **서브에이전트**로, 이슈·PR·커밋·사이클은 **커맨드·스킬**로 분리(이슈·PR·리뷰반영은 스킬, 커밋·사이클은 커맨드)
 3. **작업 로깅 훅** — 프롬프트·도구 실행 이력을 기록해 재현·추적 가능
 
 ---
@@ -24,14 +24,15 @@
 │   └── gardener.md        # 하네스·문서 위생 상시 점검 (read-only)
 ├── commands/              # 슬래시 커맨드
 │   ├── review-pr.md       # 올라간 PR 리뷰 (코멘트 다는 방향)
-│   ├── apply-review.md    # PR에 달린 리뷰 코멘트 수용→수정 / 거절→사유
 │   ├── dev-cycle.md       # 이슈 기반 개발 사이클 자동 진행
 │   ├── commit.md          # 팀 형식으로 커밋 (브랜치명→이슈번호 자동)
-│   ├── issue.md           # 팀 템플릿으로 이슈 생성
-│   ├── pr.md              # 팀 템플릿으로 PR 생성 (검토 후 업로드)
 │   ├── test.md            # 변경 모듈 테스트 실제 실행 → 결과 블록 생성
-│   └── resume.md          # 세션 재개 오리엔테이션 (read-only)
-├── skills/                # 설치한 외부 스킬 (팀 공유, git 커밋)
+│   ├── resume.md          # 세션 재개 오리엔테이션 (read-only)
+│   └── wrap-up.md         # 세션 작업 요약 → 슬랙 전송
+├── skills/                # 슬래시 커맨드 겸 자동 호출 스킬 (팀 공유, git 커밋)
+│   ├── issue/             # 팀 템플릿으로 이슈 생성 (자연어 자동 호출)
+│   ├── pr/                # 팀 템플릿으로 PR 생성, 승인 후 업로드 (자연어 자동 호출)
+│   ├── apply-review/      # PR에 달린 리뷰 코멘트 수용→수정 / 거절→사유 (자연어 자동 호출)
 │   ├── grill-me/          # 계획을 캐묻는 대화형 인터뷰 (사용자가 /grill-me 입력)
 │   └── grilling/          # grill-me가 호출하는 실제 인터뷰 세션
 ├── hooks/
@@ -88,15 +89,15 @@
 > 💡 **호출 팁:** 에이전트 이름을 명시(`researcher로`, `planner한테`)하면 해당 에이전트로 위임됩니다. 그냥 "조사해줘 / 계획 세워줘"라고만 해도
 > Claude가 description을 보고 알맞은 에이전트를 자동으로 띄울 수 있습니다.
 >
-> 📌 **이슈 생성·PR 생성·커밋**은 에이전트가 아니라 **커맨드**(`/issue`, `/pr`, `/commit`)입니다 → 4장 참고. (git 기록에서 재구성하는 결정적 절차이고, PR은 초안→승인→업로드처럼 사용자와 주고받아야 해서 **메인 컨텍스트에서 도는 커맨드**가 더 적합합니다.)
+> 📌 **이슈 생성·PR 생성·커밋**은 에이전트가 아니라 **커맨드·스킬**(`/issue`·`/pr`은 스킬, `/commit`은 커맨드)입니다 → 4장 참고. (git 기록에서 재구성하는 결정적 절차이고, PR은 초안→승인→업로드처럼 사용자와 주고받아야 해서 **메인 컨텍스트에서 도는** 편이 더 적합합니다.)
 
 ---
 
-## 4. 커맨드 활용법
+## 4. 커맨드·스킬 활용법
 
-슬래시 커맨드는 **메인 컨텍스트에서 도는 정해진 절차**입니다. `/이름`으로 직접 부르거나, 일부는 자연어로도 트리거됩니다(`CLAUDE.md` 매핑).
+슬래시 커맨드·스킬은 **메인 컨텍스트에서 도는 정해진 절차**입니다. `/이름`으로 직접 부르며, **스킬로 만든 것**(`/issue`·`/pr`·`/apply-review`)은 자연어 요청에 `description` 기반으로 **자동 호출**됩니다(정의는 `.claude/skills/<이름>/SKILL.md`, 나머지는 `.claude/commands/<이름>.md`).
 
-### 4.1. `/issue` — 이슈 생성 (2가지 모드)
+### 4.1. `/issue` — 이슈 생성 (스킬, 2가지 모드)
 
 작업 내역 또는 요구사항을 팀 이슈 템플릿(`.github/ISSUE_TEMPLATE/`)에 맞춰 GitHub 이슈로 만듭니다.
 
@@ -105,7 +106,7 @@
 * 인자에 요구사항 설명이 있으면 **B**, 없거나 "방금 작업"을 가리키면 **A**로 판별합니다(애매하면 한 번 확인).
 * 제목은 팀 규칙 `[라벨] 제목` 형식, 완료 조건은 `- [ ]` 체크박스로 작성합니다.
 
-### 4.2. `/pr` — PR 생성 (검토 후 업로드)
+### 4.2. `/pr` — PR 생성 (스킬, 검토 후 업로드)
 
 작업 내역을 팀 PR 템플릿(`.github/pull_request_template.md`)에 맞춰 **초안을 보여주고, 승인 후에만** PR을 만듭니다.
 
@@ -137,14 +138,14 @@ GitHub에 올라간 **PR을 리뷰**하는 커맨드입니다.
 * `gh pr view/diff`로 PR을 분석하고, **PR 브랜치 기준 실제 라인 번호**까지 검증하여 코멘트 제안 목록과 "Finish your review" 문구를 생성합니다.
 * 제안 목록을 보고 *"1, 3번 달아줘"* 라고 하면 실제 PR 코멘트를 작성합니다.
 
-### 4.6. `/apply-review` — PR에 달린 리뷰 코멘트 대응
+### 4.6. `/apply-review` — PR에 달린 리뷰 코멘트 대응 (스킬)
 
 `/review-pr`가 코멘트를 **다는** 방향이라면, 이건 **달린 코멘트를 받아 코드를 고치는** 반대 방향입니다.
 
 * PR 번호 생략 시 현재 브랜치 PR 자동 감지. 미해결 코멘트만 모으고(resolved는 GraphQL로 걸러냄), 봇·사람 둘 다 처리(`--human-only`/`--bot-only` 옵션).
 * **2단계 절충**: ① 전체를 분류표로 훑어 건별 **수용/거절 추천** → ⏸ 사람이 결정 → ② 수용 건만 **하나씩 수정**(라인 재검증 후, "어떻게/왜" 설명).
 * **수용 건은 작업(일)별로 개별 커밋**합니다(PR 리뷰 전체를 한 커밋으로 묶지 않음). **수용·거절 모두 GitHub 코멘트에 답글**을 달며(이모지 없음), 수용 답글 끝에는 그 작업의 커밋 링크 `: [<해시>](<커밋 URL>)`를 붙입니다. 거절 답글은 사유만(커밋 링크 없음).
-* resolve는 수동. 예: `/apply-review 249` 또는 *"PR 리뷰 반영해줘"*(`CLAUDE.md` 자연어 매핑).
+* resolve는 수동. 예: `/apply-review 249` 또는 *"PR 리뷰 반영해줘"*(스킬 `description` 기반 자연어 자동 호출).
 
 ### 4.7. `/dev-cycle` — 이슈 기반 개발 사이클 자동 진행
 
@@ -381,12 +382,12 @@ Select-String -Path .claude/logs/tools.jsonl -Pattern 'push --force|rm -rf'
 | `planner` | agent | 계획·리스크 수립 | dev-cycle 3 | 공유 |
 | `reviewer` | agent | 프로덕션 코드 diff 검증 | dev-cycle 6 | 공유 |
 | `gardener` | agent | 하네스·문서 위생 점검 | 상시 | 공유 |
-| `issue.md` | command | 이슈 생성 | dev-cycle 1 전 | 공유 |
+| `issue/` | skill | 이슈 생성(자연어 자동 호출) | dev-cycle 1 전 | 공유 |
 | `dev-cycle.md` | command | 개발 사이클 오케스트레이션 | dev-cycle 전체 | 공유 |
 | `commit.md` | command | 팀 형식 커밋 | dev-cycle 7 | 공유 |
 | `test.md` | command | 변경 모듈 테스트 실행 | dev-cycle 5 | 공유 |
-| `pr.md` | command | PR 생성(승인 후) | dev-cycle 8 | 공유 |
-| `apply-review.md` | command | PR 리뷰 코멘트 대응 | dev-cycle 9 | 공유 |
+| `pr/` | skill | PR 생성(승인 후·자연어 자동 호출) | dev-cycle 8 | 공유 |
+| `apply-review/` | skill | PR 리뷰 코멘트 대응(자연어 자동 호출) | dev-cycle 9 | 공유 |
 | `review-pr.md` | command | 남의 PR 리뷰(사이클 외) | 독립 | 공유 |
 | `resume.md` | command | 세션 재개 오리엔테이션 | 상시 | 공유 |
 | `wrap-up.md` | command | 세션 작업 요약 슬랙 전송 | 상시 | 공유 |
@@ -395,7 +396,7 @@ Select-String -Path .claude/logs/tools.jsonl -Pattern 'push --force|rm -rf'
 | `grilling` | skill | 인터뷰 세션 | dev-cycle 3 | 공유 |
 | `ai-workflow-guide.md` | doc | AI 워크플로우 SSOT | — | 공유 |
 | `backend-convention.md` | doc | 코딩 컨벤션·검증 파이프라인 SSOT | — | 공유 |
-| `ddd.md` | doc | 디렉토리·DDD 계층 | — | 공유 |
+| `ddd-directory-structure.md` | doc | 디렉토리·DDD 계층 | — | 공유 |
 | `kafka-event-guide.md` | doc | Kafka 이벤트 설계 | — | 공유 |
 | `mapstruct-guide.md` | doc | MapStruct 매퍼 | — | 공유 |
 | `settings.json` | config | 플랜모드·로깅 훅 등록 | — | 공유 |
