@@ -1,6 +1,7 @@
 package com.ticketrush.boundedcontext.booking.in.eventlistener;
 
 import static org.assertj.core.api.Assertions.assertThatCode;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.BDDMockito.given;
@@ -24,7 +25,10 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.http.HttpStatus;
 import org.springframework.kafka.support.Acknowledgment;
+import org.springframework.web.client.HttpClientErrorException;
+import org.springframework.web.client.HttpServerErrorException;
 
 @ExtendWith(MockitoExtension.class)
 class PaymentConfirmedEventListenerTest {
@@ -103,9 +107,9 @@ class PaymentConfirmedEventListenerTest {
   }
 
   @Test
-  @DisplayName("좌석 SOLD 확정 호출이 실패해도 예외를 전파하지 않고 오프셋을 커밋한다")
-  void handlePaymentConfirmedSwallowsSoldFailure() {
-    // given
+  @DisplayName("좌석 SOLD 확정이 4xx(예: 409 중복)로 실패하면 재시도하지 않고 오프셋을 커밋한다")
+  void handlePaymentConfirmedAcksWhenSoldReturns4xx() {
+    // given: 이미 SOLD된 좌석에 대한 409 등 4xx는 결정적 응답이라 재시도해도 결과가 같다
     Long bookingId = 10L;
     LocalDateTime paidAt = LocalDateTime.of(2026, 5, 22, 10, 30);
     DomainEventEnvelope envelope = envelope();
@@ -114,18 +118,92 @@ class PaymentConfirmedEventListenerTest {
 
     given(jsonConverter.deserialize(PAYLOAD, PaymentConfirmedEvent.class)).willReturn(event);
     given(bookingConfirmUseCase.execute(bookingId, paidAt, SEAT_ID)).willReturn(BOOKING_NUMBER);
-    willThrow(new RuntimeException("seat-service 호출 실패"))
+    willThrow(HttpClientErrorException.create(HttpStatus.CONFLICT, "Conflict", null, null, null))
         .given(seatRestClient)
         .confirmSold(BOOKING_NUMBER, SEAT_ID);
 
-    // when & then: 좌석 SOLD 호출 실패가 리스너 밖으로 전파되지 않는다
+    // when & then: 4xx는 삼키고 예매 확정을 유지하며 커밋한다
     assertThatCode(() -> listener.handlePaymentConfirmed(envelope, acknowledgment))
         .doesNotThrowAnyException();
 
-    // then: 예매 확정과 SOLD 호출은 시도되었고, 실패와 무관하게 오프셋은 커밋된다
+    // then
     verify(bookingConfirmUseCase).execute(bookingId, paidAt, SEAT_ID);
     verify(seatRestClient).confirmSold(BOOKING_NUMBER, SEAT_ID);
     verify(acknowledgment).acknowledge();
+  }
+
+  @Test
+  @DisplayName("좌석 SOLD 확정이 409가 아닌 4xx(예: 404)로 실패해도 결정적 응답이라 재시도하지 않고 오프셋을 커밋한다")
+  void handlePaymentConfirmedAcksWhenSoldReturnsNon409_4xx() {
+    // given: 404 등 409가 아닌 4xx도 결정적이라 재시도 무의미 → CRITICAL 로그 후 커밋
+    Long bookingId = 10L;
+    LocalDateTime paidAt = LocalDateTime.of(2026, 5, 22, 10, 30);
+    DomainEventEnvelope envelope = envelope();
+    PaymentConfirmedEvent event =
+        new PaymentConfirmedEvent(1L, bookingId, SEAT_ID, 4L, 50000L, paidAt);
+
+    given(jsonConverter.deserialize(PAYLOAD, PaymentConfirmedEvent.class)).willReturn(event);
+    given(bookingConfirmUseCase.execute(bookingId, paidAt, SEAT_ID)).willReturn(BOOKING_NUMBER);
+    willThrow(HttpClientErrorException.create(HttpStatus.NOT_FOUND, "Not Found", null, null, null))
+        .given(seatRestClient)
+        .confirmSold(BOOKING_NUMBER, SEAT_ID);
+
+    // when & then
+    assertThatCode(() -> listener.handlePaymentConfirmed(envelope, acknowledgment))
+        .doesNotThrowAnyException();
+
+    verify(acknowledgment).acknowledge();
+  }
+
+  @Test
+  @DisplayName("좌석 SOLD 확정이 5xx(일시 인프라 오류)로 실패하면 예외를 전파하고 오프셋을 커밋하지 않는다(재시도→DLT 위임)")
+  void handlePaymentConfirmedRethrowsWhenSoldReturns5xx() {
+    // given: 5xx는 일시 오류라 재시도하면 성공할 수 있다
+    Long bookingId = 10L;
+    LocalDateTime paidAt = LocalDateTime.of(2026, 5, 22, 10, 30);
+    DomainEventEnvelope envelope = envelope();
+    PaymentConfirmedEvent event =
+        new PaymentConfirmedEvent(1L, bookingId, SEAT_ID, 4L, 50000L, paidAt);
+
+    given(jsonConverter.deserialize(PAYLOAD, PaymentConfirmedEvent.class)).willReturn(event);
+    given(bookingConfirmUseCase.execute(bookingId, paidAt, SEAT_ID)).willReturn(BOOKING_NUMBER);
+    willThrow(
+            HttpServerErrorException.create(
+                HttpStatus.INTERNAL_SERVER_ERROR, "error", null, null, null))
+        .given(seatRestClient)
+        .confirmSold(BOOKING_NUMBER, SEAT_ID);
+
+    // when & then: 5xx는 리스너 밖으로 전파되어 컨테이너 재시도→DLT 파이프라인을 태운다
+    assertThatThrownBy(() -> listener.handlePaymentConfirmed(envelope, acknowledgment))
+        .isInstanceOf(HttpServerErrorException.class);
+
+    // then: 오프셋은 커밋되지 않는다
+    verify(seatRestClient).confirmSold(BOOKING_NUMBER, SEAT_ID);
+    verify(acknowledgment, never()).acknowledge();
+  }
+
+  @Test
+  @DisplayName("확정 유스케이스가 일시적(인프라) 예외를 던지면 예외를 전파하고 오프셋을 커밋하지 않는다")
+  void handlePaymentConfirmedRethrowsTransientConfirmFailure() {
+    // given: 일반 RuntimeException은 일시 실패로 분류된다
+    Long bookingId = 10L;
+    LocalDateTime paidAt = LocalDateTime.of(2026, 5, 22, 10, 30);
+    DomainEventEnvelope envelope = envelope();
+    PaymentConfirmedEvent event =
+        new PaymentConfirmedEvent(1L, bookingId, SEAT_ID, 4L, 50000L, paidAt);
+
+    given(jsonConverter.deserialize(PAYLOAD, PaymentConfirmedEvent.class)).willReturn(event);
+    willThrow(new RuntimeException("DB 일시 장애"))
+        .given(bookingConfirmUseCase)
+        .execute(bookingId, paidAt, SEAT_ID);
+
+    // when & then
+    assertThatThrownBy(() -> listener.handlePaymentConfirmed(envelope, acknowledgment))
+        .isInstanceOf(RuntimeException.class);
+
+    // then: SOLD는 호출되지 않고 오프셋도 커밋되지 않는다
+    verify(seatRestClient, never()).confirmSold(any(), anyLong());
+    verify(acknowledgment, never()).acknowledge();
   }
 
   @Test
