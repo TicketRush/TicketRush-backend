@@ -107,7 +107,7 @@ git config core.hooksPath .githooks
 
 ### 📁 디렉토리 구조 및 파일명
 
-* **디렉토리 구조:** 프로젝트 내의 `docs/ddd.md` 문서를 참고합니다.
+* **디렉토리 구조:** 프로젝트 내의 `docs/ddd-directory-structure.md` 문서를 참고합니다.
 * **Docs 파일명 규칙:** **kebab-case** 적용 (단어 사이를 하이픈 `-`으로 연결)
 * 예: `kafka-event-guide.md`
 

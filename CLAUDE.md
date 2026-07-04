@@ -20,7 +20,7 @@ Java · Spring Boot 기반. **버전 등 상세는 [`docs/backend-convention.md`
 ## 프로젝트 아키텍처
 
 **MSA (Micro Service Architecture)** - Gradle 멀티 모듈. 서비스 내부는 DDD 계층(`app`/`domain`/`in`/`out`/`global`) 구조를 따른다.
-디렉토리·DDD 계층 상세는 [`docs/ddd.md`](docs/ddd.md), 공통 모듈 주요 클래스는 [`docs/backend-convention.md`](docs/backend-convention.md) 참고.
+디렉토리·DDD 계층 상세는 [`docs/ddd-directory-structure.md`](docs/ddd-directory-structure.md), 공통 모듈 주요 클래스는 [`docs/backend-convention.md`](docs/backend-convention.md) 참고.
 
 ### 모듈 목록
 | 모듈 | 역할 |
@@ -41,12 +41,10 @@ Java · Spring Boot 기반. **버전 등 상세는 [`docs/backend-convention.md`
 
 - 이슈/PR 조회: `gh issue view {번호}` 또는 `gh pr view {번호}` 로 직접 가져옴
 - 브랜치: **`{이슈 label}/{이슈번호}`** 기준으로 작업 (예: label `refactor` → `refactor/250`). 상세는 [`docs/backend-convention.md`](docs/backend-convention.md) 브랜치 규칙.
-- **이슈 생성:** 사용자가 **"이슈 만들어줘"**(또는 "이번 작업 이슈로", "이슈 올려줘" 등 이슈 생성 의도)라고 하면 `/issue` 커맨드(`.claude/commands/issue.md`)를 실행한다.
-- **PR 생성:** 사용자가 **"PR 올려줘"**(또는 "PR 만들어줘", "풀리퀘 올려" 등 PR 생성 의도)라고 하면 `/pr` 커맨드(`.claude/commands/pr.md`)를 실행한다. 초안을 보여주고 승인받은 뒤에만 PR을 생성한다(Draft 아님).
-- **PR 리뷰 반영:** 사용자가 **"PR 리뷰 반영해줘"**(또는 "코드 리뷰 반영", "리뷰 코멘트 처리해줘" 등)라고 하면 `/apply-review` 커맨드(`.claude/commands/apply-review.md`)를 실행한다. 코멘트를 분류표로 제시하고, 사람이 건별 수용/거절을 결정하면 수용 건만 수정한다(승인 전 코드 수정·답글 금지).
+- **이슈 생성·PR 생성·PR 리뷰 반영**은 스킬(`.claude/skills/{issue,pr,apply-review}/`)로, "이슈 만들어줘"·"PR 올려줘"·"PR 리뷰 반영해줘" 같은 자연어 요청에 `description` 기반으로 자동 호출된다(별도 라우팅 규칙 불필요). 각 스킬의 "절대 규칙"이 행위 SSOT이며, 승인 게이트는 위 하드룰 1이 강제한다. 상세는 [`docs/ai-workflow-guide.md`](docs/ai-workflow-guide.md) 4장 참고.
 
 ---
 
 ## 디렉토리 구조 상세
 
-`docs/ddd.md` 참고
+`docs/ddd-directory-structure.md` 참고
