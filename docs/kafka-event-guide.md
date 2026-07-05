@@ -329,11 +329,11 @@ Inbox 중복 판정은 복합 unique **`uk_inbox_group_event (consumer_group, ev
 | 서비스 | 리스너 | groupId | 감싸는 처리 |
 |--------|--------|---------|-------------|
 | seat | `BookingCreatedEventListener` | `seat-group` | `seatFacade.tryLockSeat(...)` |
-| seat | `BookingCanceledEventListener` | `seat-group` | `seatFacade.releaseBookedSeat(...)` |
 | seat | `PaymentCanceledEventListener` | `seat-group` | `seatReleaseSoldSeatUseCase.execute(...)` |
 | seat | `PerformanceCreatedEventListener` | `seat-group` | `seatFacade.createDefaultSeats(...)` |
 | booking | `PaymentConfirmedEventListener` | `booking-group` | `bookingConfirmUseCase.execute(...)` (확정만; SOLD HTTP는 Inbox 밖) |
 | booking | `PaymentCanceledEventListener` | `booking-group` | `bookingMarkRefundedUseCase.execute(...)` |
+| booking | `RefundFailedEventListener` | `booking-group` | `bookingMarkRefundFailedUseCase.execute(...)` |
 | booking | `SeatHoldFailedEventListener` | `booking-group` | `bookingCancelUseCase.execute(...)` |
 | ticket | `PaymentConfirmedEventListener` | `ticket-group` | `ticketIssueUseCase.execute(...)` |
 | ticket | `PaymentCanceledEventListener` | `ticket-group` | `ticketCancelUseCase.execute(...)` |

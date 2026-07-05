@@ -37,11 +37,14 @@ public class PaymentCanceledEventListener {
     try {
       event = jsonConverter.deserialize(envelope.payload(), PaymentCanceledEvent.class);
       final Long seatId = event.seatId();
+      final String bookingNumber = event.bookingNumber();
 
       // Inbox로 중복 처리를 방지한다(#110). 최초 수신일 때만 좌석 반환을 수행하고 처리와 Inbox 기록을 한 트랜잭션으로 묶는다.
       boolean processed =
           inboxService.runIfFirst(
-              KafkaConsumerGroup.SEAT, envelope, () -> seatReleaseSoldSeatUseCase.execute(seatId));
+              KafkaConsumerGroup.SEAT,
+              envelope,
+              () -> seatReleaseSoldSeatUseCase.execute(seatId, bookingNumber));
 
       if (!processed) {
         log.info(

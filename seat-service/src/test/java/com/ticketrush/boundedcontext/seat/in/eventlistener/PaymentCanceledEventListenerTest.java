@@ -45,6 +45,7 @@ class PaymentCanceledEventListenerTest {
 
   private static final String PAYLOAD = "payload";
   private static final Long SEAT_ID = 3L;
+  private static final String BOOKING_NUMBER = "BOOK-1234";
 
   private DomainEventEnvelope envelope() {
     return new DomainEventEnvelope(
@@ -58,7 +59,14 @@ class PaymentCanceledEventListenerTest {
 
   private PaymentCanceledEvent event() {
     return new PaymentCanceledEvent(
-        1L, 10L, SEAT_ID, 5L, 50000L, "단순 변심", LocalDateTime.of(2026, 5, 22, 10, 30));
+        1L,
+        10L,
+        BOOKING_NUMBER,
+        SEAT_ID,
+        5L,
+        50000L,
+        "단순 변심",
+        LocalDateTime.of(2026, 5, 22, 10, 30));
   }
 
   /** Inbox가 최초 수신으로 판정해 비즈니스 콜백을 실행하고 true를 반환하도록 스텁한다. */
@@ -84,7 +92,7 @@ class PaymentCanceledEventListenerTest {
     listener.handlePaymentCanceled(envelope(), acknowledgment);
 
     // then
-    verify(seatReleaseSoldSeatUseCase).execute(SEAT_ID);
+    verify(seatReleaseSoldSeatUseCase).execute(SEAT_ID, BOOKING_NUMBER);
     verify(acknowledgment).acknowledge();
   }
 
@@ -102,7 +110,7 @@ class PaymentCanceledEventListenerTest {
     listener.handlePaymentCanceled(envelope(), acknowledgment);
 
     // then
-    verify(seatReleaseSoldSeatUseCase, never()).execute(anyLong());
+    verify(seatReleaseSoldSeatUseCase, never()).execute(anyLong(), any());
     verify(acknowledgment).acknowledge();
   }
 
@@ -133,7 +141,9 @@ class PaymentCanceledEventListenerTest {
     // given
     given(jsonConverter.deserialize(PAYLOAD, PaymentCanceledEvent.class)).willReturn(event());
     givenInboxProcessesFirst();
-    willThrow(new RuntimeException("DB 일시 장애")).given(seatReleaseSoldSeatUseCase).execute(SEAT_ID);
+    willThrow(new RuntimeException("DB 일시 장애"))
+        .given(seatReleaseSoldSeatUseCase)
+        .execute(SEAT_ID, BOOKING_NUMBER);
 
     // when & then
     assertThatThrownBy(() -> listener.handlePaymentCanceled(envelope(), acknowledgment))
@@ -150,7 +160,7 @@ class PaymentCanceledEventListenerTest {
     givenInboxProcessesFirst();
     willThrow(new BusinessException(ErrorStatus.SEAT_NOT_AVAILABLE))
         .given(seatReleaseSoldSeatUseCase)
-        .execute(SEAT_ID);
+        .execute(SEAT_ID, BOOKING_NUMBER);
 
     // when & then
     assertThatCode(() -> listener.handlePaymentCanceled(envelope(), acknowledgment))
@@ -167,7 +177,7 @@ class PaymentCanceledEventListenerTest {
     givenInboxProcessesFirst();
     willThrow(new BusinessException(ErrorStatus.SEAT_NOT_FOUND))
         .given(seatReleaseSoldSeatUseCase)
-        .execute(SEAT_ID);
+        .execute(SEAT_ID, BOOKING_NUMBER);
 
     // when & then
     assertThatCode(() -> listener.handlePaymentCanceled(envelope(), acknowledgment))
