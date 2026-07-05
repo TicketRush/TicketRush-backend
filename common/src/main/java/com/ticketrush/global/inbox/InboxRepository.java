@@ -26,4 +26,18 @@ public interface InboxRepository extends JpaRepository<InboxEntity, Long> {
   @Modifying(clearAutomatically = true)
   @Query("DELETE FROM InboxEntity i WHERE i.createdAt < :threshold")
   int deleteCreatedBefore(@Param("threshold") LocalDateTime threshold);
+
+  /**
+   * retention 대상 row를 {@code batchSize}개까지만 삭제한다(청크 삭제).
+   *
+   * <p>{@code inbox}는 전 서비스의 처리 이벤트가 쌓이는 고볼륨 테이블이라, 단일 트랜잭션 대용량 DELETE는 긴 락·큰 undo/binlog·리플리케이션
+   * 지연을 유발한다. {@code InboxRetentionService}는 이 메서드를 배치 단위로 반복 호출(각 배치는 독립 트랜잭션)해 락/트랜잭션 크기를 제한한다.
+   * MySQL의 {@code DELETE ... LIMIT}을 사용한다.
+   */
+  @Modifying(clearAutomatically = true)
+  @Query(
+      value = "DELETE FROM inbox WHERE created_at < :threshold LIMIT :batchSize",
+      nativeQuery = true)
+  int deleteCreatedBeforeInBatch(
+      @Param("threshold") LocalDateTime threshold, @Param("batchSize") int batchSize);
 }

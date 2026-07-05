@@ -42,3 +42,15 @@ app:
   slack:
     enabled: ${SLACK_ENABLED:false}
     webhook-url: ${SLACK_WEBHOOK_URL:}
+  # inbox(멱등 기록) retention(#314). inbox는 전 서비스가 공유하는 전역 테이블이라 이 서비스 한 곳에서만 정리한다.
+  # 기본은 비활성이며, 운영 환경에서 INBOX_RETENTION_ENABLED=true로 켠다. local/test는 미설정(기본 false)으로 비활성.
+  inbox:
+    retention:
+      enabled: ${INBOX_RETENTION_ENABLED:false}
+      # inbox 보존 기간(일). Kafka 재전송/replay 윈도우보다 길게 둬 윈도우 내 재전달도 계속 중복 제거되게 한다.
+      retention-days: ${INBOX_RETENTION_DAYS:30}
+      # 보존 하한(일) = Kafka replay 윈도우. retention-days가 이보다 짧으면 중복 재처리 위험이 있어 purge를 건너뛴다.
+      min-retention-days: ${INBOX_MIN_RETENTION_DAYS:7}
+      # 청크 삭제 배치 크기와 1회 실행당 배치 수 상한. 대용량 단일 트랜잭션 삭제를 피하고 최초 활성화 시 완만히 정리한다.
+      batch-size: ${INBOX_RETENTION_BATCH_SIZE:1000}
+      max-batches-per-run: ${INBOX_RETENTION_MAX_BATCHES_PER_RUN:100}
