@@ -58,6 +58,10 @@ public class Seat extends AutoIdBaseEntity {
     this.bookingNumber = bookingNumber;
   }
 
+  public boolean isAvailable() {
+    return this.seatStatus == SeatStatus.AVAILABLE;
+  }
+
   public void hold(LocalDateTime expiredAt, String bookingNumber) {
     // 1. 상태 검증
     if (this.seatStatus != SeatStatus.AVAILABLE) {

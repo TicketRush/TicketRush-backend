@@ -1,12 +1,16 @@
 package com.ticketrush.boundedcontext.booking.in.eventlistener;
 
 import com.ticketrush.boundedcontext.booking.app.usecase.BookingConfirmUseCase;
+import com.ticketrush.boundedcontext.booking.app.usecase.BookingGetBookingNumberUseCase;
 import com.ticketrush.boundedcontext.booking.out.apiclient.SeatRestClient;
 import com.ticketrush.global.event.DomainEventEnvelope;
 import com.ticketrush.global.event.KafkaConsumerErrorPolicy;
 import com.ticketrush.global.event.KafkaConsumerGroup;
+import com.ticketrush.global.inbox.DuplicateEventException;
+import com.ticketrush.global.inbox.InboxService;
 import com.ticketrush.global.json.JsonConverter;
 import com.ticketrush.shared.payment.event.PaymentConfirmedEvent;
+import java.time.LocalDateTime;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.HttpStatus;
@@ -22,8 +26,10 @@ import org.springframework.web.client.HttpClientErrorException;
 public class PaymentConfirmedEventListener {
 
   private final BookingConfirmUseCase bookingConfirmUseCase;
+  private final BookingGetBookingNumberUseCase bookingGetBookingNumberUseCase;
   private final SeatRestClient seatRestClient;
   private final JsonConverter jsonConverter;
+  private final InboxService inboxService;
 
   @KafkaListener(topics = PaymentConfirmedEvent.TOPIC, groupId = KafkaConsumerGroup.BOOKING)
   public void handlePaymentConfirmed(@Payload DomainEventEnvelope envelope, Acknowledgment ack) {
@@ -32,19 +38,47 @@ public class PaymentConfirmedEventListener {
 
     try {
       event = jsonConverter.deserialize(envelope.payload(), PaymentConfirmedEvent.class);
+      final Long bookingId = event.bookingId();
+      final Long seatId = event.seatId();
+      final LocalDateTime paidAt = event.paidAt();
 
-      log.info(
-          "결제 완료 이벤트 수신. 예매 확정 처리. bookingId: {}, paidAt: {}", event.bookingId(), event.paidAt());
+      log.info("결제 완료 이벤트 수신. 예매 확정 처리. bookingId: {}, paidAt: {}", bookingId, paidAt);
 
-      // 결제 컨텍스트의 seatId가 예매의 seatId와 일치할 때만 확정된다(불일치 시 예외).
-      // 중복 수신은 Booking.confirm() 도메인 멱등성으로 안전하게 처리된다.
-      String bookingNumber =
-          bookingConfirmUseCase.execute(event.bookingId(), event.paidAt(), event.seatId());
+      // 1. 예매 확정(DB 상태 전이)만 Inbox로 감싼다(#110) — 확정과 Inbox 기록을 한 트랜잭션으로 원자 커밋한다.
+      //    커밋 후 좌석 SOLD HTTP 호출은 크로스서비스라 이 원자 단위에 포함할 수 없다.
+      //    결제 컨텍스트의 seatId가 예매의 seatId와 일치할 때만 확정된다(불일치 시 예외).
+      boolean raced = false;
+      boolean processed = false;
+      try {
+        processed =
+            inboxService.runIfFirst(
+                KafkaConsumerGroup.BOOKING,
+                envelope,
+                () -> bookingConfirmUseCase.execute(bookingId, paidAt, seatId));
+      } catch (DuplicateEventException e) {
+        // 동시 중복 수신으로 inbox unique가 경합함(#110). 확정은 경합에서 이긴 처리가 커밋하므로 여기선 확정을
+        // 재수행하지 않되, SOLD는 아래에서 멱등하게 재시도해 유실을 막는다.
+        raced = true;
+        log.info("동시 중복 수신(inbox unique 경합). eventId: {}", envelope.eventId());
+      }
 
-      // 예매 확정 트랜잭션 커밋 후 좌석 SOLD 확정을 동기 호출한다.
+      if (processed) {
+        log.info("예매 확정 처리 완료. bookingId: {}", bookingId);
+      } else if (!raced) {
+        log.info(
+            "이미 처리된 결제 완료 이벤트(inbox 중복 스킵). eventId: {}, bookingId: {}",
+            envelope.eventId(),
+            bookingId);
+      }
+
+      // 2. bookingNumber를 재조회한다. 확정 여부·경합 여부와 무관하게 확정된 예매에서 다시 읽어,
+      //    일시적 SOLD 실패로 재소비되거나 경합 패자가 되더라도 SOLD 재시도가 유실되지 않게 한다.
+      String bookingNumber = bookingGetBookingNumberUseCase.execute(bookingId);
+
+      // 3. 예매 확정 커밋 후 좌석 SOLD 확정을 동기 호출한다(Inbox 밖). SOLD는 409(이미 SOLD) 멱등이라 이중 호출도 안전하다.
       // 크로스서비스 HTTP 호출이므로 BusinessException이 아닌 RestClient 예외로 도착한다 → isPermanent 미적용, HTTP 상태로 분기.
       try {
-        seatRestClient.confirmSold(bookingNumber, event.seatId());
+        seatRestClient.confirmSold(bookingNumber, seatId);
       } catch (HttpClientErrorException e) {
         // 4xx는 재시도해도 결과가 바뀌지 않는 결정적 응답이므로 삼키고 진행(ack)한다.
         // 단 409(이미 SOLD된 중복)만 정상 상태로 보고, 그 외 4xx(401 토큰 오류·404 등)는 설정/요청 오류일 수 있어 CRITICAL로 가시화한다.
@@ -53,16 +87,16 @@ public class PaymentConfirmedEventListener {
               "[좌석 SOLD 409] 이미 확정된 좌석(중복 수신). 재시도하지 않는다. "
                   + "eventId: {}, bookingId: {}, seatId: {}, bookingNumber: {}",
               envelope.eventId(),
-              event.bookingId(),
-              event.seatId(),
+              bookingId,
+              seatId,
               bookingNumber);
         } else {
           log.error(
               "[CRITICAL] 좌석 SOLD 확정이 4xx로 거부됨(설정/요청 오류 의심). 예매는 확정됐으나 좌석 미확정. 확인이 필요합니다. "
                   + "eventId: {}, bookingId: {}, seatId: {}, bookingNumber: {}, status: {}",
               envelope.eventId(),
-              event.bookingId(),
-              event.seatId(),
+              bookingId,
+              seatId,
               bookingNumber,
               e.getStatusCode(),
               e);

@@ -49,14 +49,40 @@ class SeatHoldUseCaseTest {
     given(seatRepository.findById(seatId)).willReturn(Optional.of(seat));
 
     // when
-    seatHoldUseCase.execute(seatId, expiredAt, bookingNumber);
+    boolean held = seatHoldUseCase.execute(seatId, expiredAt, bookingNumber);
 
     // then
     // verify(mock) 대신 실제 객체의 상태가 변했는지 직접 확인
+    assertThat(held).isTrue();
     assertThat(seat.getSeatStatus()).isEqualTo(SeatStatus.HOLD);
     assertThat(seat.getHoldExpiredAt()).isEqualTo(expiredAt);
     assertThat(seat.getBookingNumber()).isEqualTo(bookingNumber);
     verify(seatStatusEventPublisher).publishAfterCommit(seat);
+  }
+
+  @Test
+  @DisplayName("미가용: 이미 선점/판매된 좌석은 예외 없이 false를 반환하고 상태를 바꾸지 않는다")
+  void execute_returns_false_when_not_available() {
+    // given: 이미 SOLD된 좌석(미가용)
+    Long seatId = 1L;
+    LocalDateTime expiredAt = LocalDateTime.now().plusMinutes(5);
+    Seat seat =
+        Seat.builder()
+            .seatLayoutId(10L)
+            .performanceId(100L)
+            .seatNumber("A-01")
+            .seatStatus(SeatStatus.SOLD)
+            .build();
+
+    given(seatRepository.findById(seatId)).willReturn(Optional.of(seat));
+
+    // when
+    boolean held = seatHoldUseCase.execute(seatId, expiredAt, "BOOK-1234");
+
+    // then: 예외를 던지지 않고 false를 반환한다(호출부가 보상 이벤트를 발행하도록). 상태·발행 없음.
+    assertThat(held).isFalse();
+    assertThat(seat.getSeatStatus()).isEqualTo(SeatStatus.SOLD);
+    verifyNoInteractions(seatStatusEventPublisher);
   }
 
   @Test
