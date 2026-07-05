@@ -86,9 +86,11 @@ public class PaymentCancelUseCase {
     // 발행은 영속화 커밋 이후(트랜잭션 밖)에 호출한다 → 커밋에 성공한 데이터만 전파된다.
     Payment canceled = persisted.payment();
     Refund saved = persisted.refund();
+    // API 취소 경로는 payment가 bookingNumber를 알지 못하므로 null로 발행한다(#91). 이벤트 기반 환불 경로에서만 채워진다.
     paymentEventPublisher.publishCanceled(
         canceled.getId(),
         canceled.getBookingId(),
+        null,
         canceled.getSeatId(),
         saved.getId(),
         saved.getPrice(),
