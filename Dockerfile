@@ -24,9 +24,12 @@ FROM eclipse-temurin:21-jre
 
 WORKDIR /app
 
-ARG SERVICE
+RUN useradd -r -u 10001 appuser
 
+ARG SERVICE
 COPY --from=builder /workspace/${SERVICE}/build/libs/*.jar app.jar
+
+USER appuser
 
 EXPOSE 8080
 
