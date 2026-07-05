@@ -1,0 +1,10 @@
+.git
+.gradle
+.idea
+.vscode
+build
+**/build
+**/.gradle
+.env.local
+*.pem
+*.csv
