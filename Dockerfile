@@ -18,7 +18,7 @@ COPY ticket-service ./ticket-service
 COPY user-service ./user-service
 
 RUN chmod +x ./gradlew
-RUN ./gradlew :${SERVICE}:clean :${SERVICE}:bootJar --no-daemon
+RUN ./gradlew :${SERVICE}:bootJar --no-daemon
 
 FROM eclipse-temurin:21-jre
 
