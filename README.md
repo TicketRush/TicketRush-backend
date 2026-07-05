@@ -10,7 +10,7 @@
 
 |                            프로필                            | 이름  |                     GitHub                     | 담당 파트                                      |
 |:---------------------------------------------------------:|:---:|:----------------------------------------------:|--------------------------------------------|
-|   <img src="https://github.com/sohee52.png" width="80">   | 김소희 |     [@sohee52](https://github.com/sohee52)     | 좌석(seat) · 예매(booking) · 티켓(ticket) · 모니터링 |
+|    <img src="https://github.com/50h33.png" width="80">    | 김소희 |       [@50h33](https://github.com/50h33)       | 좌석(seat) · 예매(booking) · 티켓(ticket) · 모니터링 |
 |  <img src="https://github.com/calla1102.png" width="80">  | 민주  |   [@calla1102](https://github.com/calla1102)   | 공연(performance) · 결제(payment) · CI         |
 | <img src="https://github.com/kimhyerim01.png" width="80"> | 김혜림 | [@kimhyerim01](https://github.com/kimhyerim01) | 인증(auth) · 회원(user) · 게이트웨이(gateway) · 배포  |
 
