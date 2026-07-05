@@ -1,10 +1,11 @@
 package com.ticketrush.boundedcontext.ticket.in.eventlistener;
 
-import com.ticketrush.boundedcontext.ticket.app.dto.response.TicketIssueResponse;
 import com.ticketrush.boundedcontext.ticket.app.usecase.TicketIssueUseCase;
 import com.ticketrush.global.event.DomainEventEnvelope;
 import com.ticketrush.global.event.KafkaConsumerErrorPolicy;
 import com.ticketrush.global.event.KafkaConsumerGroup;
+import com.ticketrush.global.inbox.DuplicateEventException;
+import com.ticketrush.global.inbox.InboxService;
 import com.ticketrush.global.json.JsonConverter;
 import com.ticketrush.shared.payment.event.PaymentConfirmedEvent;
 import lombok.RequiredArgsConstructor;
@@ -21,6 +22,7 @@ public class PaymentConfirmedEventListener {
 
   private final TicketIssueUseCase ticketIssueUseCase;
   private final JsonConverter jsonConverter;
+  private final InboxService inboxService;
 
   @KafkaListener(topics = PaymentConfirmedEvent.TOPIC, groupId = KafkaConsumerGroup.TICKET)
   public void handlePaymentConfirmed(@Payload DomainEventEnvelope envelope, Acknowledgment ack) {
@@ -29,19 +31,32 @@ public class PaymentConfirmedEventListener {
 
     try {
       event = jsonConverter.deserialize(envelope.payload(), PaymentConfirmedEvent.class);
+      final Long bookingId = event.bookingId();
 
-      log.info("결제 완료 이벤트 수신. 티켓 발급 처리. bookingId: {}", event.bookingId());
+      log.info("결제 완료 이벤트 수신. 티켓 발급 처리. bookingId: {}", bookingId);
 
-      // 티켓 발급에는 bookingId만 사용한다.
-      // 중복 수신은 TicketIssueUseCase의 멱등 처리(alreadyIssued)로 안전하게 처리된다.
-      TicketIssueResponse response = ticketIssueUseCase.execute(event.bookingId());
+      // Inbox로 중복 처리를 방지한다(#110). 최초 수신일 때만 발급하고 처리와 Inbox 기록을 한 트랜잭션으로 묶는다.
+      // 티켓 발급에는 bookingId만 사용한다. 이미 발급된 케이스는 TicketIssueUseCase가 멱등하게(alreadyIssued) 처리한다.
+      boolean processed =
+          inboxService.runIfFirst(
+              KafkaConsumerGroup.TICKET, envelope, () -> ticketIssueUseCase.execute(bookingId));
 
-      // 신규 발급/이미 발급 여부를 남겨 멱등 동작을 추적할 수 있게 한다.
-      log.info("티켓 발급 처리 완료. bookingId: {}, issued: {}", event.bookingId(), response.issued());
+      if (processed) {
+        log.info("티켓 발급 처리 완료. bookingId: {}", bookingId);
+      } else {
+        log.info(
+            "이미 처리된 결제 완료 이벤트(inbox 중복 스킵). eventId: {}, bookingId: {}",
+            envelope.eventId(),
+            bookingId);
+      }
 
       // 성공 시에만 오프셋을 커밋한다(#269 표준).
       ack.acknowledge();
 
+    } catch (DuplicateEventException e) {
+      // 동시 중복 수신으로 inbox unique가 경합함 → 멱등(중복) 정상으로 간주하고 커밋한다(#110).
+      log.info("동시 중복 수신(inbox unique 경합). eventId: {}", envelope.eventId());
+      ack.acknowledge();
     } catch (Exception e) {
       // #269 표준: 영구(비즈니스/결정적) 실패는 로그 후 ack, 일시(인프라) 실패는 re-throw 하여 재시도→DLT로 보존.
       // 역직렬화 실패 시 event가 null이라 bookingId를 못 얻으므로, 항상 살아있는
