@@ -14,7 +14,7 @@ import com.ticketrush.boundedcontext.booking.domain.types.BookingStatus;
 import com.ticketrush.boundedcontext.booking.out.repository.BookingRepository;
 import com.ticketrush.global.eventpublisher.EventPublisher;
 import com.ticketrush.global.exception.BusinessException;
-import com.ticketrush.shared.booking.event.BookingCanceledEvent;
+import com.ticketrush.shared.booking.event.RefundRequestedEvent;
 import java.util.Optional;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -32,7 +32,7 @@ class BookingCancelMyBookingUseCaseTest {
   @Mock private EventPublisher eventPublisher;
 
   @Test
-  @DisplayName("성공: 본인의 확정 예매를 취소하고 BookingCanceledEvent를 발행한다")
+  @DisplayName("성공: 본인의 확정 예매를 REFUNDING으로 전환하고 RefundRequestedEvent를 발행한다")
   void execute_success() {
     // given
     Long userId = 1L;
@@ -52,17 +52,17 @@ class BookingCancelMyBookingUseCaseTest {
     // when
     bookingCancelMyBookingUseCase.execute(userId, bookingNumber);
 
-    // then
-    assertThat(booking.getBookingStatus()).isEqualTo(BookingStatus.CANCELED);
+    // then: 곧바로 종결하지 않고 환불을 요청한다(refund-first). 좌석 반환·종결은 환불 성공 이벤트에 매단다.
+    assertThat(booking.getBookingStatus()).isEqualTo(BookingStatus.REFUNDING);
     verify(eventPublisher)
         .publish(
             argThat(
                 event ->
-                    event instanceof BookingCanceledEvent canceledEvent
-                        && canceledEvent.bookingNumber().equals(bookingNumber)
-                        && canceledEvent.seatId().equals(3L)
-                        && canceledEvent.userId().equals(userId)
-                        && canceledEvent.canceledAt() != null));
+                    event instanceof RefundRequestedEvent refundRequested
+                        && refundRequested.bookingNumber().equals(bookingNumber)
+                        && refundRequested.seatId().equals(3L)
+                        && refundRequested.userId().equals(userId)
+                        && refundRequested.requestedAt() != null));
   }
 
   @Test
