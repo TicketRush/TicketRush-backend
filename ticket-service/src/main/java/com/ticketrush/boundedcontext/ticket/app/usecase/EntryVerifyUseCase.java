@@ -1,6 +1,7 @@
 package com.ticketrush.boundedcontext.ticket.app.usecase;
 
 import com.ticketrush.boundedcontext.ticket.app.dto.response.EntryVerifyResponse;
+import com.ticketrush.boundedcontext.ticket.app.mapper.TicketMapper;
 import com.ticketrush.boundedcontext.ticket.domain.entity.Ticket;
 import com.ticketrush.boundedcontext.ticket.domain.policy.TicketQrPayloadVerifier;
 import com.ticketrush.boundedcontext.ticket.domain.policy.VerifiedQrClaims;
@@ -23,10 +24,11 @@ public class EntryVerifyUseCase {
   private final TicketQrPayloadVerifier ticketQrPayloadVerifier;
   private final TicketRepository ticketRepository;
   private final BookingRestClient bookingRestClient;
+  private final TicketMapper ticketMapper;
 
   /** QR을 검증해 입장 가능 상태를 반환한다(상태 변경 없음). */
   public EntryVerifyResponse execute(String token) {
-    return EntryVerifyResponse.of(verifyAndLoad(token));
+    return ticketMapper.toEntryVerifyResponse(verifyAndLoad(token));
   }
 
   /**

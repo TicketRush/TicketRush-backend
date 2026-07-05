@@ -7,6 +7,7 @@ import static org.mockito.BDDMockito.then;
 import static org.mockito.Mockito.never;
 
 import com.ticketrush.boundedcontext.ticket.app.dto.response.TicketQrResponse;
+import com.ticketrush.boundedcontext.ticket.app.mapper.TicketMapper;
 import com.ticketrush.boundedcontext.ticket.domain.entity.Ticket;
 import com.ticketrush.boundedcontext.ticket.domain.policy.QrPayload;
 import com.ticketrush.boundedcontext.ticket.domain.policy.TicketQrPayloadGenerator;
@@ -21,8 +22,10 @@ import java.util.Optional;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.mapstruct.factory.Mappers;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
+import org.mockito.Spy;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.test.util.ReflectionTestUtils;
 
@@ -36,6 +39,8 @@ class TicketQrGetUseCaseTest {
   @Mock private TicketRepository ticketRepository;
 
   @Mock private TicketQrPayloadGenerator ticketQrPayloadGenerator;
+
+  @Spy private TicketMapper ticketMapper = Mappers.getMapper(TicketMapper.class);
 
   private Ticket ticket(Long bookingId, LocalDateTime createdAt) {
     Ticket ticket =

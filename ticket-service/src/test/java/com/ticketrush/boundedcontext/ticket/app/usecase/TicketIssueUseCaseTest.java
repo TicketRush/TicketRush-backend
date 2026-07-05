@@ -9,6 +9,7 @@ import static org.mockito.BDDMockito.willThrow;
 import static org.mockito.Mockito.never;
 
 import com.ticketrush.boundedcontext.ticket.app.dto.response.TicketIssueResponse;
+import com.ticketrush.boundedcontext.ticket.app.mapper.TicketMapper;
 import com.ticketrush.boundedcontext.ticket.domain.entity.Ticket;
 import com.ticketrush.boundedcontext.ticket.domain.policy.TicketTokenGenerator;
 import com.ticketrush.boundedcontext.ticket.domain.policy.TicketTokenHasher;
@@ -17,9 +18,11 @@ import com.ticketrush.boundedcontext.ticket.out.repository.TicketRepository;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.mapstruct.factory.Mappers;
 import org.mockito.ArgumentCaptor;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
+import org.mockito.Spy;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.dao.DataIntegrityViolationException;
 
@@ -33,6 +36,8 @@ class TicketIssueUseCaseTest {
   @Mock private TicketTokenGenerator ticketTokenGenerator;
 
   @Mock private TicketTokenHasher ticketTokenHasher;
+
+  @Spy private TicketMapper ticketMapper = Mappers.getMapper(TicketMapper.class);
 
   @Test
   @DisplayName("성공: 예매 ID 기준으로 티켓 토큰 해시와 UNUSED 상태를 저장한다")

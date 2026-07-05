@@ -1,10 +1,10 @@
 package com.ticketrush.boundedcontext.ticket.app.usecase;
 
 import com.ticketrush.boundedcontext.ticket.app.dto.response.TicketIssueResponse;
+import com.ticketrush.boundedcontext.ticket.app.mapper.TicketMapper;
 import com.ticketrush.boundedcontext.ticket.domain.entity.Ticket;
 import com.ticketrush.boundedcontext.ticket.domain.policy.TicketTokenGenerator;
 import com.ticketrush.boundedcontext.ticket.domain.policy.TicketTokenHasher;
-import com.ticketrush.boundedcontext.ticket.domain.types.TicketStatus;
 import com.ticketrush.boundedcontext.ticket.out.repository.TicketRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
@@ -30,6 +30,7 @@ public class TicketIssueUseCase {
   private final TicketRepository ticketRepository;
   private final TicketTokenGenerator ticketTokenGenerator;
   private final TicketTokenHasher ticketTokenHasher;
+  private final TicketMapper ticketMapper;
 
   public TicketIssueResponse execute(Long bookingId) {
     if (ticketRepository.existsByBookingId(bookingId)) {
@@ -37,12 +38,7 @@ public class TicketIssueUseCase {
     }
 
     String token = ticketTokenGenerator.generate();
-    Ticket ticket =
-        Ticket.builder()
-            .bookingId(bookingId)
-            .ticketTokenHash(ticketTokenHasher.hash(token))
-            .ticketStatus(TicketStatus.UNUSED)
-            .build();
+    Ticket ticket = ticketMapper.toEntity(bookingId, ticketTokenHasher.hash(token));
 
     // Inbox 트랜잭션에 조인된 상태로 저장한다. unique(booking_id/ticket_token_hash) 충돌 시 예외를 그대로 전파해
     // 트랜잭션을 롤백시키고(Inbox 미기록) 재소비로 처리한다.

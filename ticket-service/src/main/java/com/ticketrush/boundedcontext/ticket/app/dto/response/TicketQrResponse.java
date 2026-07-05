@@ -1,6 +1,5 @@
 package com.ticketrush.boundedcontext.ticket.app.dto.response;
 
-import com.ticketrush.boundedcontext.ticket.domain.entity.Ticket;
 import com.ticketrush.boundedcontext.ticket.domain.types.TicketStatus;
 import io.swagger.v3.oas.annotations.media.Schema;
 import java.time.LocalDateTime;
@@ -14,10 +13,4 @@ public record TicketQrResponse(
     @Schema(description = "입장권 상태", example = "UNUSED") TicketStatus ticketStatus,
     @Schema(description = "입장권 발급 시각", example = "2026-06-25 10:00:00") LocalDateTime issuedAt,
     @Schema(description = "QR payload 만료 시각", example = "2026-06-25 10:05:00")
-        LocalDateTime expiresAt) {
-
-  public static TicketQrResponse of(Ticket ticket, String payload, LocalDateTime expiresAt) {
-    return new TicketQrResponse(
-        payload, ticket.getTicketStatus(), ticket.getCreatedAt(), expiresAt);
-  }
-}
+        LocalDateTime expiresAt) {}
