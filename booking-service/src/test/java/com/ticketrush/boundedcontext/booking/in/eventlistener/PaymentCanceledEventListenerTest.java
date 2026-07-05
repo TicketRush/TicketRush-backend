@@ -58,7 +58,7 @@ class PaymentCanceledEventListenerTest {
 
   private PaymentCanceledEvent event() {
     return new PaymentCanceledEvent(
-        1L, BOOKING_ID, 3L, 5L, 50000L, "단순 변심", LocalDateTime.of(2026, 5, 22, 10, 30));
+        1L, BOOKING_ID, null, 3L, 5L, 50000L, "단순 변심", LocalDateTime.of(2026, 5, 22, 10, 30));
   }
 
   /** Inbox가 최초 수신으로 판정해 비즈니스 콜백을 실행하고 true를 반환하도록 스텁한다. */

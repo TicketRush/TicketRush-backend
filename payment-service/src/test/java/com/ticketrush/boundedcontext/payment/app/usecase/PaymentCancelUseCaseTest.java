@@ -4,6 +4,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.ArgumentMatchers.isNull;
 import static org.mockito.BDDMockito.given;
 import static org.mockito.Mockito.inOrder;
 import static org.mockito.Mockito.never;
@@ -116,6 +117,7 @@ class PaymentCancelUseCaseTest {
         .publishCanceled(
             eq(paymentId),
             eq(bookingId),
+            isNull(),
             eq(seatId),
             eq(savedRefundId),
             eq(amount),
@@ -127,7 +129,7 @@ class PaymentCancelUseCaseTest {
     inOrder.verify(paymentCancelPersister).persist(eq(paymentId), any(Refund.class));
     inOrder
         .verify(paymentEventPublisher)
-        .publishCanceled(any(), any(), any(), any(), any(), any(), any());
+        .publishCanceled(any(), any(), any(), any(), any(), any(), any(), any());
   }
 
   @Test
@@ -163,7 +165,7 @@ class PaymentCancelUseCaseTest {
     verify(paymentCancelClientRouter, never()).cancel(any());
     verify(paymentCancelPersister, never()).persist(any(), any(Refund.class));
     verify(paymentEventPublisher, never())
-        .publishCanceled(any(), any(), any(), any(), any(), any(), any());
+        .publishCanceled(any(), any(), any(), any(), any(), any(), any(), any());
   }
 
   @Test
@@ -262,7 +264,7 @@ class PaymentCancelUseCaseTest {
     assertThat(payment.getStatus()).isEqualTo(PaymentStatus.COMPLETED);
     verify(paymentCancelPersister, never()).persist(any(), any(Refund.class));
     verify(paymentEventPublisher, never())
-        .publishCanceled(any(), any(), any(), any(), any(), any(), any());
+        .publishCanceled(any(), any(), any(), any(), any(), any(), any(), any());
   }
 
   @Test
@@ -285,7 +287,7 @@ class PaymentCancelUseCaseTest {
         .isInstanceOf(DataIntegrityViolationException.class);
 
     verify(paymentEventPublisher, never())
-        .publishCanceled(any(), any(), any(), any(), any(), any(), any());
+        .publishCanceled(any(), any(), any(), any(), any(), any(), any(), any());
   }
 
   @Test

@@ -60,8 +60,18 @@ public class Booking extends AutoIdBaseEntity {
     cancelIfStatus(BookingStatus.PENDING);
   }
 
-  public void cancelConfirmedByUser() {
-    cancelIfStatus(BookingStatus.CONFIRMED);
+  /**
+   * 사용자가 결제 완료(CONFIRMED) 예매를 취소해 환불을 요청한다 → REFUNDING으로 전환한다 (#91).
+   *
+   * <p>좌석 반환·예매 종결(REFUNDED)은 환불 성공 이벤트({@code PaymentCanceledEvent})에만 매달아 refund-first 정합을
+   * 지킨다(환불도 못 받고 좌석만 잃는 역방향 공백 차단). 환불이 최종 실패하면 {@code RefundFailedEvent}로 {@link
+   * #markRefundFailed()}에서 REFUND_FAILED로 보상한다.
+   */
+  public void requestRefund() {
+    if (this.bookingStatus != BookingStatus.CONFIRMED) {
+      throw new BusinessException(ErrorStatus.BOOKING_CANCEL_NOT_ALLOWED);
+    }
+    this.bookingStatus = BookingStatus.REFUNDING;
   }
 
   private void cancelIfStatus(BookingStatus allowedStatus) {
@@ -108,6 +118,26 @@ public class Booking extends AutoIdBaseEntity {
     if (this.bookingStatus == BookingStatus.CONFIRMED
         || this.bookingStatus == BookingStatus.REFUNDING) {
       this.bookingStatus = BookingStatus.REFUNDED;
+      return true;
+    }
+    return false;
+  }
+
+  /**
+   * PG 환불 최종 실패 시 예매를 REFUND_FAILED로 보상 확정한다 (#91).
+   *
+   * <p>이미 REFUND_FAILED면 멱등 처리(전이 없이 {@code true}). REFUNDING에서만 REFUND_FAILED로 전이한다. 그 외
+   * 상태(REFUNDED로 이미 종결됐거나 CONFIRMED/CANCELED 등 교차 경로)는 전이하지 않고 {@code false}를 반환한다(예외를 던지지 않아 호출 측이
+   * ack 하도록).
+   *
+   * @return 보상(또는 이미 보상)됐으면 {@code true}, 전이 불가 상태라 전이하지 않았으면 {@code false}
+   */
+  public boolean markRefundFailed() {
+    if (this.bookingStatus == BookingStatus.REFUND_FAILED) {
+      return true;
+    }
+    if (this.bookingStatus == BookingStatus.REFUNDING) {
+      this.bookingStatus = BookingStatus.REFUND_FAILED;
       return true;
     }
     return false;

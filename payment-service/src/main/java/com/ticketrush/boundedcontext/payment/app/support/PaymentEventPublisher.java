@@ -3,6 +3,7 @@ package com.ticketrush.boundedcontext.payment.app.support;
 import com.ticketrush.global.eventpublisher.EventPublisher;
 import com.ticketrush.shared.payment.event.PaymentCanceledEvent;
 import com.ticketrush.shared.payment.event.PaymentConfirmedEvent;
+import com.ticketrush.shared.payment.event.RefundFailedEvent;
 import java.time.LocalDateTime;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Component;
@@ -22,6 +23,7 @@ public class PaymentEventPublisher {
   public void publishCanceled(
       Long paymentId,
       Long bookingId,
+      String bookingNumber,
       Long seatId,
       Long refundId,
       Long refundedAmount,
@@ -29,6 +31,18 @@ public class PaymentEventPublisher {
       LocalDateTime canceledAt) {
     eventPublisher.publish(
         new PaymentCanceledEvent(
-            paymentId, bookingId, seatId, refundId, refundedAmount, reason, canceledAt));
+            paymentId,
+            bookingId,
+            bookingNumber,
+            seatId,
+            refundId,
+            refundedAmount,
+            reason,
+            canceledAt));
+  }
+
+  public void publishRefundFailed(
+      Long bookingId, String bookingNumber, String reason, LocalDateTime failedAt) {
+    eventPublisher.publish(new RefundFailedEvent(bookingId, bookingNumber, reason, failedAt));
   }
 }
