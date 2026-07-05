@@ -1,0 +1,106 @@
+name: CD - Deploy to EC2
+
+on:
+  push:
+    branches:
+      - develop
+      - "feature/246*"
+  workflow_dispatch:
+
+env:
+  AWS_REGION: ${{ secrets.AWS_REGION }}
+  AWS_ACCOUNT_ID: ${{ secrets.AWS_ACCOUNT_ID }}
+  ECR_REGISTRY: ${{ secrets.ECR_REGISTRY }}
+  EC2_HOST: ${{ secrets.EC2_HOST }}
+  EC2_USER: ${{ secrets.EC2_USER }}
+  IMAGE_TAG: ${{ github.sha }}
+
+jobs:
+  deploy:
+    name: Build, Push, Deploy
+    runs-on: ubuntu-latest
+
+    permissions:
+      contents: read
+
+    steps:
+      - name: Checkout source code
+        uses: actions/checkout@v4
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ secrets.AWS_REGION }}
+
+      - name: Login to Amazon ECR
+        uses: aws-actions/amazon-ecr-login@v2
+
+      - name: Build and push Docker images
+        run: |
+          set -e
+
+          SERVICES=(
+            gateway-service
+            auth-service
+            user-service
+            booking-service
+            payment-service
+            performance-service
+            ticket-service
+            seat-service
+          )
+
+          for SERVICE in "${SERVICES[@]}"; do
+            IMAGE="${ECR_REGISTRY}/ticketrush/${SERVICE}"
+
+            echo "Building ${SERVICE}..."
+            docker build \
+              --build-arg SERVICE="${SERVICE}" \
+              -t "${IMAGE}:${IMAGE_TAG}" \
+              -t "${IMAGE}:latest" \
+              .
+
+            echo "Pushing ${SERVICE}..."
+            docker push "${IMAGE}:${IMAGE_TAG}"
+            docker push "${IMAGE}:latest"
+          done
+
+      - name: Prepare SSH key
+        run: |
+          mkdir -p ~/.ssh
+          printf '%s\n' "${{ secrets.EC2_SSH_KEY }}" > ~/.ssh/ticketrush-key.pem
+          chmod 600 ~/.ssh/ticketrush-key.pem
+          ssh-keyscan -H "${EC2_HOST}" >> ~/.ssh/known_hosts
+
+      - name: Copy docker compose file to EC2
+        run: |
+          ssh -i ~/.ssh/ticketrush-key.pem "${EC2_USER}@${EC2_HOST}" "mkdir -p ~/ticketrush"
+
+          scp -i ~/.ssh/ticketrush-key.pem \
+            deploy/docker-compose.prod.yml \
+            "${EC2_USER}@${EC2_HOST}:~/ticketrush/docker-compose.prod.yml"
+
+      - name: Deploy on EC2
+        run: |
+          ssh -i ~/.ssh/ticketrush-key.pem "${EC2_USER}@${EC2_HOST}" << EOF
+            set -e
+
+            cd ~/ticketrush
+
+            cat > .env << ENVEOF
+          AWS_REGION=${AWS_REGION}
+          AWS_ACCOUNT_ID=${AWS_ACCOUNT_ID}
+          ECR_REGISTRY=${ECR_REGISTRY}
+          IMAGE_TAG=${IMAGE_TAG}
+          SPRING_PROFILES_ACTIVE=prod
+          ENVEOF
+
+            aws ecr get-login-password --region "${AWS_REGION}" \
+              | docker login --username AWS --password-stdin "${ECR_REGISTRY}"
+
+            docker compose --env-file .env -f docker-compose.prod.yml pull
+            docker compose --env-file .env -f docker-compose.prod.yml up -d
+            docker image prune -f
+          EOF
