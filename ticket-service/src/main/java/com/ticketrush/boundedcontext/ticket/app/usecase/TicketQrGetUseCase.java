@@ -1,6 +1,7 @@
 package com.ticketrush.boundedcontext.ticket.app.usecase;
 
 import com.ticketrush.boundedcontext.ticket.app.dto.response.TicketQrResponse;
+import com.ticketrush.boundedcontext.ticket.app.mapper.TicketMapper;
 import com.ticketrush.boundedcontext.ticket.domain.entity.Ticket;
 import com.ticketrush.boundedcontext.ticket.domain.policy.QrPayload;
 import com.ticketrush.boundedcontext.ticket.domain.policy.TicketQrPayloadGenerator;
@@ -22,6 +23,7 @@ public class TicketQrGetUseCase {
   private final BookingRestClient bookingRestClient;
   private final TicketRepository ticketRepository;
   private final TicketQrPayloadGenerator ticketQrPayloadGenerator;
+  private final TicketMapper ticketMapper;
 
   /**
    * 외부 동기 호출(booking-service)을 트랜잭션 밖에서 먼저 수행해 DB 커넥션을 장시간 점유하지 않는다. 실제 DB 접근은 findByBookingId
@@ -46,6 +48,6 @@ public class TicketQrGetUseCase {
             .orElseThrow(() -> new BusinessException(ErrorStatus.TICKET_NOT_FOUND));
 
     QrPayload qrPayload = ticketQrPayloadGenerator.generate(ticket);
-    return TicketQrResponse.of(ticket, qrPayload.payload(), qrPayload.expiresAt());
+    return ticketMapper.toTicketQrResponse(ticket, qrPayload.payload(), qrPayload.expiresAt());
   }
 }
