@@ -80,4 +80,7 @@ public interface SeatRepository extends JpaRepository<Seat, Long> {
       @Param("bookingNumber") String bookingNumber,
       @Param("holdStatus") SeatStatus holdStatus,
       @Param("soldStatus") SeatStatus soldStatus);
+
+  @Query("select count(s) from Seat s where s.seatStatus = :hold and s.holdExpiredAt > :now")
+  long countHeldSeats(@Param("hold") SeatStatus hold, @Param("now") LocalDateTime now);
 }

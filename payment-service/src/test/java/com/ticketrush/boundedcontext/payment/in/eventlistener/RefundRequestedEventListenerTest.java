@@ -1,5 +1,6 @@
 package com.ticketrush.boundedcontext.payment.in.eventlistener;
 
+import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatCode;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
@@ -12,17 +13,19 @@ import static org.mockito.Mockito.verify;
 import com.ticketrush.boundedcontext.payment.app.support.PaymentEventPublisher;
 import com.ticketrush.boundedcontext.payment.app.usecase.PaymentRefundByBookingUseCase;
 import com.ticketrush.boundedcontext.payment.app.usecase.PaymentRefundByBookingUseCase.RefundOutcome;
+import com.ticketrush.global.constants.MetricNames;
 import com.ticketrush.global.event.DomainEventEnvelope;
 import com.ticketrush.global.exception.BusinessException;
 import com.ticketrush.global.json.JsonConverter;
 import com.ticketrush.global.status.ErrorStatus;
 import com.ticketrush.shared.booking.event.RefundRequestedEvent;
+import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import java.time.Instant;
 import java.time.LocalDateTime;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
-import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.dao.DataIntegrityViolationException;
@@ -31,12 +34,22 @@ import org.springframework.kafka.support.Acknowledgment;
 @ExtendWith(MockitoExtension.class)
 class RefundRequestedEventListenerTest {
 
-  @InjectMocks private RefundRequestedEventListener listener;
+  private RefundRequestedEventListener listener;
 
   @Mock private PaymentRefundByBookingUseCase paymentRefundByBookingUseCase;
   @Mock private PaymentEventPublisher paymentEventPublisher;
   @Mock private JsonConverter jsonConverter;
   @Mock private Acknowledgment acknowledgment;
+
+  private SimpleMeterRegistry meterRegistry;
+
+  @BeforeEach
+  void setUp() {
+    meterRegistry = new SimpleMeterRegistry();
+    listener =
+        new RefundRequestedEventListener(
+            paymentRefundByBookingUseCase, paymentEventPublisher, jsonConverter, meterRegistry);
+  }
 
   private static final String PAYLOAD = "payload";
   private static final Long BOOKING_ID = 100L;
@@ -71,6 +84,12 @@ class RefundRequestedEventListenerTest {
     // then
     verify(paymentEventPublisher, never()).publishRefundFailed(any(), any(), any(), any());
     verify(acknowledgment).acknowledge();
+
+    assertThat(
+            meterRegistry
+                .counter(MetricNames.PAYMENT_REFUND, MetricNames.TAG_OUTCOME, "refunded")
+                .count())
+        .isEqualTo(1.0);
   }
 
   @Test
@@ -139,6 +158,8 @@ class RefundRequestedEventListenerTest {
         .publishRefundFailed(
             eq(BOOKING_ID), eq(BOOKING_NUMBER), eq("PG 환불 처리 실패"), any(LocalDateTime.class));
     verify(acknowledgment).acknowledge();
+
+    assertThat(meterRegistry.counter(MetricNames.PAYMENT_REFUND_FAILED).count()).isEqualTo(1.0);
   }
 
   @Test

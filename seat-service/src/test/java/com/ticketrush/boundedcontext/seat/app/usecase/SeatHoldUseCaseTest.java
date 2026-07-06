@@ -9,25 +9,35 @@ import static org.mockito.Mockito.verifyNoInteractions;
 import com.ticketrush.boundedcontext.seat.app.support.SeatStatusEventPublisher;
 import com.ticketrush.boundedcontext.seat.domain.entity.Seat;
 import com.ticketrush.boundedcontext.seat.out.repository.SeatRepository;
+import com.ticketrush.global.constants.MetricNames;
 import com.ticketrush.global.exception.BusinessException;
 import com.ticketrush.global.status.ErrorStatus;
 import com.ticketrush.global.types.SeatStatus;
+import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import java.time.LocalDateTime;
 import java.util.Optional;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
-import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
 @ExtendWith(MockitoExtension.class)
 class SeatHoldUseCaseTest {
 
-  @InjectMocks private SeatHoldUseCase seatHoldUseCase;
+  private SeatHoldUseCase seatHoldUseCase;
 
   @Mock private SeatRepository seatRepository;
   @Mock private SeatStatusEventPublisher seatStatusEventPublisher;
+
+  private SimpleMeterRegistry meterRegistry;
+
+  @BeforeEach
+  void setUp() {
+    meterRegistry = new SimpleMeterRegistry();
+    seatHoldUseCase = new SeatHoldUseCase(seatRepository, seatStatusEventPublisher, meterRegistry);
+  }
 
   @Test
   @DisplayName("성공: 좌석이 존재하고 만료 시간이 유효하면 HOLD 상태로 변경된다")
@@ -58,6 +68,11 @@ class SeatHoldUseCaseTest {
     assertThat(seat.getHoldExpiredAt()).isEqualTo(expiredAt);
     assertThat(seat.getBookingNumber()).isEqualTo(bookingNumber);
     verify(seatStatusEventPublisher).publishAfterCommit(seat);
+    assertThat(
+            meterRegistry
+                .counter(MetricNames.SEAT_HOLD, MetricNames.TAG_RESULT, MetricNames.RESULT_SUCCESS)
+                .count())
+        .isEqualTo(1.0);
   }
 
   @Test
@@ -83,6 +98,12 @@ class SeatHoldUseCaseTest {
     assertThat(held).isFalse();
     assertThat(seat.getSeatStatus()).isEqualTo(SeatStatus.SOLD);
     verifyNoInteractions(seatStatusEventPublisher);
+    assertThat(
+            meterRegistry
+                .counter(
+                    MetricNames.SEAT_HOLD, MetricNames.TAG_RESULT, MetricNames.RESULT_UNAVAILABLE)
+                .count())
+        .isEqualTo(1.0);
   }
 
   @Test

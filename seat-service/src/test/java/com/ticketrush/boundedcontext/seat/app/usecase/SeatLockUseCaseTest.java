@@ -5,13 +5,15 @@ import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.BDDMockito.given;
 import static org.mockito.Mockito.verify;
 
+import com.ticketrush.global.constants.MetricNames;
+import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import java.time.LocalDateTime;
 import java.util.Optional;
 import java.util.concurrent.TimeUnit;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
-import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.redisson.api.RLock;
@@ -20,10 +22,18 @@ import org.redisson.api.RedissonClient;
 @ExtendWith(MockitoExtension.class)
 class SeatLockUseCaseTest {
 
-  @InjectMocks private SeatLockUseCase seatLockUseCase;
+  private SeatLockUseCase seatLockUseCase;
 
   @Mock private RedissonClient redissonClient;
   @Mock private RLock redissonLock;
+
+  private SimpleMeterRegistry meterRegistry;
+
+  @BeforeEach
+  void setUp() {
+    meterRegistry = new SimpleMeterRegistry();
+    seatLockUseCase = new SeatLockUseCase(redissonClient, meterRegistry);
+  }
 
   @Test
   @DisplayName("성공: Redisson 락 획득에 성공하면 만료 시간이 담긴 Optional을 반환한다")
@@ -62,5 +72,6 @@ class SeatLockUseCaseTest {
 
     // then
     assertThat(result).isEmpty();
+    assertThat(meterRegistry.counter(MetricNames.SEAT_LOCK_CONTENTION).count()).isEqualTo(1.0);
   }
 }

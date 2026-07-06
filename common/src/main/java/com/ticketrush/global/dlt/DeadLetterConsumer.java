@@ -1,8 +1,11 @@
 package com.ticketrush.global.dlt;
 
+import com.ticketrush.global.constants.MetricNames;
 import com.ticketrush.global.event.DomainEventEnvelope;
 import com.ticketrush.global.event.KafkaConsumerGroup;
 import com.ticketrush.global.notification.Notifier;
+import io.micrometer.core.instrument.Counter;
+import io.micrometer.core.instrument.MeterRegistry;
 import java.nio.ByteBuffer;
 import java.nio.charset.StandardCharsets;
 import java.util.LinkedHashMap;
@@ -64,6 +67,7 @@ public class DeadLetterConsumer {
 
   private final DeadLetterRecordRepository deadLetterRecordRepository;
   private final Notifier notifier;
+  private final MeterRegistry meterRegistry;
 
   /**
    * topicPattern: 접미사가 정확히 하나인 {@code .DLT} 토픽만 매칭. {@code .DLT.DLT}는 부정형 lookbehind로 제외한다.
@@ -104,6 +108,8 @@ public class DeadLetterConsumer {
       // null이 아니지만 envelope가 아닌 경우(드문 케이스)는 toString으로 폴백한다.
       payload = extractRawPayload(record);
     }
+
+    Counter.builder(MetricNames.KAFKA_DLT).register(meterRegistry).increment();
 
     // #10: 사용자 영향 문자열(Kafka 메시지 유래)의 개행·탭을 sanitize해 로그 인젝션을 방지한다.
     log.error(

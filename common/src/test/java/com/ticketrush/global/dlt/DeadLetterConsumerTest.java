@@ -8,16 +8,17 @@ import static org.mockito.Mockito.verify;
 
 import com.ticketrush.global.event.DomainEventEnvelope;
 import com.ticketrush.global.notification.Notifier;
+import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import java.nio.ByteBuffer;
 import java.nio.charset.StandardCharsets;
 import java.time.Instant;
 import java.util.Map;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
-import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.kafka.support.Acknowledgment;
@@ -26,11 +27,20 @@ import org.springframework.kafka.support.serializer.SerializationUtils;
 @ExtendWith(MockitoExtension.class)
 class DeadLetterConsumerTest {
 
-  @InjectMocks private DeadLetterConsumer deadLetterConsumer;
+  private DeadLetterConsumer deadLetterConsumer;
 
   @Mock private DeadLetterRecordRepository deadLetterRecordRepository;
   @Mock private Notifier notifier;
   @Mock private Acknowledgment ack;
+
+  private SimpleMeterRegistry meterRegistry;
+
+  @BeforeEach
+  void setUp() {
+    meterRegistry = new SimpleMeterRegistry();
+    deadLetterConsumer =
+        new DeadLetterConsumer(deadLetterRecordRepository, notifier, meterRegistry);
+  }
 
   private static byte[] intBytes(int value) {
     return ByteBuffer.allocate(Integer.BYTES).putInt(value).array();

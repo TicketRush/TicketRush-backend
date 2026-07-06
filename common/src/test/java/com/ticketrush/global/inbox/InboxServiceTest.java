@@ -8,13 +8,15 @@ import static org.mockito.BDDMockito.given;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 
+import com.ticketrush.global.constants.MetricNames;
 import com.ticketrush.global.event.DomainEventEnvelope;
+import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import java.time.Instant;
 import java.util.concurrent.atomic.AtomicBoolean;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
-import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.dao.DataIntegrityViolationException;
@@ -22,11 +24,19 @@ import org.springframework.dao.DataIntegrityViolationException;
 @ExtendWith(MockitoExtension.class)
 class InboxServiceTest {
 
-  @InjectMocks private InboxService inboxService;
+  private InboxService inboxService;
+
+  private SimpleMeterRegistry meterRegistry;
 
   @Mock private InboxRepository inboxRepository;
 
   private static final String GROUP = "seat-group";
+
+  @BeforeEach
+  void setUp() {
+    meterRegistry = new SimpleMeterRegistry();
+    inboxService = new InboxService(inboxRepository, meterRegistry);
+  }
 
   private DomainEventEnvelope envelope() {
     return new DomainEventEnvelope(
@@ -110,5 +120,45 @@ class InboxServiceTest {
 
     // then
     verify(inboxRepository).existsByConsumerGroupAndEventId(GROUP, "evt-1");
+  }
+
+  @Test
+  @DisplayName("최초 처리 성공 시 KAFKA_INBOX processed 카운터가 증가한다(#335)")
+  void runIfFirst_increments_processed_counter_when_new() {
+    // given
+    given(inboxRepository.existsByConsumerGroupAndEventId(GROUP, "evt-1")).willReturn(false);
+
+    // when
+    inboxService.runIfFirst(GROUP, envelope(), () -> {});
+
+    // then
+    double count =
+        meterRegistry
+            .get(MetricNames.KAFKA_INBOX)
+            .tag(MetricNames.TAG_CONSUMER_GROUP, GROUP)
+            .tag(MetricNames.TAG_RESULT, MetricNames.RESULT_PROCESSED)
+            .counter()
+            .count();
+    assertThat(count).isEqualTo(1.0);
+  }
+
+  @Test
+  @DisplayName("중복 처리 시 KAFKA_INBOX duplicate 카운터가 증가한다(#335)")
+  void runIfFirst_increments_duplicate_counter_when_already_processed() {
+    // given
+    given(inboxRepository.existsByConsumerGroupAndEventId(GROUP, "evt-1")).willReturn(true);
+
+    // when
+    inboxService.runIfFirst(GROUP, envelope(), () -> {});
+
+    // then
+    double count =
+        meterRegistry
+            .get(MetricNames.KAFKA_INBOX)
+            .tag(MetricNames.TAG_CONSUMER_GROUP, GROUP)
+            .tag(MetricNames.TAG_RESULT, MetricNames.RESULT_DUPLICATE)
+            .counter()
+            .count();
+    assertThat(count).isEqualTo(1.0);
   }
 }

@@ -6,6 +6,9 @@ import com.ticketrush.boundedcontext.ticket.domain.entity.Ticket;
 import com.ticketrush.boundedcontext.ticket.domain.policy.TicketTokenGenerator;
 import com.ticketrush.boundedcontext.ticket.domain.policy.TicketTokenHasher;
 import com.ticketrush.boundedcontext.ticket.out.repository.TicketRepository;
+import com.ticketrush.global.constants.MetricNames;
+import io.micrometer.core.instrument.Counter;
+import io.micrometer.core.instrument.MeterRegistry;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -31,9 +34,14 @@ public class TicketIssueUseCase {
   private final TicketTokenGenerator ticketTokenGenerator;
   private final TicketTokenHasher ticketTokenHasher;
   private final TicketMapper ticketMapper;
+  private final MeterRegistry meterRegistry;
 
   public TicketIssueResponse execute(Long bookingId) {
     if (ticketRepository.existsByBookingId(bookingId)) {
+      Counter.builder(MetricNames.TICKET_ISSUE)
+          .tag(MetricNames.TAG_RESULT, MetricNames.RESULT_ALREADY_ISSUED)
+          .register(meterRegistry)
+          .increment();
       return TicketIssueResponse.alreadyIssued();
     }
 
@@ -43,6 +51,10 @@ public class TicketIssueUseCase {
     // Inbox 트랜잭션에 조인된 상태로 저장한다. unique(booking_id/ticket_token_hash) 충돌 시 예외를 그대로 전파해
     // 트랜잭션을 롤백시키고(Inbox 미기록) 재소비로 처리한다.
     ticketRepository.saveAndFlush(ticket);
+    Counter.builder(MetricNames.TICKET_ISSUE)
+        .tag(MetricNames.TAG_RESULT, MetricNames.RESULT_ISSUED)
+        .register(meterRegistry)
+        .increment();
     return TicketIssueResponse.issued(token);
   }
 }

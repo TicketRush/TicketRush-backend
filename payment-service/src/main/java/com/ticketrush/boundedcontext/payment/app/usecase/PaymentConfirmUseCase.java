@@ -11,8 +11,12 @@ import com.ticketrush.boundedcontext.payment.out.apiclient.PaymentApprovalReques
 import com.ticketrush.boundedcontext.payment.out.apiclient.PaymentApprovalResponse;
 import com.ticketrush.boundedcontext.payment.out.repository.ExpiredBookingRepository;
 import com.ticketrush.boundedcontext.payment.out.repository.PaymentRepository;
+import com.ticketrush.global.constants.MetricNames;
 import com.ticketrush.global.exception.BusinessException;
 import com.ticketrush.global.status.ErrorStatus;
+import io.micrometer.core.instrument.Counter;
+import io.micrometer.core.instrument.MeterRegistry;
+import io.micrometer.core.instrument.Timer;
 import java.util.EnumSet;
 import java.util.Set;
 import lombok.RequiredArgsConstructor;
@@ -52,6 +56,7 @@ public class PaymentConfirmUseCase {
   private final PaymentEventPublisher paymentEventPublisher;
   private final ExpiredBookingRepository expiredBookingRepository;
   private final PaymentMapper paymentMapper;
+  private final MeterRegistry meterRegistry;
 
   public PaymentConfirmResponse execute(Long userId, PaymentConfirmRequest request) {
     if (paymentRepository.existsByBookingIdAndStatus(
@@ -69,14 +74,24 @@ public class PaymentConfirmUseCase {
     // PG 승인·금액 검증 단계에서 결제 실패가 확정되면(PG 거절/금액 불일치) 예외만 던지지 않고 FAILED 이력을 남긴다(#297).
     PaymentApprovalResponse approval;
     try {
-      approval =
-          paymentApprovalClientRouter.approve(
-              new PaymentApprovalRequest(
-                  request.provider(),
-                  request.paymentKey(),
-                  orderId,
-                  request.bookingId(),
-                  request.amount()));
+      Timer.Sample sample = Timer.start(meterRegistry);
+      try {
+        approval =
+            paymentApprovalClientRouter.approve(
+                new PaymentApprovalRequest(
+                    request.provider(),
+                    request.paymentKey(),
+                    orderId,
+                    request.bookingId(),
+                    request.amount()));
+      } finally {
+        sample.stop(
+            Timer.builder(MetricNames.PAYMENT_PG_APPROVE)
+                .tag(
+                    MetricNames.TAG_PROVIDER,
+                    request.provider() != null ? request.provider().name() : "unknown")
+                .register(meterRegistry));
+      }
 
       if (!request.amount().equals(approval.approvedAmount())) {
         throw new BusinessException(ErrorStatus.PAYMENT_AMOUNT_MISMATCH);
@@ -111,6 +126,11 @@ public class PaymentConfirmUseCase {
         userId,
         saved.getAmount(),
         saved.getPaidAt());
+
+    Counter.builder(MetricNames.PAYMENT_CONFIRM)
+        .tag(MetricNames.TAG_RESULT, MetricNames.RESULT_SUCCESS)
+        .register(meterRegistry)
+        .increment();
 
     return paymentMapper.toConfirmResponse(saved);
   }
@@ -153,6 +173,11 @@ public class PaymentConfirmUseCase {
               e.getErrorStatus().getCode(),
               e.getErrorStatus().getMessage());
       paymentRepository.saveAndFlush(failed);
+      Counter.builder(MetricNames.PAYMENT_CONFIRM)
+          .tag(MetricNames.TAG_RESULT, MetricNames.RESULT_FAILURE)
+          .tag(MetricNames.TAG_REASON, e.getErrorStatus().getCode())
+          .register(meterRegistry)
+          .increment();
     } catch (Exception ex) {
       // 추적이 목적인 기능이라 이력 저장 실패는 집계 누락이다. error 레벨로 올려 알람/메트릭 대상이 되게 한다.
       log.error(

@@ -1,10 +1,15 @@
 package com.ticketrush.global.outbox;
 
+import com.ticketrush.global.constants.MetricNames;
 import com.ticketrush.global.event.DomainEventEnvelope;
+import io.micrometer.core.instrument.Gauge;
+import io.micrometer.core.instrument.MeterRegistry;
+import jakarta.annotation.PostConstruct;
 import java.time.Instant;
 import java.time.LocalDateTime;
 import java.time.ZoneId;
 import java.util.List;
+import java.util.concurrent.atomic.AtomicLong;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnExpression;
@@ -37,12 +42,24 @@ public class OutboxRelayService {
   private final KafkaTemplate<String, DomainEventEnvelope> kafkaTemplate;
   private final OutboxProperties outboxProperties;
   private final OutboxStatusUpdater outboxStatusUpdater;
+  private final MeterRegistry meterRegistry;
+
+  private final AtomicLong backlog = new AtomicLong();
+
+  /** 이 서비스가 소유한 aggregateTypes의 적체(PENDING/FAILED) 건수를 노출하는 Gauge를 등록한다(#335). */
+  @PostConstruct
+  public void registerBacklogGauge() {
+    Gauge.builder(MetricNames.OUTBOX_BACKLOG, backlog, AtomicLong::get).register(meterRegistry);
+  }
 
   public void relayBatch() {
     List<String> aggregateTypes = outboxProperties.getAggregateTypes();
     if (aggregateTypes == null || aggregateTypes.isEmpty()) {
       return;
     }
+
+    backlog.set(
+        outboxRepository.countByAggregateTypeInAndStatusIn(aggregateTypes, RELAY_TARGET_STATUSES));
 
     int batchSize = outboxProperties.getBatchSize();
     if (batchSize < 1) {

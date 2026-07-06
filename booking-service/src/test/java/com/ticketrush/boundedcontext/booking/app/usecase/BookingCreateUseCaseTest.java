@@ -10,12 +10,14 @@ import com.ticketrush.boundedcontext.booking.app.mapper.BookingMapper;
 import com.ticketrush.boundedcontext.booking.domain.entity.Booking;
 import com.ticketrush.boundedcontext.booking.domain.types.BookingStatus;
 import com.ticketrush.boundedcontext.booking.out.repository.BookingRepository;
+import com.ticketrush.global.constants.MetricNames;
 import com.ticketrush.global.eventpublisher.EventPublisher;
 import com.ticketrush.shared.booking.event.BookingCreatedEvent;
+import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
-import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.test.util.ReflectionTestUtils;
@@ -23,11 +25,20 @@ import org.springframework.test.util.ReflectionTestUtils;
 @ExtendWith(MockitoExtension.class)
 class BookingCreateUseCaseTest {
 
-  @InjectMocks private BookingCreateUseCase bookingCreateUseCase;
+  private BookingCreateUseCase bookingCreateUseCase;
 
   @Mock private BookingRepository bookingRepository;
   @Mock private BookingMapper bookingMapper;
   @Mock private EventPublisher eventPublisher;
+
+  private SimpleMeterRegistry meterRegistry;
+
+  @BeforeEach
+  void setUp() {
+    meterRegistry = new SimpleMeterRegistry();
+    bookingCreateUseCase =
+        new BookingCreateUseCase(bookingRepository, bookingMapper, eventPublisher, meterRegistry);
+  }
 
   @Test
   @DisplayName("성공: 예약 요청을 받아 저장하고 내부 이벤트를 발행한다")
@@ -72,5 +83,8 @@ class BookingCreateUseCaseTest {
 
     // 3. 도메인 이벤트가 트랜잭션 내부에서 정상적으로 발행되었는지 검증
     verify(eventPublisher).publish(any(BookingCreatedEvent.class));
+
+    // 4. 예약 생성 성공 카운터가 1 증가했는지 검증
+    assertThat(meterRegistry.counter(MetricNames.BOOKING_CREATED).count()).isEqualTo(1.0);
   }
 }

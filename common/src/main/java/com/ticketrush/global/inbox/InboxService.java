@@ -1,6 +1,9 @@
 package com.ticketrush.global.inbox;
 
+import com.ticketrush.global.constants.MetricNames;
 import com.ticketrush.global.event.DomainEventEnvelope;
+import io.micrometer.core.instrument.Counter;
+import io.micrometer.core.instrument.MeterRegistry;
 import lombok.RequiredArgsConstructor;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.stereotype.Service;
@@ -17,6 +20,7 @@ import org.springframework.transaction.annotation.Transactional;
 public class InboxService {
 
   private final InboxRepository inboxRepository;
+  private final MeterRegistry meterRegistry;
 
   /**
    * 해당 컨슈머 그룹이 처음 보는 이벤트이면 {@code business}를 실행하고 Inbox에 기록한 뒤 {@code true}를, 이미 처리한 이벤트이면 아무것도 하지
@@ -40,6 +44,11 @@ public class InboxService {
   @Transactional
   public boolean runIfFirst(String consumerGroup, DomainEventEnvelope envelope, Runnable business) {
     if (inboxRepository.existsByConsumerGroupAndEventId(consumerGroup, envelope.eventId())) {
+      Counter.builder(MetricNames.KAFKA_INBOX)
+          .tag(MetricNames.TAG_CONSUMER_GROUP, consumerGroup)
+          .tag(MetricNames.TAG_RESULT, MetricNames.RESULT_DUPLICATE)
+          .register(meterRegistry)
+          .increment();
       return false;
     }
 
@@ -54,6 +63,11 @@ public class InboxService {
       // 롤백-only 상태에서 정상 반환하면 커밋 시 UnexpectedRollbackException이 나므로 반드시 예외로 롤백시킨다.
       throw new DuplicateEventException(consumerGroup, envelope.eventId(), e);
     }
+    Counter.builder(MetricNames.KAFKA_INBOX)
+        .tag(MetricNames.TAG_CONSUMER_GROUP, consumerGroup)
+        .tag(MetricNames.TAG_RESULT, MetricNames.RESULT_PROCESSED)
+        .register(meterRegistry)
+        .increment();
     return true;
   }
 }

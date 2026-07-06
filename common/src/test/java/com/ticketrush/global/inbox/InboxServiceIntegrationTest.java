@@ -5,6 +5,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import com.ticketrush.global.event.DomainEventEnvelope;
 import com.ticketrush.global.jpa.config.JpaConfig;
+import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import java.time.Instant;
 import java.util.concurrent.atomic.AtomicInteger;
 import org.junit.jupiter.api.DisplayName;
@@ -16,9 +17,12 @@ import org.springframework.context.annotation.Import;
 /**
  * 실제 트랜잭션·리포지토리로 {@link InboxService#runIfFirst}를 검증한다(mock이 아닌 실동작). 원자성 seam(비즈니스 콜백 + inbox 기록이
  * 한 트랜잭션)을 실제 DB에서 확인한다.
+ *
+ * <p>{@code @DataJpaTest}는 메트릭 익스포트를 비활성화해 {@link io.micrometer.core.instrument.MeterRegistry} 빈이
+ * 없으므로, {@link InboxService}(#335 계측) 생성을 위해 {@link SimpleMeterRegistry}를 함께 가져온다.
  */
 @DataJpaTest
-@Import({JpaConfig.class, InboxService.class})
+@Import({JpaConfig.class, InboxService.class, SimpleMeterRegistry.class})
 class InboxServiceIntegrationTest {
 
   @Autowired private InboxService inboxService;

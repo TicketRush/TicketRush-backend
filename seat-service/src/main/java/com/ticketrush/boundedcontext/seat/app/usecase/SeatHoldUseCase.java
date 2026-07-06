@@ -3,8 +3,11 @@ package com.ticketrush.boundedcontext.seat.app.usecase;
 import com.ticketrush.boundedcontext.seat.app.support.SeatStatusEventPublisher;
 import com.ticketrush.boundedcontext.seat.domain.entity.Seat;
 import com.ticketrush.boundedcontext.seat.out.repository.SeatRepository;
+import com.ticketrush.global.constants.MetricNames;
 import com.ticketrush.global.exception.BusinessException;
 import com.ticketrush.global.status.ErrorStatus;
+import io.micrometer.core.instrument.Counter;
+import io.micrometer.core.instrument.MeterRegistry;
 import java.time.LocalDateTime;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
@@ -17,6 +20,7 @@ public class SeatHoldUseCase {
 
   private final SeatRepository seatRepository;
   private final SeatStatusEventPublisher seatStatusEventPublisher;
+  private final MeterRegistry meterRegistry;
 
   /**
    * 좌석을 HOLD로 전이한다.
@@ -34,11 +38,19 @@ public class SeatHoldUseCase {
             .orElseThrow(() -> new BusinessException(ErrorStatus.SEAT_NOT_FOUND));
 
     if (!seat.isAvailable()) {
+      Counter.builder(MetricNames.SEAT_HOLD)
+          .tag(MetricNames.TAG_RESULT, MetricNames.RESULT_UNAVAILABLE)
+          .register(meterRegistry)
+          .increment();
       return false;
     }
 
     seat.hold(holdExpiredAt, bookingNumber);
     seatStatusEventPublisher.publishAfterCommit(seat);
+    Counter.builder(MetricNames.SEAT_HOLD)
+        .tag(MetricNames.TAG_RESULT, MetricNames.RESULT_SUCCESS)
+        .register(meterRegistry)
+        .increment();
     return true;
   }
 }
