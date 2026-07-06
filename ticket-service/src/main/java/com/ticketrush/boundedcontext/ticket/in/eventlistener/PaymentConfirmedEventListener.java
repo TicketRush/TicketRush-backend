@@ -1,6 +1,7 @@
 package com.ticketrush.boundedcontext.ticket.in.eventlistener;
 
 import com.ticketrush.boundedcontext.ticket.app.usecase.TicketIssueUseCase;
+import com.ticketrush.global.constants.MetricNames;
 import com.ticketrush.global.event.DomainEventEnvelope;
 import com.ticketrush.global.event.KafkaConsumerErrorPolicy;
 import com.ticketrush.global.event.KafkaConsumerGroup;
@@ -8,6 +9,8 @@ import com.ticketrush.global.inbox.DuplicateEventException;
 import com.ticketrush.global.inbox.InboxService;
 import com.ticketrush.global.json.JsonConverter;
 import com.ticketrush.shared.payment.event.PaymentConfirmedEvent;
+import io.micrometer.core.instrument.Counter;
+import io.micrometer.core.instrument.MeterRegistry;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.kafka.annotation.KafkaListener;
@@ -23,6 +26,7 @@ public class PaymentConfirmedEventListener {
   private final TicketIssueUseCase ticketIssueUseCase;
   private final JsonConverter jsonConverter;
   private final InboxService inboxService;
+  private final MeterRegistry meterRegistry;
 
   @KafkaListener(topics = PaymentConfirmedEvent.TOPIC, groupId = KafkaConsumerGroup.TICKET)
   public void handlePaymentConfirmed(@Payload DomainEventEnvelope envelope, Acknowledgment ack) {
@@ -78,6 +82,9 @@ public class PaymentConfirmedEventListener {
               envelope.eventId(),
               failedBookingId,
               e);
+          Counter.builder(MetricNames.TICKET_ISSUE_CRITICAL_FAILURE)
+              .register(meterRegistry)
+              .increment();
         }
         // 영구 실패는 재시도해도 결과가 바뀌지 않으므로 커밋해 파티션 블로킹을 막는다.
         ack.acknowledge();

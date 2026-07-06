@@ -21,18 +21,20 @@ import com.ticketrush.boundedcontext.payment.out.apiclient.PaymentApprovalReques
 import com.ticketrush.boundedcontext.payment.out.apiclient.PaymentApprovalResponse;
 import com.ticketrush.boundedcontext.payment.out.repository.ExpiredBookingRepository;
 import com.ticketrush.boundedcontext.payment.out.repository.PaymentRepository;
+import com.ticketrush.global.constants.MetricNames;
 import com.ticketrush.global.exception.BusinessException;
 import com.ticketrush.global.status.ErrorStatus;
+import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import java.lang.reflect.Field;
 import java.time.LocalDateTime;
 import java.util.Optional;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mapstruct.factory.Mappers;
 import org.mockito.ArgumentCaptor;
 import org.mockito.InOrder;
-import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.Spy;
 import org.mockito.junit.jupiter.MockitoExtension;
@@ -47,7 +49,21 @@ class PaymentConfirmUseCaseTest {
 
   @Spy private PaymentMapper paymentMapper = Mappers.getMapper(PaymentMapper.class);
 
-  @InjectMocks private PaymentConfirmUseCase paymentConfirmUseCase;
+  private SimpleMeterRegistry meterRegistry;
+  private PaymentConfirmUseCase paymentConfirmUseCase;
+
+  @BeforeEach
+  void setUp() {
+    meterRegistry = new SimpleMeterRegistry();
+    paymentConfirmUseCase =
+        new PaymentConfirmUseCase(
+            paymentRepository,
+            paymentApprovalClientRouter,
+            paymentEventPublisher,
+            expiredBookingRepository,
+            paymentMapper,
+            meterRegistry);
+  }
 
   @Test
   @DisplayName("PG 승인 성공 시 Payment를 COMPLETED 상태로 저장하고 PaymentConfirmedEvent를 발행한다")
@@ -116,6 +132,19 @@ class PaymentConfirmUseCaseTest {
     inOrder
         .verify(paymentEventPublisher)
         .publishConfirmed(any(), any(), any(), any(), any(), any());
+
+    // 성공 시 result=success 카운터가 증가하고 PG 승인 Latency 타이머가 기록되어야 한다.
+    assertThat(
+            meterRegistry
+                .counter(
+                    MetricNames.PAYMENT_CONFIRM, MetricNames.TAG_RESULT, MetricNames.RESULT_SUCCESS)
+                .count())
+        .isEqualTo(1.0);
+    assertThat(
+            meterRegistry
+                .timer(MetricNames.PAYMENT_PG_APPROVE, MetricNames.TAG_PROVIDER, "TOSS")
+                .count())
+        .isEqualTo(1L);
   }
 
   private void setId(Payment payment, Long id) throws Exception {
@@ -207,6 +236,25 @@ class PaymentConfirmUseCaseTest {
     assertThat(failed.getFailureCode()).isEqualTo(ErrorStatus.PAYMENT_METHOD_REJECTED.getCode());
     verify(paymentEventPublisher, never())
         .publishConfirmed(any(), any(), any(), any(), any(), any());
+
+    // 화이트리스트 실패는 result=failure & reason 태그 카운터가 증가해야 한다.
+    assertThat(
+            meterRegistry
+                .counter(
+                    MetricNames.PAYMENT_CONFIRM,
+                    MetricNames.TAG_RESULT,
+                    MetricNames.RESULT_FAILURE,
+                    MetricNames.TAG_REASON,
+                    ErrorStatus.PAYMENT_METHOD_REJECTED.getCode())
+                .count())
+        .isEqualTo(1.0);
+
+    // approve()가 예외를 던져도 finally에서 PG 승인 Latency 타이머는 기록되어야 한다(예외 안전성).
+    assertThat(
+            meterRegistry
+                .timer(MetricNames.PAYMENT_PG_APPROVE, MetricNames.TAG_PROVIDER, "TOSS")
+                .count())
+        .isEqualTo(1L);
   }
 
   @Test

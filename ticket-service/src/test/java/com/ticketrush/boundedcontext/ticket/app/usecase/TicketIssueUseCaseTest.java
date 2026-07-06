@@ -15,6 +15,9 @@ import com.ticketrush.boundedcontext.ticket.domain.policy.TicketTokenGenerator;
 import com.ticketrush.boundedcontext.ticket.domain.policy.TicketTokenHasher;
 import com.ticketrush.boundedcontext.ticket.domain.types.TicketStatus;
 import com.ticketrush.boundedcontext.ticket.out.repository.TicketRepository;
+import com.ticketrush.global.constants.MetricNames;
+import io.micrometer.core.instrument.MeterRegistry;
+import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -38,6 +41,8 @@ class TicketIssueUseCaseTest {
   @Mock private TicketTokenHasher ticketTokenHasher;
 
   @Spy private TicketMapper ticketMapper = Mappers.getMapper(TicketMapper.class);
+
+  @Spy private MeterRegistry meterRegistry = new SimpleMeterRegistry();
 
   @Test
   @DisplayName("성공: 예매 ID 기준으로 티켓 토큰 해시와 UNUSED 상태를 저장한다")
@@ -64,6 +69,12 @@ class TicketIssueUseCaseTest {
     assertThat(savedTicket.getTicketTokenHash()).doesNotContain("raw-ticket-token");
     assertThat(savedTicket.getTicketStatus()).isEqualTo(TicketStatus.UNUSED);
     assertThat(savedTicket.getUsedAt()).isNull();
+    assertThat(
+            meterRegistry
+                .counter(
+                    MetricNames.TICKET_ISSUE, MetricNames.TAG_RESULT, MetricNames.RESULT_ISSUED)
+                .count())
+        .isEqualTo(1.0);
   }
 
   @Test
@@ -82,6 +93,14 @@ class TicketIssueUseCaseTest {
     then(ticketTokenGenerator).should(never()).generate();
     then(ticketTokenHasher).shouldHaveNoInteractions();
     then(ticketRepository).should(never()).saveAndFlush(any());
+    assertThat(
+            meterRegistry
+                .counter(
+                    MetricNames.TICKET_ISSUE,
+                    MetricNames.TAG_RESULT,
+                    MetricNames.RESULT_ALREADY_ISSUED)
+                .count())
+        .isEqualTo(1.0);
   }
 
   @Test

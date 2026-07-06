@@ -28,6 +28,13 @@ public interface OutboxRepository extends JpaRepository<OutboxEntity, Long> {
       Collection<String> aggregateTypes, Collection<OutboxStatus> statuses, Pageable pageable);
 
   /**
+   * relay 폴링 대상(자기 소유 {@code aggregateTypes} 중 {@code statuses})의 적체 건수를 센다(#335 {@code
+   * OUTBOX_BACKLOG} Gauge용).
+   */
+  long countByAggregateTypeInAndStatusIn(
+      Collection<String> aggregateTypes, Collection<OutboxStatus> statuses);
+
+  /**
    * retention 대상 row를 벌크 삭제한다. 자기 소유 {@code aggregateTypes} 중 {@code status}(보통 {@link
    * OutboxStatus#SENT})이면서 {@code threshold} 이전에 발행된 row만 지운다.
    */

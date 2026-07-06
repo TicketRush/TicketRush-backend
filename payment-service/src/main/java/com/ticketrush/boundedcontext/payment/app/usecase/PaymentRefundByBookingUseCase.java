@@ -11,7 +11,10 @@ import com.ticketrush.boundedcontext.payment.out.apiclient.PaymentCancelCommand;
 import com.ticketrush.boundedcontext.payment.out.apiclient.PaymentCancelResult;
 import com.ticketrush.boundedcontext.payment.out.repository.PaymentRepository;
 import com.ticketrush.boundedcontext.payment.out.repository.RefundRepository;
+import com.ticketrush.global.constants.MetricNames;
 import com.ticketrush.shared.booking.event.RefundRequestedEvent;
+import io.micrometer.core.instrument.MeterRegistry;
+import io.micrometer.core.instrument.Timer;
 import java.time.LocalDateTime;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -42,6 +45,7 @@ public class PaymentRefundByBookingUseCase {
   private final PaymentCancelClientRouter paymentCancelClientRouter;
   private final PaymentCancelPersister paymentCancelPersister;
   private final PaymentEventPublisher paymentEventPublisher;
+  private final MeterRegistry meterRegistry;
 
   public enum RefundOutcome {
     /** PG 환불을 실행하고 {@code PaymentCanceledEvent}를 발행했다. */
@@ -64,14 +68,23 @@ public class PaymentRefundByBookingUseCase {
     }
 
     // PG 취소는 트랜잭션 밖에서 호출한다(외부 왕복 동안 DB 커넥션을 점유하지 않기 위함). paymentId 기반 고정 멱등 키로 PG 측 중복 취소를 막는다.
-    PaymentCancelResult result =
-        paymentCancelClientRouter.cancel(
-            new PaymentCancelCommand(
-                payment.getProvider(),
-                payment.getPaymentKey(),
-                payment.getAmount(),
-                REFUND_REASON,
-                generateIdempotencyKey(payment.getId())));
+    Timer.Sample sample = Timer.start(meterRegistry);
+    PaymentCancelResult result;
+    try {
+      result =
+          paymentCancelClientRouter.cancel(
+              new PaymentCancelCommand(
+                  payment.getProvider(),
+                  payment.getPaymentKey(),
+                  payment.getAmount(),
+                  REFUND_REASON,
+                  generateIdempotencyKey(payment.getId())));
+    } finally {
+      sample.stop(
+          Timer.builder(MetricNames.PAYMENT_PG_CANCEL)
+              .tag(MetricNames.TAG_PROVIDER, payment.getProvider().name())
+              .register(meterRegistry));
+    }
 
     Refund refund =
         Refund.builder()

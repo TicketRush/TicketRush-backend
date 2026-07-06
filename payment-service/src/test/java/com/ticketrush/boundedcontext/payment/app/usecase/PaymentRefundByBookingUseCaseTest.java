@@ -20,16 +20,18 @@ import com.ticketrush.boundedcontext.payment.out.apiclient.PaymentCancelCommand;
 import com.ticketrush.boundedcontext.payment.out.apiclient.PaymentCancelResult;
 import com.ticketrush.boundedcontext.payment.out.repository.PaymentRepository;
 import com.ticketrush.boundedcontext.payment.out.repository.RefundRepository;
+import com.ticketrush.global.constants.MetricNames;
 import com.ticketrush.shared.booking.event.RefundRequestedEvent;
+import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import java.lang.reflect.Field;
 import java.time.LocalDateTime;
 import java.util.Optional;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
 import org.mockito.InOrder;
-import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
@@ -42,7 +44,21 @@ class PaymentRefundByBookingUseCaseTest {
   @Mock private PaymentCancelPersister paymentCancelPersister;
   @Mock private PaymentEventPublisher paymentEventPublisher;
 
-  @InjectMocks private PaymentRefundByBookingUseCase paymentRefundByBookingUseCase;
+  private SimpleMeterRegistry meterRegistry;
+  private PaymentRefundByBookingUseCase paymentRefundByBookingUseCase;
+
+  @BeforeEach
+  void setUp() {
+    meterRegistry = new SimpleMeterRegistry();
+    paymentRefundByBookingUseCase =
+        new PaymentRefundByBookingUseCase(
+            paymentRepository,
+            refundRepository,
+            paymentCancelClientRouter,
+            paymentCancelPersister,
+            paymentEventPublisher,
+            meterRegistry);
+  }
 
   private static final Long PAYMENT_ID = 1L;
   private static final Long BOOKING_ID = 100L;
@@ -112,6 +128,13 @@ class PaymentRefundByBookingUseCaseTest {
     inOrder
         .verify(paymentEventPublisher)
         .publishCanceled(any(), any(), any(), any(), any(), any(), any(), any());
+
+    // PG 취소 Latency 타이머가 provider 태그와 함께 기록되어야 한다.
+    assertThat(
+            meterRegistry
+                .timer(MetricNames.PAYMENT_PG_CANCEL, MetricNames.TAG_PROVIDER, "TOSS")
+                .count())
+        .isEqualTo(1L);
   }
 
   @Test

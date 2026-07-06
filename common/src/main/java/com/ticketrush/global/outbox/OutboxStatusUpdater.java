@@ -1,6 +1,9 @@
 package com.ticketrush.global.outbox;
 
+import com.ticketrush.global.constants.MetricNames;
 import com.ticketrush.global.notification.Notifier;
+import io.micrometer.core.instrument.Counter;
+import io.micrometer.core.instrument.MeterRegistry;
 import java.util.Map;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -25,13 +28,22 @@ public class OutboxStatusUpdater {
 
   private final OutboxStatusTransition transition;
   private final Notifier notifier;
+  private final MeterRegistry meterRegistry;
 
   public void markSuccess(Long id) {
     transition.markSuccess(id);
+    Counter.builder(MetricNames.OUTBOX_RELAY)
+        .tag(MetricNames.TAG_RESULT, MetricNames.RESULT_SUCCESS)
+        .register(meterRegistry)
+        .increment();
   }
 
   public void markFail(Long id, String lastError) {
     OutboxStatusTransition.DeadInfo deadInfo = transition.markFail(id, lastError);
+    Counter.builder(MetricNames.OUTBOX_RELAY)
+        .tag(MetricNames.TAG_RESULT, MetricNames.RESULT_FAIL)
+        .register(meterRegistry)
+        .increment();
     if (deadInfo != null) {
       // 트랜잭션 커밋 후 알림. 외부 HTTP 지연이 DB 커넥션을 점유하지 않는다(#1 결정).
       // 알림 본문에 자유서식 오류 메시지를 포함하지 않는다(#6 결정 — PII 유출 방지).

@@ -3,12 +3,15 @@ package com.ticketrush.boundedcontext.payment.in.eventlistener;
 import com.ticketrush.boundedcontext.payment.app.support.PaymentEventPublisher;
 import com.ticketrush.boundedcontext.payment.app.usecase.PaymentRefundByBookingUseCase;
 import com.ticketrush.boundedcontext.payment.app.usecase.PaymentRefundByBookingUseCase.RefundOutcome;
+import com.ticketrush.global.constants.MetricNames;
 import com.ticketrush.global.event.DomainEventEnvelope;
 import com.ticketrush.global.event.KafkaConsumerGroup;
 import com.ticketrush.global.exception.BusinessException;
 import com.ticketrush.global.json.JsonConverter;
 import com.ticketrush.global.status.ErrorStatus;
 import com.ticketrush.shared.booking.event.RefundRequestedEvent;
+import io.micrometer.core.instrument.Counter;
+import io.micrometer.core.instrument.MeterRegistry;
 import java.time.LocalDateTime;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -50,6 +53,7 @@ public class RefundRequestedEventListener {
   private final PaymentRefundByBookingUseCase paymentRefundByBookingUseCase;
   private final PaymentEventPublisher paymentEventPublisher;
   private final JsonConverter jsonConverter;
+  private final MeterRegistry meterRegistry;
 
   @KafkaListener(topics = RefundRequestedEvent.TOPIC, groupId = KafkaConsumerGroup.PAYMENT)
   public void handleRefundRequested(@Payload DomainEventEnvelope envelope, Acknowledgment ack) {
@@ -72,6 +76,11 @@ public class RefundRequestedEventListener {
             event.bookingId());
       }
 
+      Counter.builder(MetricNames.PAYMENT_REFUND)
+          .tag(MetricNames.TAG_OUTCOME, outcome.name().toLowerCase())
+          .register(meterRegistry)
+          .increment();
+
       // 성공(재발행·멱등 스킵 포함) 시에만 오프셋을 커밋한다(#269 표준).
       ack.acknowledge();
     } catch (DataIntegrityViolationException e) {
@@ -90,6 +99,7 @@ public class RefundRequestedEventListener {
             e);
         paymentEventPublisher.publishRefundFailed(
             event.bookingId(), event.bookingNumber(), REASON_REFUND_FAILED, LocalDateTime.now());
+        Counter.builder(MetricNames.PAYMENT_REFUND_FAILED).register(meterRegistry).increment();
         ack.acknowledge();
       } else {
         log.warn(

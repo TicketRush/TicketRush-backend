@@ -7,11 +7,12 @@ import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 
 import com.ticketrush.global.notification.Notifier;
+import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import java.util.Map;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
-import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
@@ -24,10 +25,18 @@ import org.mockito.junit.jupiter.MockitoExtension;
 @ExtendWith(MockitoExtension.class)
 class OutboxStatusUpdaterTest {
 
-  @InjectMocks private OutboxStatusUpdater outboxStatusUpdater;
+  private OutboxStatusUpdater outboxStatusUpdater;
 
   @Mock private OutboxStatusTransition transition;
   @Mock private Notifier notifier;
+
+  private SimpleMeterRegistry meterRegistry;
+
+  @BeforeEach
+  void setUp() {
+    meterRegistry = new SimpleMeterRegistry();
+    outboxStatusUpdater = new OutboxStatusUpdater(transition, notifier, meterRegistry);
+  }
 
   @Test
   @DisplayName("markSuccess: transition.markSuccess를 위임한다")
