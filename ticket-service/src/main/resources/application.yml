@@ -35,3 +35,12 @@ ticket:
     # QR 토큰 서명 시크릿. 기본값을 두지 않아 미주입 시 기동을 실패시킨다(공개 시크릿으로 서명되는 사고 방지).
     secret: ${TICKET_QR_SECRET}
     ttl-millis: ${TICKET_QR_TTL_MILLIS:300000}
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health, info, prometheus
+  endpoint:
+    health:
+      show-details: never
