@@ -76,4 +76,27 @@ class PaymentTest {
     assertThat(payment(PaymentStatus.CANCELED).isAlreadyProcessed()).isFalse();
     assertThat(payment(PaymentStatus.FAILED).isAlreadyProcessed()).isFalse();
   }
+
+  @Test
+  @DisplayName("failed 팩토리는 FAILED 상태로 실패 코드/사유를 담고 paymentKey는 비운다")
+  void failed_creates_failed_payment_with_meta() {
+    // when
+    Payment failed =
+        Payment.failed(
+            100L, 10L, 200L, PaymentProvider.TOSS, 55_000L, "PAYMENT_400_003", "결제가 거절되었습니다.");
+
+    // then
+    assertThat(failed.getStatus()).isEqualTo(PaymentStatus.FAILED);
+    assertThat(failed.getFailureCode()).isEqualTo("PAYMENT_400_003");
+    assertThat(failed.getFailureReason()).isEqualTo("결제가 거절되었습니다.");
+    assertThat(failed.getBookingId()).isEqualTo(100L);
+    assertThat(failed.getUserId()).isEqualTo(10L);
+    assertThat(failed.getSeatId()).isEqualTo(200L);
+    assertThat(failed.getAmount()).isEqualTo(55_000L);
+    // 결제가 성립하지 않았으므로 결제 성립 관련 필드는 비운다.
+    assertThat(failed.getPaymentKey()).isNull();
+    assertThat(failed.getApprovalNumber()).isNull();
+    assertThat(failed.getPaidAt()).isNull();
+    assertThat(failed.isAlreadyProcessed()).isFalse();
+  }
 }

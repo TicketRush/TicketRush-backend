@@ -125,8 +125,8 @@ class PaymentConfirmUseCaseTest {
   }
 
   @Test
-  @DisplayName("PG 승인 금액과 요청 금액이 다르면 PAYMENT_400_001 예외가 발생하고 Payment를 저장하지 않는다")
-  void execute_fail_when_amount_mismatch() {
+  @DisplayName("금액 불일치는 PG 승인 후(과금됨) 검증 실패라 FAILED로 기록하지 않는다")
+  void execute_does_not_record_when_amount_mismatch() {
     // given
     Long userId = 10L;
     Long bookingId = 100L;
@@ -147,6 +147,87 @@ class PaymentConfirmUseCaseTest {
         .isInstanceOf(BusinessException.class)
         .extracting("errorStatus")
         .isEqualTo(ErrorStatus.PAYMENT_AMOUNT_MISMATCH);
+
+    verify(paymentRepository, never()).saveAndFlush(any(Payment.class));
+    verify(paymentEventPublisher, never())
+        .publishConfirmed(any(), any(), any(), any(), any(), any());
+  }
+
+  @Test
+  @DisplayName("PG가 이미 승인·과금 완료한 건(ALREADY_COMPLETED)은 성공 건이라 FAILED로 기록하지 않는다")
+  void execute_does_not_record_when_pg_already_completed() {
+    // given
+    Long userId = 10L;
+    Long bookingId = 100L;
+    PaymentConfirmRequest request =
+        new PaymentConfirmRequest(bookingId, 200L, PaymentProvider.TOSS, 55_000L, "pgKey_xyz");
+
+    given(paymentRepository.existsByBookingIdAndStatus(bookingId, PaymentStatus.COMPLETED))
+        .willReturn(false);
+    given(paymentApprovalClientRouter.approve(any()))
+        .willThrow(new BusinessException(ErrorStatus.PAYMENT_ALREADY_COMPLETED));
+
+    // when & then
+    assertThatThrownBy(() -> paymentConfirmUseCase.execute(userId, request))
+        .isInstanceOf(BusinessException.class)
+        .extracting("errorStatus")
+        .isEqualTo(ErrorStatus.PAYMENT_ALREADY_COMPLETED);
+
+    verify(paymentRepository, never()).saveAndFlush(any(Payment.class));
+    verify(paymentEventPublisher, never())
+        .publishConfirmed(any(), any(), any(), any(), any(), any());
+  }
+
+  @Test
+  @DisplayName("PG가 결제를 거절하면(무과금 거절) 예외가 전파되고 FAILED 이력을 남긴다")
+  void execute_records_failed_when_pg_rejected() {
+    // given
+    Long userId = 10L;
+    Long bookingId = 100L;
+    Long seatId = 200L;
+    Long amount = 55_000L;
+    PaymentConfirmRequest request =
+        new PaymentConfirmRequest(bookingId, seatId, PaymentProvider.TOSS, amount, "pgKey_xyz");
+
+    given(paymentRepository.existsByBookingIdAndStatus(bookingId, PaymentStatus.COMPLETED))
+        .willReturn(false);
+    given(paymentApprovalClientRouter.approve(any()))
+        .willThrow(new BusinessException(ErrorStatus.PAYMENT_METHOD_REJECTED));
+
+    // when & then
+    assertThatThrownBy(() -> paymentConfirmUseCase.execute(userId, request))
+        .isInstanceOf(BusinessException.class)
+        .extracting("errorStatus")
+        .isEqualTo(ErrorStatus.PAYMENT_METHOD_REJECTED);
+
+    ArgumentCaptor<Payment> failedCaptor = ArgumentCaptor.forClass(Payment.class);
+    verify(paymentRepository).saveAndFlush(failedCaptor.capture());
+    Payment failed = failedCaptor.getValue();
+    assertThat(failed.getStatus()).isEqualTo(PaymentStatus.FAILED);
+    assertThat(failed.getFailureCode()).isEqualTo(ErrorStatus.PAYMENT_METHOD_REJECTED.getCode());
+    verify(paymentEventPublisher, never())
+        .publishConfirmed(any(), any(), any(), any(), any(), any());
+  }
+
+  @Test
+  @DisplayName("PG 통신 실패(결과 불명)는 고아 청구 위험이 있어 FAILED 이력을 남기지 않는다")
+  void execute_does_not_record_when_pg_communication_failed() {
+    // given
+    Long userId = 10L;
+    Long bookingId = 100L;
+    PaymentConfirmRequest request =
+        new PaymentConfirmRequest(bookingId, 200L, PaymentProvider.TOSS, 55_000L, "pgKey_xyz");
+
+    given(paymentRepository.existsByBookingIdAndStatus(bookingId, PaymentStatus.COMPLETED))
+        .willReturn(false);
+    given(paymentApprovalClientRouter.approve(any()))
+        .willThrow(new BusinessException(ErrorStatus.PAYMENT_PG_COMMUNICATION_FAILED));
+
+    // when & then
+    assertThatThrownBy(() -> paymentConfirmUseCase.execute(userId, request))
+        .isInstanceOf(BusinessException.class)
+        .extracting("errorStatus")
+        .isEqualTo(ErrorStatus.PAYMENT_PG_COMMUNICATION_FAILED);
 
     verify(paymentRepository, never()).saveAndFlush(any(Payment.class));
     verify(paymentEventPublisher, never())

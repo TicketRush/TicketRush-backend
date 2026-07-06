@@ -52,6 +52,14 @@ public class Payment extends AutoIdBaseEntity {
 
   private LocalDateTime paidAt; // 결제 완료 시점
 
+  /* 결제 실패(FAILED) 시 실패 코드/사유를 남겨 추적·집계·CS 대응에 쓴다. 성공 결제는 NULL이다(#297). failureCode는
+   * ErrorStatus code(예: PAYMENT_400_003) 문자열이다. */
+  @Column(length = 50)
+  private String failureCode; // 실패 코드 (ErrorStatus code)
+
+  @Column(length = 255)
+  private String failureReason; // 실패 사유 (사람이 읽는 메시지)
+
   /* completedBookingId는 status=COMPLETED일 때만 booking_id 값을 갖는 DB generated 컬럼이다(그 외 NULL). 이 컬럼의
    * unique 제약(uk_payment_completed_booking)으로 동일 booking에 서로 다른 paymentKey를 가진 confirm이 동시에 들어와도
    * COMPLETED 결제가 2건 생성되지 못하게 DB 레벨에서 막는다(#296, TOCTOU 최종 방어선). MySQL은 NULL을 unique 중복으로 보지 않으므로
@@ -80,6 +88,36 @@ public class Payment extends AutoIdBaseEntity {
     this.paymentKey = paymentKey;
     this.approvalNumber = approvalNumber;
     this.paidAt = paidAt;
+  }
+
+  /**
+   * PG 거절·검증 실패 등 결제 실패가 확정된 시점의 이력을 FAILED 상태로 생성한다(#297).
+   *
+   * <p>실패 추적/집계·CS 대응을 위해 실패 코드·사유를 함께 남긴다. 결제가 성립하지 않았으므로 {@code paymentKey}·{@code
+   * approvalNumber}·{@code paidAt}은 비운다. 특히 {@code paymentKey}를 비워 unique 제약과 충돌하지 않게 해 재결제(재시도)를
+   * 막지 않는다. {@code completedBookingId}(generated)도 COMPLETED가 아니므로 NULL이라 동일 booking에 FAILED가 여러 건
+   * 누적될 수 있다(재시도 이력). PG 통신 실패(결과 불명)는 고아 청구 위험이 있어 이 팩토리로 기록하지 않는다(UseCase에서 분기).
+   */
+  public static Payment failed(
+      Long bookingId,
+      Long userId,
+      Long seatId,
+      PaymentProvider provider,
+      Long amount,
+      String failureCode,
+      String failureReason) {
+    Payment payment =
+        Payment.builder()
+            .bookingId(bookingId)
+            .userId(userId)
+            .seatId(seatId)
+            .provider(provider)
+            .amount(amount)
+            .status(PaymentStatus.FAILED)
+            .build();
+    payment.failureCode = failureCode;
+    payment.failureReason = failureReason;
+    return payment;
   }
 
   /**
