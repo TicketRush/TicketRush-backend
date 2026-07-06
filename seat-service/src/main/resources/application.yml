@@ -22,3 +22,12 @@ springdoc:
 
 gateway:
   internal-token: ${GATEWAY_INTERNAL_TOKEN:test-token}
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health, info, prometheus
+  endpoint:
+    health:
+      show-details: never

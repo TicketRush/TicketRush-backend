@@ -35,3 +35,12 @@ payment:
       webhook-secret: ${TOSS_PAYMENTS_WEBHOOK_SECRET:}
       connect-timeout-ms: ${TOSS_PAYMENTS_CONNECT_TIMEOUT_MS:3000}
       read-timeout-ms: ${TOSS_PAYMENTS_READ_TIMEOUT_MS:10000}
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health, info, prometheus
+  endpoint:
+    health:
+      show-details: never
