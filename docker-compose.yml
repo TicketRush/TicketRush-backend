@@ -76,10 +76,30 @@ services:
     networks:
       - ticketrush-net
 
+  grafana:
+    image: grafana/grafana:11.1.0
+    container_name: grafana
+    ports:
+      - "127.0.0.1:3000:3000"
+    environment:
+      GF_SECURITY_ADMIN_USER: ${GRAFANA_ADMIN_USER:-admin}
+      GF_SECURITY_ADMIN_PASSWORD: ${GRAFANA_ADMIN_PASSWORD:-admin}
+      GF_USERS_ALLOW_SIGN_UP: "false"
+    volumes:
+      # 데이터소스·대시보드 프로비저닝(자동 연결/임포트)과 대시보드 JSON 번들
+      - ./monitoring/grafana/provisioning:/etc/grafana/provisioning:ro
+      - ./monitoring/grafana/dashboards:/var/lib/grafana/dashboards:ro
+      - grafana_data:/var/lib/grafana
+    depends_on:
+      - prometheus
+    networks:
+      - ticketrush-net
+
 volumes:
   redis_data:
   kafka-data:
   prometheus_data:
+  grafana_data:
 
 networks:
   ticketrush-net:

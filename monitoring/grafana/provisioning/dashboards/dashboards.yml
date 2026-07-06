@@ -1,0 +1,15 @@
+apiVersion: 1
+
+providers:
+  - name: TicketRush
+    orgId: 1
+    folder: TicketRush
+    type: file
+    disableDeletion: false
+    updateIntervalSeconds: 30
+    # 대시보드 SSOT는 리포지토리 JSON이며 소스는 :ro로 마운트된다. UI 편집은 파일로 영속되지 않으므로 비허용.
+    allowUiUpdates: false
+    options:
+      # docker-compose에서 ./monitoring/grafana/dashboards 를 이 경로로 마운트한다.
+      path: /var/lib/grafana/dashboards
+      foldersFromFilesStructure: false
