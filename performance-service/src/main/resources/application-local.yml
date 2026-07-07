@@ -1,8 +1,6 @@
 springdoc:
   swagger-ui:
     enabled: true
-  api-docs:
-    enabled: true
   servers:
     - url: http://localhost:8083
       description: 로컬 서버
@@ -16,42 +14,16 @@ spring:
   jpa:
     hibernate:
       ddl-auto: ${SPRING_JPA_HIBERNATE_DDL_AUTO:update}
-    open-in-view: false
-  servlet:
-    multipart:
-      enabled: true
-      max-file-size: 10MB
-      max-request-size: 50MB
   kafka:
     bootstrap-servers: localhost:29092
+  data:
+    redis:
+      host: ${REDIS_HOST:localhost}
+      port: ${REDIS_PORT:6379}
   cloud:
     aws:
-      region:
-        static: ap-northeast-2
       credentials:
         access-key: local-dummy-key
         secret-key: local-dummy-secret
-      stack:
-        auto: false
       s3:
         bucket: ticket-rush-local-bucket
-app:
-  event-publisher:
-    type: kafka
-  kafka:
-    topics:
-      performance-events:
-        partitions: 1
-        replicas: 1
-
-custom:
-  security:
-    permit-all: false
-    permit-urls:
-      # ========== 개발 도구 ==========
-      - /h2-console/**
-      - /swagger-ui/**
-      - /v3/api-docs/**
-      - /
-      - /favicon.ico
-      - /error

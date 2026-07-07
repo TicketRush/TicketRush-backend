@@ -7,16 +7,34 @@ spring:
     active: ${SPRING_PROFILES_ACTIVE:local}
   application:
     name: auth-service
+  jpa:
+    open-in-view: false
+  mail:
+    host: smtp.gmail.com
+    port: 587
+    username: ${MAIL_USERNAME}
+    password: ${MAIL_PASSWORD}
+    properties:
+      mail:
+        smtp:
+          auth: true
+          connectiontimeout: 5000
+          timeout: 5000
+          writetimeout: 5000
+          starttls:
+            enable: true
 
 oauth:
   kakao:
     authorization-uri: https://kauth.kakao.com/oauth/authorize
+    auth-uri: https://kauth.kakao.com/oauth/authorize
     token-uri: https://kauth.kakao.com/oauth/token
     user-info-uri: https://kapi.kakao.com/v2/user/me
     user-name-attribute: id
 
   google:
     authorization-uri: https://accounts.google.com/o/oauth2/v2/auth
+    auth-uri: https://accounts.google.com/o/oauth2/v2/auth
     token-uri: https://oauth2.googleapis.com/token
     user-info-uri: https://www.googleapis.com/oauth2/v2/userinfo
 
@@ -29,9 +47,20 @@ oauth:
 
 custom:
   global:
-    internalBackUrl: http://localhost:${server.port:8082}
+    internalBackUrl: ${INTERNAL_BACK_URL:http://localhost:${server.port:8082}}
   swagger:
-    serverUrl: http://localhost:8080
+    serverUrl: ${SWAGGER_SERVER_URL:http://localhost:8080}
+  security:
+    permit-all: false
+    internal-token: ${GATEWAY_INTERNAL_TOKEN}
+    permit-urls:
+      # ========== 개발 도구 ==========
+      - /h2-console/**
+      - /swagger-ui/**
+      - /v3/api-docs/**
+      - /
+      - /favicon.ico
+      - /error
 
 service:
   user:
@@ -39,6 +68,10 @@ service:
   http:
     connect-timeout-ms: ${SERVICE_HTTP_CONNECT_TIMEOUT_MS:3000}
     read-timeout-ms: ${SERVICE_HTTP_READ_TIMEOUT_MS:10000}
+
+app:
+  event-publisher:
+    type: kafka
 
 jwt:
   secret: ${JWT_SECRET}

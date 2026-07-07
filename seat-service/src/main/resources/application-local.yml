@@ -7,27 +7,9 @@ spring:
   jpa:
     hibernate:
       ddl-auto: ${SPRING_JPA_HIBERNATE_DDL_AUTO:update}
-    open-in-view: false
   kafka:
     bootstrap-servers: localhost:29092
-app:
-  event-publisher:
-    type: outbox
-  outbox:
-    aggregate-types:
-      - Seat
-    batch-size: 100
-    max-retries: 3
-    retention-hours: 72
-
-custom:
-  security:
-    permit-all: false
-    permit-urls:
-      # ========== 개발 도구 ==========
-      - /h2-console/**
-      - /swagger-ui/**
-      - /v3/api-docs/**
-      - /
-      - /favicon.ico
-      - /error
+  data:
+    redis:
+      host: ${REDIS_HOST:localhost}
+      port: ${REDIS_PORT:6379}

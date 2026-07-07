@@ -7,6 +7,8 @@ spring:
     active: ${SPRING_PROFILES_ACTIVE:local}
   application:
     name: user-service
+  jpa:
+    open-in-view: false
 
 service:
   auth:
@@ -15,11 +17,26 @@ service:
     connect-timeout-ms: ${SERVICE_HTTP_CONNECT_TIMEOUT_MS:3000}
     read-timeout-ms: ${SERVICE_HTTP_READ_TIMEOUT_MS:10000}
 
+app:
+  event-publisher:
+    type: kafka
+
 custom:
   global:
-    internalBackUrl: http://localhost:${server.port:8081}
+    internalBackUrl: ${INTERNAL_BACK_URL:http://localhost:${server.port:8081}}
   swagger:
-    serverUrl: http://localhost:8080
+    serverUrl: ${SWAGGER_SERVER_URL:http://localhost:8080}
+  security:
+    internal-token: ${GATEWAY_INTERNAL_TOKEN}
+    permit-all: false
+    permit-urls:
+      # ========== 개발 도구 ==========
+      - /h2-console/**
+      - /swagger-ui/**
+      - /v3/api-docs/**
+      - /
+      - /favicon.ico
+      - /error
 
 springdoc:
   api-docs:

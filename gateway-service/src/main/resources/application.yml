@@ -1,17 +1,11 @@
 server:
   port: 8080
 
-custom:
-  cors:
-    enabled: true
-    allowed-origins:
-      - http://localhost:3000
-      - http://localhost:8080
-
-
 spring:
   application:
     name: gateway-service
+  profiles:
+    active: ${SPRING_PROFILES_ACTIVE:local}
 
   cloud:
     gateway:
@@ -102,6 +96,13 @@ jwt:
 
 gateway:
   internal-token: ${GATEWAY_INTERNAL_TOKEN:test-token}
+
+custom:
+  security:
+    permit-all: false
+    permit-urls:
+      - /swagger-ui/**
+      - /v3/api-docs/**
 
 management:
   endpoints:

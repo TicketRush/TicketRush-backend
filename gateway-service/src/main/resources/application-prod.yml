@@ -1,0 +1,29 @@
+custom:
+  swagger:
+    serverUrl: ${SWAGGER_SERVER_URL}
+    description: "Production Server"
+
+  cors:
+    enabled: true
+    allowed-origins:
+      - ${CORS_ALLOWED_ORIGIN}
+
+services:
+  user:
+    host: ${USER_SERVICE_HOST}
+  auth:
+    host: ${AUTH_SERVICE_HOST}
+  performance:
+    host: ${PERFORMANCE_SERVICE_HOST}
+  booking:
+    host: ${BOOKING_SERVICE_HOST}
+  payment:
+    host: ${PAYMENT_SERVICE_HOST}
+  seat:
+    host: ${SEAT_SERVICE_HOST}
+  ticket:
+    host: ${TICKET_SERVICE_HOST}
+
+gateway:
+  # 운영은 게이트웨이 내부 토큰을 반드시 주입(base의 test-token 기본값 오버라이드, 미주입 시 fail-fast).
+  internal-token: ${GATEWAY_INTERNAL_TOKEN}

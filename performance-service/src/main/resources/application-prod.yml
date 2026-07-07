@@ -1,0 +1,36 @@
+spring:
+  datasource:
+    url: jdbc:mysql://${DB_HOST}:${DB_PORT}/${DB_NAME}
+    username: ${MYSQL_USERNAME}
+    password: ${MYSQL_PASSWORD}
+    driver-class-name: com.mysql.cj.jdbc.Driver
+  jpa:
+    hibernate:
+      ddl-auto: validate
+  kafka:
+    bootstrap-servers: ${KAFKA_BOOTSTRAP_SERVERS}
+  data:
+    redis:
+      host: ${REDIS_HOST}
+      port: ${REDIS_PORT:6379}
+  cloud:
+    aws:
+      # 운영은 IAM 인스턴스 롤 사용 권장(access/secret 미주입 시 DefaultCredentialsProvider로 폴백).
+      credentials:
+        access-key: ${AWS_S3_ACCESS_KEY:}
+        secret-key: ${AWS_S3_SECRET_KEY:}
+      s3:
+        bucket: ${AWS_S3_BUCKET}
+
+gateway:
+  # 운영은 게이트웨이 내부 토큰을 반드시 주입(base의 test-token 기본값 오버라이드, 미주입 시 fail-fast).
+  internal-token: ${GATEWAY_INTERNAL_TOKEN}
+
+custom:
+  security:
+    permit-urls:
+      - /swagger-ui/**
+      - /v3/api-docs/**
+      - /
+      - /favicon.ico
+      - /error
