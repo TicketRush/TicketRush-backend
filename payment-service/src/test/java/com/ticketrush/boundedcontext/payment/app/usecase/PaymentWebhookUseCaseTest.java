@@ -3,16 +3,16 @@ package com.ticketrush.boundedcontext.payment.app.usecase;
 import static org.assertj.core.api.Assertions.assertThatCode;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.BDDMockito.given;
 import static org.mockito.BDDMockito.willThrow;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 
-import com.ticketrush.boundedcontext.payment.app.support.PaymentWebhookVerifier;
 import com.ticketrush.boundedcontext.payment.domain.entity.Payment;
 import com.ticketrush.boundedcontext.payment.domain.types.PaymentProvider;
 import com.ticketrush.boundedcontext.payment.domain.types.PaymentStatus;
+import com.ticketrush.boundedcontext.payment.out.apiclient.PaymentInquiryClientRouter;
+import com.ticketrush.boundedcontext.payment.out.apiclient.PaymentInquiryResult;
 import com.ticketrush.boundedcontext.payment.out.repository.PaymentRepository;
 import com.ticketrush.global.exception.BusinessException;
 import com.ticketrush.global.status.ErrorStatus;
@@ -29,7 +29,6 @@ import org.mockito.junit.jupiter.MockitoExtension;
 @ExtendWith(MockitoExtension.class)
 class PaymentWebhookUseCaseTest {
 
-  private static final String SIGNATURE = "valid-signature";
   private static final String PAYMENT_KEY = "tossKey_abc";
   private static final byte[] BODY =
       """
@@ -40,14 +39,14 @@ class PaymentWebhookUseCaseTest {
       """
           .getBytes(StandardCharsets.UTF_8);
 
-  @Mock private PaymentWebhookVerifier webhookVerifier;
+  @Mock private PaymentInquiryClientRouter inquiryClientRouter;
   @Mock private PaymentRepository paymentRepository;
 
   private PaymentWebhookUseCase paymentWebhookUseCase;
 
   @BeforeEach
   void setUp() {
-    paymentWebhookUseCase = new PaymentWebhookUseCase(webhookVerifier, paymentRepository);
+    paymentWebhookUseCase = new PaymentWebhookUseCase(inquiryClientRouter, paymentRepository);
   }
 
   private Payment payment(PaymentStatus status) {
@@ -64,48 +63,73 @@ class PaymentWebhookUseCaseTest {
         .build();
   }
 
+  private void givenPgHasPayment() {
+    given(inquiryClientRouter.inquire(PaymentProvider.TOSS, PAYMENT_KEY))
+        .willReturn(
+            Optional.of(
+                new PaymentInquiryResult(
+                    PAYMENT_KEY, "BKG-0000100", 55_000L, "DONE", LocalDateTime.now())));
+  }
+
   @Test
-  @DisplayName("기존 COMPLETED 결제가 있으면 멱등 처리하고 예외 없이 끝난다")
+  @DisplayName("재조회로 존재가 확인되고 COMPLETED 결제가 있으면 멱등 처리하고 예외 없이 끝난다")
   void handle_idempotent_when_payment_completed() {
     // given
+    givenPgHasPayment();
     given(paymentRepository.findByPaymentKey(PAYMENT_KEY))
         .willReturn(Optional.of(payment(PaymentStatus.COMPLETED)));
 
     // when & then
-    assertThatCode(() -> paymentWebhookUseCase.handle(BODY, SIGNATURE)).doesNotThrowAnyException();
-    verify(webhookVerifier).verify(any(byte[].class), eq(SIGNATURE));
+    assertThatCode(() -> paymentWebhookUseCase.handle(BODY)).doesNotThrowAnyException();
+    verify(inquiryClientRouter).inquire(PaymentProvider.TOSS, PAYMENT_KEY);
     verify(paymentRepository).findByPaymentKey(PAYMENT_KEY);
   }
 
   @Test
-  @DisplayName("Payment가 없으면(누락) 예외 없이 끝난다(CRITICAL 로그로만 추적)")
+  @DisplayName("재조회는 성공했으나 로컬 Payment가 없으면 예외 없이 끝난다(CRITICAL 로그로만 추적)")
   void handle_logs_and_returns_when_payment_missing() {
     // given
+    givenPgHasPayment();
     given(paymentRepository.findByPaymentKey(PAYMENT_KEY)).willReturn(Optional.empty());
 
     // when & then
-    assertThatCode(() -> paymentWebhookUseCase.handle(BODY, SIGNATURE)).doesNotThrowAnyException();
+    assertThatCode(() -> paymentWebhookUseCase.handle(BODY)).doesNotThrowAnyException();
     verify(paymentRepository).findByPaymentKey(PAYMENT_KEY);
   }
 
   @Test
-  @DisplayName("서명 검증에 실패하면 예외가 전파되고 조회하지 않는다")
-  void handle_propagates_when_signature_invalid() {
+  @DisplayName("PG에 존재하지 않는 paymentKey(위조)면 PAYMENT_401_001로 거부하고 로컬 조회하지 않는다")
+  void handle_rejects_when_payment_not_found_at_pg() {
     // given
-    willThrow(new BusinessException(ErrorStatus.PAYMENT_WEBHOOK_SIGNATURE_INVALID))
-        .given(webhookVerifier)
-        .verify(any(byte[].class), any());
+    given(inquiryClientRouter.inquire(PaymentProvider.TOSS, PAYMENT_KEY))
+        .willReturn(Optional.empty());
 
     // when & then
-    assertThatThrownBy(() -> paymentWebhookUseCase.handle(BODY, SIGNATURE))
+    assertThatThrownBy(() -> paymentWebhookUseCase.handle(BODY))
         .isInstanceOf(BusinessException.class)
         .extracting("errorStatus")
-        .isEqualTo(ErrorStatus.PAYMENT_WEBHOOK_SIGNATURE_INVALID);
+        .isEqualTo(ErrorStatus.PAYMENT_WEBHOOK_INVALID);
     verify(paymentRepository, never()).findByPaymentKey(any());
   }
 
   @Test
-  @DisplayName("paymentKey가 없는 이벤트는 예외 없이 무시한다(처리 대상 아님)")
+  @DisplayName("재조회 통신 실패는 예외가 그대로 전파되고 로컬 조회하지 않는다(재전송 유도)")
+  void handle_propagates_when_inquiry_communication_fails() {
+    // given
+    willThrow(new BusinessException(ErrorStatus.PAYMENT_PG_COMMUNICATION_FAILED))
+        .given(inquiryClientRouter)
+        .inquire(PaymentProvider.TOSS, PAYMENT_KEY);
+
+    // when & then
+    assertThatThrownBy(() -> paymentWebhookUseCase.handle(BODY))
+        .isInstanceOf(BusinessException.class)
+        .extracting("errorStatus")
+        .isEqualTo(ErrorStatus.PAYMENT_PG_COMMUNICATION_FAILED);
+    verify(paymentRepository, never()).findByPaymentKey(any());
+  }
+
+  @Test
+  @DisplayName("paymentKey가 없는 이벤트는 재조회 없이 무시한다(처리 대상 아님)")
   void handle_ignores_when_payment_key_missing() {
     // given
     byte[] bodyWithoutKey =
@@ -113,33 +137,35 @@ class PaymentWebhookUseCaseTest {
             .getBytes(StandardCharsets.UTF_8);
 
     // when & then
-    assertThatCode(() -> paymentWebhookUseCase.handle(bodyWithoutKey, SIGNATURE))
-        .doesNotThrowAnyException();
+    assertThatCode(() -> paymentWebhookUseCase.handle(bodyWithoutKey)).doesNotThrowAnyException();
+    verify(inquiryClientRouter, never()).inquire(any(), any());
     verify(paymentRepository, never()).findByPaymentKey(any());
   }
 
   @Test
-  @DisplayName("페이로드 JSON이 깨졌으면 PAYMENT_400_006으로 실패한다")
+  @DisplayName("페이로드 JSON이 깨졌으면 재조회 없이 PAYMENT_400_006으로 실패한다")
   void handle_fails_when_payload_malformed() {
     // given
     byte[] malformed = "{ not-a-json".getBytes(StandardCharsets.UTF_8);
 
     // when & then
-    assertThatThrownBy(() -> paymentWebhookUseCase.handle(malformed, SIGNATURE))
+    assertThatThrownBy(() -> paymentWebhookUseCase.handle(malformed))
         .isInstanceOf(BusinessException.class)
         .extracting("errorStatus")
         .isEqualTo(ErrorStatus.PAYMENT_WEBHOOK_PAYLOAD_INVALID);
+    verify(inquiryClientRouter, never()).inquire(any(), any());
   }
 
   @Test
-  @DisplayName("Payment가 존재하나 COMPLETED가 아니어도 예외 없이 끝난다")
+  @DisplayName("재조회 성공 후 로컬 Payment가 COMPLETED가 아니어도 예외 없이 끝난다")
   void handle_returns_when_payment_not_completed() {
     // given
+    givenPgHasPayment();
     given(paymentRepository.findByPaymentKey(PAYMENT_KEY))
         .willReturn(Optional.of(payment(PaymentStatus.PENDING)));
 
     // when & then
-    assertThatCode(() -> paymentWebhookUseCase.handle(BODY, SIGNATURE)).doesNotThrowAnyException();
-    verify(webhookVerifier).verify(any(byte[].class), eq(SIGNATURE));
+    assertThatCode(() -> paymentWebhookUseCase.handle(BODY)).doesNotThrowAnyException();
+    verify(inquiryClientRouter).inquire(PaymentProvider.TOSS, PAYMENT_KEY);
   }
 }

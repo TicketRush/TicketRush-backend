@@ -49,7 +49,7 @@ public class SecurityConfig {
             auth ->
                 auth.requestMatchers("/v3/api-docs/**", "/swagger-ui/**", "/swagger-ui.html")
                     .permitAll()
-                    // PG webhook은 게이트웨이를 거치지 않는 외부 직접 호출이므로 서명 검증으로 인증한다(permitAll).
+                    // PG webhook은 게이트웨이를 거치지 않는 외부 직접 호출이므로 paymentKey 재조회 검증으로 인증한다(permitAll).
                     .requestMatchers(HttpMethod.POST, "/api/v1/payment/webhook")
                     .permitAll()
                     .requestMatchers(HttpMethod.POST, "/api/v1/payment/confirm")
