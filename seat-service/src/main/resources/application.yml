@@ -23,6 +23,12 @@ springdoc:
 gateway:
   internal-token: ${GATEWAY_INTERNAL_TOKEN:test-token}
 
+app:
+  seat:
+    release:
+      chunk-size: 100
+      max-chunks: 20
+
 management:
   endpoints:
     web:
