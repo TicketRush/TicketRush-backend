@@ -14,6 +14,7 @@ import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.data.jpa.test.autoconfigure.DataJpaTest;
 import org.springframework.boot.jpa.test.autoconfigure.TestEntityManager;
+import org.springframework.data.domain.PageRequest;
 
 @DataJpaTest
 class SeatRepositoryTest {
@@ -148,6 +149,73 @@ class SeatRepositoryTest {
     assertThat(updatedSeat1.getSeatStatus()).isEqualTo(SeatStatus.AVAILABLE); // AVAILABLE로 변경됨
     assertThat(validSeat.getSeatStatus()).isEqualTo(SeatStatus.HOLD); // 변경되지 않음
     assertThat(updatedSoldSeat.getSeatStatus()).isEqualTo(SeatStatus.SOLD); // 변경되지 않음
+  }
+
+  @Test
+  @DisplayName("만료된 HOLD 좌석을 id 오름차순으로 페이지 크기만큼만(청크) 조회하고 비만료 HOLD/SOLD는 제외한다")
+  void findExpiredHoldSeats_ReturnsChunkOrderedById() {
+    // given
+    LocalDateTime now = LocalDateTime.now();
+
+    // 만료된 HOLD 좌석 3개 -> 조회 대상 O (저장 순서를 뒤섞어 id ASC 정렬을 검증)
+    Seat expiredHoldSeat1 =
+        Seat.builder()
+            .seatLayoutId(1L)
+            .performanceId(100L)
+            .seatNumber("A1")
+            .seatStatus(SeatStatus.HOLD)
+            .holdExpiredAt(now.minusMinutes(1))
+            .build();
+    Seat expiredHoldSeat2 =
+        Seat.builder()
+            .seatLayoutId(1L)
+            .performanceId(100L)
+            .seatNumber("A2")
+            .seatStatus(SeatStatus.HOLD)
+            .holdExpiredAt(now.minusMinutes(3))
+            .build();
+    Seat expiredHoldSeat3 =
+        Seat.builder()
+            .seatLayoutId(1L)
+            .performanceId(100L)
+            .seatNumber("A3")
+            .seatStatus(SeatStatus.HOLD)
+            .holdExpiredAt(now.minusMinutes(5))
+            .build();
+
+    // 만료되지 않은 HOLD 좌석 -> 조회 대상 X
+    Seat validHoldSeat =
+        Seat.builder()
+            .seatLayoutId(1L)
+            .performanceId(100L)
+            .seatNumber("A4")
+            .seatStatus(SeatStatus.HOLD)
+            .holdExpiredAt(now.plusMinutes(5))
+            .build();
+
+    // 이미 결제 완료된 SOLD 좌석 -> 조회 대상 X
+    Seat soldSeat =
+        Seat.builder()
+            .seatLayoutId(1L)
+            .performanceId(100L)
+            .seatNumber("A5")
+            .seatStatus(SeatStatus.SOLD)
+            .holdExpiredAt(now.minusMinutes(1))
+            .build();
+
+    seatRepository.saveAll(
+        List.of(expiredHoldSeat1, expiredHoldSeat2, expiredHoldSeat3, validHoldSeat, soldSeat));
+
+    // when: 청크 크기 2로 상위 페이지 조회
+    List<Seat> firstChunk =
+        seatRepository.findExpiredHoldSeats(SeatStatus.HOLD, now, PageRequest.of(0, 2));
+
+    // then: 만료 HOLD만, 정확히 청크 크기(2)만큼, id 오름차순으로 반환
+    assertThat(firstChunk).hasSize(2);
+    assertThat(firstChunk)
+        .extracting(Seat::getId)
+        .containsExactly(expiredHoldSeat1.getId(), expiredHoldSeat2.getId());
+    assertThat(firstChunk).allMatch(seat -> seat.getSeatStatus() == SeatStatus.HOLD);
   }
 
   @Test

@@ -7,6 +7,7 @@ import com.ticketrush.boundedcontext.seat.domain.entity.Seat;
 import com.ticketrush.global.types.SeatStatus;
 import java.time.LocalDateTime;
 import java.util.List;
+import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
@@ -56,9 +57,14 @@ public interface SeatRepository extends JpaRepository<Seat, Long> {
           + "WHERE s.id IN :seatIds")
   List<SeatNumberResponse> findSeatNumbersByIdIn(@Param("seatIds") List<Long> seatIds);
 
-  @Query("SELECT s FROM Seat s " + "WHERE s.seatStatus = :holdStatus AND s.holdExpiredAt <= :now")
+  @Query(
+      "SELECT s FROM Seat s "
+          + "WHERE s.seatStatus = :holdStatus AND s.holdExpiredAt <= :now "
+          + "ORDER BY s.id ASC")
   List<Seat> findExpiredHoldSeats(
-      @Param("holdStatus") SeatStatus holdStatus, @Param("now") LocalDateTime now);
+      @Param("holdStatus") SeatStatus holdStatus,
+      @Param("now") LocalDateTime now,
+      Pageable pageable);
 
   @Modifying(clearAutomatically = true)
   @Query(
