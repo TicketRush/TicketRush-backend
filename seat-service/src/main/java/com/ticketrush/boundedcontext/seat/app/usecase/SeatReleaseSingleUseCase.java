@@ -1,5 +1,6 @@
 package com.ticketrush.boundedcontext.seat.app.usecase;
 
+import com.ticketrush.boundedcontext.seat.app.support.SeatHoldExpiredPublisher;
 import com.ticketrush.boundedcontext.seat.app.support.SeatStatusEventPublisher;
 import com.ticketrush.boundedcontext.seat.out.repository.SeatRepository;
 import com.ticketrush.global.types.SeatStatus;
@@ -15,6 +16,7 @@ public class SeatReleaseSingleUseCase {
 
   private final SeatRepository seatRepository;
   private final SeatStatusEventPublisher seatStatusEventPublisher;
+  private final SeatHoldExpiredPublisher seatHoldExpiredPublisher;
 
   @Transactional
   public void execute(Long seatId) {
@@ -30,6 +32,7 @@ public class SeatReleaseSingleUseCase {
                 return;
               }
 
+              seatHoldExpiredPublisher.publish(seat);
               seat.releaseHold();
               seatStatusEventPublisher.publishAfterCommit(seat);
               log.info("Redis 만료 이벤트 수신: 좌석 {} 상태를 AVAILABLE로 즉시 롤백했습니다.", seatId);
