@@ -60,6 +60,14 @@ public class Payment extends AutoIdBaseEntity {
   @Column(length = 255)
   private String failureReason; // 실패 사유 (사람이 읽는 메시지)
 
+  /* PG(예: Toss)가 4xx로 내려준 원본 거절 코드/사유. 내부 failureCode(카테고리)와 별개로 원본 사유를 남겨 CS·정밀
+   * 분석에 쓴다(#332). 성공 결제·원본 미확보(에러 body 파싱 실패) 시 NULL이다. */
+  @Column(length = 50)
+  private String pgFailureCode; // PG 원본 거절 코드
+
+  @Column(length = 255)
+  private String pgFailureReason; // PG 원본 거절 사유
+
   /* completedBookingId는 status=COMPLETED일 때만 booking_id 값을 갖는 DB generated 컬럼이다(그 외 NULL). 이 컬럼의
    * unique 제약(uk_payment_completed_booking)으로 동일 booking에 서로 다른 paymentKey를 가진 confirm이 동시에 들어와도
    * COMPLETED 결제가 2건 생성되지 못하게 DB 레벨에서 막는다(#296, TOCTOU 최종 방어선). MySQL은 NULL을 unique 중복으로 보지 않으므로
@@ -97,6 +105,9 @@ public class Payment extends AutoIdBaseEntity {
    * approvalNumber}·{@code paidAt}은 비운다. 특히 {@code paymentKey}를 비워 unique 제약과 충돌하지 않게 해 재결제(재시도)를
    * 막지 않는다. {@code completedBookingId}(generated)도 COMPLETED가 아니므로 NULL이라 동일 booking에 FAILED가 여러 건
    * 누적될 수 있다(재시도 이력). PG 통신 실패(결과 불명)는 고아 청구 위험이 있어 이 팩토리로 기록하지 않는다(UseCase에서 분기).
+   *
+   * <p>{@code pgFailureCode}/{@code pgFailureReason}는 PG 원본 거절 코드/사유로, 미확보 시 null이다(#332). 컬럼
+   * 길이(50/255)를 넘는 원본이 들어와도 이력 저장(INSERT)이 깨져 #297 추적까지 유실되지 않도록 팩토리 내부에서 잘라 담는다.
    */
   public static Payment failed(
       Long bookingId,
@@ -105,7 +116,9 @@ public class Payment extends AutoIdBaseEntity {
       PaymentProvider provider,
       Long amount,
       String failureCode,
-      String failureReason) {
+      String failureReason,
+      String pgFailureCode,
+      String pgFailureReason) {
     Payment payment =
         Payment.builder()
             .bookingId(bookingId)
@@ -117,7 +130,17 @@ public class Payment extends AutoIdBaseEntity {
             .build();
     payment.failureCode = failureCode;
     payment.failureReason = failureReason;
+    payment.pgFailureCode = truncate(pgFailureCode, 50);
+    payment.pgFailureReason = truncate(pgFailureReason, 255);
     return payment;
+  }
+
+  /* 컬럼 길이 초과 원본으로 INSERT가 깨지지 않도록 방어적으로 자른다. null은 그대로 둔다. */
+  private static String truncate(String value, int maxLength) {
+    if (value == null || value.length() <= maxLength) {
+      return value;
+    }
+    return value.substring(0, maxLength);
   }
 
   /**

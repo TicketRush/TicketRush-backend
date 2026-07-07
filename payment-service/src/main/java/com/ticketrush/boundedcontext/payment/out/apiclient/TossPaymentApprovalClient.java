@@ -63,6 +63,7 @@ public class TossPaymentApprovalClient implements PaymentApprovalClient {
                   (req, res) -> {
                     TossErrorResponse errorBody = readErrorBody(res);
                     String tossCode = errorBody == null ? null : errorBody.code();
+                    String tossMessage = errorBody == null ? null : errorBody.message();
                     TossErrorCode mapped = TossErrorCode.from(tossCode);
                     log.warn(
                         "[PG-TOSS] 결제 승인 거절. status={}, tossCode={}, mapped={}, "
@@ -72,7 +73,9 @@ public class TossPaymentApprovalClient implements PaymentApprovalClient {
                         mapped,
                         request.orderId(),
                         request.bookingId());
-                    throw new BusinessException(mapped.getErrorStatus());
+                    // 원본 Toss code/message를 UseCase까지 전달해 FAILED 이력에 남긴다(#332). data는 채우지
+                    // 않아(super(errorStatus)) 원본이 HTTP 응답 body에 노출되지 않게 한다.
+                    throw new PgRejectionException(mapped.getErrorStatus(), tossCode, tossMessage);
                   })
               .onStatus(
                   HttpStatusCode::is5xxServerError,
