@@ -47,8 +47,6 @@ payment:
       enabled: ${TOSS_PAYMENTS_ENABLED:false}
       base-url: ${TOSS_PAYMENTS_BASE_URL:https://api.tosspayments.com}
       secret-key: ${TOSS_PAYMENTS_SECRET_KEY:}
-      # Webhook 서명 검증용 시크릿. 결제 승인 API용 secret-key와 별개다(미설정 시 webhook은 모두 거부).
-      webhook-secret: ${TOSS_PAYMENTS_WEBHOOK_SECRET:}
       connect-timeout-ms: ${TOSS_PAYMENTS_CONNECT_TIMEOUT_MS:3000}
       read-timeout-ms: ${TOSS_PAYMENTS_READ_TIMEOUT_MS:10000}
 

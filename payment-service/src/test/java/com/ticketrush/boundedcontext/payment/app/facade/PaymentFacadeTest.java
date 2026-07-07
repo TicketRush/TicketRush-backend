@@ -141,16 +141,15 @@ class PaymentFacadeTest {
   }
 
   @Test
-  @DisplayName("handleWebhook은 webhook UseCase에 원문 body와 서명을 위임한다")
+  @DisplayName("handleWebhook은 webhook UseCase에 원문 body를 위임한다")
   void handleWebhook_delegates_to_usecase() {
     // given
     byte[] rawBody = "{\"eventType\":\"PAYMENT_STATUS_CHANGED\"}".getBytes(StandardCharsets.UTF_8);
-    String signature = "sig";
 
     // when
-    paymentFacade.handleWebhook(rawBody, signature);
+    paymentFacade.handleWebhook(rawBody);
 
     // then
-    verify(paymentWebhookUseCase).handle(rawBody, signature);
+    verify(paymentWebhookUseCase).handle(rawBody);
   }
 }

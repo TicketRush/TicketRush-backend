@@ -46,8 +46,8 @@ public class PaymentFacade {
     }
   }
 
-  public void handleWebhook(byte[] rawBody, String signature) {
-    paymentWebhookUseCase.handle(rawBody, signature);
+  public void handleWebhook(byte[] rawBody) {
+    paymentWebhookUseCase.handle(rawBody);
   }
 
   public void registerExpiredBooking(Long bookingId, LocalDateTime expiredAt) {

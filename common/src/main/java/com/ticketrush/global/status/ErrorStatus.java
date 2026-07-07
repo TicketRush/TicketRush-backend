@@ -154,8 +154,7 @@ public enum ErrorStatus {
       HttpStatus.BAD_REQUEST, "PAYMENT_400_006", "Webhook 페이로드를 해석할 수 없습니다."),
 
   // Payment 401
-  PAYMENT_WEBHOOK_SIGNATURE_INVALID(
-      HttpStatus.UNAUTHORIZED, "PAYMENT_401_001", "Webhook 서명 검증에 실패했습니다."),
+  PAYMENT_WEBHOOK_INVALID(HttpStatus.UNAUTHORIZED, "PAYMENT_401_001", "Webhook 검증에 실패했습니다."),
 
   // Payment 404
   PAYMENT_SESSION_NOT_FOUND(HttpStatus.NOT_FOUND, "PAYMENT_404_001", "결제 세션이 만료되었거나 존재하지 않습니다."),
