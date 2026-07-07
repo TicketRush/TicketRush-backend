@@ -19,6 +19,7 @@ import com.ticketrush.boundedcontext.payment.domain.types.PaymentStatus;
 import com.ticketrush.boundedcontext.payment.out.apiclient.PaymentApprovalClientRouter;
 import com.ticketrush.boundedcontext.payment.out.apiclient.PaymentApprovalRequest;
 import com.ticketrush.boundedcontext.payment.out.apiclient.PaymentApprovalResponse;
+import com.ticketrush.boundedcontext.payment.out.apiclient.PgRejectionException;
 import com.ticketrush.boundedcontext.payment.out.repository.ExpiredBookingRepository;
 import com.ticketrush.boundedcontext.payment.out.repository.PaymentRepository;
 import com.ticketrush.global.constants.MetricNames;
@@ -208,7 +209,7 @@ class PaymentConfirmUseCaseTest {
   }
 
   @Test
-  @DisplayName("PG가 결제를 거절하면(무과금 거절) 예외가 전파되고 FAILED 이력을 남긴다")
+  @DisplayName("PG가 결제를 거절하면(무과금 거절) 예외가 전파되고 원본 코드/사유까지 FAILED 이력에 남긴다")
   void execute_records_failed_when_pg_rejected() {
     // given
     Long userId = 10L;
@@ -221,7 +222,9 @@ class PaymentConfirmUseCaseTest {
     given(paymentRepository.existsByBookingIdAndStatus(bookingId, PaymentStatus.COMPLETED))
         .willReturn(false);
     given(paymentApprovalClientRouter.approve(any()))
-        .willThrow(new BusinessException(ErrorStatus.PAYMENT_METHOD_REJECTED));
+        .willThrow(
+            new PgRejectionException(
+                ErrorStatus.PAYMENT_METHOD_REJECTED, "REJECT_CARD_COMPANY", "카드사에서 거절한 카드입니다"));
 
     // when & then
     assertThatThrownBy(() -> paymentConfirmUseCase.execute(userId, request))
@@ -233,7 +236,10 @@ class PaymentConfirmUseCaseTest {
     verify(paymentRepository).saveAndFlush(failedCaptor.capture());
     Payment failed = failedCaptor.getValue();
     assertThat(failed.getStatus()).isEqualTo(PaymentStatus.FAILED);
+    // 내부 카테고리 코드/사유는 기존대로 유지되고(#297), PG 원본 코드/사유가 함께 저장된다(#332).
     assertThat(failed.getFailureCode()).isEqualTo(ErrorStatus.PAYMENT_METHOD_REJECTED.getCode());
+    assertThat(failed.getPgFailureCode()).isEqualTo("REJECT_CARD_COMPANY");
+    assertThat(failed.getPgFailureReason()).isEqualTo("카드사에서 거절한 카드입니다");
     verify(paymentEventPublisher, never())
         .publishConfirmed(any(), any(), any(), any(), any(), any());
 
@@ -255,6 +261,35 @@ class PaymentConfirmUseCaseTest {
                 .timer(MetricNames.PAYMENT_PG_APPROVE, MetricNames.TAG_PROVIDER, "TOSS")
                 .count())
         .isEqualTo(1L);
+  }
+
+  @Test
+  @DisplayName("원본 없는 화이트리스트 실패(순수 BusinessException)는 PG 원본 필드를 null로 남긴다")
+  void execute_records_failed_with_null_pg_fields_when_no_raw() {
+    // given: PgRejectionException이 아닌 순수 BusinessException(원본 미확보)이 던져진 경우
+    Long userId = 10L;
+    Long bookingId = 100L;
+    PaymentConfirmRequest request =
+        new PaymentConfirmRequest(bookingId, 200L, PaymentProvider.TOSS, 55_000L, "pgKey_xyz");
+
+    given(paymentRepository.existsByBookingIdAndStatus(bookingId, PaymentStatus.COMPLETED))
+        .willReturn(false);
+    given(paymentApprovalClientRouter.approve(any()))
+        .willThrow(new BusinessException(ErrorStatus.PAYMENT_LIMIT_EXCEEDED));
+
+    // when & then
+    assertThatThrownBy(() -> paymentConfirmUseCase.execute(userId, request))
+        .isInstanceOf(BusinessException.class)
+        .extracting("errorStatus")
+        .isEqualTo(ErrorStatus.PAYMENT_LIMIT_EXCEEDED);
+
+    ArgumentCaptor<Payment> failedCaptor = ArgumentCaptor.forClass(Payment.class);
+    verify(paymentRepository).saveAndFlush(failedCaptor.capture());
+    Payment failed = failedCaptor.getValue();
+    assertThat(failed.getStatus()).isEqualTo(PaymentStatus.FAILED);
+    assertThat(failed.getFailureCode()).isEqualTo(ErrorStatus.PAYMENT_LIMIT_EXCEEDED.getCode());
+    assertThat(failed.getPgFailureCode()).isNull();
+    assertThat(failed.getPgFailureReason()).isNull();
   }
 
   @Test

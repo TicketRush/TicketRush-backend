@@ -9,6 +9,7 @@ import com.ticketrush.boundedcontext.payment.domain.types.PaymentStatus;
 import com.ticketrush.boundedcontext.payment.out.apiclient.PaymentApprovalClientRouter;
 import com.ticketrush.boundedcontext.payment.out.apiclient.PaymentApprovalRequest;
 import com.ticketrush.boundedcontext.payment.out.apiclient.PaymentApprovalResponse;
+import com.ticketrush.boundedcontext.payment.out.apiclient.PgRejectionException;
 import com.ticketrush.boundedcontext.payment.out.repository.ExpiredBookingRepository;
 import com.ticketrush.boundedcontext.payment.out.repository.PaymentRepository;
 import com.ticketrush.global.constants.MetricNames;
@@ -162,6 +163,13 @@ public class PaymentConfirmUseCase {
     if (!RECORDABLE_FAILURES.contains(e.getErrorStatus())) {
       return;
     }
+    // PG(Toss)가 원본 거절 코드/사유를 실어 보낸 경우(PgRejectionException) 내부 ErrorStatus와 함께 원본도 남긴다(#332).
+    String pgFailureCode = null;
+    String pgFailureReason = null;
+    if (e instanceof PgRejectionException pge) {
+      pgFailureCode = pge.getRawCode();
+      pgFailureReason = pge.getRawMessage();
+    }
     try {
       Payment failed =
           Payment.failed(
@@ -171,7 +179,9 @@ public class PaymentConfirmUseCase {
               request.provider(),
               request.amount(),
               e.getErrorStatus().getCode(),
-              e.getErrorStatus().getMessage());
+              e.getErrorStatus().getMessage(),
+              pgFailureCode,
+              pgFailureReason);
       paymentRepository.saveAndFlush(failed);
       Counter.builder(MetricNames.PAYMENT_CONFIRM)
           .tag(MetricNames.TAG_RESULT, MetricNames.RESULT_FAILURE)

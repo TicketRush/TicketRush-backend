@@ -162,6 +162,40 @@ class TossPaymentApprovalClientTest {
     mockServer.verify();
   }
 
+  @Test
+  @DisplayName("Toss 4xx 거절 시 원본 code/message를 PgRejectionException에 실어 던진다")
+  void approve_carries_raw_toss_code_and_message() {
+    expect4xxWithCode("REJECT_CARD_COMPANY");
+
+    assertThatThrownBy(
+            () ->
+                client.approve(
+                    new PaymentApprovalRequest(
+                        PaymentProvider.TOSS, "pgKey_xyz", "BKG-0000100", 100L, 55_000L)))
+        .isInstanceOf(PgRejectionException.class)
+        .extracting("errorStatus", "rawCode", "rawMessage")
+        .containsExactly(ErrorStatus.PAYMENT_METHOD_REJECTED, "REJECT_CARD_COMPANY", "테스트 거절 메시지");
+
+    mockServer.verify();
+  }
+
+  @Test
+  @DisplayName("미정의 코드도 매핑 이전 원본 code를 그대로 보존한다")
+  void approve_preserves_raw_code_for_unknown() {
+    expect4xxWithCode("SOME_UNDEFINED_TOSS_CODE");
+
+    assertThatThrownBy(
+            () ->
+                client.approve(
+                    new PaymentApprovalRequest(
+                        PaymentProvider.TOSS, "pgKey_xyz", "BKG-0000100", 100L, 55_000L)))
+        .isInstanceOf(PgRejectionException.class)
+        .extracting("rawCode")
+        .isEqualTo("SOME_UNDEFINED_TOSS_CODE");
+
+    mockServer.verify();
+  }
+
   private void expect4xxWithCode(String tossCode) {
     mockServer
         .expect(requestTo(CONFIRM_URL))
