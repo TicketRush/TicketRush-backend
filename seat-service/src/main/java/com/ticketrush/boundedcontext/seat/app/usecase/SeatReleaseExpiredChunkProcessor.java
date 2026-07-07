@@ -1,5 +1,6 @@
 package com.ticketrush.boundedcontext.seat.app.usecase;
 
+import com.ticketrush.boundedcontext.seat.app.support.SeatHoldExpiredPublisher;
 import com.ticketrush.boundedcontext.seat.app.support.SeatStatusEventPublisher;
 import com.ticketrush.boundedcontext.seat.domain.entity.Seat;
 import com.ticketrush.boundedcontext.seat.out.repository.SeatRepository;
@@ -24,6 +25,7 @@ public class SeatReleaseExpiredChunkProcessor {
 
   private final SeatRepository seatRepository;
   private final SeatStatusEventPublisher seatStatusEventPublisher;
+  private final SeatHoldExpiredPublisher seatHoldExpiredPublisher;
 
   @Transactional
   public int releaseChunk(LocalDateTime now, int chunkSize) {
@@ -31,6 +33,7 @@ public class SeatReleaseExpiredChunkProcessor {
         seatRepository.findExpiredHoldSeats(SeatStatus.HOLD, now, PageRequest.of(0, chunkSize));
 
     for (Seat seat : expiredSeats) {
+      seatHoldExpiredPublisher.publish(seat);
       seat.releaseHold();
       seatStatusEventPublisher.publishAfterCommit(seat);
     }

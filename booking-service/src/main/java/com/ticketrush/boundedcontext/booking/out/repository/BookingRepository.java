@@ -21,6 +21,9 @@ public interface BookingRepository extends JpaRepository<Booking, Long> {
 
   Optional<Booking> findByBookingNumberAndUserId(String bookingNumber, Long userId);
 
+  @Query("SELECT b.id FROM Booking b WHERE b.bookingNumber = :bookingNumber")
+  Optional<Long> findIdByBookingNumber(@Param("bookingNumber") String bookingNumber);
+
   @Query(
       "SELECT b.id FROM Booking b "
           + "WHERE b.bookingStatus = :bookingStatus AND b.createdAt <= :cutoff "
