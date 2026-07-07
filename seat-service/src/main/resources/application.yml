@@ -7,12 +7,24 @@ spring:
     active: ${SPRING_PROFILES_ACTIVE:local}
   application:
     name: seat-service
+  jpa:
+    open-in-view: false
 
 custom:
   global:
-    internalBackUrl: http://localhost:${server.port:8086}
+    internalBackUrl: ${INTERNAL_BACK_URL:http://localhost:${server.port:8086}}
   swagger:
-    serverUrl: http://localhost:8080
+    serverUrl: ${SWAGGER_SERVER_URL:http://localhost:8080}
+  security:
+    permit-all: false
+    permit-urls:
+      # ========== 개발 도구 ==========
+      - /h2-console/**
+      - /swagger-ui/**
+      - /v3/api-docs/**
+      - /
+      - /favicon.ico
+      - /error
 
 springdoc:
   api-docs:
@@ -28,6 +40,14 @@ app:
     release:
       chunk-size: 100
       max-chunks: 20
+  event-publisher:
+    type: outbox
+  outbox:
+    aggregate-types:
+      - Seat
+    batch-size: 100
+    max-retries: 3
+    retention-hours: 72
 
 management:
   endpoints:

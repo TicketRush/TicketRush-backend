@@ -7,6 +7,8 @@ spring:
     active: ${SPRING_PROFILES_ACTIVE:local}
   application:
     name: booking-service
+  jpa:
+    open-in-view: false
 
 service:
   seat:
@@ -17,9 +19,19 @@ service:
 
 custom:
   global:
-    internalBackUrl: http://localhost:${server.port:8084}
+    internalBackUrl: ${INTERNAL_BACK_URL:http://localhost:${server.port:8084}}
   swagger:
-    serverUrl: http://localhost:8080
+    serverUrl: ${SWAGGER_SERVER_URL:http://localhost:8080}
+  security:
+    permit-all: false
+    permit-urls:
+      # ========== 개발 도구 ==========
+      - /h2-console/**
+      - /swagger-ui/**
+      - /v3/api-docs/**
+      - /
+      - /favicon.ico
+      - /error
 
 springdoc:
   api-docs:
@@ -34,6 +46,14 @@ gateway:
 # 기본은 비활성이며, 운영 환경에서 환경변수로 켠다(DLT_MONITOR_ENABLED=true, SLACK_ENABLED=true, SLACK_WEBHOOK_URL=...).
 # local/test는 미설정(기본 false)으로 비활성.
 app:
+  event-publisher:
+    type: kafka
+  outbox:
+    aggregate-types:
+      - Booking
+    batch-size: 100
+    max-retries: 3
+    retention-hours: 72
   dlt:
     monitor:
       enabled: ${DLT_MONITOR_ENABLED:false}

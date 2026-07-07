@@ -254,6 +254,25 @@ Diary diary = diaryRepository.findByDiaryIdAndUserId(diaryId, userId)
 * **Java:** 21
 * **Spring Boot:** 4.0.3 (LTS)
 
+### 🌱 프로파일 및 인프라 접속정보 외부화
+
+각 서비스는 `application.yml`(환경 무관 공통 설정) + 프로파일별 오버라이드(`application-local.yml` / `application-prod.yml` / 테스트용 `application-test.yml`) 구조를 따른다.
+
+* **설정 분리 원칙(SSOT):**
+    * **환경 무관 앱 설정**(`app.event-publisher.type`, `app.outbox.*`, `custom.security.permit-urls`, OAuth provider URI, mail 정적 프로퍼티, `spring.datasource.driver-class-name`, `spring.jpa.open-in-view` 등)은 `application.yml`(base)에 둔다.
+    * **접속 엔드포인트·환경가변 값**(DB/Redis/Kafka 호스트, `ddl-auto`, OAuth `allowed-redirect-domains`, gateway `services.*.host`, CORS origin, swagger serverUrl 등)만 프로파일 yml에 둔다.
+* **프로파일 활성화:** 컨테이너에서 `SPRING_PROFILES_ACTIVE=prod` 환경변수로 구동한다. base의 `spring.profiles.active: ${SPRING_PROFILES_ACTIVE:local}` 기본값이 local이다.
+* **접속정보 환경변수 규칙:**
+    * **DB:** `url: jdbc:mysql://${DB_HOST}:${DB_PORT}/${DB_NAME}`, 자격증명은 `${MYSQL_USERNAME}` / `${MYSQL_PASSWORD}`(기본값 없음, 미주입 시 기동 실패).
+    * **Redis:** `spring.data.redis.host/port` 를 **명시적으로 설정**한다(오토컨피그 localhost:6379 암묵 의존 금지). local은 `${REDIS_HOST:localhost}`, prod는 `${REDIS_HOST}`.
+    * **Kafka:** local은 `localhost:29092`, prod는 `${KAFKA_BOOTSTRAP_SERVERS}`.
+    * **gateway 서비스 호스트:** `${<NAME>_SERVICE_HOST}`(host-only). 포트가 포함된 서비스 URL(`${<NAME>_SERVICE_URL}`, [§ 서비스 간 호출 프로퍼티 키](#️-서비스-간-호출-프로퍼티-키-restclient) 참고)과는 별개의 host 전용 패턴이다.
+    * 값이 있는 것은 `${VAR:default}`, 자격증명·비밀키는 기본값 없는 `${VAR}`(fail-fast).
+* **운영 안전값:** prod의 `spring.jpa.hibernate.ddl-auto` 는 **`validate`**(스키마 사전 마이그레이션 전제). `management` actuator 노출은 `health, info, prometheus` + `health.show-details: never` 로 제한, prod `custom.security.permit-urls` 에서 `/h2-console/**` 등 개발도구 경로는 제외한다.
+* **민감정보:** 커밋 파일(yml 포함)에 평문 비밀값을 남기지 않는다. 운영 환경변수 키 전체 목록은 리포 루트 [`.env.prod.example`](../.env.prod.example)(값 비움)을 SSOT로 참고하며, 실제 값은 컨테이너 환경변수/Secret으로 주입한다.
+
+> 실제 RDS/ElastiCache/MSK 프로비저닝·CD 파이프라인 연동은 별도 배포(CD) 이슈에서 다룬다. 이 규칙은 **애플리케이션 설정 외부화**에 한정한다.
+
 ### 🏷 주석 컨벤션
 
 * **코드 길이 제한:** 100자 (Checkstyle `LineLength max=100` 강제)
