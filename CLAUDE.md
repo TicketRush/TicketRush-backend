@@ -21,6 +21,7 @@ Java · Spring Boot 기반. **버전 등 상세는 [`docs/backend-convention.md`
 
 **MSA (Micro Service Architecture)** - Gradle 멀티 모듈. 서비스 내부는 DDD 계층(`app`/`domain`/`in`/`out`/`global`) 구조를 따른다.
 디렉토리·DDD 계층 상세는 [`docs/ddd-directory-structure.md`](docs/ddd-directory-structure.md), 공통 모듈 주요 클래스는 [`docs/backend-convention.md`](docs/backend-convention.md) 참고.
+아키텍처 결정 근거·이력은 [`docs/adr/`](docs/adr/)에 ADR(아키텍처 결정 기록)로 남긴다.
 
 ### 모듈 목록
 | 모듈 | 역할 |

@@ -4,6 +4,10 @@
 # Linux start script should use lf
 /gradlew        text eol=lf
 
+# adr-tools(bash)가 읽는 파일 — CRLF면 경로/서식이 깨지므로 lf 고정
+/.adr-dir       text eol=lf
+docs/adr/**     text eol=lf
+
 # These are Windows script files and should use crlf
 *.bat           text eol=crlf
 
