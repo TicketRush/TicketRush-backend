@@ -65,6 +65,14 @@ services:
   prometheus:
     image: prom/prometheus:v2.53.0
     container_name: prometheus
+    # command는 이미지 기본 CMD를 통째로 덮으므로 기본 플래그를 재명시해야 한다.
+    # 마지막 줄만 실질 변경: k6 remote-write(-o experimental-prometheus-rw) 수신용 receiver 활성화.
+    command:
+      - "--config.file=/etc/prometheus/prometheus.yml"
+      - "--storage.tsdb.path=/prometheus"
+      - "--web.console.libraries=/usr/share/prometheus/console_libraries"
+      - "--web.console.templates=/usr/share/prometheus/consoles"
+      - "--web.enable-remote-write-receiver"
     ports:
       - "127.0.0.1:9090:9090"
     volumes:
@@ -92,6 +100,29 @@ services:
       - grafana_data:/var/lib/grafana
     depends_on:
       - prometheus
+    networks:
+      - ticketrush-net
+
+  # 부하 생성기. run-to-completion이라 상시 기동 대상이 아니므로 profile로 분리한다.
+  #   실행: docker compose run --rm k6 run /scripts/scenarios/seat-layouts.js
+  #   K6_OUT로 remote-write가 기본 적용되어 -o 플래그 없이도 Prometheus로 push된다.
+  #   같은 네트워크라 prometheus엔 서비스명으로, 호스트에서 도는 앱엔 host.docker.internal로 접근.
+  # ponytail: 부하 생성기와 대상이 같은 머신이라 리소스는 공유된다. 큰 부하는 별도 머신에서.
+  k6:
+    image: grafana/k6:latest
+    container_name: k6
+    profiles: ["loadtest"]
+    depends_on:
+      - prometheus
+    environment:
+      K6_OUT: experimental-prometheus-rw
+      K6_PROMETHEUS_RW_SERVER_URL: http://prometheus:9090/api/v1/write
+      K6_PROMETHEUS_RW_TREND_STATS: "p(95),p(99),avg"
+      BASE_URL: http://host.docker.internal:8080
+    volumes:
+      - ./load-test:/scripts:ro
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
     networks:
       - ticketrush-net
 
