@@ -65,6 +65,14 @@ services:
   prometheus:
     image: prom/prometheus:v2.53.0
     container_name: prometheus
+    # command는 이미지 기본 CMD를 통째로 덮으므로 기본 플래그를 재명시해야 한다.
+    # 마지막 줄만 실질 변경: k6 remote-write(-o experimental-prometheus-rw) 수신용 receiver 활성화.
+    command:
+      - "--config.file=/etc/prometheus/prometheus.yml"
+      - "--storage.tsdb.path=/prometheus"
+      - "--web.console.libraries=/usr/share/prometheus/console_libraries"
+      - "--web.console.templates=/usr/share/prometheus/consoles"
+      - "--web.enable-remote-write-receiver"
     ports:
       - "127.0.0.1:9090:9090"
     volumes:
