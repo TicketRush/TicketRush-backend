@@ -63,6 +63,7 @@ common/                     # 모듈 공통 코드 (내부 shared/ 디렉토리�
     * 각 버전은 서로 독립된 API 스펙을 가지며, **하위 호환성을 보장하기 위해 기존 버전은 유지**합니다.
     * 버전은 단순히 숫자를 증가시키는 것이 아니라, '요청/응답 구조 변경' 혹은 '필드 제거/이름 변경'과 같은 **Breaking Change 발생 시** 새로운 버전을
       생성합니다.
+    * **외부용 / 내부용 구분:** 외부 클라이언트용은 `/api/v1/{module}/...`, 서비스 간 내부 호출용은 `/api/v1/internal/{module}/...` 경로를 씁니다. URL 구분 규칙과 근거는 [`backend-convention.md`](backend-convention.md) §3 "API 엔드포인트 규칙" 및 [ADR 0002](adr/0002-external-internal-api-url-separation.md) 참고.
 * **`eventlistener`**: event를 받아서 처리하는 영역입니다.
 * **`scheduler`**: scheduler를 통해서 주기적으로 실행되는 영역입니다.
 * **`datainit`**: 애플리케이션 실행 시 초기 데이터 세팅 등 어떠한 일을 시작하는 영역입니다.
