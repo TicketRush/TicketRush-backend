@@ -1,0 +1,13 @@
+# Oracle Always Free(원격 분리 부하 테스트)용 오버레이. 로컬 기본값은 건드리지 않는다.
+#   docker compose -f docker-compose.yml -f docker-compose.oracle.yml up -d prometheus grafana redis kafka
+#
+# 기본 compose는 prometheus를 127.0.0.1:9090에 묶어 로컬 전용이다. 원격의 GitHub Actions 러너가
+# remote-write(-o experimental-prometheus-rw) 하려면 공인 인터페이스에 노출해야 하므로 여기서 0.0.0.0으로 바꾼다.
+#
+# ponytail: 인증 없는 공개 노출이다. Oracle Security List/NSG로 9090 접근 소스를 반드시 제한하고
+#           측정이 끝나면 포트를 닫는다(무료·포트폴리오 전제). 상시 공개가 필요하면 리버스 프록시 basic-auth로 올린다.
+# !override: 오버레이의 ports를 append가 아닌 교체로 병합해 127.0.0.1:9090과의 중복 바인딩을 막는다(Compose v2.24+).
+services:
+  prometheus:
+    ports: !override
+      - "9090:9090"
