@@ -10,6 +10,8 @@ load-test/
 └── seed/     # seed_load.sql(대량 시딩), cleanup_load.sql(정리)
 ```
 
+k6는 docker-compose의 `loadtest` profile로 분리된 컨테이너에서 실행한다(상시 기동 대상 아님).
+
 빠른 실행:
 
 ```bash
@@ -19,10 +21,8 @@ docker compose up -d prometheus grafana
 # 2) 대량 시딩 (규모는 seed_load.sql 상단 @vars 에서 조정)
 mysql -h 127.0.0.1 -u "$MYSQL_USERNAME" -p"$MYSQL_PASSWORD" ticket_rush < seed/seed_load.sql
 
-# 3) k6 실행 → Prometheus remote-write → Grafana
-K6_PROMETHEUS_RW_SERVER_URL=http://localhost:9090/api/v1/write \
-K6_PROMETHEUS_RW_TREND_STATS="p(95),p(99),avg" \
-k6 run -o experimental-prometheus-rw scenarios/seat-layouts.js
+# 3) k6 실행 (컨테이너, remote-write는 K6_OUT로 기본 적용) → Grafana
+docker compose run --rm k6 run /scripts/scenarios/seat-layouts.js
 ```
 
 상세(사전조건·Grafana 관측·트러블슈팅)는 [`docs/load-test-guide.md`](../docs/load-test-guide.md) 참고.

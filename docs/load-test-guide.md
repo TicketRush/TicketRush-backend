@@ -5,18 +5,20 @@ seat/booking/ticket 핫패스의 처리량·latency를 k6로 측정하고, 기�
 ## 1. 개요
 
 ```
-k6 (호스트) --(remote-write)--> Prometheus :9090 --(scrape)--> Grafana :3000
-                                     ↑
-              앱 8개 /actuator/prometheus (기존 scrape)
+k6 (컨테이너, loadtest profile) --(remote-write)--> Prometheus :9090 --(scrape)--> Grafana :3000
+                                                          ↑
+                        앱 8개(호스트) /actuator/prometheus (기존 scrape)
 ```
 
-- k6 결과는 **내장 remote-write 출력**(`-o experimental-prometheus-rw`)으로 Prometheus에 push한다. 커스텀 xk6 빌드나 InfluxDB는 쓰지 않는다.
+- k6는 docker-compose의 `loadtest` profile 컨테이너로 실행한다(호스트에 k6 설치 불필요, 평소 `up`엔 안 뜸).
+- k6 결과는 **내장 remote-write 출력**(`experimental-prometheus-rw`, compose의 `K6_OUT`로 기본 적용)으로 Prometheus에 push한다. 커스텀 xk6 빌드나 InfluxDB는 쓰지 않는다.
+- 부하 생성기와 대상이 같은 머신을 공유하므로 리소스가 경쟁한다. 큰 규모 부하는 별도 머신에서 이 k6 서비스 정의를 재사용해 실행하는 것을 권장한다.
 - k6 시계열(`k6_*`)과 앱 계측(`ticketrush_*`)이 같은 Prometheus에 모여, 하나의 Grafana에서 교차 관측된다.
 
 ## 2. 사전 조건
 
 ### 2.1 도구
-- [k6](https://grafana.com/docs/k6/latest/set-up/install-k6/) (remote-write 출력은 v0.42+ 내장)
+- Docker / Docker Compose (k6는 `loadtest` profile 컨테이너로 실행 — 로컬 k6 설치 불필요)
 - MySQL 클라이언트 (`mysql`), MySQL **8.0+** (시딩 스크립트가 재귀 CTE·윈도우 함수 사용)
 
 ### 2.2 모니터링 스택
@@ -61,25 +63,23 @@ mysql -h 127.0.0.1 -u "$MYSQL_USERNAME" -p"$MYSQL_PASSWORD" ticket_rush < load-t
 
 ## 4. k6 실행
 
-공통 환경변수:
-```bash
-export K6_PROMETHEUS_RW_SERVER_URL=http://localhost:9090/api/v1/write
-export K6_PROMETHEUS_RW_TREND_STATS="p(95),p(99),avg"   # 미설정 시 p95가 Grafana에서 비어 보임
-```
+k6는 `loadtest` profile 컨테이너로 실행한다. remote-write 관련 설정(`K6_OUT`, `K6_PROMETHEUS_RW_SERVER_URL`, `K6_PROMETHEUS_RW_TREND_STATS`)과 `BASE_URL`(→ `host.docker.internal:8080`)은 compose에 정의돼 있어 매번 `-o`/URL을 줄 필요가 없다.
 
-시나리오 파라미터는 `-e KEY=VALUE`로 덮는다 (`BASE_URL, PERF_ID, USER_ID, SEAT_ID_MIN, SEAT_ID_MAX, VUS, RAMP, STEADY`).
+스크립트는 `./load-test`가 컨테이너 안 `/scripts`로 마운트된다. 시나리오 파라미터는 `-e KEY=VALUE`로 덮는다 (`BASE_URL, PERF_ID, USER_ID, SEAT_ID_MIN, SEAT_ID_MAX, VUS, RAMP, STEADY`).
 
 ```bash
 # (b) 좌석 조회 — 인증 불필요, 먼저 파이프라인 검증용
-k6 run -o experimental-prometheus-rw \
+docker compose run --rm k6 run \
   -e PERF_ID=1 -e VUS=50 \
-  load-test/scenarios/seat-layouts.js
+  /scripts/scenarios/seat-layouts.js
 
 # (a) 예매 생성 — setup()에서 DevToken 자동 발급 후 Bearer 호출
-k6 run -o experimental-prometheus-rw \
+docker compose run --rm k6 run \
   -e PERF_ID=1 -e USER_ID=1 -e SEAT_ID_MIN=1 -e SEAT_ID_MAX=6000 \
-  load-test/scenarios/booking-create.js
+  /scripts/scenarios/booking-create.js
 ```
+
+> 대상 앱(게이트웨이·auth·seat 등)은 호스트에서 기동 중이어야 하고, prometheus/grafana 스택도 먼저 떠 있어야 한다(2.2). 컨테이너는 이들에 `host.docker.internal`로 접근한다.
 
 ## 5. Grafana 관측
 
@@ -97,6 +97,7 @@ k6 run -o experimental-prometheus-rw \
 ## 6. 트러블슈팅 / 리스크
 
 - **좌석 고갈**: 예매 부하가 좌석을 HOLD로 소모해 지속 부하 시 `SEAT_NOT_AVAILABLE`이 늘 수 있다. 대응 — `@cols_per`를 키워 AVAILABLE 풀을 크게, `SEAT_ID_MAX`를 넓게 분산, 실행 사이 cleanup+재시드 또는 `UPDATE seat SET seat_status='AVAILABLE', booking_number=NULL, hold_expired_at=NULL WHERE ...`로 리셋. 순수 처리량은 좌석 조회 시나리오로, 예매는 짧은 스파이크로 본다.
-- **Grafana에 p95가 없음**: `K6_PROMETHEUS_RW_TREND_STATS` 설정 확인.
-- **remote-write 연결 실패**: prometheus 컨테이너에 receiver 플래그가 적용됐는지(`docker inspect prometheus`의 command), 포트 9090 매핑 확인.
+- **Grafana에 p95가 없음**: compose의 `K6_PROMETHEUS_RW_TREND_STATS` 설정 확인.
+- **remote-write 연결 실패**: k6 컨테이너와 prometheus가 같은 `ticketrush-net`에 있는지, prometheus에 receiver 플래그가 적용됐는지(`docker inspect prometheus`의 command) 확인.
+- **앱 접근 실패**: 대상 서비스가 호스트에서 기동 중인지, k6 컨테이너의 `BASE_URL`이 `host.docker.internal:8080`인지 확인(Linux는 compose의 `extra_hosts`로 매핑됨).
 - **공유/운영 DB 시딩 금지**: 시딩·cleanup은 마커 범위만 건드리지만 반드시 로컬 전용 DB에서만 실행한다.
