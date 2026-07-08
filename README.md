@@ -121,3 +121,4 @@
 | [kafka-event-guide.md](docs/kafka-event-guide.md)             | Kafka 이벤트 / Outbox / DLT 정책 |
 | [mapstruct-guide.md](docs/mapstruct-guide.md)                 | MapStruct Mapper 구조         |
 | [ai-workflow-guide.md](docs/ai-workflow-guide.md)             | Claude Code AI 개발 워크플로우     |
+| [adr/](docs/adr/)                                             | 아키텍처 결정 기록(ADR)             |
