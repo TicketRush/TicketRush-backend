@@ -12,7 +12,7 @@ k6 (컨테이너, loadtest profile) --(remote-write)--> Prometheus :9090 --(scra
 
 - k6는 docker-compose의 `loadtest` profile 컨테이너로 실행한다(호스트에 k6 설치 불필요, 평소 `up`엔 안 뜸).
 - k6 결과는 **내장 remote-write 출력**(`experimental-prometheus-rw`, compose의 `K6_OUT`로 기본 적용)으로 Prometheus에 push한다. 커스텀 xk6 빌드나 InfluxDB는 쓰지 않는다.
-- 부하 생성기와 대상이 같은 머신을 공유하므로 리소스가 경쟁한다. 큰 규모 부하는 별도 머신에서 이 k6 서비스 정의를 재사용해 실행하는 것을 권장한다.
+- 부하 생성기와 대상이 같은 머신을 공유하므로 리소스가 경쟁한다. 신뢰 가능한 수치가 필요하면 대상을 원격(AWS 배포본)에 두고 분리 실행한다(§7).
 - k6 시계열(`k6_*`)과 앱 계측(`ticketrush_*`)이 같은 Prometheus에 모여, 하나의 Grafana에서 교차 관측된다.
 
 ## 2. 사전 조건
@@ -101,3 +101,50 @@ docker compose run --rm k6 run \
 - **remote-write 연결 실패**: k6 컨테이너와 prometheus가 같은 `ticketrush-net`에 있는지, prometheus에 receiver 플래그가 적용됐는지(`docker inspect prometheus`의 command) 확인.
 - **앱 접근 실패**: 대상 서비스가 호스트에서 기동 중인지, k6 컨테이너의 `BASE_URL`이 `host.docker.internal:8080`인지 확인(Linux는 compose의 `extra_hosts`로 매핑됨).
 - **공유/운영 DB 시딩 금지**: 시딩·cleanup은 마커 범위만 건드리지만 반드시 로컬 전용 DB에서만 실행한다.
+
+## 7. 원격 실행 — k6 로컬 + AWS 배포본
+
+k6는 **로컬에서 그대로 실행**하고, 대상 앱은 **AWS에 배포된 인스턴스**를 타격해 부하 생성기와 대상을 분리한다. 기존 `loadtest` 프로파일·시나리오·시딩은 그대로 쓰고 `BASE_URL`만 AWS 엔드포인트로 덮으면 된다.
+
+> 이 토폴로지를 택한 근거(전부 로컬·Oracle 무료·k6=원격+앱=로컬 등 대안 비교, 왜 반대 방향이 아닌지)는 [ADR 0004](adr/0004-load-test-execution-topology.md)가 SSOT다. 여기서는 실행 방법만 다룬다.
+
+```
+k6 (로컬 loadtest 컨테이너) --HTTP--> AWS 배포 앱 (공인 게이트웨이 :8080)
+        │
+        └─ remote-write ─> 로컬 Prometheus :9090 --scrape--> 로컬 Grafana :3000   (k6_* 시계열)
+```
+
+- **k6 클라이언트 시계열(`k6_*`: 처리량·latency·에러율)**은 기존대로 로컬 Prometheus→Grafana로 remote-write 된다(설정 무변경).
+- **앱 계측(`ticketrush_*`)은 로컬에서 스크랩되지 않는다** — 앱이 AWS에 있어 로컬 Prometheus의 `host.docker.internal` 스크랩 대상 밖이다. 앱 지표는 **AWS 측 모니터링(CloudWatch 등)에서 별도 확인**한다.
+
+### 7.1 사전 조건 (AWS)
+- 부하 대상 앱을 AWS에 배포하고 게이트웨이 공인 엔드포인트(`https://<aws-gateway>`)를 확보한다.
+- `seat-layouts`(read)는 **인증 불필요** → 배포 프로파일과 무관하게 바로 가능.
+- `booking-create`(write)는 `DevToken(/api/v1/dev/auth/token)`을 사용하는데 이는 **`local`/`dev` 프로파일에서만 노출**된다. → AWS 배포본을 **`dev` 프로파일(부하테스트 전용 환경)**로 띄우지 않으면 write 시나리오는 **인증 실패**한다.
+- 시딩은 3장과 동일하게 **AWS의 부하테스트용 DB**에 대해 수행한다(운영 DB 금지).
+
+### 7.2 k6 실행 (로컬)
+4장과 동일하되 `BASE_URL`만 AWS로 덮는다. remote-write는 로컬 prometheus로 그대로 나간다.
+```bash
+# 모니터링 스택 먼저 (2.2)
+docker compose up -d prometheus grafana
+
+# (b) 좌석 조회 — 인증 불필요
+docker compose run --rm k6 run \
+  -e BASE_URL=https://<aws-gateway> \
+  -e PERF_ID=1 -e VUS=50 \
+  /scripts/scenarios/seat-layouts.js
+
+# (a) 예매 생성 — AWS가 dev 프로파일(DevToken 노출)일 때만 가능
+docker compose run --rm k6 run \
+  -e BASE_URL=https://<aws-gateway> \
+  -e PERF_ID=1 -e USER_ID=1 -e SEAT_ID_MIN=1 -e SEAT_ID_MAX=6000 \
+  /scripts/scenarios/booking-create.js
+```
+관측은 5장 쿼리를 그대로 쓴다(단, `ticketrush_*` 앱 지표는 AWS 측에서 확인).
+
+### 7.3 비용
+비테스트 시간엔 AWS 리소스를 내려두는 **온디맨드 전제**로: 세션당 ~3시간 × 월 8회 = 24시간/월 ≈ **$2.5(약 3,500원)**. **비테스트 시간엔 AWS 리소스를 반드시 중지**해야 이 비용이 성립한다(상시 기동 시 24/7 과금).
+
+### 7.4 보안
+부하 대상 공인 엔드포인트와 `dev` 프로파일(DevToken 노출)은 **측정 시간에만** 열고, 끝나면 접근을 닫는다. 부하테스트용 DB·환경을 운영과 분리한다.

@@ -8,6 +8,7 @@ TicketRush의 아키텍처 결정을 번호 매긴 Markdown으로 축적하는 �
 
 - [1. 아키텍처 결정을 기록한다](0001-record-architecture-decisions.md)
 - [3. 단일 공유 DB를 유지하고 서비스 규율로 데이터 경계를 강제한다](0003-shared-database-with-service-boundaries.md)
+- [4. 부하 테스트 실행 토폴로지: k6는 로컬, 대상 앱은 AWS 배포본](0004-load-test-execution-topology.md)
 
 ## 사용법
 
