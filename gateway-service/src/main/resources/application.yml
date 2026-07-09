@@ -22,7 +22,10 @@ spring:
             - id: auth-service
               uri: http://${services.auth.host}:8082
               predicates:
-                - Path=/api/v1/auth/**,/v3/api-docs/auth
+                # /api/v1/dev/auth/** 는 DevToken 발급용(부하 테스트 write 시나리오가 게이트웨이 경유로 호출한다).
+                # 라우트는 항상 열려 있지만 DevTokenController 가 @Profile({"local","dev"}) 라
+                # prod 단독 기동에서는 빈이 없어 auth-service 가 404 를 반환한다.
+                - Path=/api/v1/auth/**,/api/v1/dev/auth/**,/v3/api-docs/auth
               filters:
                 - RewritePath=/v3/api-docs/auth,/v3/api-docs
 
