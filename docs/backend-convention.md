@@ -166,6 +166,13 @@ service:
     * 예: `GET` `/api/v1/member/`
     * **주의:** 모듈 이름은 항상 **단수형**으로 사용합니다.
 
+* **외부용 / 내부용 API 구분:** 외부 클라이언트가 호출하는 API와 서비스 간 내부 호출(`RestClient`)용 API를 **URL로 구분**합니다.
+    * 외부용: `/api/{version}/{module_name}/...` (예: `/api/v1/booking`)
+    * 내부용: `/api/{version}/internal/{module_name}/...` (예: `/api/v1/internal/booking/{id}`)
+    * **위치 규칙:** `internal` 세그먼트는 반드시 **버전 접두사 직후·모듈명 앞**에 둡니다. (`/api/v1/internal/booking` ✅ / `/api/v1/booking/internal` ❌)
+        * **근거:** Gateway 라우트가 `/api/v1/{module}/**` 서비스별 와일드카드라, `internal`을 모듈명 **뒤**에 두면 그 라우트에 걸려 외부로 노출됩니다. **버전 직후**에 두면 `/api/v1/internal/**`이 어떤 서비스 라우트에도 걸리지 않아, **Gateway 라우트에 등록하지 않는 것만으로 외부 차단**이 성립합니다(내부 호출은 Gateway를 우회해 서비스 포트로 직결되므로 영향 없음).
+    * **보안:** 내부용 엔드포인트는 `hasRole("INTERNAL")` + `X-Internal-Token` 검증을 적용합니다(공통 `InternalApiTokenFilter` 재사용). 경로별 하드코딩 차단 필터에 의존하지 않습니다.
+    * 결정 배경·트레이드오프는 [ADR 0002](adr/0002-external-internal-api-url-separation.md) 참고.
 
 * **RESTful API 규칙:**
     * 리스트 조회: `/{module_name}`
