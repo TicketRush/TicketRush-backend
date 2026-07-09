@@ -1,6 +1,7 @@
 package com.ticketrush.boundedcontext.payment.app.usecase;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.BDDMockito.given;
@@ -21,6 +22,8 @@ import com.ticketrush.boundedcontext.payment.out.apiclient.PaymentCancelResult;
 import com.ticketrush.boundedcontext.payment.out.repository.PaymentRepository;
 import com.ticketrush.boundedcontext.payment.out.repository.RefundRepository;
 import com.ticketrush.global.constants.MetricNames;
+import com.ticketrush.global.exception.BusinessException;
+import com.ticketrush.global.status.ErrorStatus;
 import com.ticketrush.shared.booking.event.RefundRequestedEvent;
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import java.lang.reflect.Field;
@@ -42,6 +45,7 @@ class PaymentRefundByBookingUseCaseTest {
   @Mock private RefundRepository refundRepository;
   @Mock private PaymentCancelClientRouter paymentCancelClientRouter;
   @Mock private PaymentCancelPersister paymentCancelPersister;
+  @Mock private FailedRefundRecorder failedRefundRecorder;
   @Mock private PaymentEventPublisher paymentEventPublisher;
 
   private SimpleMeterRegistry meterRegistry;
@@ -56,6 +60,7 @@ class PaymentRefundByBookingUseCaseTest {
             refundRepository,
             paymentCancelClientRouter,
             paymentCancelPersister,
+            failedRefundRecorder,
             paymentEventPublisher,
             meterRegistry);
   }
@@ -201,6 +206,26 @@ class PaymentRefundByBookingUseCaseTest {
             eq(AMOUNT),
             eq("사용자 예매 취소"),
             eq(refundConfirmedAt));
+  }
+
+  @Test
+  @DisplayName("PG 취소가 실패하면 FailedRefundRecorder에 위임하고 원 예외를 재던진다(영속화·발행 없음)")
+  void execute_delegates_to_recorder_and_rethrows_on_pg_failure() throws Exception {
+    // given
+    Payment payment = completedPayment();
+    given(paymentRepository.findFirstByBookingIdAndStatus(BOOKING_ID, PaymentStatus.COMPLETED))
+        .willReturn(Optional.of(payment));
+    BusinessException rejected = new BusinessException(ErrorStatus.PAYMENT_REFUND_FAILED);
+    given(paymentCancelClientRouter.cancel(any())).willThrow(rejected);
+
+    // when & then: 원 예외가 그대로 리스너로 전파돼 보상/재시도로 분류된다.
+    assertThatThrownBy(() -> paymentRefundByBookingUseCase.execute(event())).isSameAs(rejected);
+
+    // FAILED 이력 기록은 recorder에 위임한다(분류·저장·멱등은 FailedRefundRecorderTest에서 검증).
+    verify(failedRefundRecorder).recordIfRejected(payment, rejected);
+    verify(paymentCancelPersister, never()).persist(any(), any(Refund.class));
+    verify(paymentEventPublisher, never())
+        .publishCanceled(any(), any(), any(), any(), any(), any(), any(), any());
   }
 
   private Payment completedPayment() throws Exception {

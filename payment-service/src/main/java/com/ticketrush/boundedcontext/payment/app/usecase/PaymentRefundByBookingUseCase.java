@@ -5,13 +5,13 @@ import com.ticketrush.boundedcontext.payment.app.usecase.PaymentCancelPersister.
 import com.ticketrush.boundedcontext.payment.domain.entity.Payment;
 import com.ticketrush.boundedcontext.payment.domain.entity.Refund;
 import com.ticketrush.boundedcontext.payment.domain.types.PaymentStatus;
-import com.ticketrush.boundedcontext.payment.domain.types.RefundStatus;
 import com.ticketrush.boundedcontext.payment.out.apiclient.PaymentCancelClientRouter;
 import com.ticketrush.boundedcontext.payment.out.apiclient.PaymentCancelCommand;
 import com.ticketrush.boundedcontext.payment.out.apiclient.PaymentCancelResult;
 import com.ticketrush.boundedcontext.payment.out.repository.PaymentRepository;
 import com.ticketrush.boundedcontext.payment.out.repository.RefundRepository;
 import com.ticketrush.global.constants.MetricNames;
+import com.ticketrush.global.exception.BusinessException;
 import com.ticketrush.shared.booking.event.RefundRequestedEvent;
 import io.micrometer.core.instrument.MeterRegistry;
 import io.micrometer.core.instrument.Timer;
@@ -44,6 +44,7 @@ public class PaymentRefundByBookingUseCase {
   private final RefundRepository refundRepository;
   private final PaymentCancelClientRouter paymentCancelClientRouter;
   private final PaymentCancelPersister paymentCancelPersister;
+  private final FailedRefundRecorder failedRefundRecorder;
   private final PaymentEventPublisher paymentEventPublisher;
   private final MeterRegistry meterRegistry;
 
@@ -69,7 +70,8 @@ public class PaymentRefundByBookingUseCase {
 
     // PG 취소는 트랜잭션 밖에서 호출한다(외부 왕복 동안 DB 커넥션을 점유하지 않기 위함). paymentId 기반 고정 멱등 키로 PG 측 중복 취소를 막는다.
     Timer.Sample sample = Timer.start(meterRegistry);
-    PaymentCancelResult result;
+    PaymentCancelResult result = null;
+    BusinessException failure = null;
     try {
       result =
           paymentCancelClientRouter.cancel(
@@ -79,24 +81,30 @@ public class PaymentRefundByBookingUseCase {
                   payment.getAmount(),
                   REFUND_REASON,
                   generateIdempotencyKey(payment.getId())));
+    } catch (BusinessException e) {
+      failure = e;
     } finally {
+      // 타이머는 PG 왕복만 측정하도록 FAILED 저장(recordIfRejected)보다 먼저 멈춘다.
       sample.stop(
           Timer.builder(MetricNames.PAYMENT_PG_CANCEL)
               .tag(MetricNames.TAG_PROVIDER, payment.getProvider().name())
               .register(meterRegistry));
     }
+    if (failure != null) {
+      // PG 거절이면 FAILED 환불 이력을 남긴다(부수효과). 원 예외는 그대로 재던져 리스너가 보상/재시도로 분류하게 한다(#91, #334).
+      failedRefundRecorder.recordIfRejected(payment, failure);
+      throw failure;
+    }
 
     Refund refund =
-        Refund.builder()
-            .paymentId(payment.getId())
-            .bookingId(payment.getBookingId())
-            .price(payment.getAmount())
-            .status(RefundStatus.COMPLETED)
-            .pgRefundKey(result.pgRefundKey())
-            .reason(REFUND_REASON)
-            .requestedAt(LocalDateTime.now())
-            .confirmedAt(result.canceledAt())
-            .build();
+        Refund.completed(
+            payment.getId(),
+            payment.getBookingId(),
+            payment.getAmount(),
+            result.pgRefundKey(),
+            REFUND_REASON,
+            LocalDateTime.now(),
+            result.canceledAt());
 
     // 영속화(refund 저장 + 상태 전이)만 짧은 트랜잭션으로 분리한다. 동시 환불 시 unique 위반은 리스너가 멱등 처리한다(#296).
     CancelPersisted persisted = paymentCancelPersister.persist(payment.getId(), refund);

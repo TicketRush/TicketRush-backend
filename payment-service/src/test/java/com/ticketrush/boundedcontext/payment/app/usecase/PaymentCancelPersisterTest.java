@@ -95,6 +95,58 @@ class PaymentCancelPersisterTest {
     verify(refundRepository, never()).saveAndFlush(any(Refund.class));
   }
 
+  @Test
+  @DisplayName("이전 FAILED 환불 이력이 있으면 새 INSERT 대신 COMPLETED로 전이하고 결제를 CANCELED로 바꾼다")
+  void persist_transitions_existing_failed_refund() throws Exception {
+    // given: 이전 시도에서 FAILED row가 unique(payment_id) 슬롯을 점유한 상태에서 재시도가 성공한 상황
+    Long paymentId = 1L;
+    Payment payment = completedPayment(paymentId);
+    final Refund incoming = refund(paymentId); // UseCase가 만든 COMPLETED 환불
+    Refund existingFailed =
+        Refund.failed(
+            paymentId, 100L, 55_000L, "PG사 환불 처리에 실패했습니다.", LocalDateTime.of(2026, 5, 22, 10, 0));
+    setId(existingFailed, 777L);
+    given(paymentRepository.findById(paymentId)).willReturn(Optional.of(payment));
+    given(refundRepository.findByPaymentId(paymentId)).willReturn(Optional.of(existingFailed));
+
+    // when
+    CancelPersisted result = paymentCancelPersister.persist(paymentId, incoming);
+
+    // then: 새 INSERT 없이 기존 row를 전이(unique 슬롯 재사용)하고 결제는 CANCELED로 전이한다.
+    assertThat(result.refund()).isSameAs(existingFailed);
+    assertThat(result.refund().getStatus()).isEqualTo(RefundStatus.COMPLETED);
+    assertThat(result.payment().getStatus()).isEqualTo(PaymentStatus.CANCELED);
+    verify(refundRepository, never()).saveAndFlush(any(Refund.class));
+  }
+
+  @Test
+  @DisplayName("persistFailedRefund는 FAILED 환불만 저장하고 결제 상태 전이는 하지 않는다")
+  void persistFailedRefund_saves_only_failed_refund() {
+    // given
+    Refund failed = Refund.failed(1L, 100L, 55_000L, "PG사 환불 처리에 실패했습니다.", LocalDateTime.now());
+
+    // when
+    paymentCancelPersister.persistFailedRefund(failed);
+
+    // then: 환불 저장만 수행하고 결제 조회/전이는 일어나지 않는다(Payment는 COMPLETED 유지).
+    verify(refundRepository).saveAndFlush(failed);
+    verify(paymentRepository, never()).findById(any());
+    assertThat(failed.getStatus()).isEqualTo(RefundStatus.FAILED);
+  }
+
+  @Test
+  @DisplayName("persistFailedRefund의 paymentId unique 위반은 호출자(FailedRefundRecorder)로 전파된다")
+  void persistFailedRefund_propagates_unique_violation() {
+    // given
+    Refund failed = Refund.failed(1L, 100L, 55_000L, "PG사 환불 처리에 실패했습니다.", LocalDateTime.now());
+    given(refundRepository.saveAndFlush(failed))
+        .willThrow(new DataIntegrityViolationException("duplicate paymentId"));
+
+    // when & then: 트랜잭션 경계 밖에서 멱등 처리하도록 예외를 그대로 전파한다.
+    assertThatThrownBy(() -> paymentCancelPersister.persistFailedRefund(failed))
+        .isInstanceOf(DataIntegrityViolationException.class);
+  }
+
   private Payment completedPayment(Long paymentId) throws Exception {
     Payment payment =
         Payment.builder()

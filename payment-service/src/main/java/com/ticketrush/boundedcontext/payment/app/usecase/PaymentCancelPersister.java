@@ -2,6 +2,7 @@ package com.ticketrush.boundedcontext.payment.app.usecase;
 
 import com.ticketrush.boundedcontext.payment.domain.entity.Payment;
 import com.ticketrush.boundedcontext.payment.domain.entity.Refund;
+import com.ticketrush.boundedcontext.payment.domain.types.RefundStatus;
 import com.ticketrush.boundedcontext.payment.out.repository.PaymentRepository;
 import com.ticketrush.boundedcontext.payment.out.repository.RefundRepository;
 import com.ticketrush.global.exception.BusinessException;
@@ -43,10 +44,39 @@ public class PaymentCancelPersister {
             .findById(paymentId)
             .orElseThrow(() -> new BusinessException(ErrorStatus.PAYMENT_NOT_FOUND));
 
-    Refund saved = refundRepository.saveAndFlush(refund);
+    // 이전 시도에서 FAILED 환불 이력이 있으면(재시도 성공, #334) unique(payment_id) 슬롯을 재사용하도록 새 INSERT 대신 전이한다.
+    // 이 선-조회가 없으면 FAILED row와 unique 충돌이 나고, 그 DataIntegrityViolationException을 상위(Facade/리스너)가
+    // "이미 환불됨(멱등)"으로 오분류해 실제 성공한 환불이 은폐된다. 동시 최초 환불의 경합은 여전히 아래 saveAndFlush에서 표면화된다.
+    Refund existingFailed =
+        refundRepository
+            .findByPaymentId(paymentId)
+            .filter(r -> r.getStatus() == RefundStatus.FAILED)
+            .orElse(null);
+
+    Refund saved;
+    if (existingFailed != null) {
+      existingFailed.markCompleted(
+          refund.getPgRefundKey(), refund.getReason(), refund.getConfirmedAt());
+      saved = existingFailed;
+    } else {
+      saved = refundRepository.saveAndFlush(refund);
+    }
     payment.markCanceled();
 
     return new CancelPersisted(payment, saved);
+  }
+
+  /**
+   * 실패(FAILED) 환불 이력만 저장한다(#334). 결제는 취소되지 않았으므로 {@code markCanceled}는 호출하지 않는다(Payment는 COMPLETED
+   * 유지).
+   *
+   * <p>{@code saveAndFlush}로 즉시 flush해 {@code payment_id} unique 위반({@code
+   * DataIntegrityViolationException})을 트랜잭션 경계 밖(호출자 {@link FailedRefundRecorder})에서 멱등 처리할 수 있게
+   * 한다. 재전달/DLT 재처리로 이미 FAILED 이력이 있으면 위반이 난다.
+   */
+  @Transactional
+  public void persistFailedRefund(Refund failedRefund) {
+    refundRepository.saveAndFlush(failedRefund);
   }
 
   /** 영속화 결과. {@code payment}는 CANCELED로 전이된 상태다. */

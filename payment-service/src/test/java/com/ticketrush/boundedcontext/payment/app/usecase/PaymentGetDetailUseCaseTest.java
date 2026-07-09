@@ -97,6 +97,31 @@ class PaymentGetDetailUseCaseTest {
     verifyNoInteractions(refundRepository);
   }
 
+  @Test
+  @DisplayName("FAILED 환불 이력만 있으면(정상 결제) 상세의 refund는 null이다")
+  void execute_hides_failed_refund() throws Exception {
+    // given: #334로 COMPLETED 결제에도 FAILED 환불 이력이 남을 수 있다.
+    Long userId = 10L;
+    Long paymentId = 1L;
+    Long bookingId = 100L;
+    Payment payment = samplePayment(paymentId, userId, bookingId);
+    Refund failed =
+        Refund.failed(
+            paymentId,
+            bookingId,
+            55_000L,
+            "PG사 환불 처리에 실패했습니다.",
+            LocalDateTime.of(2026, 5, 2, 12, 0));
+    given(paymentRepository.findByIdAndUserId(paymentId, userId)).willReturn(Optional.of(payment));
+    given(refundRepository.findByBookingId(bookingId)).willReturn(Optional.of(failed));
+
+    // when
+    PaymentDetailResponse response = paymentGetDetailUseCase.execute(userId, paymentId);
+
+    // then: 실패 이력은 정상 결제 상세에 노출하지 않는다.
+    assertThat(response.refund()).isNull();
+  }
+
   private Payment samplePayment(Long id, Long userId, Long bookingId) throws Exception {
     Payment payment =
         Payment.builder()
