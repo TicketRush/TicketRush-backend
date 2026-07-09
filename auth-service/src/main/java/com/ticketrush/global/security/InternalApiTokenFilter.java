@@ -34,23 +34,23 @@ public class InternalApiTokenFilter extends OncePerRequestFilter {
 
   @Override
   protected void doFilterInternal(
-    HttpServletRequest request, HttpServletResponse response, FilterChain filterChain)
-    throws ServletException, IOException {
+      HttpServletRequest request, HttpServletResponse response, FilterChain filterChain)
+      throws ServletException, IOException {
 
     String expectedToken = securityProperties.getInternalToken();
     String actualToken = request.getHeader(INTERNAL_TOKEN_HEADER);
 
     if (!StringUtils.hasText(expectedToken)
-      || !StringUtils.hasText(actualToken)
-      || !MessageDigest.isEqual(expectedToken.getBytes(UTF_8), actualToken.getBytes(UTF_8))) {
+        || !StringUtils.hasText(actualToken)
+        || !MessageDigest.isEqual(expectedToken.getBytes(UTF_8), actualToken.getBytes(UTF_8))) {
       SecurityContextHolder.clearContext();
       response.setStatus(HttpServletResponse.SC_FORBIDDEN);
       return;
     }
 
     UsernamePasswordAuthenticationToken authentication =
-      new UsernamePasswordAuthenticationToken(
-        "internal-service", null, List.of(new SimpleGrantedAuthority("ROLE_INTERNAL")));
+        new UsernamePasswordAuthenticationToken(
+            "internal-service", null, List.of(new SimpleGrantedAuthority("ROLE_INTERNAL")));
 
     SecurityContextHolder.getContext().setAuthentication(authentication);
 
@@ -58,7 +58,7 @@ public class InternalApiTokenFilter extends OncePerRequestFilter {
   }
 
   private boolean isInternalAuthApi(HttpServletRequest request) {
-    String path = request.getServletPath();
+    String path = request.getRequestURI();
 
     return INTERNAL_AUTH_API_PREFIX.equals(path) || path.startsWith(INTERNAL_AUTH_API_PREFIX + "/");
   }

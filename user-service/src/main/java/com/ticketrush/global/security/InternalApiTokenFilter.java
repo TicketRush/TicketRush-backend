@@ -1,7 +1,8 @@
-package com.ticketrush.global.config;
+package com.ticketrush.global.security;
 
 import static java.nio.charset.StandardCharsets.UTF_8;
 
+import com.ticketrush.global.config.CustomSecurityProperties;
 import jakarta.servlet.FilterChain;
 import jakarta.servlet.ServletException;
 import jakarta.servlet.http.HttpServletRequest;

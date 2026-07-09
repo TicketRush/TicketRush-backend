@@ -28,7 +28,7 @@ public class InternalAuthController {
   @Operation(summary = "회원가입 이메일 인증 완료 여부 조회", description = "회원가입 전 이메일 인증 완료 여부를 조회합니다.")
   @GetMapping("/email-verification/verified")
   public ResponseEntity<ApiResponse<SignupEmailVerificationCheckResponse>>
-  checkSignupEmailVerification(@RequestParam String email) {
+      checkSignupEmailVerification(@RequestParam String email) {
     SignupEmailVerificationCheckResponse response = authFacade.checkSignupEmailVerification(email);
 
     return ApiResponse.onSuccess(SuccessStatus.OK, response);
@@ -37,7 +37,7 @@ public class InternalAuthController {
   @Operation(summary = "회원가입 이메일 인증 완료 상태 소비", description = "회원가입 진행 전 이메일 인증 완료 상태를 확인하고 삭제합니다.")
   @PostMapping("/email-verification/consume")
   public ResponseEntity<ApiResponse<Void>> consumeSignupEmailVerification(
-    @Valid @RequestBody SignupEmailVerificationConsumeRequest request) {
+      @Valid @RequestBody SignupEmailVerificationConsumeRequest request) {
     authFacade.consumeSignupEmailAuthVerified(request);
 
     return ApiResponse.onSuccess(SuccessStatus.OK, (Void) null);
