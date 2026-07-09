@@ -40,6 +40,7 @@ public class PaymentCancelUseCase {
   private final RefundRepository refundRepository;
   private final PaymentCancelClientRouter paymentCancelClientRouter;
   private final PaymentCancelPersister paymentCancelPersister;
+  private final FailedRefundRecorder failedRefundRecorder;
   private final PaymentEventPublisher paymentEventPublisher;
   private final PaymentMapper paymentMapper;
 
@@ -59,26 +60,31 @@ public class PaymentCancelUseCase {
     }
 
     // PG 취소는 트랜잭션 밖에서 호출한다(외부 왕복 동안 DB 커넥션을 점유하지 않기 위함).
-    PaymentCancelResult result =
-        paymentCancelClientRouter.cancel(
-            new PaymentCancelCommand(
-                payment.getProvider(),
-                payment.getPaymentKey(),
-                payment.getAmount(),
-                request.reason(),
-                generateIdempotencyKey(paymentId)));
+    PaymentCancelResult result;
+    try {
+      result =
+          paymentCancelClientRouter.cancel(
+              new PaymentCancelCommand(
+                  payment.getProvider(),
+                  payment.getPaymentKey(),
+                  payment.getAmount(),
+                  request.reason(),
+                  generateIdempotencyKey(paymentId)));
+    } catch (BusinessException e) {
+      // PG 거절이면 FAILED 환불 이력을 남긴다(부수효과). 원 예외는 그대로 던져 사용자에게 실패를 전달한다(#334).
+      failedRefundRecorder.recordIfRejected(payment, e);
+      throw e;
+    }
 
     Refund refund =
-        Refund.builder()
-            .paymentId(payment.getId())
-            .bookingId(payment.getBookingId())
-            .price(payment.getAmount())
-            .status(RefundStatus.COMPLETED)
-            .pgRefundKey(result.pgRefundKey())
-            .reason(request.reason())
-            .requestedAt(LocalDateTime.now())
-            .confirmedAt(result.canceledAt())
-            .build();
+        Refund.completed(
+            payment.getId(),
+            payment.getBookingId(),
+            payment.getAmount(),
+            result.pgRefundKey(),
+            request.reason(),
+            LocalDateTime.now(),
+            result.canceledAt());
 
     // 영속화(refund 저장 + 상태 전이)만 짧은 트랜잭션으로 분리한다. 동시 취소 시 unique 위반은 PaymentFacade가 멱등 처리한다.
     CancelPersisted persisted = paymentCancelPersister.persist(paymentId, refund);
@@ -118,6 +124,11 @@ public class PaymentCancelUseCase {
         refundRepository
             .findByPaymentId(paymentId)
             .orElseThrow(() -> new BusinessException(ErrorStatus.PAYMENT_REFUND_INCONSISTENT));
+    // FAILED 이력만 있고 취소 완료가 아니면 "취소됨"으로 응답하면 안 된다. unique 슬롯을 FAILED가 점유한 상태의 충돌(#334)을
+    // 멱등 성공으로 오분류해 미환불/미정합을 은폐하는 것을 막고, 불일치로 표면화한다.
+    if (existing.getStatus() != RefundStatus.COMPLETED) {
+      throw new BusinessException(ErrorStatus.PAYMENT_REFUND_INCONSISTENT);
+    }
     return paymentMapper.toCancelResponse(payment, existing);
   }
 

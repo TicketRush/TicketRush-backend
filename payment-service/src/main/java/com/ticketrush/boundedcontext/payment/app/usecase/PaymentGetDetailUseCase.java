@@ -4,6 +4,7 @@ import com.ticketrush.boundedcontext.payment.app.dto.response.PaymentDetailRespo
 import com.ticketrush.boundedcontext.payment.app.mapper.PaymentMapper;
 import com.ticketrush.boundedcontext.payment.domain.entity.Payment;
 import com.ticketrush.boundedcontext.payment.domain.entity.Refund;
+import com.ticketrush.boundedcontext.payment.domain.types.RefundStatus;
 import com.ticketrush.boundedcontext.payment.out.repository.PaymentRepository;
 import com.ticketrush.boundedcontext.payment.out.repository.RefundRepository;
 import com.ticketrush.global.exception.BusinessException;
@@ -28,7 +29,13 @@ public class PaymentGetDetailUseCase {
             .findByIdAndUserId(paymentId, userId)
             .orElseThrow(() -> new BusinessException(ErrorStatus.PAYMENT_NOT_FOUND));
 
-    Refund refund = refundRepository.findByBookingId(payment.getBookingId()).orElse(null);
+    // COMPLETED 환불만 상세에 노출한다. #334로 COMPLETED 결제에도 FAILED 환불 이력이 남을 수 있어, 상태 무관 매핑 시
+    // 정상 결제 상세에 "환불 실패" 정보가 잘못 노출된다.
+    Refund refund =
+        refundRepository
+            .findByBookingId(payment.getBookingId())
+            .filter(r -> r.getStatus() == RefundStatus.COMPLETED)
+            .orElse(null);
 
     return paymentMapper.toDetailResponse(payment, refund);
   }

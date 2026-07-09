@@ -1,6 +1,7 @@
 package com.ticketrush.boundedcontext.payment.in.eventlistener;
 
 import com.ticketrush.boundedcontext.payment.app.support.PaymentEventPublisher;
+import com.ticketrush.boundedcontext.payment.app.usecase.FailedRefundRecorder;
 import com.ticketrush.boundedcontext.payment.app.usecase.PaymentRefundByBookingUseCase;
 import com.ticketrush.boundedcontext.payment.app.usecase.PaymentRefundByBookingUseCase.RefundOutcome;
 import com.ticketrush.global.constants.MetricNames;
@@ -92,7 +93,8 @@ public class RefundRequestedEventListener {
       ack.acknowledge();
     } catch (BusinessException e) {
       // PG 거절(결정적)만 보상한다. 통신 실패는 환불 성공 여부가 불명이라 재시도→DLT로 넘겨 섣부른 REFUND_FAILED 확정을 피한다.
-      if (event != null && e.getErrorStatus() == ErrorStatus.PAYMENT_REFUND_FAILED) {
+      // 결정적 거절 판별은 FAILED 이력 기록(FailedRefundRecorder)과 동일한 술어를 공유해 저장/보상 짝이 어긋나지 않게 한다(#334).
+      if (event != null && FailedRefundRecorder.isDeterministicRejection(e)) {
         log.error(
             "[CRITICAL] PG 환불 거절(결정적) → 보상 이벤트(RefundFailed) 발행. bookingId: {}",
             event.bookingId(),

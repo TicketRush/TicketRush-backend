@@ -48,6 +48,7 @@ class PaymentCancelUseCaseTest {
   @Mock private RefundRepository refundRepository;
   @Mock private PaymentCancelClientRouter paymentCancelClientRouter;
   @Mock private PaymentCancelPersister paymentCancelPersister;
+  @Mock private FailedRefundRecorder failedRefundRecorder;
   @Mock private PaymentEventPublisher paymentEventPublisher;
 
   @Spy private PaymentMapper paymentMapper = Mappers.getMapper(PaymentMapper.class);
@@ -320,6 +321,48 @@ class PaymentCancelUseCaseTest {
     assertThat(response.status()).isEqualTo("CANCELED");
     verify(paymentCancelClientRouter, never()).cancel(any());
     verify(paymentCancelPersister, never()).persist(any(), any(Refund.class));
+  }
+
+  @Test
+  @DisplayName("PG 취소가 실패하면 FailedRefundRecorder에 위임하고 원 예외를 사용자에게 그대로 던진다(영속화·발행 없음)")
+  void execute_delegates_to_recorder_and_rethrows_on_pg_failure() throws Exception {
+    // given
+    Long userId = 10L;
+    Long paymentId = 1L;
+    final PaymentCancelRequest request = new PaymentCancelRequest("단순 변심");
+    Payment payment = completedPayment(paymentId, userId, 100L, 200L, 55_000L);
+    given(paymentRepository.findByIdAndUserId(paymentId, userId)).willReturn(Optional.of(payment));
+    BusinessException rejected = new BusinessException(ErrorStatus.PAYMENT_REFUND_FAILED);
+    given(paymentCancelClientRouter.cancel(any())).willThrow(rejected);
+
+    // when & then: 저장은 부수효과일 뿐 사용자 응답은 예외 그대로 유지된다.
+    assertThatThrownBy(() -> paymentCancelUseCase.execute(userId, paymentId, request))
+        .isSameAs(rejected);
+
+    verify(failedRefundRecorder).recordIfRejected(payment, rejected);
+    verify(paymentCancelPersister, never()).persist(any(), any(Refund.class));
+    verify(paymentEventPublisher, never())
+        .publishCanceled(any(), any(), any(), any(), any(), any(), any(), any());
+  }
+
+  @Test
+  @DisplayName("getCanceledResponse가 COMPLETED가 아닌 환불(FAILED)만 있으면 REFUND_INCONSISTENT로 표면화한다")
+  void getCanceledResponse_rejects_non_completed_refund() throws Exception {
+    // given: FAILED가 unique 슬롯을 점유한 상태의 충돌(#334)을 멱등 성공으로 오분류하지 않도록 표면화해야 한다.
+    Long userId = 10L;
+    Long paymentId = 1L;
+    Payment payment = completedPayment(paymentId, userId, 100L, 200L, 55_000L);
+    Refund failed =
+        Refund.failed(
+            paymentId, 100L, 55_000L, "PG사 환불 처리에 실패했습니다.", LocalDateTime.of(2026, 5, 22, 10, 0));
+    given(paymentRepository.findByIdAndUserId(paymentId, userId)).willReturn(Optional.of(payment));
+    given(refundRepository.findByPaymentId(paymentId)).willReturn(Optional.of(failed));
+
+    // when & then
+    assertThatThrownBy(() -> paymentCancelUseCase.getCanceledResponse(userId, paymentId))
+        .isInstanceOf(BusinessException.class)
+        .extracting("errorStatus")
+        .isEqualTo(ErrorStatus.PAYMENT_REFUND_INCONSISTENT);
   }
 
   private Payment completedPayment(
