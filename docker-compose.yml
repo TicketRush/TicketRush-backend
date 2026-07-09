@@ -10,13 +10,6 @@ services:
       - ticketrush-net
     volumes:
       - redis_data:/data
-    healthcheck:
-      test: [ "CMD", "redis-cli", "ping" ]
-      interval: 10s
-      timeout: 5s
-      retries: 5
-      start_period: 5s
-    mem_limit: 512m
 
   kafka:
     image: apache/kafka:3.7.0
@@ -55,8 +48,6 @@ services:
       retries: 5
       start_period: 30s
 
-    mem_limit: 1.5g
-
   prometheus:
     image: prom/prometheus:v2.53.0
     container_name: prometheus
@@ -78,14 +69,6 @@ services:
       - "host.docker.internal:host-gateway"
     networks:
       - ticketrush-net
-    healthcheck:
-      test: [ "CMD", "wget", "-q", "--spider", "http://localhost:9090/-/healthy" ]
-      interval: 10s
-      timeout: 5s
-      retries: 5
-      start_period: 10s
-    mem_limit: 1g
-    cpus: 0.3
 
   grafana:
     image: grafana/grafana:11.1.0
@@ -105,14 +88,6 @@ services:
       - prometheus
     networks:
       - ticketrush-net
-    healthcheck:
-      test: [ "CMD", "wget", "-q", "--spider", "http://localhost:3000/api/health" ]
-      interval: 10s
-      timeout: 5s
-      retries: 5
-      start_period: 15s
-    mem_limit: 512m
-    cpus: 0.2
 
   # 부하 생성기. run-to-completion이라 상시 기동 대상이 아니므로 profile로 분리한다.
   #   실행: docker compose run --rm k6 run /scripts/scenarios/seat-layouts.js

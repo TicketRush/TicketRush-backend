@@ -1,7 +1,9 @@
 # MySQL 초기 스키마 스냅샷
 
-`init/01-schema.sql`은 `docker-compose.aws.yml`의 MySQL 컨테이너가 최초 기동할 때
-`/docker-entrypoint-initdb.d`에서 1회 실행하는 초기 스키마다.
+`init/01-schema.sql`은 `ticket_rush` 스키마의 DDL 스냅샷이다. 배포 환경의 MySQL이 최초 기동할 때
+`/docker-entrypoint-initdb.d`에 마운트해 1회 실행하는 것을 전제로 한다.
+
+> 마운트를 실제로 거는 배포 Compose 구성은 이 저장소에 아직 없다. 별도 이슈에서 다룬다.
 
 ## 왜 필요한가
 
@@ -20,67 +22,64 @@
 **엔티티(`@Entity`, `@Table`, `@Column`, `@Index`)를 바꿀 때마다.** 바꾸고 재생성하지 않으면
 `validate`가 부팅을 거부한다.
 
-`init/`은 **볼륨이 비어 있을 때만** 실행된다. 갈아끼우려면 `mysql_data` 볼륨을 지워야 한다.
-
-> ⚠️ `docker compose ... down -v`를 쓰지 마라. `mysql_data`뿐 아니라 로컬 개발 스택의
-> `redis_data`·`kafka-data`·`prometheus_data`·`grafana_data`까지 함께 지운다.
-> 아래처럼 `mysql_data`만 지정해 지운다.
-
 ## 재생성 절차
 
-> ⚠️ 엔티티 변경을 **먼저** 반영해 이미지를 빌드한 뒤 덤프한다.
-> 덤프는 그 시점의 `@Index` 정의를 그대로 굳힌다.
+> ⚠️ 엔티티 변경을 **먼저** 반영한 뒤 덤프한다. 덤프는 그 시점의 `@Index` 정의를 그대로 굳힌다.
 
-편의상 아래 별칭을 쓴다.
-
-```sh
-alias dc='docker compose -f docker-compose.yml -f docker-compose.aws.yml'
-```
-
-1. MySQL 볼륨만 비우고 인프라를 띄운다. 볼륨이 비어야 다음 기동에서 `init/`이 다시 실행된다.
+1. 로컬 인프라를 띄운다. 앱 부팅에 Kafka·Redis가 필요하다.
 
    ```sh
-   dc down
-   docker volume rm ticketrush-backend_mysql_data   # 볼륨명 = {compose 프로젝트명}_mysql_data
-   dc up -d mysql kafka redis
+   docker compose up -d redis kafka
    ```
 
-2. DB를 쓰는 7개 서비스를 `ddl-auto: update`로 **순차** 기동한다. 각자 자기 테이블을 만든다.
+2. 스냅샷 전용 MySQL을 임시로 띄운다. 개발용 `ticket_rush`는 drift 되었을 수 있어 재사용하지 않는다.
+
+   ```sh
+   docker run -d --name mysql-snapshot -p 3307:3306 \
+     -e MYSQL_ROOT_PASSWORD=snapshot -e MYSQL_DATABASE=ticket_rush \
+     mysql:8.0
+   ```
+
+3. DB를 쓰는 7개 서비스를 **순차** 기동해 각자 자기 테이블을 만든다.
    동시에 띄우면 공유 테이블(outbox·inbox)에서 DDL이 경쟁한다.
-   OS 환경변수가 `application-prod.yml`보다 우선하므로 `validate`를 덮는다.
+   OS 환경변수가 `application-local.yml`보다 우선하므로 접속 대상과 `ddl-auto`를 덮는다.
 
    ```sh
    for svc in auth-service user-service performance-service seat-service \
               booking-service payment-service ticket-service; do
-     SPRING_JPA_HIBERNATE_DDL_AUTO=update dc up -d "$svc"
-     dc logs -f "$svc" | grep -m1 "Started .*Application"   # 부팅 완료까지 대기
+     SPRING_DATASOURCE_URL=jdbc:mysql://localhost:3307/ticket_rush \
+     SPRING_JPA_HIBERNATE_DDL_AUTO=update \
+       ./gradlew ":$svc:bootRun"     # "Started ...Application" 로그 확인 후 Ctrl+C
    done
    ```
 
-3. 덤프한다. `--skip-comments`는 버전·타임스탬프 헤더를 지워 재생성 시 diff를 깨끗하게 만든다.
-   `sed`는 테이블별 `AUTO_INCREMENT=<n>` 시작값을 지운다. 덤프를 뜬 DB에 몇 행이 있었는지가
+   (gateway는 datasource가 없어 제외한다.)
+
+4. 덤프한다. `--skip-comments`는 버전·타임스탬프 헤더를 지운다.
+   `sed`는 테이블별 `AUTO_INCREMENT=<n>` 시작값을 지운다 — 덤프를 뜬 DB에 몇 행이 있었는지가
    그대로 굳어 재현이 깨지기 때문이다(컬럼의 `AUTO_INCREMENT` 속성 자체는 남는다).
 
    ```sh
-   dc exec -T mysql mysqldump -uroot -p"$MYSQL_ROOT_PASSWORD" \
+   docker exec -e MYSQL_PWD=snapshot mysql-snapshot mysqldump -uroot \
      --no-data --skip-add-drop-table --skip-comments ticket_rush \
      | sed -E 's/ AUTO_INCREMENT=[0-9]+//g' \
      > infra/mysql/init/01-schema.sql
    ```
 
-4. `idx_seat_performance_id`와 `uk_seat_layout_performance_id`가 파일에 있는지 확인한다.
+5. 인덱스와 제약이 들어갔는지 확인한다.
 
    ```sh
    grep -E "idx_seat_performance_id|uk_seat_layout_performance_id" infra/mysql/init/01-schema.sql
    ```
 
-5. 스냅샷이 실제로 `validate`를 통과하는지 검증한다. MySQL 볼륨을 비우고 전체를 다시 띄운다.
+6. 정리한다.
 
    ```sh
-   dc down
-   docker volume rm ticketrush-backend_mysql_data
-   dc up -d          # init/01-schema.sql 이 1회 실행된다
-   dc ps             # 13개 컨테이너가 전부 healthy
+   docker rm -f mysql-snapshot
    ```
 
-   스키마와 엔티티가 어긋나면 여기서 `SchemaManagementException`으로 부팅이 실패한다.
+## 검증
+
+스냅샷이 실제로 `validate`를 통과하는지 보려면, 빈 MySQL에 `init/01-schema.sql`을 적용한 뒤
+서비스를 `prod` 프로파일(`ddl-auto: validate`)로 띄운다. 스키마와 엔티티가 어긋나면
+`SchemaManagementException`으로 부팅이 실패한다.
