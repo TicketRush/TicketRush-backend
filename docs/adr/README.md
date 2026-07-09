@@ -8,6 +8,7 @@ TicketRush의 아키텍처 결정을 번호 매긴 Markdown으로 축적하는 �
 
 - [1. 아키텍처 결정을 기록한다](0001-record-architecture-decisions.md)
 - [2. 외부용/내부용 API를 URL로 구분한다](0002-external-internal-api-url-separation.md)
+- [3. 단일 공유 DB를 유지하고 서비스 규율로 데이터 경계를 강제한다](0003-shared-database-with-service-boundaries.md)
 
 ## 사용법
 
