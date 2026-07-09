@@ -10,6 +10,7 @@ import com.ticketrush.boundedcontext.performance.app.dto.response.PerformanceDet
 import com.ticketrush.boundedcontext.performance.app.facade.PerformanceFacade;
 import com.ticketrush.boundedcontext.performance.domain.types.Genre;
 import com.ticketrush.boundedcontext.performance.domain.types.PerformanceStatus;
+import com.ticketrush.global.config.CustomSecurityProperties;
 import com.ticketrush.global.config.JacksonConfig;
 import com.ticketrush.global.config.SecurityConfig;
 import com.ticketrush.global.exception.BusinessException;
@@ -26,7 +27,7 @@ import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
 
 @WebMvcTest(PerformanceController.class)
-@Import({JacksonConfig.class, SecurityConfig.class})
+@Import({CustomSecurityProperties.class, JacksonConfig.class, SecurityConfig.class})
 class PerformanceGetDetailTest {
 
   @Autowired private MockMvc mockMvc;
