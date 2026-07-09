@@ -24,26 +24,22 @@ public class SecurityConfig {
   @Bean
   public SecurityFilterChain filterChain(HttpSecurity http) throws Exception {
     http.csrf(csrf -> csrf.disable())
-        .cors(cors -> {})
-        .addFilterBefore(gatewayHeaderFilter, UsernamePasswordAuthenticationFilter.class)
-        .addFilterBefore(internalApiTokenFilter, UsernamePasswordAuthenticationFilter.class)
-        .authorizeHttpRequests(
-            auth ->
-                auth.requestMatchers("/v3/api-docs/**", "/swagger-ui/**", "/swagger-ui.html")
-                    .permitAll()
-                    .requestMatchers(
-                        HttpMethod.POST,
-                        "/api/v1/auth/signup/email-verification/send",
-                        "/api/v1/auth/signup/email-verification/verify")
-                    .permitAll()
-                    .requestMatchers(
-                        HttpMethod.GET, "/api/v1/auth/signup/email-verification/verified")
-                    .hasRole("INTERNAL")
-                    .requestMatchers(
-                        HttpMethod.POST, "/api/v1/auth/signup/email-verification/consume")
-                    .hasRole("INTERNAL")
-                    .anyRequest()
-                    .permitAll());
+      .cors(cors -> {})
+      .addFilterBefore(gatewayHeaderFilter, UsernamePasswordAuthenticationFilter.class)
+      .addFilterBefore(internalApiTokenFilter, UsernamePasswordAuthenticationFilter.class)
+      .authorizeHttpRequests(
+        auth ->
+          auth.requestMatchers("/v3/api-docs/**", "/swagger-ui/**", "/swagger-ui.html")
+            .permitAll()
+            .requestMatchers("/api/v1/internal/auth/**")
+            .hasRole("INTERNAL")
+            .requestMatchers(
+              HttpMethod.POST,
+              "/api/v1/auth/signup/email-verification/send",
+              "/api/v1/auth/signup/email-verification/verify")
+            .permitAll()
+            .anyRequest()
+            .permitAll());
 
     return http.build();
   }

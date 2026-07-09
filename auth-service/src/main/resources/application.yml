@@ -85,7 +85,7 @@ springdoc:
     enabled: false
 
 gateway:
-  internal-token: ${GATEWAY_INTERNAL_TOKEN:test-token}
+  internal-token: ${GATEWAY_INTERNAL_TOKEN}
 
 management:
   endpoints:
