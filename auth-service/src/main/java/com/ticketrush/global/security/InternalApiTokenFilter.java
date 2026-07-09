@@ -11,7 +11,6 @@ import java.io.IOException;
 import java.security.MessageDigest;
 import java.util.List;
 import lombok.RequiredArgsConstructor;
-import org.springframework.http.HttpMethod;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.authority.SimpleGrantedAuthority;
 import org.springframework.security.core.context.SecurityContextHolder;
@@ -24,20 +23,13 @@ import org.springframework.web.filter.OncePerRequestFilter;
 public class InternalApiTokenFilter extends OncePerRequestFilter {
 
   private static final String INTERNAL_TOKEN_HEADER = "X-Internal-Token";
-
-  private static final String SIGNUP_EMAIL_VERIFICATION_VERIFIED_PATH =
-      "/api/v1/auth/signup/email-verification/verified";
-
-  private static final String SIGNUP_EMAIL_VERIFICATION_CONSUME_PATH =
-      "/api/v1/auth/signup/email-verification/consume";
-
-  private static final String INTERNAL_USER_API_PREFIX = "/api/v1/internal/user";
+  private static final String INTERNAL_AUTH_API_PREFIX = "/api/v1/internal/auth";
 
   private final CustomSecurityProperties securityProperties;
 
   @Override
   protected boolean shouldNotFilter(HttpServletRequest request) {
-    return !isInternalApi(request);
+    return !isInternalAuthApi(request);
   }
 
   @Override
@@ -51,6 +43,7 @@ public class InternalApiTokenFilter extends OncePerRequestFilter {
     if (!StringUtils.hasText(expectedToken)
         || !StringUtils.hasText(actualToken)
         || !MessageDigest.isEqual(expectedToken.getBytes(UTF_8), actualToken.getBytes(UTF_8))) {
+      SecurityContextHolder.clearContext();
       response.setStatus(HttpServletResponse.SC_FORBIDDEN);
       return;
     }
@@ -64,16 +57,9 @@ public class InternalApiTokenFilter extends OncePerRequestFilter {
     filterChain.doFilter(request, response);
   }
 
-  private boolean isInternalApi(HttpServletRequest request) {
-    String path = request.getServletPath();
-    String method = request.getMethod();
+  private boolean isInternalAuthApi(HttpServletRequest request) {
+    String path = request.getRequestURI();
 
-    return isInternalUserApi(path)
-        || (HttpMethod.GET.matches(method) && SIGNUP_EMAIL_VERIFICATION_VERIFIED_PATH.equals(path))
-        || (HttpMethod.POST.matches(method) && SIGNUP_EMAIL_VERIFICATION_CONSUME_PATH.equals(path));
-  }
-
-  private boolean isInternalUserApi(String path) {
-    return INTERNAL_USER_API_PREFIX.equals(path) || path.startsWith(INTERNAL_USER_API_PREFIX + "/");
+    return INTERNAL_AUTH_API_PREFIX.equals(path) || path.startsWith(INTERNAL_AUTH_API_PREFIX + "/");
   }
 }

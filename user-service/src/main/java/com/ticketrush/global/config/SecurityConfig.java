@@ -1,6 +1,7 @@
 package com.ticketrush.global.config;
 
 import com.ticketrush.global.filter.GatewayHeaderFilter;
+import com.ticketrush.global.security.InternalApiTokenFilter;
 import lombok.RequiredArgsConstructor;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;

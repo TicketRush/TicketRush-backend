@@ -17,21 +17,27 @@ import org.springframework.web.client.RestClientException;
 @RequiredArgsConstructor
 public class EmailVerificationClient {
 
+  private static final String INTERNAL_TOKEN_HEADER = "X-Internal-Token";
+  private static final String EMAIL_VERIFICATION_VERIFIED_PATH =
+      "/api/v1/internal/auth/signup/email-verification/verified?email={email}";
+
   private final RestClient restClient;
 
-  @Value("${service.auth.url}")
-  private String authServiceUrl;
+  @Value("${custom.security.internal-token}")
+  private String internalToken;
 
   public boolean isVerified(String email) {
-    String url = authServiceUrl + "/api/v1/auth/signup/email-verification/verified?email={email}";
-
     try {
-      log.info("[이메일 인증 조회] auth-service 호출 시작 url={}, email={}", url, email);
+      log.info(
+          "[이메일 인증 조회] auth-service 호출 시작 path={}, email={}",
+          EMAIL_VERIFICATION_VERIFIED_PATH,
+          email);
 
       AuthApiResponse<EmailVerificationCheckResponse> response =
           restClient
               .get()
-              .uri(url, email)
+              .uri(EMAIL_VERIFICATION_VERIFIED_PATH, email)
+              .header(INTERNAL_TOKEN_HEADER, internalToken)
               .retrieve()
               .body(
                   new ParameterizedTypeReference<
