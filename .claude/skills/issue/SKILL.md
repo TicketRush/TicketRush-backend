@@ -57,9 +57,12 @@ git status --short                      # 아직 커밋 안 한 변경
   - 참고: 각 `.github/ISSUE_TEMPLATE/*.yml`에도 동일 매핑의 top-level `type:`이 지정돼 있어 GitHub UI 폼 생성 시엔 자동 적용된다. `/issue` 커맨드(CLI 생성)는 폼을 거치지 않으므로 아래 `--type`으로 직접 지정한다.
 
 ### 3단계: 본문 작성 & 생성 (공통)
-- 제목: 팀 규칙 `[모듈명] {내용}` 형식. **`[ ]` 안에는 관련 모듈명**을 아래 표기대로 적고, **특정 모듈에 한정되지 않으면 `[공통]`**으로 적는다. 여러 모듈에 걸치면 `[공연/결제]`처럼 슬래시로 병기한다.
+- 제목: 팀 규칙 `[공간] {내용}` 형식. **`[ ]` 안에는 "어디를 건드리나"(공간)**를 아래 순서로 정한다(SSOT: `docs/backend-convention.md` 이슈 규칙).
+  1. 모듈이 특정되면 **모듈 태그**(아래 표). 여러 모듈에 걸치면 `[공연/결제]`처럼 슬래시로 병기한다.
+  2. 모듈은 아니지만 특정 공간이면 **공간 태그**(아래 표의 `[CI]`·`[CD]`·`[모니터링]`).
+  3. 공간이 특정되지 않으면 `[공통]`.
 
-  | 모듈 | 제목 표기 |
+  | 공간 | 제목 표기 |
   |---|---|
   | `performance-service` | `[공연]` |
   | `seat-service` | `[좌석]` |
@@ -69,10 +72,14 @@ git status --short                      # 아직 커밋 안 한 변경
   | `user-service` | `[User]` |
   | `auth-service` | `[Auth]` |
   | `gateway-service` | `[Gateway]` |
+  | 모니터링·관측성(메트릭·분산추적·알림·로그수집) | `[모니터링]` |
+  | CI(Actions 워크플로우·빌드·테스트·린트) | `[CI]` |
+  | 배포(EC2·ECR·Docker Compose 등) | `[CD]` |
   | `common`·환경·문서·협업 설정 등 | `[공통]` |
-  | 배포(EC2·ECR·Docker·Actions 등) | `[CD]` |
 
-  - ⚠️ **주의 (3축 구분):** ① 이슈 제목 `[ ]`에는 **모듈명**(`[공통]`·`[예매]` 등), ② PR 제목 `[ ]`에는 **작업 타입**(`[Refactor]`·`[Feat]`·`[Fix]` 등)을 적는다. ③ 이슈에서 작업 타입은 **`--label`**(repo 라벨), GitHub Issue Type은 **`--type`**(org 정의 `Task`/`Bug`/`Feature`)으로 각각 지정한다. 셋을 혼동하지 말 것.
+  - 위 세 개(`[모니터링]`·`[CI]`·`[CD]`)가 모듈 아닌 **공간 태그의 전부**다. 화이트리스트는 **닫혀 있고**, 새 공간 태그는 팀 합의로만 추가한다.
+  - 🚫 **행위를 제목에 적지 않는다:** 부하 테스트·성능 개선 등은 **행위**이므로 `[부하테스트]`·`[성능]`·`[테스트]` 같은 제목 태그를 만들지 않는다. 공간(모듈)을 제목에, 행위는 `--label`에 적는다. 부하/성능은 실제로 하나의 label에 묶이지도 않는다(하네스 구축 `infra`, 측정 `test`, 스크립트 수정 `fix`, 문서 정정 `docs`). `[공통]`에 이슈가 몰리는 것은 정상이며, 그 안의 구분은 label이 한다.
+  - ⚠️ **주의 (3축 구분):** ① 이슈 제목 `[ ]`에는 **공간**(`[예매]` 같은 모듈명, 또는 `[모니터링]`·`[CI]`·`[CD]`, 아니면 `[공통]`), ② PR 제목 `[ ]`에는 **작업 타입**(`[Refactor]`·`[Feat]`·`[Fix]` 등)을 적는다. ③ 이슈에서 작업 타입은 **`--label`**(repo 라벨), GitHub Issue Type은 **`--type`**(org 정의 `Task`/`Bug`/`Feature`)으로 각각 지정한다. 셋을 혼동하지 말 것. **제목 = 공간, label = 행위**가 대원칙이다.
 - **Assignees:** 이슈는 현재 작업 중인 사용자를 담당자로 지정한다. `gh issue create`에 `--assignee @me`를 붙이면 현재 gh 인증 계정(`gh api user --jq .login`로 확인 가능)이 자동 지정된다.
 - 본문은 템플릿 섹션(📝 요약 / 📌 상세 / 👀 참고 / ✅ 완료 조건)을 채운다. 완료 조건은 `- [ ]` 미체크 체크박스로(앞으로 만족해야 할 조건).
 - 팀 컨벤션(`docs/backend-convention.md` 단일 출처, `CLAUDE.md` 아키텍처) 용어를 쓴다.
@@ -81,9 +88,9 @@ git status --short                      # 아직 커밋 안 한 변경
 cat > /tmp/issue_body.md << 'EOF'
 ... 본문 ...
 EOF
-gh issue create --title "[모듈명] 제목" --label <템플릿라벨> --type <IssueType> --assignee @me --body-file /tmp/issue_body.md
+gh issue create --title "[공간] 제목" --label <템플릿라벨> --type <IssueType> --assignee @me --body-file /tmp/issue_body.md
 ```
-  - `--title`의 `[ ]`에는 **모듈명**(위 표), `--label`에는 템플릿의 `labels:` 값(작업 타입)을 넣는다(`gh label list`로 존재 확인 가능).
+  - `--title`의 `[ ]`에는 **공간**(위 표), `--label`에는 템플릿의 `labels:` 값(작업 타입)을 넣는다(`gh label list`로 존재 확인 가능).
   - `--type`에는 위 매핑표의 **GitHub Issue Type**(`Task`/`Bug`/`Feature`)을 넣는다. `--label`(작업 타입)과 `--type`(Issue Type)은 별개 축이라 이름이 달라도 된다(예: label `fix` ↔ Issue Type `Bug`).
   - `--assignee @me`로 현재 사용자를 담당자로 지정한다.
 
