@@ -71,6 +71,15 @@ class PaymentWebhookUseCaseTest {
                     PAYMENT_KEY, "BKG-0000100", 55_000L, "DONE", LocalDateTime.now())));
   }
 
+  /** 형식상 유효한 paymentKey 전용 헬퍼. 인자를 JSON 이스케이프하지 않으므로 {@code "}·{@code \} 등이 든 키에는 쓰지 않는다. */
+  private byte[] bodyWithKey(String paymentKey) {
+    String json =
+        "{ \"eventType\": \"PAYMENT_STATUS_CHANGED\", \"data\": { \"paymentKey\": \""
+            + paymentKey
+            + "\", \"orderId\": \"BKG-0000100\", \"status\": \"DONE\" } }";
+    return json.getBytes(StandardCharsets.UTF_8);
+  }
+
   @Test
   @DisplayName("재조회로 존재가 확인되고 COMPLETED 결제가 있으면 멱등 처리하고 예외 없이 끝난다")
   void handle_idempotent_when_payment_completed() {
@@ -140,6 +149,56 @@ class PaymentWebhookUseCaseTest {
     assertThatCode(() -> paymentWebhookUseCase.handle(bodyWithoutKey)).doesNotThrowAnyException();
     verify(inquiryClientRouter, never()).inquire(any(), any());
     verify(paymentRepository, never()).findByPaymentKey(any());
+  }
+
+  @Test
+  @DisplayName("paymentKey가 200자를 초과하면 재조회 없이 PAYMENT_401_001로 거부한다(증폭 방어)")
+  void handle_rejects_when_payment_key_too_long() {
+    // given
+    byte[] tooLong = bodyWithKey("a".repeat(201));
+
+    // when & then
+    assertThatThrownBy(() -> paymentWebhookUseCase.handle(tooLong))
+        .isInstanceOf(BusinessException.class)
+        .extracting("errorStatus")
+        .isEqualTo(ErrorStatus.PAYMENT_WEBHOOK_INVALID);
+    verify(inquiryClientRouter, never()).inquire(any(), any());
+    verify(paymentRepository, never()).findByPaymentKey(any());
+  }
+
+  @Test
+  @DisplayName("paymentKey에 제어문자가 섞이면 재조회 없이 PAYMENT_401_001로 거부한다(증폭 방어)")
+  void handle_rejects_when_payment_key_has_control_char() {
+    // given (JSON 이스케이프 \n → 파싱 시 실제 개행 0x0A, 인쇄가능 ASCII 범위 밖)
+    byte[] withControlChar =
+        "{ \"eventType\": \"PAYMENT_STATUS_CHANGED\", \"data\": { \"paymentKey\": \"toss\\nkey\", \"orderId\": \"BKG-0000100\", \"status\": \"DONE\" } }"
+            .getBytes(StandardCharsets.UTF_8);
+
+    // when & then
+    assertThatThrownBy(() -> paymentWebhookUseCase.handle(withControlChar))
+        .isInstanceOf(BusinessException.class)
+        .extracting("errorStatus")
+        .isEqualTo(ErrorStatus.PAYMENT_WEBHOOK_INVALID);
+    verify(inquiryClientRouter, never()).inquire(any(), any());
+    verify(paymentRepository, never()).findByPaymentKey(any());
+  }
+
+  @Test
+  @DisplayName("정확히 200자인 정상 형식 paymentKey는 사전 필터를 통과해 재조회까지 도달한다(오탐 없음)")
+  void handle_passes_filter_when_payment_key_at_boundary() {
+    // given
+    String key200 = "a".repeat(200);
+    given(inquiryClientRouter.inquire(PaymentProvider.TOSS, key200))
+        .willReturn(
+            Optional.of(
+                new PaymentInquiryResult(
+                    key200, "BKG-0000100", 55_000L, "DONE", LocalDateTime.now())));
+    given(paymentRepository.findByPaymentKey(key200)).willReturn(Optional.empty());
+
+    // when & then
+    assertThatCode(() -> paymentWebhookUseCase.handle(bodyWithKey(key200)))
+        .doesNotThrowAnyException();
+    verify(inquiryClientRouter).inquire(PaymentProvider.TOSS, key200);
   }
 
   @Test
