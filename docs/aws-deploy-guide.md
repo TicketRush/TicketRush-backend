@@ -88,8 +88,11 @@ MySQL 컨테이너는 최초 기동 시 `infra/mysql/init/01-schema.sql`을 1회
 
 ```sh
 curl http://<IP>:8080/actuator/health          # {"status":"UP"}
+
+# DevToken (prod,dev 조합 검증). 앱 ObjectMapper가 전역 snake_case라 요청은 user_id,
+# 응답은 result.access_token 이다.
 curl -X POST http://<IP>:8080/api/v1/dev/auth/token \
-  -H 'Content-Type: application/json' -d '{...}'   # accessToken (prod,dev 조합 검증)
+  -H 'Content-Type: application/json' -d '{"user_id": 1}'
 ```
 
 ### 4. 시작·중지
@@ -104,6 +107,11 @@ export TICKETRUSH_EC2_INSTANCE_ID=i-0123456789abcdef0
 
 - **CPU 상한 합계는 4.5로 4 vCPU를 넘는다** (앱 8×0.5 + prometheus 0.3 + grafana 0.2).
   `cpus`는 예약이 아니라 상한이라 기동은 되지만, 부하 피크에서 앱끼리 CPU를 다툰다.
+- **`mem_limit: 1g` + `MaxRAMPercentage=75` → 힙 768m, 비힙에 약 256m가 남는다.**
+  메타스페이스·스레드 스택·코드 캐시·다이렉트 버퍼가 그 안에 들어가야 한다.
+  idle RSS는 앱당 330~410MiB로 여유가 있고 read 부하에서 재시작 0회를 확인했지만,
+  힙이 상한까지 차오르는 write 피크는 아직 측정하지 않았다.
+  `exit 137`(OOMKill)이 보이면 `Dockerfile`의 `MaxRAMPercentage`를 70으로 낮춘다.
 - **측정 중에는 Grafana 대시보드를 열어두지 않는다.** 패널마다 도는 주기 쿼리가 측정 대상의
   CPU를 소모한다. 데이터는 TSDB에 쌓이므로 테스트가 끝난 뒤 열어 본다.
 - 요청 경로는 여전히 가정용 업로드 회선을 탄다. 초고 VU에서는 업로드 대역이 먼저 상한에 닿는다.

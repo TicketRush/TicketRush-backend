@@ -196,7 +196,7 @@ CREATE TABLE `seat` (
   `seat_status` enum('AVAILABLE','HOLD','SOLD') NOT NULL,
   PRIMARY KEY (`seat_id`),
   KEY `idx_seat_performance_id` (`performance_id`)
-) ENGINE=InnoDB AUTO_INCREMENT=121 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
 /*!40101 SET character_set_client = @saved_cs_client */;
 /*!40101 SET @saved_cs_client     = @@character_set_client */;
 /*!50503 SET character_set_client = utf8mb4 */;
@@ -209,7 +209,7 @@ CREATE TABLE `seat_layout` (
   `total_rows` int NOT NULL,
   PRIMARY KEY (`seat_layout_id`),
   UNIQUE KEY `uk_seat_layout_performance_id` (`performance_id`)
-) ENGINE=InnoDB AUTO_INCREMENT=2 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
 /*!40101 SET character_set_client = @saved_cs_client */;
 /*!40101 SET @saved_cs_client     = @@character_set_client */;
 /*!50503 SET character_set_client = utf8mb4 */;

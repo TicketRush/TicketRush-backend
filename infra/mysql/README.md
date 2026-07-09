@@ -58,10 +58,13 @@ alias dc='docker compose -f docker-compose.yml -f docker-compose.aws.yml'
    ```
 
 3. 덤프한다. `--skip-comments`는 버전·타임스탬프 헤더를 지워 재생성 시 diff를 깨끗하게 만든다.
+   `sed`는 테이블별 `AUTO_INCREMENT=<n>` 시작값을 지운다. 덤프를 뜬 DB에 몇 행이 있었는지가
+   그대로 굳어 재현이 깨지기 때문이다(컬럼의 `AUTO_INCREMENT` 속성 자체는 남는다).
 
    ```sh
    dc exec -T mysql mysqldump -uroot -p"$MYSQL_ROOT_PASSWORD" \
      --no-data --skip-add-drop-table --skip-comments ticket_rush \
+     | sed -E 's/ AUTO_INCREMENT=[0-9]+//g' \
      > infra/mysql/init/01-schema.sql
    ```
 
