@@ -9,6 +9,7 @@ import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.EnumType;
 import jakarta.persistence.Enumerated;
+import jakarta.persistence.Index;
 import jakarta.persistence.Table;
 import java.time.LocalDateTime;
 import lombok.AccessLevel;
@@ -17,7 +18,11 @@ import lombok.Getter;
 import lombok.NoArgsConstructor;
 
 @Entity
-@Table(name = "seat")
+// SeatRepository.findSeatLayoutsByPerformanceId가 performanceId로만 필터한다.
+// 인덱스가 없으면 공연당 수천 행을 매 요청 풀스캔해 부하 테스트 수치가 앱이 아닌 인덱스 부재를 반영한다.
+@Table(
+    name = "seat",
+    indexes = @Index(name = "idx_seat_performance_id", columnList = "performance_id"))
 @Getter
 @NoArgsConstructor(access = AccessLevel.PROTECTED)
 @AttributeOverride(name = "id", column = @Column(name = "seat_id"))
