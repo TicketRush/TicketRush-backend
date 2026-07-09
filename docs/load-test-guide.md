@@ -12,7 +12,7 @@ k6 (컨테이너, loadtest profile) --(remote-write)--> Prometheus :9090 --(scra
 
 - k6는 docker-compose의 `loadtest` profile 컨테이너로 실행한다(호스트에 k6 설치 불필요, 평소 `up`엔 안 뜸).
 - k6 결과는 **내장 remote-write 출력**(`experimental-prometheus-rw`, compose의 `K6_OUT`로 기본 적용)으로 Prometheus에 push한다. 커스텀 xk6 빌드나 InfluxDB는 쓰지 않는다.
-- 부하 생성기와 대상이 같은 머신을 공유하므로 리소스가 경쟁한다. 큰 규모 부하는 별도 머신에서 이 k6 서비스 정의를 재사용해 실행하는 것을 권장한다.
+- 부하 생성기와 대상이 같은 머신을 공유하므로 리소스가 경쟁한다. 신뢰 가능한 수치가 필요하면 대상을 원격(AWS 배포본)에 두고 분리 실행한다(§7).
 - k6 시계열(`k6_*`)과 앱 계측(`ticketrush_*`)이 같은 Prometheus에 모여, 하나의 Grafana에서 교차 관측된다.
 
 ## 2. 사전 조건
@@ -102,56 +102,47 @@ docker compose run --rm k6 run \
 - **앱 접근 실패**: 대상 서비스가 호스트에서 기동 중인지, k6 컨테이너의 `BASE_URL`이 `host.docker.internal:8080`인지 확인(Linux는 compose의 `extra_hosts`로 매핑됨).
 - **공유/운영 DB 시딩 금지**: 시딩·cleanup은 마커 범위만 건드리지만 반드시 로컬 전용 DB에서만 실행한다.
 
-## 7. 원격(분리) 실행 — Oracle Cloud + GitHub Actions
+## 7. 원격 실행 — k6 로컬 + AWS 배포본
 
-부하 생성기(k6)와 대상(앱)이 같은 머신을 쓰면 리소스 경쟁으로 수치를 신뢰하기 어렵다(6장 참고). 둘을 **서로 다른 머신으로 분리**하되 **비용 0원**으로 구성한다: k6는 GitHub Actions 러너에서, 앱 스택은 Oracle Cloud Always Free 인스턴스에서 돌린다.
+부하 생성기(k6)와 대상(앱)이 같은 머신을 쓰면 리소스 경쟁으로 수치를 신뢰하기 어렵다(6장 참고). k6는 **로컬에서 그대로 실행**하고, 대상 앱은 **AWS에 배포된 인스턴스**를 타격해 둘을 분리한다. 기존 `loadtest` 프로파일·시나리오·시딩은 그대로 쓰고 `BASE_URL`만 AWS 엔드포인트로 덮으면 된다.
 
 ```
-k6 (GitHub Actions) --remote-write(공인)--> Oracle Prometheus :9090 --scrape--> Grafana :3000
-        │                                          ↑
-        └── BASE_URL(공인) ──> Oracle 앱(호스트, gateway :8080 …) /actuator/prometheus
+k6 (로컬 loadtest 컨테이너) --HTTP--> AWS 배포 앱 (공인 게이트웨이 :8080)
+        │
+        └─ remote-write ─> 로컬 Prometheus :9090 --scrape--> 로컬 Grafana :3000   (k6_* 시계열)
 ```
 
-기존 자산(`load-test/` 시나리오·시딩, compose의 prometheus/grafana)은 **그대로** 쓰고 실행 위치와 URL·네트워크만 원격에 맞춘다.
+- **k6 클라이언트 시계열(`k6_*`: 처리량·latency·에러율)**은 기존대로 로컬 Prometheus→Grafana로 remote-write 된다(설정 무변경).
+- **앱 계측(`ticketrush_*`)은 로컬에서 스크랩되지 않는다** — 앱이 AWS에 있어 로컬 Prometheus의 `host.docker.internal` 스크랩 대상 밖이다. 앱 지표는 **AWS 측 모니터링(CloudWatch 등)에서 별도 확인**한다.
 
-### 7.1 Oracle 인스턴스 준비 (사용자 수행, 콘솔/SSH)
-- **인스턴스**: ARM Ampere A1(Always Free 한도 내 총 4 OCPU / 24GB RAM)로 생성. Always Free는 영구 무료(AWS 프리티어와 무관)이며, 한도는 진행 전 Oracle 공식 문서로 재확인한다.
-  - 주의: ARM 인스턴스는 "Out of capacity"로 생성이 지연될 수 있다 → 리전/가용 도메인/시간대를 바꿔 재시도.
-- **네트워크 개방**(Security List 또는 NSG): 부하 대상·수신 포트만 인바운드 허용.
-  - `8080` — 게이트웨이(부하 대상 `BASE_URL`).
-  - `9090` — Prometheus remote-write 수신. **소스 CIDR을 반드시 제한**(아래 7.5 보안 경고).
-  - Grafana `3000`은 열지 말고 SSH 터널로 접근(7.4).
+### 7.1 사전 조건 (AWS)
+- 부하 대상 앱을 AWS에 배포하고 게이트웨이 공인 엔드포인트(`https://<aws-gateway>`)를 확보한다.
+- `seat-layouts`(read)는 **인증 불필요** → 배포 프로파일과 무관하게 바로 가능.
+- `booking-create`(write)는 `DevToken(/api/v1/dev/auth/token)`을 사용하는데 이는 **`local`/`dev` 프로파일에서만 노출**된다. → AWS 배포본을 **`dev` 프로파일(부하테스트 전용 환경)**로 띄우지 않으면 write 시나리오는 **인증 실패**한다.
+- 시딩은 3장과 동일하게 **AWS의 부하테스트용 DB**에 대해 수행한다(운영 DB 금지).
 
-### 7.2 앱·관측 스택 기동 (Oracle 호스트)
-앱은 (컨테이너화 #245 이전이라) 로컬과 동일하게 **호스트에서 직접 기동**한다. arm64 주의: infra 이미지(redis/kafka/prometheus/grafana)는 멀티아치라 그대로 뜨고, 앱을 도커로 빌드한다면 `docs/ecr.md`의 `--platform linux/amd64` 고정과 달리 **플랫폼 지정 없이 네이티브 arm64**로 빌드한다.
-
+### 7.2 k6 실행 (로컬)
+4장과 동일하되 `BASE_URL`만 AWS로 덮는다. remote-write는 로컬 prometheus로 그대로 나간다.
 ```bash
-# 관측 스택 + 의존 인프라 (오버레이로 prometheus를 0.0.0.0:9090에 노출)
-docker compose -f docker-compose.yml -f docker-compose.oracle.yml up -d prometheus grafana redis kafka
+# 모니터링 스택 먼저 (2.2)
+docker compose up -d prometheus grafana
 
-# MySQL + 대상 서비스(gateway 8080 / auth 8082 / booking 8084 / seat 8086)를 local/dev 프로파일로 기동.
-#   DevToken(booking-create 시나리오가 사용)은 local/dev 프로파일에서만 노출된다.
-# JVM heap: 24GB 안에 여러 서비스를 수용하도록 서비스별 힙 상한을 준다(현재 Dockerfile/compose엔 튜닝 훅 없음).
-JAVA_TOOL_OPTIONS="-XX:MaxRAMPercentage=50" java -jar <service>.jar   # 또는 -Xmx2g 등
+# (b) 좌석 조회 — 인증 불필요
+docker compose run --rm k6 run \
+  -e BASE_URL=https://<aws-gateway> \
+  -e PERF_ID=1 -e VUS=50 \
+  /scripts/scenarios/seat-layouts.js
+
+# (a) 예매 생성 — AWS가 dev 프로파일(DevToken 노출)일 때만 가능
+docker compose run --rm k6 run \
+  -e BASE_URL=https://<aws-gateway> \
+  -e PERF_ID=1 -e USER_ID=1 -e SEAT_ID_MIN=1 -e SEAT_ID_MAX=6000 \
+  /scripts/scenarios/booking-create.js
 ```
+관측은 5장 쿼리를 그대로 쓴다(단, `ticketrush_*` 앱 지표는 AWS 측에서 확인).
 
-시딩은 3장과 동일하게 Oracle의 MySQL에 대해 수행한다.
+### 7.3 비용
+비테스트 시간엔 AWS 리소스를 내려두는 **온디맨드 전제**로: 세션당 ~3시간 × 월 8회 = 24시간/월 ≈ **$2.5(약 3,500원)**. **비테스트 시간엔 AWS 리소스를 반드시 중지**해야 이 비용이 성립한다(상시 기동 시 24/7 과금).
 
-### 7.3 GitHub Secrets 등록
-리포 → Settings → Secrets and variables → Actions → New repository secret:
-
-| Secret | 값(예) | 용도 |
-|--------|--------|------|
-| `LOADTEST_BASE_URL` | `http://<oracle-public-ip>:8080` | k6 대상 게이트웨이 |
-| `LOADTEST_PROMETHEUS_RW_URL` | `http://<oracle-public-ip>:9090/api/v1/write` | k6 결과 remote-write 타겟 |
-
-### 7.4 워크플로우 실행
-GitHub → **Actions** 탭 → **Load Test (k6)** → **Run workflow**. 입력값으로 시나리오·VUs·램프 등을 지정한다(`booking-create`는 `user_id`/`seat_id_min`/`seat_id_max`도 사용). 워크플로우는 `grafana/setup-k6-action`으로 러너에 k6를 설치한 뒤 `load-test/scenarios/*`를 실행하고, 결과를 Oracle Prometheus로 remote-write 하며, `summary.json`을 Actions 아티팩트로 업로드한다.
-
-Grafana 관측은 5장 쿼리를 그대로 쓴다. Oracle Grafana는 포트를 열지 말고 SSH 터널로 접근한다:
-```bash
-ssh -L 3000:localhost:3000 <user>@<oracle-public-ip>   # 이후 http://localhost:3000
-```
-
-### 7.5 보안 경고
-공개된 `9090`은 **인증 없는 remote-write 수신** 엔드포인트다. Oracle Security List/NSG로 접근 소스를 제한하고, 측정이 끝나면 포트를 닫는다. 상시 노출이 필요하면 리버스 프록시 basic-auth 등 인증을 앞단에 둔다.
+### 7.4 보안
+부하 대상 공인 엔드포인트와 `dev` 프로파일(DevToken 노출)은 **측정 시간에만** 열고, 끝나면 접근을 닫는다. 부하테스트용 DB·환경을 운영과 분리한다.
