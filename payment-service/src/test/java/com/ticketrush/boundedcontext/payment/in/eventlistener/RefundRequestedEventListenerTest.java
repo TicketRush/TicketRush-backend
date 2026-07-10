@@ -165,7 +165,7 @@ class RefundRequestedEventListenerTest {
   @Test
   @DisplayName("PG 통신 실패(PAYMENT_PG_COMMUNICATION_FAILED, 일시적)면 보상 없이 예외를 전파한다(재시도→DLT)")
   void handleRefundRequested_pgCommunicationFailure_rethrowsWithoutCompensation() {
-    // given: 환불 성공 여부가 불명이라 섣불리 REFUND_FAILED로 확정하지 않고 재시도에 위임한다
+    // given: 환불 성공 여부가 불명이라 섣불리 환불 실패로 확정하지 않고 재시도에 위임한다
     given(jsonConverter.deserialize(PAYLOAD, RefundRequestedEvent.class)).willReturn(event());
     willThrow(new BusinessException(ErrorStatus.PAYMENT_PG_COMMUNICATION_FAILED))
         .given(paymentRefundByBookingUseCase)

@@ -24,10 +24,12 @@ public class TicketQrGetUseCase {
    * QR 조회는 booking-service 동기 호출 없이 로컬 데이터로만 처리한다(#364). 소유권은 발급 시 복제한 {@code ticket.userId}로, 유효성은
    * PaymentCanceledEvent가 투영한 로컬 {@code ticketStatus}로 판정한다.
    *
-   * <p>REFUNDING/REFUND_FAILED 등 환불 진행 상태는 로컬에 반영되지 않아 이 경로에서 걸러지지 않는다. 특히 PG 환불이 거절되면 {@code
-   * PaymentCanceledEvent}가 끝내 발행되지 않아(RefundFailedEvent는 booking-service만 구독) {@code
-   * booking=REFUND_FAILED, ticket=UNUSED} 상태가 영구히 남는다. QR 조회는 되돌릴 수 없는 행위가 아니므로 허용하고, 실제 입장
+   * <p>REFUNDING(환불 진행 중)은 로컬에 반영되지 않아 이 경로에서 걸러지지 않는다. QR 조회는 되돌릴 수 없는 행위가 아니므로 허용하고, 실제 입장
    * 게이트({@code EntryVerifyUseCase})가 권위 있는 bookingStatus로 최종 차단한다.
+   *
+   * <p>PG 환불이 거절되면 {@code PaymentCanceledEvent}가 발행되지 않아(RefundFailedEvent는 booking-service만 구독)
+   * {@code ticket=UNUSED}로 남는데, 이때 booking도 CONFIRMED로 복원되므로(#391) 입장까지 정상 허용된다 — 사용자가 대금을 돌려받지 못한
+   * 채 좌석을 SOLD로 보유한 상태이므로 유효한 예매다.
    *
    * <p>DB 접근이 findByBookingId 단건뿐이라 Spring Data의 기본 트랜잭션으로 충분하므로 메서드 레벨 트랜잭션을 두지 않는다.
    */
