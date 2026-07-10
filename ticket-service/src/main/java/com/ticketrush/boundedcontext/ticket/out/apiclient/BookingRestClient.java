@@ -34,7 +34,7 @@ public class BookingRestClient {
       response =
           bookingServiceRestClient
               .get()
-              .uri("/api/v1/booking/internal/{bookingId}", bookingId)
+              .uri("/api/v1/internal/booking/{bookingId}", bookingId)
               .header(INTERNAL_TOKEN_HEADER, internalToken)
               .retrieve()
               .onStatus(

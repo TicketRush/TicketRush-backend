@@ -16,6 +16,9 @@ custom:
   swagger:
     serverUrl: ${SWAGGER_SERVER_URL:http://localhost:8080}
   security:
+    # 내부 API 토큰. gateway.internal-token과 동일한 GATEWAY_INTERNAL_TOKEN 시크릿을 의도적으로 공유한다
+    # (게이트웨이↔서비스 공유 시크릿 재사용, performance/user/auth 서비스와 동일).
+    internal-token: ${GATEWAY_INTERNAL_TOKEN:test-token}
     permit-all: false
     permit-urls:
       # ========== 개발 도구 ==========

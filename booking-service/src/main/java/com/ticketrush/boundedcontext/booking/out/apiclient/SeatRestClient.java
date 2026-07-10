@@ -28,7 +28,7 @@ public class SeatRestClient {
 
     seatServiceRestClient
         .post()
-        .uri("/api/v1/seat/internal/sold")
+        .uri("/api/v1/internal/seat/sold")
         .header(INTERNAL_TOKEN_HEADER, internalToken)
         .body(request)
         .retrieve()

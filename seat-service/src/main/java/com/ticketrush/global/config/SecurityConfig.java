@@ -9,6 +9,7 @@ import org.springframework.security.config.annotation.method.configuration.Enabl
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.security.config.annotation.web.configuration.EnableWebSecurity;
 import org.springframework.security.web.SecurityFilterChain;
+import org.springframework.security.web.authentication.UsernamePasswordAuthenticationFilter;
 
 @Configuration
 @EnableWebSecurity
@@ -17,15 +18,20 @@ import org.springframework.security.web.SecurityFilterChain;
 @RequiredArgsConstructor
 public class SecurityConfig {
 
+  private final InternalApiTokenFilter internalApiTokenFilter;
+
   @Bean
   public SecurityFilterChain filterChain(HttpSecurity http) throws Exception {
     http.csrf(csrf -> csrf.disable())
         .cors(cors -> {})
+        .addFilterBefore(internalApiTokenFilter, UsernamePasswordAuthenticationFilter.class)
         .authorizeHttpRequests(
             auth ->
                 auth.requestMatchers("/v3/api-docs/**", "/swagger-ui/**", "/swagger-ui.html")
                     // TODO: 인증 이후 허용 범위 수정
                     .permitAll()
+                    .requestMatchers("/api/v1/internal/seat/**")
+                    .hasRole("INTERNAL")
                     .anyRequest()
                     .permitAll());
 

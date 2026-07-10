@@ -9,10 +9,11 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import com.ticketrush.boundedcontext.booking.app.dto.response.BookingInternalResponse;
 import com.ticketrush.boundedcontext.booking.app.usecase.BookingGetInternalUseCase;
 import com.ticketrush.boundedcontext.booking.domain.types.BookingStatus;
+import com.ticketrush.global.config.CustomSecurityProperties;
+import com.ticketrush.global.config.InternalApiTokenFilter;
 import com.ticketrush.global.config.JacksonConfig;
 import com.ticketrush.global.config.SecurityConfig;
 import com.ticketrush.global.filter.GatewayHeaderFilter;
-import com.ticketrush.global.status.ErrorStatus;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -23,11 +24,21 @@ import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
 
 @WebMvcTest(BookingInternalController.class)
-@Import({JacksonConfig.class, SecurityConfig.class, GatewayHeaderFilter.class})
-@TestPropertySource(properties = "gateway.internal-token=test-token")
+@Import({
+  JacksonConfig.class,
+  SecurityConfig.class,
+  GatewayHeaderFilter.class,
+  InternalApiTokenFilter.class,
+  CustomSecurityProperties.class
+})
+@TestPropertySource(
+    properties = {
+      "gateway.internal-token=test-token",
+      "custom.security.internal-token=test-internal-token"
+    })
 class BookingInternalControllerTest {
 
-  private static final String INTERNAL_TOKEN = "test-token";
+  private static final String INTERNAL_TOKEN_HEADER = "X-Internal-Token";
 
   @Autowired private MockMvc mockMvc;
 
@@ -44,8 +55,8 @@ class BookingInternalControllerTest {
     // when & then
     mockMvc
         .perform(
-            get("/api/v1/booking/internal/{bookingId}", bookingId)
-                .header("X-Internal-Token", INTERNAL_TOKEN))
+            get("/api/v1/internal/booking/{bookingId}", bookingId)
+                .header(INTERNAL_TOKEN_HEADER, "test-internal-token"))
         .andExpect(status().isOk())
         .andExpect(jsonPath("$.is_success").value(true))
         .andExpect(jsonPath("$.result.booking_id").value(100))
@@ -59,10 +70,9 @@ class BookingInternalControllerTest {
     // when & then
     mockMvc
         .perform(
-            get("/api/v1/booking/internal/{bookingId}", 100L).header("X-Internal-Token", "wrong"))
-        .andExpect(status().isForbidden())
-        .andExpect(jsonPath("$.is_success").value(false))
-        .andExpect(jsonPath("$.code").value(ErrorStatus.FORBIDDEN.getCode()));
+            get("/api/v1/internal/booking/{bookingId}", 100L)
+                .header(INTERNAL_TOKEN_HEADER, "wrong"))
+        .andExpect(status().isForbidden());
 
     verifyNoInteractions(bookingGetInternalUseCase);
   }
@@ -72,9 +82,8 @@ class BookingInternalControllerTest {
   void getBookingInternal_fails_when_token_missing() throws Exception {
     // when & then
     mockMvc
-        .perform(get("/api/v1/booking/internal/{bookingId}", 100L))
-        .andExpect(status().isForbidden())
-        .andExpect(jsonPath("$.code").value(ErrorStatus.FORBIDDEN.getCode()));
+        .perform(get("/api/v1/internal/booking/{bookingId}", 100L))
+        .andExpect(status().isForbidden());
 
     verifyNoInteractions(bookingGetInternalUseCase);
   }
