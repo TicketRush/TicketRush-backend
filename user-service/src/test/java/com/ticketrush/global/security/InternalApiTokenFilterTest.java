@@ -1,5 +1,6 @@
-package com.ticketrush.global.config;
+package com.ticketrush.global.security;
 
+import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.BDDMockito.given;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
@@ -14,8 +15,9 @@ import com.ticketrush.boundedcontext.user.app.dto.response.UserAuthInfoResponse;
 import com.ticketrush.boundedcontext.user.app.facade.UserFacade;
 import com.ticketrush.boundedcontext.user.in.api.v1.InternalUserController;
 import com.ticketrush.boundedcontext.user.in.api.v1.UserController;
+import com.ticketrush.global.config.CustomSecurityProperties;
+import com.ticketrush.global.config.SecurityConfig;
 import com.ticketrush.global.filter.GatewayHeaderFilter;
-import com.ticketrush.global.security.InternalApiTokenFilter;
 import com.ticketrush.support.WebMvcSliceTest;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -49,8 +51,8 @@ class InternalApiTokenFilterTest {
   @MockitoBean private UserFacade userFacade;
 
   @Test
-  @DisplayName("내부 API는 내부 토큰이 없으면 403 Forbidden을 반환한다")
-  void internalApi_withoutToken_forbidden() throws Exception {
+  @DisplayName("POST 내부 API는 내부 토큰이 없으면 403 Forbidden을 반환한다")
+  void postInternalApi_withoutToken_forbidden() throws Exception {
     UserAuthInfoRequest request = new UserAuthInfoRequest("test@test.com");
 
     mockMvc
@@ -63,8 +65,8 @@ class InternalApiTokenFilterTest {
   }
 
   @Test
-  @DisplayName("내부 API는 내부 토큰이 틀리면 403 Forbidden을 반환한다")
-  void internalApi_withWrongToken_forbidden() throws Exception {
+  @DisplayName("POST 내부 API는 내부 토큰이 틀리면 403 Forbidden을 반환한다")
+  void postInternalApi_withWrongToken_forbidden() throws Exception {
     UserAuthInfoRequest request = new UserAuthInfoRequest("test@test.com");
 
     mockMvc
@@ -78,8 +80,8 @@ class InternalApiTokenFilterTest {
   }
 
   @Test
-  @DisplayName("내부 API는 내부 토큰이 맞으면 요청을 통과시킨다")
-  void internalApi_withValidToken_success() throws Exception {
+  @DisplayName("POST 내부 API는 내부 토큰이 맞으면 요청을 통과시킨다")
+  void postInternalApi_withValidToken_success() throws Exception {
     UserAuthInfoRequest request = new UserAuthInfoRequest("test@test.com");
 
     given(userFacade.getUserAuthInfoByEmail(anyString()))
@@ -91,6 +93,39 @@ class InternalApiTokenFilterTest {
                 .header(INTERNAL_TOKEN_HEADER, "test-internal-token")
                 .contentType(MediaType.APPLICATION_JSON)
                 .content(objectMapper.writeValueAsString(request)))
+        .andDo(print())
+        .andExpect(status().isOk());
+  }
+
+  @Test
+  @DisplayName("GET 내부 API는 내부 토큰이 없으면 403 Forbidden을 반환한다")
+  void getInternalApi_withoutToken_forbidden() throws Exception {
+    mockMvc
+        .perform(get("/api/v1/internal/user/1/auth-info"))
+        .andDo(print())
+        .andExpect(status().isForbidden());
+  }
+
+  @Test
+  @DisplayName("GET 내부 API는 내부 토큰이 틀리면 403 Forbidden을 반환한다")
+  void getInternalApi_withWrongToken_forbidden() throws Exception {
+    mockMvc
+        .perform(
+            get("/api/v1/internal/user/1/auth-info").header(INTERNAL_TOKEN_HEADER, "wrong-token"))
+        .andDo(print())
+        .andExpect(status().isForbidden());
+  }
+
+  @Test
+  @DisplayName("GET 내부 API는 내부 토큰이 맞으면 요청을 통과시킨다")
+  void getInternalApi_withValidToken_success() throws Exception {
+    given(userFacade.getUserAuthInfoByUserId(anyLong()))
+        .willReturn(new UserAuthInfoResponse(1L, "test@test.com", "passwordHash", "USER"));
+
+    mockMvc
+        .perform(
+            get("/api/v1/internal/user/1/auth-info")
+                .header(INTERNAL_TOKEN_HEADER, "test-internal-token"))
         .andDo(print())
         .andExpect(status().isOk());
   }

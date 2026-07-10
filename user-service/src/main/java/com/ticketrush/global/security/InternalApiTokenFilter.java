@@ -11,7 +11,6 @@ import java.io.IOException;
 import java.security.MessageDigest;
 import java.util.List;
 import lombok.RequiredArgsConstructor;
-import org.springframework.http.HttpMethod;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.authority.SimpleGrantedAuthority;
 import org.springframework.security.core.context.SecurityContextHolder;
@@ -25,7 +24,7 @@ public class InternalApiTokenFilter extends OncePerRequestFilter {
 
   private static final String INTERNAL_TOKEN_HEADER = "X-Internal-Token";
 
-  private static final String USER_AUTH_INFO_PATH = "/api/v1/internal/user/auth-info";
+  private static final String INTERNAL_USER_API_PREFIX = "/api/v1/internal/user";
 
   private final CustomSecurityProperties securityProperties;
 
@@ -59,9 +58,18 @@ public class InternalApiTokenFilter extends OncePerRequestFilter {
   }
 
   private boolean isInternalApi(HttpServletRequest request) {
-    String path = request.getRequestURI();
-    String method = request.getMethod();
+    String path = getRequestPath(request);
 
-    return HttpMethod.POST.matches(method) && USER_AUTH_INFO_PATH.equals(path);
+    return path.equals(INTERNAL_USER_API_PREFIX) || path.startsWith(INTERNAL_USER_API_PREFIX + "/");
+  }
+
+  private String getRequestPath(HttpServletRequest request) {
+    String servletPath = request.getServletPath();
+
+    if (StringUtils.hasText(servletPath)) {
+      return servletPath;
+    }
+
+    return request.getRequestURI();
   }
 }
