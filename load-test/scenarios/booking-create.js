@@ -3,9 +3,16 @@
 import http from 'k6/http';
 import { check } from 'k6';
 import { Rate } from 'k6/metrics';
-import { BASE_URL, PERF_ID, USER_ID, SEAT_ID_MIN, SEAT_ID_MAX } from '../config/env.js';
+import {
+  BASE_URL,
+  PERF_ID,
+  LOAD_USER_EMAIL,
+  LOAD_USER_PASSWORD,
+  SEAT_ID_MIN,
+  SEAT_ID_MAX,
+} from '../config/env.js';
 import { baseOptions } from '../config/options.js';
-import { devToken } from '../lib/auth.js';
+import { login } from '../lib/auth.js';
 
 export const options = baseOptions;
 
@@ -13,7 +20,7 @@ export const options = baseOptions;
 const seatConflict = new Rate('seat_conflict');
 
 export function setup() {
-  return { token: devToken(USER_ID) };
+  return { token: login(LOAD_USER_EMAIL, LOAD_USER_PASSWORD) };
 }
 
 export default function (data) {
