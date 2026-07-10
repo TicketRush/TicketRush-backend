@@ -42,6 +42,10 @@ public class Booking extends AutoIdBaseEntity {
   @Column(name = "confirmed_at")
   private LocalDateTime confirmedAt;
 
+  /* 마지막으로 PG 환불이 실패한 시각. null이면 환불 실패 이력이 없다. 실패 사유는 payment의 refund 테이블이 SSOT다 (#391). */
+  @Column(name = "refund_failed_at")
+  private LocalDateTime refundFailedAt;
+
   @Builder
   public Booking(
       String bookingNumber,
@@ -65,7 +69,10 @@ public class Booking extends AutoIdBaseEntity {
    *
    * <p>좌석 반환·예매 종결(REFUNDED)은 환불 성공 이벤트({@code PaymentCanceledEvent})에만 매달아 refund-first 정합을
    * 지킨다(환불도 못 받고 좌석만 잃는 역방향 공백 차단). 환불이 최종 실패하면 {@code RefundFailedEvent}로 {@link
-   * #markRefundFailed()}에서 REFUND_FAILED로 보상한다.
+   * #recordRefundFailure(LocalDateTime)}에서 CONFIRMED로 복원한다.
+   *
+   * <p>과거 환불에 실패한 예매({@code refundFailedAt != null})도 CONFIRMED이므로 이 경로로 다시 환불을 요청할 수 있다. 재요청은 흡수
+   * 상태를 만들지 않는다 — 또 실패해도 CONFIRMED로 돌아온다 (#391).
    */
   public void requestRefund() {
     if (this.bookingStatus != BookingStatus.CONFIRMED) {
@@ -124,20 +131,34 @@ public class Booking extends AutoIdBaseEntity {
   }
 
   /**
-   * PG 환불 최종 실패 시 예매를 REFUND_FAILED로 보상 확정한다 (#91).
+   * PG 환불 최종 실패 시 예매를 CONFIRMED로 복원하고 실패 시각을 기록한다 (#391).
    *
-   * <p>이미 REFUND_FAILED면 멱등 처리(전이 없이 {@code true}). REFUNDING에서만 REFUND_FAILED로 전이한다. 그 외
-   * 상태(REFUNDED로 이미 종결됐거나 CONFIRMED/CANCELED 등 교차 경로)는 전이하지 않고 {@code false}를 반환한다(예외를 던지지 않아 호출 측이
-   * ack 하도록).
+   * <p>환불 실패는 취소가 성사되지 않았다는 뜻이다. 돈은 지불된 채고(payment=COMPLETED) 좌석은 SOLD, 티켓은 ISSUED로 남아 있으므로 예매는 여전히
+   * 유효하다 — 즉 CONFIRMED다. 실패를 별도 상태로 두면 벗어나는 전이가 없는 흡수 상태가 되어 재환불도 입장도 막힌다. 실패 사실은 {@code
+   * refundFailedAt}으로만 남기고, 사유는 payment의 refund 테이블(FAILED 이력)이 SSOT다.
    *
-   * @return 보상(또는 이미 보상)됐으면 {@code true}, 전이 불가 상태라 전이하지 않았으면 {@code false}
+   * <p>이미 복원된 예매(CONFIRMED이고 {@code refundFailedAt}이 있음)에 이벤트가 재전달되면 멱등 처리한다(전이 없이 {@code true}).
+   * REFUNDING이 아닌 그 외 상태(REFUNDED로 이미 종결됐거나 CANCELED/PENDING 등 교차 경로)는 전이하지 않고 {@code false}를
+   * 반환한다(예외를 던지지 않아 호출 측이 ack 하도록).
+   *
+   * <p>REFUNDING이더라도 {@code failedAt}이 이미 기록된 {@code refundFailedAt}보다 나중일 때만 복원한다. Inbox
+   * retention이 만료된 뒤 옛 {@code RefundFailedEvent}가 재생돼 <b>진행 중인 재환불 시도</b> 도중 도착하면, 그 시도를 조용히 중단시키고
+   * stale 시각을 덮어쓰기 때문이다.
+   *
+   * @param failedAt PG 환불이 최종 실패한 시각
+   * @return 복원(또는 이미 복원)됐으면 {@code true}, 전이 불가 상태라 전이하지 않았으면 {@code false}
    */
-  public boolean markRefundFailed() {
-    if (this.bookingStatus == BookingStatus.REFUND_FAILED) {
+  public boolean recordRefundFailure(LocalDateTime failedAt) {
+    if (this.bookingStatus == BookingStatus.REFUNDING) {
+      if (this.refundFailedAt != null && !failedAt.isAfter(this.refundFailedAt)) {
+        // 진행 중인 재환불 시도보다 앞선 실패 이벤트의 재생이다. 현재 시도를 중단시키지 않는다.
+        return false;
+      }
+      this.bookingStatus = BookingStatus.CONFIRMED;
+      this.refundFailedAt = failedAt;
       return true;
     }
-    if (this.bookingStatus == BookingStatus.REFUNDING) {
-      this.bookingStatus = BookingStatus.REFUND_FAILED;
+    if (this.bookingStatus == BookingStatus.CONFIRMED && this.refundFailedAt != null) {
       return true;
     }
     return false;

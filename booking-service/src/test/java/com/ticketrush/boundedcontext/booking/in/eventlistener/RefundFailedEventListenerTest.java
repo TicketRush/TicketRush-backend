@@ -10,7 +10,7 @@ import static org.mockito.BDDMockito.willThrow;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 
-import com.ticketrush.boundedcontext.booking.app.usecase.BookingMarkRefundFailedUseCase;
+import com.ticketrush.boundedcontext.booking.app.usecase.BookingRecordRefundFailureUseCase;
 import com.ticketrush.global.event.DomainEventEnvelope;
 import com.ticketrush.global.event.KafkaConsumerGroup;
 import com.ticketrush.global.exception.BusinessException;
@@ -35,7 +35,7 @@ class RefundFailedEventListenerTest {
 
   @InjectMocks private RefundFailedEventListener listener;
 
-  @Mock private BookingMarkRefundFailedUseCase bookingMarkRefundFailedUseCase;
+  @Mock private BookingRecordRefundFailureUseCase bookingRecordRefundFailureUseCase;
 
   @Mock private JsonConverter jsonConverter;
 
@@ -45,6 +45,7 @@ class RefundFailedEventListenerTest {
 
   private static final String PAYLOAD = "payload";
   private static final Long BOOKING_ID = 10L;
+  private static final LocalDateTime FAILED_AT = LocalDateTime.of(2026, 5, 22, 10, 30);
 
   private DomainEventEnvelope envelope() {
     return new DomainEventEnvelope(
@@ -57,8 +58,7 @@ class RefundFailedEventListenerTest {
   }
 
   private RefundFailedEvent event() {
-    return new RefundFailedEvent(
-        BOOKING_ID, "BOOK-1234", "PG 환불 처리 실패", LocalDateTime.of(2026, 5, 22, 10, 30));
+    return new RefundFailedEvent(BOOKING_ID, "BOOK-1234", "PG 환불 처리 실패", FAILED_AT);
   }
 
   /** Inbox가 최초 수신으로 판정해 비즈니스 콜백을 실행하고 true를 반환하도록 스텁한다. */
@@ -76,7 +76,7 @@ class RefundFailedEventListenerTest {
   }
 
   @Test
-  @DisplayName("최초 수신이면 예매를 REFUND_FAILED로 보상하고 오프셋을 커밋한다")
+  @DisplayName("최초 수신이면 예매를 CONFIRMED로 복원하고 오프셋을 커밋한다")
   void handleRefundFailed() {
     // given
     given(jsonConverter.deserialize(PAYLOAD, RefundFailedEvent.class)).willReturn(event());
@@ -85,13 +85,13 @@ class RefundFailedEventListenerTest {
     // when
     listener.handleRefundFailed(envelope(), acknowledgment);
 
-    // then
-    verify(bookingMarkRefundFailedUseCase).execute(BOOKING_ID);
+    // then: 이벤트의 실패 시각이 그대로 전달돼야 재전달 시에도 최초 시각이 보존된다 (#391)
+    verify(bookingRecordRefundFailureUseCase).execute(BOOKING_ID, FAILED_AT);
     verify(acknowledgment).acknowledge();
   }
 
   @Test
-  @DisplayName("이미 처리된 이벤트(inbox 중복)면 보상을 실행하지 않고 오프셋만 커밋한다")
+  @DisplayName("이미 처리된 이벤트(inbox 중복)면 복원을 실행하지 않고 오프셋만 커밋한다")
   void handleRefundFailedSkipsDuplicate() {
     // given
     given(jsonConverter.deserialize(PAYLOAD, RefundFailedEvent.class)).willReturn(event());
@@ -106,7 +106,7 @@ class RefundFailedEventListenerTest {
     listener.handleRefundFailed(envelope(), acknowledgment);
 
     // then
-    verify(bookingMarkRefundFailedUseCase, never()).execute(anyLong());
+    verify(bookingRecordRefundFailureUseCase, never()).execute(anyLong(), any(LocalDateTime.class));
     verify(acknowledgment).acknowledge();
   }
 
@@ -140,8 +140,8 @@ class RefundFailedEventListenerTest {
     given(jsonConverter.deserialize(PAYLOAD, RefundFailedEvent.class)).willReturn(event());
     givenInboxProcessesFirst();
     willThrow(new RuntimeException("DB 일시 장애"))
-        .given(bookingMarkRefundFailedUseCase)
-        .execute(BOOKING_ID);
+        .given(bookingRecordRefundFailureUseCase)
+        .execute(BOOKING_ID, FAILED_AT);
 
     // when & then
     assertThatThrownBy(() -> listener.handleRefundFailed(envelope(), acknowledgment))
@@ -157,8 +157,8 @@ class RefundFailedEventListenerTest {
     given(jsonConverter.deserialize(PAYLOAD, RefundFailedEvent.class)).willReturn(event());
     givenInboxProcessesFirst();
     willThrow(new BusinessException(ErrorStatus.BOOKING_NOT_FOUND))
-        .given(bookingMarkRefundFailedUseCase)
-        .execute(BOOKING_ID);
+        .given(bookingRecordRefundFailureUseCase)
+        .execute(BOOKING_ID, FAILED_AT);
 
     // when & then
     assertThatCode(() -> listener.handleRefundFailed(envelope(), acknowledgment))
