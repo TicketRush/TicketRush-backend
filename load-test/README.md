@@ -19,7 +19,9 @@ k6는 docker-compose의 `loadtest` profile로 분리된 컨테이너에서 실�
 docker compose up -d prometheus grafana
 
 # 2) 대량 시딩 (규모는 seed_load.sql 상단 @vars 에서 조정)
-mysql -h 127.0.0.1 -u "$MYSQL_USERNAME" -p"$MYSQL_PASSWORD" ticket_rush < seed/seed_load.sql
+#    오실행 가드: @i_confirm_loadtest_db=1 없으면 중단된다(운영 DB 보호).
+mysql -h 127.0.0.1 -u "$MYSQL_USERNAME" -p"$MYSQL_PASSWORD" \
+  --init-command="SET @i_confirm_loadtest_db=1" ticket_rush < seed/seed_load.sql
 
 # 3) k6 실행 (컨테이너, remote-write는 K6_OUT로 기본 적용) → Grafana
 docker compose run --rm k6 run /scripts/scenarios/seat-layouts.js

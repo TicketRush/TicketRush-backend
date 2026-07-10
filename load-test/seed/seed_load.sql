@@ -3,8 +3,20 @@
 --   생성 순서: user -> performance -> seat_layout -> seat -> (선택) booking + seat HOLD
 --   전 로우는 title 마커(@marker) 또는 @load_email 로 표식 -> cleanup_load.sql 로 일괄 삭제.
 --   표준 재실행 절차: cleanup_load.sql 먼저 -> seed_load.sql.
---   ⚠ 로컬 전용 DB에서만 실행할 것 (공유/운영 DB 금지).
+--   ⚠ 로컬/부하테스트 전용 DB에서만 실행할 것 (공유/운영 DB 금지).
 -- ============================================================================
+
+-- ---- 오실행 가드 -----------------------------------------------------------
+-- 이 시드는 실제로 로그인되는 계정을 만든다. 운영 DB에 잘못 실행하면 그대로 백도어가 된다.
+-- 주석은 강제력이 없으므로 실행자가 확인 변수를 명시해야만 진행되게 한다:
+--   mysql --init-command="SET @i_confirm_loadtest_db=1" ... < seed_load.sql
+-- 변수가 없으면 없는 테이블을 PREPARE 하다 ERROR 1146 으로 즉시 중단되고 본문은 돌지 않는다.
+SET @stmt := IF(COALESCE(@i_confirm_loadtest_db, 0) = 1,
+                'SELECT ''guard ok'' AS guard',
+                'SELECT * FROM `ABORT__run_with_i_confirm_loadtest_db_eq_1`');
+PREPARE guard_check FROM @stmt;
+EXECUTE guard_check;
+DEALLOCATE PREPARE guard_check;
 
 -- ---- 규모 파라미터 (여기만 조정) -------------------------------------------
 SET @perf_count  = 10;   -- 공연 수
@@ -18,8 +30,10 @@ SET SESSION cte_max_recursion_depth = 100000;
 
 -- 부하테스트 전용 계정. k6 시나리오가 POST /api/v1/auth/login 으로 이 계정에 로그인한다.
 -- 해시는 BCryptPasswordEncoder 기본 강도(cost 10). 평문은 커밋하지 않고 k6 실행 인자로만 넘긴다.
+-- 해시에는 salt가 그대로 들어 있어 오프라인 대입이 가능하다. 평문은 반드시 길고 무작위여야 하며
+-- 다른 계정·환경에서 재사용하지 않는다.
 SET @load_email   = 'loadtest@ticketrush.local';
-SET @load_pw_hash = '$2a$10$E4BOWKo0z6j93C4j2NMc/OoWhNeF4Mt5GEwvVhEYok/7fZAcO18oa';
+SET @load_pw_hash = '$2a$10$suAPTuh/UrqjiHmiGXdcueeABS9HHtxCrkH4r6uy2unY8yrtOq7CW';
 
 -- ---- 0) 부하테스트 전용 사용자 ---------------------------------------------
 -- user -> user_account 순서. user_account.user_id 는 user(id) 로 실제 FK 제약이 걸려 있다.
