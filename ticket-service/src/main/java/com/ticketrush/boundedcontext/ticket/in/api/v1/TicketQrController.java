@@ -25,7 +25,10 @@ public class TicketQrController {
 
   @Operation(
       summary = "입장권 QR payload 조회",
-      description = "로그인 사용자 본인의 확정된 예매에 한해 QR로 렌더링할 payload와 입장권 메타데이터를 반환합니다.")
+      description =
+          "로그인 사용자 본인의 취소되지 않은 예매에 한해 QR로 렌더링할 payload와 입장권 메타데이터를 반환합니다. "
+              + "환불 진행 중(REFUNDING)이거나 환불에 실패한(REFUND_FAILED) 예매도 payload를 반환하므로, "
+              + "조회 성공을 입장 가능으로 해석하면 안 됩니다. 입장 가능 여부는 입장 검증 API가 최종 판정합니다.")
   @GetMapping("/bookings/{bookingId}/qr")
   public ResponseEntity<ApiResponse<TicketQrResponse>> getTicketQr(
       @AuthenticationPrincipal CustomUserDetails user, @PathVariable Long bookingId) {
