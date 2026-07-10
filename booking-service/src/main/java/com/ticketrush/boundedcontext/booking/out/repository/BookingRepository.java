@@ -21,6 +21,12 @@ public interface BookingRepository extends JpaRepository<Booking, Long> {
 
   Optional<Booking> findByBookingNumberAndUserId(String bookingNumber, Long userId);
 
+  Optional<Booking> findByBookingNumber(String bookingNumber);
+
+  /* 환불에 실패해 아직 해결되지 않은 예매(CONFIRMED로 복원됐고 실패 이력이 남은 건)를 관리자가 조회한다 (#391). */
+  Page<Booking> findByBookingStatusAndRefundFailedAtIsNotNull(
+      BookingStatus bookingStatus, Pageable pageable);
+
   @Query("SELECT b.id FROM Booking b WHERE b.bookingNumber = :bookingNumber")
   Optional<Long> findIdByBookingNumber(@Param("bookingNumber") String bookingNumber);
 

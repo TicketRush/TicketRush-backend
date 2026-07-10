@@ -64,6 +64,8 @@ public class SecurityConfig {
                     .permitAll()
                     .requestMatchers("/api/v1/internal/booking/**")
                     .hasRole("INTERNAL")
+                    .requestMatchers("/api/v1/booking/admin/**")
+                    .hasRole("ADMIN")
                     .requestMatchers(HttpMethod.POST, "/api/v1/booking")
                     .authenticated()
                     .anyRequest()

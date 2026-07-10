@@ -4,10 +4,12 @@ import com.ticketrush.boundedcontext.booking.app.dto.request.BookingCreateReques
 import com.ticketrush.boundedcontext.booking.app.dto.response.BookingCountResponse;
 import com.ticketrush.boundedcontext.booking.app.dto.response.BookingPendingResponse;
 import com.ticketrush.boundedcontext.booking.app.dto.response.BookingSummaryResponse;
+import com.ticketrush.boundedcontext.booking.app.usecase.BookingAdminRetryRefundUseCase;
 import com.ticketrush.boundedcontext.booking.app.usecase.BookingCancelMyBookingUseCase;
 import com.ticketrush.boundedcontext.booking.app.usecase.BookingCountUseCase;
 import com.ticketrush.boundedcontext.booking.app.usecase.BookingCreateUseCase;
 import com.ticketrush.boundedcontext.booking.app.usecase.BookingGetMyBookingsUseCase;
+import com.ticketrush.boundedcontext.booking.app.usecase.BookingGetRefundFailedBookingsUseCase;
 import com.ticketrush.boundedcontext.booking.app.usecase.BookingIssueNumberUseCase;
 import com.ticketrush.boundedcontext.booking.app.usecase.BookingValidateReferencesUseCase;
 import com.ticketrush.boundedcontext.booking.app.usecase.BookingValidateSeatAvailableUseCase;
@@ -31,6 +33,8 @@ public class BookingFacade {
   private final BookingCancelMyBookingUseCase bookingCancelMyBookingUseCase;
   private final BookingValidateReferencesUseCase bookingValidateReferencesUseCase;
   private final BookingValidateSeatAvailableUseCase bookingValidateSeatAvailableUseCase;
+  private final BookingGetRefundFailedBookingsUseCase bookingGetRefundFailedBookingsUseCase;
+  private final BookingAdminRetryRefundUseCase bookingAdminRetryRefundUseCase;
 
   public BookingPendingResponse createBooking(Long userId, Long performanceId, Long seatId) {
     // 참조 및 좌석 가용성 검증 실행
@@ -60,5 +64,13 @@ public class BookingFacade {
 
   public void cancelMyBooking(Long userId, String bookingNumber) {
     bookingCancelMyBookingUseCase.execute(userId, bookingNumber);
+  }
+
+  public Page<BookingSummaryResponse> getRefundFailedBookings(OffsetPageRequest pageRequest) {
+    return bookingGetRefundFailedBookingsUseCase.execute(pageRequest);
+  }
+
+  public void retryRefund(Long adminId, String bookingNumber) {
+    bookingAdminRetryRefundUseCase.execute(adminId, bookingNumber);
   }
 }

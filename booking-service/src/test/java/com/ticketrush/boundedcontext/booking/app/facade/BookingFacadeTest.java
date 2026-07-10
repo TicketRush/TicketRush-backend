@@ -135,10 +135,12 @@ class BookingFacadeTest {
         new BookingSummaryResponse(
             100L,
             "BOOK-1234",
+            userId,
             2L,
             3L,
             BookingStatus.CONFIRMED,
-            LocalDateTime.of(2026, 5, 22, 10, 30));
+            LocalDateTime.of(2026, 5, 22, 10, 30),
+            null);
 
     given(
             bookingGetMyBookingsUseCase.execute(
