@@ -6,6 +6,8 @@
 
 승인됨
 
+> **정정 (2026-07-10, #381).** 초안의 `dev` 프로파일 전제를 정정했다. 프로파일 축은 `local` / `prod` / `test` 셋뿐이고 `application-dev.yml`은 어느 서비스에도 없다(SSOT: [`docs/backend-convention.md`](../backend-convention.md) § "프로파일 및 인프라 접속정보 외부화"). AWS 배포본은 `SPRING_PROFILES_ACTIVE=prod` 단독으로 뜨며(#378), write 시나리오는 정상 로그인을 쓰므로 배포 프로파일과 무관하다(#379). 아래 「맥락」의 인증 관련 힘과 「결정」의 write 시나리오 조건이 그에 맞게 수정되었다. **결정 자체(k6는 로컬, 대상 앱은 AWS 배포본)는 유효하며 폐기되지 않았다.**
+
 ## 맥락
 
 #342에서 k6 부하 테스트 인프라(docker-compose `loadtest` 프로파일 컨테이너, 시나리오 2개, 대량 시딩 SQL, `docs/load-test-guide.md`)를 구축했다. 다만 부하 생성기(k6)와 대상(앱)이 **같은 머신을 공유하면 CPU가 경쟁**해 latency·throughput 수치를 신뢰하기 어렵다. 신뢰 가능한 정량 수치를 얻으려면 둘을 서로 다른 머신으로 **분리**해야 한다.
@@ -15,7 +17,7 @@
 - **비용** — 개인·포트폴리오 규모라 상시 과금이 부담스럽다.
 - **팀 배포 대상** — 팀은 이미 서비스를 **AWS**에 배포할 예정이다.
 - **가정용 회선** — 로컬에서 무언가를 돌린다면 그 트래픽은 비대칭 가정용 인터넷(업로드가 좁고 지터가 큼)을 거친다.
-- **인증 제약** — write 시나리오(`booking-create`)가 쓰는 DevToken(`/api/v1/dev/auth/token`)은 `local`/`dev` 프로파일에서만 노출된다.
+- **인증 경로** — write 시나리오(`booking-create`)는 정상 로그인(`POST /api/v1/auth/login`)으로 토큰을 얻는다(#379). 개발 전용 DevToken(`/api/v1/dev/auth/token`)은 `local` 프로파일에서만 노출되며 부하 테스트는 쓰지 않는다.
 
 검토한 대안:
 
@@ -33,7 +35,7 @@
 - **k6 클라이언트 지표(`k6_*`)와 앱 계측(`ticketrush_*`, `http_server_requests_seconds`)은 같은 TSDB에 모은다.** Prometheus에는 이미 `--web.enable-remote-write-receiver`가 켜져 있으므로(`docker-compose.yml`), 로컬 k6의 remote-write 대상(`K6_PROMETHEUS_RW_SERVER_URL`)을 앱 지표를 스크랩하는 Prometheus로 돌리면 된다. 대시보드 JSON은 datasource uid `prometheus`를 참조하므로 수정이 필요 없다.
 
   다만 Prometheus를 **로컬**에 두는 구성은 불가하다. Prometheus는 pull 방식이라 AWS 쪽 앱 7개(8081~8087)의 포트를 인터넷에 열어야 하는데, 이는 위에서 대안 3을 기각한 **"노출면 악화"와 같은 문제**다. 관측 스택을 실제로 어디에 배치할지(대상 인스턴스에 함께 올릴지)는 **AWS 배포 토폴로지를 정하는 후속 ADR에서 다룬다.**
-- write 시나리오(`booking-create`)는 DevToken이 필요하므로 **AWS를 `dev` 프로파일로 띄울 때만** 실행한다. read 시나리오(`seat-layouts`)는 프로파일과 무관하다.
+- write 시나리오(`booking-create`)는 정상 로그인으로 인증하므로 **배포 프로파일과 무관하다**. read 시나리오(`seat-layouts`)는 인증 자체가 필요 없다. AWS 배포본은 `SPRING_PROFILES_ACTIVE=prod` 단독으로 띄운다(#378).
 
 Oracle 기반 무료 분리(대안 2)는 폐기하고 관련 자산(GitHub Actions 워크플로우, Prometheus 공인 노출 오버레이)을 제거한다.
 
