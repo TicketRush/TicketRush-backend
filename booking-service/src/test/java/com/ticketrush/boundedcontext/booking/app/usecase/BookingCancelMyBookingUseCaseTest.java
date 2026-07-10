@@ -4,6 +4,7 @@ import static com.ticketrush.global.status.ErrorStatus.BOOKING_CANCEL_NOT_ALLOWE
 import static com.ticketrush.global.status.ErrorStatus.BOOKING_NOT_FOUND;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.argThat;
 import static org.mockito.BDDMockito.given;
 import static org.mockito.Mockito.verify;
@@ -15,6 +16,7 @@ import com.ticketrush.boundedcontext.booking.out.repository.BookingRepository;
 import com.ticketrush.global.eventpublisher.EventPublisher;
 import com.ticketrush.global.exception.BusinessException;
 import com.ticketrush.shared.booking.event.RefundRequestedEvent;
+import java.time.LocalDateTime;
 import java.util.Optional;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -63,6 +65,33 @@ class BookingCancelMyBookingUseCaseTest {
                         && refundRequested.seatId().equals(3L)
                         && refundRequested.userId().equals(userId)
                         && refundRequested.requestedAt() != null));
+  }
+
+  @Test
+  @DisplayName("성공: 환불에 실패해 복원된 예매도 다시 취소해 재환불을 요청할 수 있다")
+  void execute_retries_refund_when_previous_refund_failed() {
+    // given: 환불 실패로 CONFIRMED로 복원된 예매(refundFailedAt이 찍혀 있다)
+    Long userId = 1L;
+    String bookingNumber = "BOOK-1234";
+    Booking booking =
+        Booking.builder()
+            .userId(userId)
+            .performanceId(2L)
+            .seatId(3L)
+            .bookingNumber(bookingNumber)
+            .bookingStatus(BookingStatus.REFUNDING)
+            .build();
+    booking.recordRefundFailure(LocalDateTime.of(2026, 7, 10, 12, 0));
+
+    given(bookingRepository.findByBookingNumberAndUserId(bookingNumber, userId))
+        .willReturn(Optional.of(booking));
+
+    // when
+    bookingCancelMyBookingUseCase.execute(userId, bookingNumber);
+
+    // then: 흡수 상태가 없으므로 별도 전이 없이 기존 취소 경로가 곧 재환불이다 (#391)
+    assertThat(booking.getBookingStatus()).isEqualTo(BookingStatus.REFUNDING);
+    verify(eventPublisher).publish(any(RefundRequestedEvent.class));
   }
 
   @Test

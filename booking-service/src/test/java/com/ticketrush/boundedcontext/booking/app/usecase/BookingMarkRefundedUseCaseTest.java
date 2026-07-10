@@ -8,6 +8,7 @@ import static org.mockito.Mockito.verifyNoMoreInteractions;
 import com.ticketrush.boundedcontext.booking.domain.entity.Booking;
 import com.ticketrush.boundedcontext.booking.domain.types.BookingStatus;
 import com.ticketrush.boundedcontext.booking.out.repository.BookingRepository;
+import java.time.LocalDateTime;
 import java.util.Optional;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -60,6 +61,21 @@ class BookingMarkRefundedUseCaseTest {
     bookingMarkRefundedUseCase.execute(BOOKING_ID);
 
     // then
+    assertThat(booking.getBookingStatus()).isEqualTo(BookingStatus.REFUNDED);
+  }
+
+  @Test
+  @DisplayName("정합 회복: 환불에 실패해 복원된 예매도 우회 환불이 성공하면 REFUNDED로 수렴한다")
+  void execute_converges_when_refund_previously_failed() {
+    // given: 환불 실패로 CONFIRMED로 복원된 뒤, 결제 취소 API로 우회 환불이 성공해 PaymentCanceledEvent가 도착한 경우
+    Booking booking = bookingWithStatus(BookingStatus.REFUNDING);
+    booking.recordRefundFailure(LocalDateTime.of(2026, 7, 10, 12, 0));
+    given(bookingRepository.findById(BOOKING_ID)).willReturn(Optional.of(booking));
+
+    // when
+    bookingMarkRefundedUseCase.execute(BOOKING_ID);
+
+    // then: 실패를 상태로 두지 않으므로 별도 전이 없이 정합이 회복된다 (#391)
     assertThat(booking.getBookingStatus()).isEqualTo(BookingStatus.REFUNDED);
   }
 

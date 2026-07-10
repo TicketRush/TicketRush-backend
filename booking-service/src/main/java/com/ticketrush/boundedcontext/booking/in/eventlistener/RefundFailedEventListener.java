@@ -1,6 +1,6 @@
 package com.ticketrush.boundedcontext.booking.in.eventlistener;
 
-import com.ticketrush.boundedcontext.booking.app.usecase.BookingMarkRefundFailedUseCase;
+import com.ticketrush.boundedcontext.booking.app.usecase.BookingRecordRefundFailureUseCase;
 import com.ticketrush.global.event.DomainEventEnvelope;
 import com.ticketrush.global.event.KafkaConsumerErrorPolicy;
 import com.ticketrush.global.event.KafkaConsumerGroup;
@@ -8,6 +8,7 @@ import com.ticketrush.global.inbox.DuplicateEventException;
 import com.ticketrush.global.inbox.InboxService;
 import com.ticketrush.global.json.JsonConverter;
 import com.ticketrush.shared.payment.event.RefundFailedEvent;
+import java.time.LocalDateTime;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.kafka.annotation.KafkaListener;
@@ -16,16 +17,17 @@ import org.springframework.messaging.handler.annotation.Payload;
 import org.springframework.stereotype.Component;
 
 /**
- * PG 환불 최종 실패 이벤트를 수신해 예매를 REFUND_FAILED로 보상 확정한다 (#91).
+ * PG 환불 최종 실패 이벤트를 수신해 예매를 CONFIRMED로 복원하고 실패 시각을 기록한다 (#391).
  *
- * <p>환불 요청으로 REFUNDING이던 예매를 되돌리는 보상 트랜잭션이다. 좌석은 환불되지 않았으므로 SOLD를 유지한다(반환 이벤트를 발행하지 않는다).
+ * <p>환불이 실패했다는 건 취소가 성사되지 않았다는 뜻이므로, 환불 요청으로 REFUNDING이던 예매를 원래의 CONFIRMED로 되돌린다. 좌석은 환불되지 않았으므로
+ * SOLD를 유지한다(반환 이벤트를 발행하지 않는다).
  */
 @Slf4j
 @Component
 @RequiredArgsConstructor
 public class RefundFailedEventListener {
 
-  private final BookingMarkRefundFailedUseCase bookingMarkRefundFailedUseCase;
+  private final BookingRecordRefundFailureUseCase bookingRecordRefundFailureUseCase;
   private final JsonConverter jsonConverter;
   private final InboxService inboxService;
 
@@ -36,13 +38,14 @@ public class RefundFailedEventListener {
     try {
       event = jsonConverter.deserialize(envelope.payload(), RefundFailedEvent.class);
       final Long bookingId = event.bookingId();
+      final LocalDateTime failedAt = event.failedAt();
 
-      // Inbox로 중복 처리를 방지한다(#110). 최초 수신일 때만 보상을 수행하고 처리와 Inbox 기록을 한 트랜잭션으로 묶는다.
+      // Inbox로 중복 처리를 방지한다(#110). 최초 수신일 때만 복원을 수행하고 처리와 Inbox 기록을 한 트랜잭션으로 묶는다.
       boolean processed =
           inboxService.runIfFirst(
               KafkaConsumerGroup.BOOKING,
               envelope,
-              () -> bookingMarkRefundFailedUseCase.execute(bookingId));
+              () -> bookingRecordRefundFailureUseCase.execute(bookingId, failedAt));
 
       if (!processed) {
         log.info(
