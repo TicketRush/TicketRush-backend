@@ -24,6 +24,10 @@ public class Ticket extends AutoIdBaseEntity {
   @Column(name = "booking_id", nullable = false, unique = true)
   private Long bookingId;
 
+  /** PaymentConfirmedEvent에서 복제한 예매자. QR 조회의 소유권 확인을 booking 동기 호출 없이 로컬에서 수행하기 위함(#364). */
+  @Column(name = "user_id")
+  private Long userId;
+
   @Column(name = "ticket_token_hash", length = 64, nullable = false, unique = true)
   private String ticketTokenHash;
 
@@ -35,8 +39,9 @@ public class Ticket extends AutoIdBaseEntity {
   private LocalDateTime usedAt;
 
   @Builder
-  public Ticket(Long bookingId, String ticketTokenHash, TicketStatus ticketStatus) {
+  public Ticket(Long bookingId, Long userId, String ticketTokenHash, TicketStatus ticketStatus) {
     this.bookingId = bookingId;
+    this.userId = userId;
     this.ticketTokenHash = ticketTokenHash;
     this.ticketStatus = ticketStatus;
   }

@@ -233,6 +233,7 @@ CREATE TABLE `ticket` (
   `created_at` datetime(6) DEFAULT NULL,
   `updated_at` datetime(6) DEFAULT NULL,
   `booking_id` bigint NOT NULL,
+  `user_id` bigint DEFAULT NULL,
   `ticket_status` enum('CANCELED','UNUSED','USED') NOT NULL,
   `ticket_token_hash` varchar(64) NOT NULL,
   `used_at` datetime(6) DEFAULT NULL,

@@ -36,7 +36,7 @@ public class TicketIssueUseCase {
   private final TicketMapper ticketMapper;
   private final MeterRegistry meterRegistry;
 
-  public TicketIssueResponse execute(Long bookingId) {
+  public TicketIssueResponse execute(Long bookingId, Long userId) {
     if (ticketRepository.existsByBookingId(bookingId)) {
       Counter.builder(MetricNames.TICKET_ISSUE)
           .tag(MetricNames.TAG_RESULT, MetricNames.RESULT_ALREADY_ISSUED)
@@ -46,7 +46,7 @@ public class TicketIssueUseCase {
     }
 
     String token = ticketTokenGenerator.generate();
-    Ticket ticket = ticketMapper.toEntity(bookingId, ticketTokenHasher.hash(token));
+    Ticket ticket = ticketMapper.toEntity(bookingId, userId, ticketTokenHasher.hash(token));
 
     // Inbox 트랜잭션에 조인된 상태로 저장한다. unique(booking_id/ticket_token_hash) 충돌 시 예외를 그대로 전파해
     // 트랜잭션을 롤백시키고(Inbox 미기록) 재소비로 처리한다.
