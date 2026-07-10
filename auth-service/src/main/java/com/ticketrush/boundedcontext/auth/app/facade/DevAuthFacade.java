@@ -7,7 +7,7 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.context.annotation.Profile;
 import org.springframework.stereotype.Component;
 
-@Profile({"local", "dev"})
+@Profile("local")
 @Component
 @RequiredArgsConstructor
 public class DevAuthFacade {

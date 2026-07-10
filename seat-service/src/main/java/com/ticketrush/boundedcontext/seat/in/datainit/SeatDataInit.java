@@ -9,7 +9,7 @@ import org.springframework.context.annotation.Profile;
 import org.springframework.stereotype.Component;
 
 @Slf4j
-@Profile({"local", "dev"})
+@Profile("local")
 @Component
 @RequiredArgsConstructor
 public class SeatDataInit implements ApplicationRunner {
@@ -21,6 +21,6 @@ public class SeatDataInit implements ApplicationRunner {
   @Override
   public void run(ApplicationArguments args) {
     seatFacade.createDefaultSeats(DUMMY_PERFORMANCE_ID);
-    log.info("local/dev 프로필용 더미 공연 좌석 초기화를 요청했습니다. performanceId: {}", DUMMY_PERFORMANCE_ID);
+    log.info("local 프로필용 더미 공연 좌석 초기화를 요청했습니다. performanceId: {}", DUMMY_PERFORMANCE_ID);
   }
 }
