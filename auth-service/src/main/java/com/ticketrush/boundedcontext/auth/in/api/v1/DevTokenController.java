@@ -16,7 +16,7 @@ import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
-@Profile({"local", "dev"})
+@Profile("local")
 @Tag(name = "Dev Auth", description = "개발 및 테스트용 인증 API")
 @RestController
 @RequestMapping("/api/v1/dev/auth")

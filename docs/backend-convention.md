@@ -281,6 +281,7 @@ Diary diary = diaryRepository.findByDiaryIdAndUserId(diaryId, userId)
     * **환경 무관 앱 설정**(`app.event-publisher.type`, `app.outbox.*`, `custom.security.permit-urls`, OAuth provider URI, mail 정적 프로퍼티, `spring.datasource.driver-class-name`, `spring.jpa.open-in-view` 등)은 `application.yml`(base)에 둔다.
     * **접속 엔드포인트·환경가변 값**(DB/Redis/Kafka 호스트, `ddl-auto`, OAuth `allowed-redirect-domains`, gateway `services.*.host`, CORS origin, swagger serverUrl 등)만 프로파일 yml에 둔다.
 * **프로파일 활성화:** 컨테이너에서 `SPRING_PROFILES_ACTIVE=prod` 환경변수로 구동한다. base의 `spring.profiles.active: ${SPRING_PROFILES_ACTIVE:local}` 기본값이 local이다.
+* **프로파일 축은 `local` / `prod` / `test` 셋뿐이다.** 개발 환경 = `local`, 운영 환경 = `prod`, 테스트 환경 = `test`. **`dev` 는 사용하지 않는다** — `application-dev.yml` 은 존재하지 않으며 `@Profile` 에도 `dev` 를 쓰지 않는다(`prod,dev` 처럼 함께 활성화하면 개발 전용 빈이 운영에 끼어드는 백도어가 된다).
 * **접속정보 환경변수 규칙:**
     * **DB:** `url: jdbc:mysql://${DB_HOST}:${DB_PORT}/${DB_NAME}`, 자격증명은 `${MYSQL_USERNAME}` / `${MYSQL_PASSWORD}`(기본값 없음, 미주입 시 기동 실패).
     * **Redis:** `spring.data.redis.host/port` 를 **명시적으로 설정**한다(오토컨피그 localhost:6379 암묵 의존 금지). local은 `${REDIS_HOST:localhost}`, prod는 `${REDIS_HOST}`.
