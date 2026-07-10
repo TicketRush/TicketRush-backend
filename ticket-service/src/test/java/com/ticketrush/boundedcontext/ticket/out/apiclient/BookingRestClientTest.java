@@ -27,7 +27,7 @@ class BookingRestClientTest {
   private static final String BASE_URL = "http://localhost:8084";
   private static final String INTERNAL_TOKEN = "test-token";
   private static final long BOOKING_ID = 100L;
-  private static final String REQUEST_URL = BASE_URL + "/api/v1/booking/internal/" + BOOKING_ID;
+  private static final String REQUEST_URL = BASE_URL + "/api/v1/internal/booking/" + BOOKING_ID;
 
   private MockRestServiceServer mockServer;
   private BookingRestClient client;
