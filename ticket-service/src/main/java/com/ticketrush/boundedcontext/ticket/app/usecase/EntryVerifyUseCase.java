@@ -48,8 +48,8 @@ public class EntryVerifyUseCase {
             .findById(claims.ticketId())
             .orElseThrow(() -> new BusinessException(ErrorStatus.TICKET_NOT_FOUND));
 
-    // 취소 전파가 ticket-service로 들어오지 않으므로(로컬 ticketStatus만으로는 취소를 알 수 없음), 예매 확정/취소 판정은 booking 동기 조회로
-    // 한다.
+    // 취소는 PaymentCanceledEventListener가 로컬 ticketStatus=CANCELED로 투영하지만, REFUNDING/REFUND_FAILED 등
+    // 환불 진행 상태는 로컬에 반영되지 않는다. 입장은 되돌릴 수 없는 행위이므로 권위 있는 bookingStatus로 최종 판정한다(#364).
     BookingInfoResponse booking = bookingRestClient.getBooking(ticket.getBookingId());
     if (!CONFIRMED_STATUS.equals(booking.bookingStatus())) {
       throw new BusinessException(ErrorStatus.TICKET_NOT_USABLE);

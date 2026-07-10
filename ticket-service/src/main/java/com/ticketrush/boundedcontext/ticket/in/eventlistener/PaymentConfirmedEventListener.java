@@ -36,14 +36,24 @@ public class PaymentConfirmedEventListener {
     try {
       event = jsonConverter.deserialize(envelope.payload(), PaymentConfirmedEvent.class);
       final Long bookingId = event.bookingId();
+      final Long userId = event.userId();
 
       log.info("결제 완료 이벤트 수신. 티켓 발급 처리. bookingId: {}", bookingId);
 
+      // userId가 없으면 티켓은 발급되지만 소유권 확인에 실패해 소유자조차 QR을 조회할 수 없다(#364).
+      // 발급 자체는 막지 않되(입장 게이트는 booking 동기 조회로 동작), 사후 추적이 가능하도록 남긴다.
+      if (userId == null) {
+        log.warn("결제 완료 이벤트에 userId가 없습니다. QR 조회가 불가능한 티켓이 발급됩니다. bookingId: {}", bookingId);
+      }
+
       // Inbox로 중복 처리를 방지한다(#110). 최초 수신일 때만 발급하고 처리와 Inbox 기록을 한 트랜잭션으로 묶는다.
-      // 티켓 발급에는 bookingId만 사용한다. 이미 발급된 케이스는 TicketIssueUseCase가 멱등하게(alreadyIssued) 처리한다.
+      // userId는 티켓에 복제 저장해 QR 조회가 booking-service 동기 호출 없이 소유권을 확인하게 한다(#364).
+      // 이미 발급된 케이스는 TicketIssueUseCase가 멱등하게(alreadyIssued) 처리한다.
       boolean processed =
           inboxService.runIfFirst(
-              KafkaConsumerGroup.TICKET, envelope, () -> ticketIssueUseCase.execute(bookingId));
+              KafkaConsumerGroup.TICKET,
+              envelope,
+              () -> ticketIssueUseCase.execute(bookingId, userId));
 
       if (processed) {
         log.info("티켓 발급 처리 완료. bookingId: {}", bookingId);

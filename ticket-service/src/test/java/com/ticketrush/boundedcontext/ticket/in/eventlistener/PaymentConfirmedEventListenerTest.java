@@ -53,6 +53,7 @@ class PaymentConfirmedEventListenerTest {
   // 따라서 payload는 의미 없는 식별 문자열로 둔다.
   private static final String PAYLOAD = "payload";
   private static final Long BOOKING_ID = 10L;
+  private static final Long USER_ID = 4L;
 
   private DomainEventEnvelope envelope() {
     return new DomainEventEnvelope(
@@ -66,7 +67,7 @@ class PaymentConfirmedEventListenerTest {
 
   private PaymentConfirmedEvent event() {
     return new PaymentConfirmedEvent(
-        1L, BOOKING_ID, 3L, 4L, 50000L, LocalDateTime.of(2026, 5, 22, 10, 30));
+        1L, BOOKING_ID, 3L, USER_ID, 50000L, LocalDateTime.of(2026, 5, 22, 10, 30));
   }
 
   /** Inbox가 최초 수신으로 판정해 비즈니스 콜백을 실행하고 true를 반환하도록 스텁한다. */
@@ -93,7 +94,7 @@ class PaymentConfirmedEventListenerTest {
     listener.handlePaymentConfirmed(envelope, acknowledgment);
 
     // then
-    verify(ticketIssueUseCase).execute(BOOKING_ID);
+    verify(ticketIssueUseCase).execute(BOOKING_ID, USER_ID);
     verify(acknowledgment).acknowledge();
   }
 
@@ -112,7 +113,7 @@ class PaymentConfirmedEventListenerTest {
     listener.handlePaymentConfirmed(envelope, acknowledgment);
 
     // then
-    verify(ticketIssueUseCase, never()).execute(anyLong());
+    verify(ticketIssueUseCase, never()).execute(anyLong(), anyLong());
     verify(acknowledgment).acknowledge();
   }
 
@@ -145,14 +146,16 @@ class PaymentConfirmedEventListenerTest {
     final DomainEventEnvelope envelope = envelope();
     given(jsonConverter.deserialize(PAYLOAD, PaymentConfirmedEvent.class)).willReturn(event());
     givenInboxProcessesFirst();
-    willThrow(new RuntimeException("DB 일시 장애")).given(ticketIssueUseCase).execute(BOOKING_ID);
+    willThrow(new RuntimeException("DB 일시 장애"))
+        .given(ticketIssueUseCase)
+        .execute(BOOKING_ID, USER_ID);
 
     // when & then: 일시 실패는 리스너 밖으로 전파되어 컨테이너 재시도→DLT 파이프라인을 태운다
     assertThatThrownBy(() -> listener.handlePaymentConfirmed(envelope, acknowledgment))
         .isInstanceOf(RuntimeException.class);
 
     // then: 발급은 시도되었으나 오프셋은 커밋되지 않는다
-    verify(ticketIssueUseCase).execute(BOOKING_ID);
+    verify(ticketIssueUseCase).execute(BOOKING_ID, USER_ID);
     verify(acknowledgment, never()).acknowledge();
   }
 
@@ -165,14 +168,14 @@ class PaymentConfirmedEventListenerTest {
     givenInboxProcessesFirst();
     willThrow(new BusinessException(ErrorStatus.BOOKING_NOT_FOUND))
         .given(ticketIssueUseCase)
-        .execute(BOOKING_ID);
+        .execute(BOOKING_ID, USER_ID);
 
     // when & then: 영구 실패는 로그 후 커밋되어 파티션 블로킹을 막는다
     assertThatCode(() -> listener.handlePaymentConfirmed(envelope, acknowledgment))
         .doesNotThrowAnyException();
 
     // then
-    verify(ticketIssueUseCase).execute(BOOKING_ID);
+    verify(ticketIssueUseCase).execute(BOOKING_ID, USER_ID);
     verify(acknowledgment).acknowledge();
   }
 
@@ -189,7 +192,7 @@ class PaymentConfirmedEventListenerTest {
         .doesNotThrowAnyException();
 
     // then: 발급 유스케이스는 호출되지 않고, 오프셋은 커밋된다
-    verify(ticketIssueUseCase, never()).execute(anyLong());
+    verify(ticketIssueUseCase, never()).execute(anyLong(), anyLong());
     verify(acknowledgment).acknowledge();
   }
 }
