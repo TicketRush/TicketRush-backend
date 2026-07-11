@@ -1,0 +1,12 @@
+container,max_cpu_pct,max_memory_mib,max_memory_limit_pct
+auth-service,0.36,322.4,55.97
+booking-service,1.66,379.2,65.83
+gateway-service,11.87,245.5,47.94
+payment-service,0.58,350.1,60.79
+performance-service,0.44,362.2,62.88
+seat-service,25.47,435.9,68.10
+ticket-service,3.10,356.7,61.92
+ticketrush-kafka,5.51,445.9,43.54
+ticketrush-mysql,5.44,391.8,51.02
+ticketrush-redis,2.36,4.1,3.20
+user-service,0.34,328.5,57.04
