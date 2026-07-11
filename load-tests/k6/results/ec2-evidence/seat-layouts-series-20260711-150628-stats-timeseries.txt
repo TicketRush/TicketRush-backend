@@ -1,0 +1,1601 @@
+===== 2026-07-11T15:06:37+00:00 =====
+HOST_CPU_BUSY=3.0%
+               total        used        free      shared  buff/cache   available
+Mem:            7778        4210        2372           3        1451        3567
+gateway-service CPU=0.08% MEM=236.4MiB / 512MiB MEM_PCT=46.16% PIDS=22
+ticket-service CPU=0.25% MEM=355.9MiB / 576MiB MEM_PCT=61.79% PIDS=40
+payment-service CPU=0.34% MEM=349.3MiB / 576MiB MEM_PCT=60.65% PIDS=39
+booking-service CPU=0.50% MEM=378.2MiB / 576MiB MEM_PCT=65.66% PIDS=51
+seat-service CPU=0.91% MEM=426.7MiB / 640MiB MEM_PCT=66.67% PIDS=93
+auth-service CPU=0.14% MEM=320MiB / 576MiB MEM_PCT=55.55% PIDS=34
+performance-service CPU=0.15% MEM=361.7MiB / 576MiB MEM_PCT=62.80% PIDS=34
+user-service CPU=0.13% MEM=327.8MiB / 576MiB MEM_PCT=56.92% PIDS=34
+ticketrush-kafka CPU=1.48% MEM=424.7MiB / 1GiB MEM_PCT=41.48% PIDS=92
+ticketrush-redis CPU=0.47% MEM=3.602MiB / 128MiB MEM_PCT=2.81% PIDS=6
+ticketrush-mysql CPU=0.63% MEM=390.1MiB / 768MiB MEM_PCT=50.80% PIDS=108
+
+===== 2026-07-11T15:06:44+00:00 =====
+HOST_CPU_BUSY=5.0%
+               total        used        free      shared  buff/cache   available
+Mem:            7778        4216        2365           3        1452        3561
+gateway-service CPU=0.08% MEM=236.4MiB / 512MiB MEM_PCT=46.16% PIDS=22
+ticket-service CPU=0.33% MEM=355.9MiB / 576MiB MEM_PCT=61.79% PIDS=40
+payment-service CPU=0.28% MEM=349.1MiB / 576MiB MEM_PCT=60.60% PIDS=39
+booking-service CPU=0.40% MEM=378.2MiB / 576MiB MEM_PCT=65.65% PIDS=51
+seat-service CPU=0.71% MEM=426.4MiB / 640MiB MEM_PCT=66.62% PIDS=93
+auth-service CPU=0.13% MEM=320MiB / 576MiB MEM_PCT=55.55% PIDS=34
+performance-service CPU=0.13% MEM=361.7MiB / 576MiB MEM_PCT=62.80% PIDS=34
+user-service CPU=0.34% MEM=328.1MiB / 576MiB MEM_PCT=56.96% PIDS=34
+ticketrush-kafka CPU=2.42% MEM=425.7MiB / 1GiB MEM_PCT=41.57% PIDS=92
+ticketrush-redis CPU=0.43% MEM=3.848MiB / 128MiB MEM_PCT=3.01% PIDS=6
+ticketrush-mysql CPU=0.52% MEM=390.4MiB / 768MiB MEM_PCT=50.83% PIDS=108
+
+===== 2026-07-11T15:06:51+00:00 =====
+HOST_CPU_BUSY=2.0%
+               total        used        free      shared  buff/cache   available
+Mem:            7778        4212        2370           3        1452        3565
+gateway-service CPU=0.08% MEM=236.4MiB / 512MiB MEM_PCT=46.16% PIDS=22
+ticket-service CPU=0.33% MEM=355.9MiB / 576MiB MEM_PCT=61.79% PIDS=40
+payment-service CPU=0.30% MEM=349.1MiB / 576MiB MEM_PCT=60.60% PIDS=39
+booking-service CPU=0.71% MEM=378.4MiB / 576MiB MEM_PCT=65.70% PIDS=51
+seat-service CPU=1.39% MEM=426.4MiB / 640MiB MEM_PCT=66.63% PIDS=93
+auth-service CPU=0.15% MEM=320MiB / 576MiB MEM_PCT=55.55% PIDS=34
+performance-service CPU=0.14% MEM=361.7MiB / 576MiB MEM_PCT=62.80% PIDS=34
+user-service CPU=0.13% MEM=327.9MiB / 576MiB MEM_PCT=56.92% PIDS=34
+ticketrush-kafka CPU=1.60% MEM=424.5MiB / 1GiB MEM_PCT=41.45% PIDS=92
+ticketrush-redis CPU=0.46% MEM=3.805MiB / 128MiB MEM_PCT=2.97% PIDS=6
+ticketrush-mysql CPU=0.51% MEM=390.1MiB / 768MiB MEM_PCT=50.80% PIDS=108
+
+===== 2026-07-11T15:06:58+00:00 =====
+HOST_CPU_BUSY=5.0%
+               total        used        free      shared  buff/cache   available
+Mem:            7778        4217        2364           3        1452        3560
+gateway-service CPU=0.10% MEM=236.4MiB / 512MiB MEM_PCT=46.16% PIDS=22
+ticket-service CPU=0.23% MEM=355.9MiB / 576MiB MEM_PCT=61.79% PIDS=40
+payment-service CPU=0.30% MEM=349.1MiB / 576MiB MEM_PCT=60.60% PIDS=39
+booking-service CPU=1.50% MEM=378.2MiB / 576MiB MEM_PCT=65.65% PIDS=51
+seat-service CPU=1.97% MEM=426.2MiB / 640MiB MEM_PCT=66.60% PIDS=93
+auth-service CPU=0.35% MEM=320MiB / 576MiB MEM_PCT=55.55% PIDS=34
+performance-service CPU=0.15% MEM=361.7MiB / 576MiB MEM_PCT=62.80% PIDS=34
+user-service CPU=0.15% MEM=327.9MiB / 576MiB MEM_PCT=56.92% PIDS=34
+ticketrush-kafka CPU=2.18% MEM=424.5MiB / 1GiB MEM_PCT=41.46% PIDS=92
+ticketrush-redis CPU=0.49% MEM=4.051MiB / 128MiB MEM_PCT=3.16% PIDS=6
+ticketrush-mysql CPU=0.76% MEM=390.4MiB / 768MiB MEM_PCT=50.83% PIDS=108
+
+===== 2026-07-11T15:07:06+00:00 =====
+HOST_CPU_BUSY=3.0%
+               total        used        free      shared  buff/cache   available
+Mem:            7778        4213        2369           3        1452        3564
+gateway-service CPU=0.08% MEM=236.4MiB / 512MiB MEM_PCT=46.16% PIDS=22
+ticket-service CPU=0.31% MEM=355.9MiB / 576MiB MEM_PCT=61.79% PIDS=40
+payment-service CPU=0.28% MEM=349.3MiB / 576MiB MEM_PCT=60.64% PIDS=39
+booking-service CPU=0.39% MEM=378.4MiB / 576MiB MEM_PCT=65.70% PIDS=51
+seat-service CPU=0.76% MEM=426.4MiB / 640MiB MEM_PCT=66.63% PIDS=93
+auth-service CPU=0.31% MEM=320MiB / 576MiB MEM_PCT=55.55% PIDS=34
+performance-service CPU=0.16% MEM=361.7MiB / 576MiB MEM_PCT=62.80% PIDS=34
+user-service CPU=0.15% MEM=327.9MiB / 576MiB MEM_PCT=56.92% PIDS=34
+ticketrush-kafka CPU=1.68% MEM=424.7MiB / 1GiB MEM_PCT=41.48% PIDS=92
+ticketrush-redis CPU=0.48% MEM=3.848MiB / 128MiB MEM_PCT=3.01% PIDS=6
+ticketrush-mysql CPU=0.53% MEM=390.4MiB / 768MiB MEM_PCT=50.83% PIDS=108
+
+===== 2026-07-11T15:07:13+00:00 =====
+HOST_CPU_BUSY=3.0%
+               total        used        free      shared  buff/cache   available
+Mem:            7778        4219        2363           3        1452        3558
+gateway-service CPU=0.09% MEM=236.4MiB / 512MiB MEM_PCT=46.16% PIDS=22
+ticket-service CPU=0.22% MEM=355.9MiB / 576MiB MEM_PCT=61.79% PIDS=40
+payment-service CPU=0.31% MEM=349.6MiB / 576MiB MEM_PCT=60.69% PIDS=39
+booking-service CPU=0.60% MEM=378.5MiB / 576MiB MEM_PCT=65.71% PIDS=51
+seat-service CPU=0.60% MEM=426.2MiB / 640MiB MEM_PCT=66.59% PIDS=93
+auth-service CPU=0.18% MEM=320MiB / 576MiB MEM_PCT=55.55% PIDS=34
+performance-service CPU=0.18% MEM=361.7MiB / 576MiB MEM_PCT=62.80% PIDS=34
+user-service CPU=0.14% MEM=327.9MiB / 576MiB MEM_PCT=56.92% PIDS=34
+ticketrush-kafka CPU=1.69% MEM=424.7MiB / 1GiB MEM_PCT=41.48% PIDS=92
+ticketrush-redis CPU=0.44% MEM=3.844MiB / 128MiB MEM_PCT=3.00% PIDS=6
+ticketrush-mysql CPU=0.65% MEM=390.4MiB / 768MiB MEM_PCT=50.83% PIDS=108
+
+===== 2026-07-11T15:07:20+00:00 =====
+HOST_CPU_BUSY=3.0%
+               total        used        free      shared  buff/cache   available
+Mem:            7778        4218        2364           3        1452        3559
+gateway-service CPU=0.10% MEM=236.4MiB / 512MiB MEM_PCT=46.16% PIDS=22
+ticket-service CPU=0.27% MEM=355.9MiB / 576MiB MEM_PCT=61.79% PIDS=40
+payment-service CPU=0.32% MEM=349.3MiB / 576MiB MEM_PCT=60.64% PIDS=39
+booking-service CPU=1.49% MEM=378.2MiB / 576MiB MEM_PCT=65.66% PIDS=51
+seat-service CPU=0.70% MEM=426.4MiB / 640MiB MEM_PCT=66.63% PIDS=93
+auth-service CPU=0.14% MEM=320.2MiB / 576MiB MEM_PCT=55.59% PIDS=34
+performance-service CPU=0.16% MEM=361.7MiB / 576MiB MEM_PCT=62.80% PIDS=34
+user-service CPU=0.16% MEM=327.9MiB / 576MiB MEM_PCT=56.92% PIDS=34
+ticketrush-kafka CPU=1.76% MEM=424.7MiB / 1GiB MEM_PCT=41.48% PIDS=92
+ticketrush-redis CPU=0.49% MEM=3.805MiB / 128MiB MEM_PCT=2.97% PIDS=6
+ticketrush-mysql CPU=0.49% MEM=390.1MiB / 768MiB MEM_PCT=50.80% PIDS=108
+
+===== 2026-07-11T15:07:27+00:00 =====
+HOST_CPU_BUSY=3.0%
+               total        used        free      shared  buff/cache   available
+Mem:            7778        4202        2379           3        1452        3575
+gateway-service CPU=0.09% MEM=236.4MiB / 512MiB MEM_PCT=46.16% PIDS=22
+ticket-service CPU=0.31% MEM=355.9MiB / 576MiB MEM_PCT=61.79% PIDS=40
+payment-service CPU=0.25% MEM=349.6MiB / 576MiB MEM_PCT=60.69% PIDS=39
+booking-service CPU=0.54% MEM=378MiB / 576MiB MEM_PCT=65.62% PIDS=51
+seat-service CPU=0.94% MEM=426.2MiB / 640MiB MEM_PCT=66.59% PIDS=93
+auth-service CPU=0.14% MEM=320MiB / 576MiB MEM_PCT=55.55% PIDS=34
+performance-service CPU=0.14% MEM=361.7MiB / 576MiB MEM_PCT=62.80% PIDS=34
+user-service CPU=0.16% MEM=327.9MiB / 576MiB MEM_PCT=56.92% PIDS=34
+ticketrush-kafka CPU=1.50% MEM=424.7MiB / 1GiB MEM_PCT=41.47% PIDS=92
+ticketrush-redis CPU=2.31% MEM=3.812MiB / 128MiB MEM_PCT=2.98% PIDS=6
+ticketrush-mysql CPU=0.62% MEM=390.4MiB / 768MiB MEM_PCT=50.83% PIDS=108
+
+===== 2026-07-11T15:07:34+00:00 =====
+HOST_CPU_BUSY=17.0%
+               total        used        free      shared  buff/cache   available
+Mem:            7778        4202        2379           3        1452        3575
+gateway-service CPU=0.10% MEM=236.4MiB / 512MiB MEM_PCT=46.16% PIDS=22
+ticket-service CPU=0.23% MEM=355.7MiB / 576MiB MEM_PCT=61.75% PIDS=40
+payment-service CPU=0.31% MEM=349.3MiB / 576MiB MEM_PCT=60.64% PIDS=39
+booking-service CPU=0.40% MEM=378.3MiB / 576MiB MEM_PCT=65.67% PIDS=51
+seat-service CPU=0.58% MEM=426.3MiB / 640MiB MEM_PCT=66.61% PIDS=93
+auth-service CPU=0.19% MEM=320.2MiB / 576MiB MEM_PCT=55.59% PIDS=34
+performance-service CPU=0.15% MEM=361.7MiB / 576MiB MEM_PCT=62.80% PIDS=34
+user-service CPU=0.19% MEM=327.9MiB / 576MiB MEM_PCT=56.92% PIDS=34
+ticketrush-kafka CPU=1.74% MEM=424.8MiB / 1GiB MEM_PCT=41.49% PIDS=92
+ticketrush-redis CPU=0.42% MEM=3.848MiB / 128MiB MEM_PCT=3.01% PIDS=6
+ticketrush-mysql CPU=2.34% MEM=390.4MiB / 768MiB MEM_PCT=50.83% PIDS=108
+
+===== 2026-07-11T15:07:41+00:00 =====
+HOST_CPU_BUSY=2.0%
+               total        used        free      shared  buff/cache   available
+Mem:            7778        4206        2375           3        1452        3571
+gateway-service CPU=0.11% MEM=236.4MiB / 512MiB MEM_PCT=46.16% PIDS=22
+ticket-service CPU=0.24% MEM=355.9MiB / 576MiB MEM_PCT=61.79% PIDS=40
+payment-service CPU=0.26% MEM=349.3MiB / 576MiB MEM_PCT=60.64% PIDS=39
+booking-service CPU=0.54% MEM=378MiB / 576MiB MEM_PCT=65.63% PIDS=51
+seat-service CPU=0.83% MEM=426.3MiB / 640MiB MEM_PCT=66.61% PIDS=93
+auth-service CPU=0.15% MEM=320MiB / 576MiB MEM_PCT=55.55% PIDS=34
+performance-service CPU=0.13% MEM=361.7MiB / 576MiB MEM_PCT=62.80% PIDS=34
+user-service CPU=0.16% MEM=327.9MiB / 576MiB MEM_PCT=56.92% PIDS=34
+ticketrush-kafka CPU=1.67% MEM=424.8MiB / 1GiB MEM_PCT=41.48% PIDS=92
+ticketrush-redis CPU=0.41% MEM=3.848MiB / 128MiB MEM_PCT=3.01% PIDS=6
+ticketrush-mysql CPU=0.53% MEM=390.4MiB / 768MiB MEM_PCT=50.83% PIDS=108
+
+===== 2026-07-11T15:07:48+00:00 =====
+HOST_CPU_BUSY=9.0%
+               total        used        free      shared  buff/cache   available
+Mem:            7778        4198        2383           3        1452        3579
+gateway-service CPU=6.04% MEM=237.4MiB / 512MiB MEM_PCT=46.37% PIDS=26
+ticket-service CPU=0.23% MEM=356.2MiB / 576MiB MEM_PCT=61.83% PIDS=40
+payment-service CPU=0.58% MEM=349.5MiB / 576MiB MEM_PCT=60.68% PIDS=39
+booking-service CPU=0.50% MEM=378.5MiB / 576MiB MEM_PCT=65.72% PIDS=51
+seat-service CPU=19.55% MEM=423.3MiB / 640MiB MEM_PCT=66.14% PIDS=93
+auth-service CPU=0.15% MEM=320MiB / 576MiB MEM_PCT=55.55% PIDS=34
+performance-service CPU=0.14% MEM=361.7MiB / 576MiB MEM_PCT=62.80% PIDS=34
+user-service CPU=0.15% MEM=327.9MiB / 576MiB MEM_PCT=56.92% PIDS=34
+ticketrush-kafka CPU=1.63% MEM=424.6MiB / 1GiB MEM_PCT=41.46% PIDS=92
+ticketrush-redis CPU=0.49% MEM=3.801MiB / 128MiB MEM_PCT=2.97% PIDS=6
+ticketrush-mysql CPU=2.07% MEM=390.9MiB / 768MiB MEM_PCT=50.90% PIDS=108
+
+===== 2026-07-11T15:07:55+00:00 =====
+HOST_CPU_BUSY=14.0%
+               total        used        free      shared  buff/cache   available
+Mem:            7778        4199        2383           3        1452        3578
+gateway-service CPU=3.40% MEM=237.4MiB / 512MiB MEM_PCT=46.37% PIDS=26
+ticket-service CPU=0.41% MEM=355.9MiB / 576MiB MEM_PCT=61.79% PIDS=40
+payment-service CPU=0.31% MEM=349.5MiB / 576MiB MEM_PCT=60.68% PIDS=39
+booking-service CPU=0.43% MEM=378.3MiB / 576MiB MEM_PCT=65.68% PIDS=51
+seat-service CPU=4.71% MEM=423.7MiB / 640MiB MEM_PCT=66.21% PIDS=93
+auth-service CPU=0.15% MEM=320MiB / 576MiB MEM_PCT=55.55% PIDS=34
+performance-service CPU=0.20% MEM=361.7MiB / 576MiB MEM_PCT=62.80% PIDS=34
+user-service CPU=0.14% MEM=327.9MiB / 576MiB MEM_PCT=56.92% PIDS=34
+ticketrush-kafka CPU=1.69% MEM=424.6MiB / 1GiB MEM_PCT=41.46% PIDS=92
+ticketrush-redis CPU=0.46% MEM=4.055MiB / 128MiB MEM_PCT=3.17% PIDS=6
+ticketrush-mysql CPU=2.10% MEM=390.7MiB / 768MiB MEM_PCT=50.87% PIDS=108
+
+===== 2026-07-11T15:08:02+00:00 =====
+HOST_CPU_BUSY=16.0%
+               total        used        free      shared  buff/cache   available
+Mem:            7778        4209        2372           3        1452        3568
+gateway-service CPU=6.79% MEM=241.1MiB / 512MiB MEM_PCT=47.08% PIDS=26
+ticket-service CPU=0.36% MEM=355.9MiB / 576MiB MEM_PCT=61.79% PIDS=40
+payment-service CPU=0.27% MEM=349.3MiB / 576MiB MEM_PCT=60.64% PIDS=39
+booking-service CPU=0.45% MEM=378.1MiB / 576MiB MEM_PCT=65.64% PIDS=51
+seat-service CPU=9.24% MEM=424MiB / 640MiB MEM_PCT=66.25% PIDS=93
+auth-service CPU=0.15% MEM=320MiB / 576MiB MEM_PCT=55.55% PIDS=34
+performance-service CPU=0.17% MEM=361.7MiB / 576MiB MEM_PCT=62.80% PIDS=34
+user-service CPU=0.14% MEM=327.9MiB / 576MiB MEM_PCT=56.92% PIDS=34
+ticketrush-kafka CPU=1.66% MEM=425.7MiB / 1GiB MEM_PCT=41.57% PIDS=92
+ticketrush-redis CPU=0.61% MEM=4.051MiB / 128MiB MEM_PCT=3.16% PIDS=6
+ticketrush-mysql CPU=2.10% MEM=391.2MiB / 768MiB MEM_PCT=50.94% PIDS=108
+
+===== 2026-07-11T15:08:09+00:00 =====
+HOST_CPU_BUSY=8.0%
+               total        used        free      shared  buff/cache   available
+Mem:            7778        4210        2371           3        1452        3567
+gateway-service CPU=3.65% MEM=241.2MiB / 512MiB MEM_PCT=47.11% PIDS=26
+ticket-service CPU=0.25% MEM=355.7MiB / 576MiB MEM_PCT=61.75% PIDS=40
+payment-service CPU=0.43% MEM=349.3MiB / 576MiB MEM_PCT=60.64% PIDS=39
+booking-service CPU=0.51% MEM=378.1MiB / 576MiB MEM_PCT=65.64% PIDS=51
+seat-service CPU=7.72% MEM=423.9MiB / 640MiB MEM_PCT=66.23% PIDS=93
+auth-service CPU=0.14% MEM=320MiB / 576MiB MEM_PCT=55.55% PIDS=34
+performance-service CPU=0.18% MEM=361.7MiB / 576MiB MEM_PCT=62.80% PIDS=34
+user-service CPU=0.20% MEM=327.9MiB / 576MiB MEM_PCT=56.92% PIDS=34
+ticketrush-kafka CPU=1.84% MEM=424.6MiB / 1GiB MEM_PCT=41.46% PIDS=92
+ticketrush-redis CPU=0.44% MEM=3.844MiB / 128MiB MEM_PCT=3.00% PIDS=6
+ticketrush-mysql CPU=1.92% MEM=391.2MiB / 768MiB MEM_PCT=50.94% PIDS=108
+
+===== 2026-07-11T15:08:17+00:00 =====
+HOST_CPU_BUSY=8.0%
+               total        used        free      shared  buff/cache   available
+Mem:            7778        4212        2370           3        1452        3565
+gateway-service CPU=3.26% MEM=241.3MiB / 512MiB MEM_PCT=47.13% PIDS=26
+ticket-service CPU=0.31% MEM=355.9MiB / 576MiB MEM_PCT=61.79% PIDS=40
+payment-service CPU=0.26% MEM=349.6MiB / 576MiB MEM_PCT=60.69% PIDS=39
+booking-service CPU=0.55% MEM=378.3MiB / 576MiB MEM_PCT=65.68% PIDS=51
+seat-service CPU=4.17% MEM=424.1MiB / 640MiB MEM_PCT=66.27% PIDS=93
+auth-service CPU=0.18% MEM=320MiB / 576MiB MEM_PCT=55.55% PIDS=34
+performance-service CPU=0.14% MEM=361.7MiB / 576MiB MEM_PCT=62.80% PIDS=34
+user-service CPU=0.14% MEM=327.9MiB / 576MiB MEM_PCT=56.92% PIDS=34
+ticketrush-kafka CPU=1.53% MEM=424.6MiB / 1GiB MEM_PCT=41.46% PIDS=92
+ticketrush-redis CPU=2.30% MEM=3.566MiB / 128MiB MEM_PCT=2.79% PIDS=6
+ticketrush-mysql CPU=2.02% MEM=391.2MiB / 768MiB MEM_PCT=50.94% PIDS=108
+
+===== 2026-07-11T15:08:24+00:00 =====
+HOST_CPU_BUSY=7.0%
+               total        used        free      shared  buff/cache   available
+Mem:            7778        4212        2369           3        1453        3565
+gateway-service CPU=4.91% MEM=241.5MiB / 512MiB MEM_PCT=47.17% PIDS=26
+ticket-service CPU=0.31% MEM=355.9MiB / 576MiB MEM_PCT=61.79% PIDS=40
+payment-service CPU=0.26% MEM=349.6MiB / 576MiB MEM_PCT=60.69% PIDS=39
+booking-service CPU=0.40% MEM=378.3MiB / 576MiB MEM_PCT=65.68% PIDS=51
+seat-service CPU=7.18% MEM=424.5MiB / 640MiB MEM_PCT=66.33% PIDS=97
+auth-service CPU=0.14% MEM=320MiB / 576MiB MEM_PCT=55.55% PIDS=34
+performance-service CPU=0.16% MEM=361.7MiB / 576MiB MEM_PCT=62.80% PIDS=34
+user-service CPU=0.19% MEM=327.9MiB / 576MiB MEM_PCT=56.92% PIDS=34
+ticketrush-kafka CPU=1.58% MEM=424.6MiB / 1GiB MEM_PCT=41.46% PIDS=92
+ticketrush-redis CPU=0.42% MEM=3.559MiB / 128MiB MEM_PCT=2.78% PIDS=6
+ticketrush-mysql CPU=2.07% MEM=391.3MiB / 768MiB MEM_PCT=50.95% PIDS=108
+
+===== 2026-07-11T15:08:31+00:00 =====
+HOST_CPU_BUSY=11.0%
+               total        used        free      shared  buff/cache   available
+Mem:            7778        4211        2370           3        1453        3566
+gateway-service CPU=6.05% MEM=241.5MiB / 512MiB MEM_PCT=47.17% PIDS=26
+ticket-service CPU=0.29% MEM=355.7MiB / 576MiB MEM_PCT=61.75% PIDS=40
+payment-service CPU=0.57% MEM=349.3MiB / 576MiB MEM_PCT=60.65% PIDS=39
+booking-service CPU=0.60% MEM=378.6MiB / 576MiB MEM_PCT=65.72% PIDS=51
+seat-service CPU=25.47% MEM=429.1MiB / 640MiB MEM_PCT=67.05% PIDS=96
+auth-service CPU=0.15% MEM=320MiB / 576MiB MEM_PCT=55.55% PIDS=34
+performance-service CPU=0.21% MEM=361.7MiB / 576MiB MEM_PCT=62.80% PIDS=34
+user-service CPU=0.15% MEM=327.9MiB / 576MiB MEM_PCT=56.92% PIDS=34
+ticketrush-kafka CPU=1.80% MEM=424.8MiB / 1GiB MEM_PCT=41.49% PIDS=92
+ticketrush-redis CPU=0.45% MEM=3.559MiB / 128MiB MEM_PCT=2.78% PIDS=6
+ticketrush-mysql CPU=1.91% MEM=391.2MiB / 768MiB MEM_PCT=50.94% PIDS=108
+
+===== 2026-07-11T15:08:38+00:00 =====
+HOST_CPU_BUSY=7.0%
+               total        used        free      shared  buff/cache   available
+Mem:            7778        4218        2363           3        1453        3559
+gateway-service CPU=3.43% MEM=241.5MiB / 512MiB MEM_PCT=47.18% PIDS=26
+ticket-service CPU=0.31% MEM=355.9MiB / 576MiB MEM_PCT=61.79% PIDS=40
+payment-service CPU=0.26% MEM=349.3MiB / 576MiB MEM_PCT=60.65% PIDS=39
+booking-service CPU=0.39% MEM=378.6MiB / 576MiB MEM_PCT=65.72% PIDS=51
+seat-service CPU=25.29% MEM=426.1MiB / 640MiB MEM_PCT=66.58% PIDS=96
+auth-service CPU=0.17% MEM=320MiB / 576MiB MEM_PCT=55.55% PIDS=34
+performance-service CPU=0.13% MEM=361.7MiB / 576MiB MEM_PCT=62.80% PIDS=34
+user-service CPU=0.13% MEM=327.9MiB / 576MiB MEM_PCT=56.92% PIDS=34
+ticketrush-kafka CPU=1.64% MEM=425.1MiB / 1GiB MEM_PCT=41.51% PIDS=92
+ticketrush-redis CPU=0.44% MEM=4.098MiB / 128MiB MEM_PCT=3.20% PIDS=6
+ticketrush-mysql CPU=2.05% MEM=391.2MiB / 768MiB MEM_PCT=50.94% PIDS=108
+
+===== 2026-07-11T15:08:45+00:00 =====
+HOST_CPU_BUSY=8.0%
+               total        used        free      shared  buff/cache   available
+Mem:            7778        4213        2368           3        1453        3564
+gateway-service CPU=3.65% MEM=241.7MiB / 512MiB MEM_PCT=47.20% PIDS=26
+ticket-service CPU=0.25% MEM=355.7MiB / 576MiB MEM_PCT=61.75% PIDS=40
+payment-service CPU=0.31% MEM=349.6MiB / 576MiB MEM_PCT=60.69% PIDS=39
+booking-service CPU=0.39% MEM=378.1MiB / 576MiB MEM_PCT=65.64% PIDS=51
+seat-service CPU=4.00% MEM=426.4MiB / 640MiB MEM_PCT=66.63% PIDS=96
+auth-service CPU=0.14% MEM=320MiB / 576MiB MEM_PCT=55.55% PIDS=34
+performance-service CPU=0.16% MEM=361.7MiB / 576MiB MEM_PCT=62.80% PIDS=34
+user-service CPU=0.17% MEM=327.9MiB / 576MiB MEM_PCT=56.92% PIDS=34
+ticketrush-kafka CPU=2.08% MEM=425.2MiB / 1GiB MEM_PCT=41.52% PIDS=92
+ticketrush-redis CPU=0.48% MEM=4.059MiB / 128MiB MEM_PCT=3.17% PIDS=6
+ticketrush-mysql CPU=2.03% MEM=391.1MiB / 768MiB MEM_PCT=50.92% PIDS=108
+
+===== 2026-07-11T15:08:52+00:00 =====
+HOST_CPU_BUSY=7.0%
+               total        used        free      shared  buff/cache   available
+Mem:            7778        4215        2366           3        1453        3562
+gateway-service CPU=3.17% MEM=242.2MiB / 512MiB MEM_PCT=47.31% PIDS=26
+ticket-service CPU=0.35% MEM=355.9MiB / 576MiB MEM_PCT=61.79% PIDS=40
+payment-service CPU=0.32% MEM=349.8MiB / 576MiB MEM_PCT=60.73% PIDS=39
+booking-service CPU=0.46% MEM=378.1MiB / 576MiB MEM_PCT=65.64% PIDS=51
+seat-service CPU=4.93% MEM=426.3MiB / 640MiB MEM_PCT=66.61% PIDS=96
+auth-service CPU=0.36% MEM=320MiB / 576MiB MEM_PCT=55.55% PIDS=34
+performance-service CPU=0.14% MEM=361.7MiB / 576MiB MEM_PCT=62.80% PIDS=34
+user-service CPU=0.15% MEM=327.9MiB / 576MiB MEM_PCT=56.92% PIDS=34
+ticketrush-kafka CPU=1.43% MEM=424.8MiB / 1GiB MEM_PCT=41.49% PIDS=92
+ticketrush-redis CPU=0.46% MEM=3.809MiB / 128MiB MEM_PCT=2.98% PIDS=6
+ticketrush-mysql CPU=1.92% MEM=391.2MiB / 768MiB MEM_PCT=50.94% PIDS=108
+
+===== 2026-07-11T15:08:59+00:00 =====
+HOST_CPU_BUSY=11.0%
+               total        used        free      shared  buff/cache   available
+Mem:            7778        4214        2367           3        1453        3563
+gateway-service CPU=2.59% MEM=241.8MiB / 512MiB MEM_PCT=47.24% PIDS=26
+ticket-service CPU=0.28% MEM=355.7MiB / 576MiB MEM_PCT=61.75% PIDS=40
+payment-service CPU=0.33% MEM=349.6MiB / 576MiB MEM_PCT=60.69% PIDS=39
+booking-service CPU=0.38% MEM=378.1MiB / 576MiB MEM_PCT=65.65% PIDS=51
+seat-service CPU=5.41% MEM=426.6MiB / 640MiB MEM_PCT=66.66% PIDS=96
+auth-service CPU=0.13% MEM=320MiB / 576MiB MEM_PCT=55.55% PIDS=34
+performance-service CPU=0.15% MEM=361.7MiB / 576MiB MEM_PCT=62.80% PIDS=34
+user-service CPU=0.16% MEM=327.9MiB / 576MiB MEM_PCT=56.92% PIDS=34
+ticketrush-kafka CPU=1.71% MEM=424.8MiB / 1GiB MEM_PCT=41.49% PIDS=92
+ticketrush-redis CPU=0.45% MEM=3.559MiB / 128MiB MEM_PCT=2.78% PIDS=6
+ticketrush-mysql CPU=2.43% MEM=391.3MiB / 768MiB MEM_PCT=50.95% PIDS=108
+
+===== 2026-07-11T15:09:06+00:00 =====
+HOST_CPU_BUSY=5.0%
+               total        used        free      shared  buff/cache   available
+Mem:            7778        4210        2371           3        1453        3567
+gateway-service CPU=3.79% MEM=242MiB / 512MiB MEM_PCT=47.27% PIDS=26
+ticket-service CPU=0.28% MEM=355.7MiB / 576MiB MEM_PCT=61.75% PIDS=40
+payment-service CPU=0.34% MEM=349.6MiB / 576MiB MEM_PCT=60.69% PIDS=39
+booking-service CPU=0.60% MEM=378.1MiB / 576MiB MEM_PCT=65.64% PIDS=51
+seat-service CPU=3.60% MEM=426.6MiB / 640MiB MEM_PCT=66.66% PIDS=96
+auth-service CPU=0.16% MEM=320MiB / 576MiB MEM_PCT=55.55% PIDS=34
+performance-service CPU=0.15% MEM=361.7MiB / 576MiB MEM_PCT=62.80% PIDS=34
+user-service CPU=0.14% MEM=327.9MiB / 576MiB MEM_PCT=56.92% PIDS=34
+ticketrush-kafka CPU=1.60% MEM=425.1MiB / 1GiB MEM_PCT=41.51% PIDS=92
+ticketrush-redis CPU=0.42% MEM=3.848MiB / 128MiB MEM_PCT=3.01% PIDS=6
+ticketrush-mysql CPU=1.90% MEM=391.3MiB / 768MiB MEM_PCT=50.95% PIDS=108
+
+===== 2026-07-11T15:09:13+00:00 =====
+HOST_CPU_BUSY=9.0%
+               total        used        free      shared  buff/cache   available
+Mem:            7778        4215        2366           3        1453        3562
+gateway-service CPU=8.85% MEM=242.5MiB / 512MiB MEM_PCT=47.36% PIDS=26
+ticket-service CPU=0.24% MEM=355.7MiB / 576MiB MEM_PCT=61.75% PIDS=40
+payment-service CPU=0.29% MEM=349.3MiB / 576MiB MEM_PCT=60.65% PIDS=39
+booking-service CPU=0.38% MEM=378.1MiB / 576MiB MEM_PCT=65.64% PIDS=51
+seat-service CPU=4.09% MEM=426.9MiB / 640MiB MEM_PCT=66.70% PIDS=99
+auth-service CPU=0.15% MEM=322MiB / 576MiB MEM_PCT=55.90% PIDS=34
+performance-service CPU=0.15% MEM=361.7MiB / 576MiB MEM_PCT=62.80% PIDS=34
+user-service CPU=0.18% MEM=327.9MiB / 576MiB MEM_PCT=56.92% PIDS=34
+ticketrush-kafka CPU=1.71% MEM=424.8MiB / 1GiB MEM_PCT=41.48% PIDS=92
+ticketrush-redis CPU=0.41% MEM=3.598MiB / 128MiB MEM_PCT=2.81% PIDS=6
+ticketrush-mysql CPU=5.44% MEM=391.5MiB / 768MiB MEM_PCT=50.98% PIDS=108
+
+===== 2026-07-11T15:09:21+00:00 =====
+HOST_CPU_BUSY=6.0%
+               total        used        free      shared  buff/cache   available
+Mem:            7778        4213        2368           3        1453        3564
+gateway-service CPU=2.07% MEM=242MiB / 512MiB MEM_PCT=47.26% PIDS=25
+ticket-service CPU=0.34% MEM=355.7MiB / 576MiB MEM_PCT=61.75% PIDS=40
+payment-service CPU=0.32% MEM=349.8MiB / 576MiB MEM_PCT=60.73% PIDS=39
+booking-service CPU=0.42% MEM=378.6MiB / 576MiB MEM_PCT=65.73% PIDS=51
+seat-service CPU=5.82% MEM=427MiB / 640MiB MEM_PCT=66.71% PIDS=98
+auth-service CPU=0.14% MEM=322MiB / 576MiB MEM_PCT=55.90% PIDS=34
+performance-service CPU=0.16% MEM=361.8MiB / 576MiB MEM_PCT=62.81% PIDS=34
+user-service CPU=0.16% MEM=327.9MiB / 576MiB MEM_PCT=56.92% PIDS=34
+ticketrush-kafka CPU=1.58% MEM=424.8MiB / 1GiB MEM_PCT=41.49% PIDS=92
+ticketrush-redis CPU=0.41% MEM=3.852MiB / 128MiB MEM_PCT=3.01% PIDS=6
+ticketrush-mysql CPU=1.73% MEM=391.2MiB / 768MiB MEM_PCT=50.94% PIDS=108
+
+===== 2026-07-11T15:09:28+00:00 =====
+HOST_CPU_BUSY=9.0%
+               total        used        free      shared  buff/cache   available
+Mem:            7778        4220        2361           3        1453        3557
+gateway-service CPU=2.70% MEM=242.2MiB / 512MiB MEM_PCT=47.30% PIDS=26
+ticket-service CPU=0.31% MEM=355.9MiB / 576MiB MEM_PCT=61.79% PIDS=40
+payment-service CPU=0.35% MEM=349.6MiB / 576MiB MEM_PCT=60.69% PIDS=39
+booking-service CPU=1.08% MEM=378.6MiB / 576MiB MEM_PCT=65.73% PIDS=51
+seat-service CPU=21.66% MEM=428.5MiB / 640MiB MEM_PCT=66.96% PIDS=99
+auth-service CPU=0.16% MEM=322MiB / 576MiB MEM_PCT=55.90% PIDS=34
+performance-service CPU=0.15% MEM=361.8MiB / 576MiB MEM_PCT=62.81% PIDS=34
+user-service CPU=0.15% MEM=327.9MiB / 576MiB MEM_PCT=56.92% PIDS=34
+ticketrush-kafka CPU=1.55% MEM=424.6MiB / 1GiB MEM_PCT=41.47% PIDS=92
+ticketrush-redis CPU=0.46% MEM=3.578MiB / 128MiB MEM_PCT=2.80% PIDS=6
+ticketrush-mysql CPU=1.96% MEM=391.3MiB / 768MiB MEM_PCT=50.95% PIDS=108
+
+===== 2026-07-11T15:09:35+00:00 =====
+HOST_CPU_BUSY=11.0%
+               total        used        free      shared  buff/cache   available
+Mem:            7778        4215        2365           3        1453        3562
+gateway-service CPU=2.74% MEM=242.4MiB / 512MiB MEM_PCT=47.34% PIDS=26
+ticket-service CPU=0.32% MEM=355.9MiB / 576MiB MEM_PCT=61.79% PIDS=40
+payment-service CPU=0.32% MEM=349.6MiB / 576MiB MEM_PCT=60.69% PIDS=39
+booking-service CPU=0.40% MEM=378.3MiB / 576MiB MEM_PCT=65.68% PIDS=51
+seat-service CPU=6.12% MEM=429.1MiB / 640MiB MEM_PCT=67.04% PIDS=98
+auth-service CPU=0.15% MEM=322MiB / 576MiB MEM_PCT=55.90% PIDS=34
+performance-service CPU=0.16% MEM=361.8MiB / 576MiB MEM_PCT=62.81% PIDS=34
+user-service CPU=0.16% MEM=327.9MiB / 576MiB MEM_PCT=56.93% PIDS=34
+ticketrush-kafka CPU=1.64% MEM=424.9MiB / 1GiB MEM_PCT=41.49% PIDS=92
+ticketrush-redis CPU=0.51% MEM=3.844MiB / 128MiB MEM_PCT=3.00% PIDS=6
+ticketrush-mysql CPU=2.06% MEM=391MiB / 768MiB MEM_PCT=50.92% PIDS=108
+
+===== 2026-07-11T15:09:42+00:00 =====
+HOST_CPU_BUSY=23.0%
+               total        used        free      shared  buff/cache   available
+Mem:            7778        4220        2361           3        1453        3557
+gateway-service CPU=1.81% MEM=242.3MiB / 512MiB MEM_PCT=47.33% PIDS=26
+ticket-service CPU=0.32% MEM=355.7MiB / 576MiB MEM_PCT=61.75% PIDS=40
+payment-service CPU=0.27% MEM=349.3MiB / 576MiB MEM_PCT=60.65% PIDS=39
+booking-service CPU=0.47% MEM=378.3MiB / 576MiB MEM_PCT=65.69% PIDS=51
+seat-service CPU=8.24% MEM=435.9MiB / 640MiB MEM_PCT=68.10% PIDS=98
+auth-service CPU=0.16% MEM=322MiB / 576MiB MEM_PCT=55.90% PIDS=34
+performance-service CPU=0.15% MEM=361.8MiB / 576MiB MEM_PCT=62.81% PIDS=34
+user-service CPU=0.14% MEM=327.9MiB / 576MiB MEM_PCT=56.93% PIDS=34
+ticketrush-kafka CPU=1.49% MEM=424.9MiB / 1GiB MEM_PCT=41.49% PIDS=92
+ticketrush-redis CPU=0.46% MEM=3.848MiB / 128MiB MEM_PCT=3.01% PIDS=6
+ticketrush-mysql CPU=2.05% MEM=391.3MiB / 768MiB MEM_PCT=50.95% PIDS=108
+
+===== 2026-07-11T15:09:49+00:00 =====
+HOST_CPU_BUSY=5.0%
+               total        used        free      shared  buff/cache   available
+Mem:            7778        4223        2357           3        1453        3554
+gateway-service CPU=0.07% MEM=242.2MiB / 512MiB MEM_PCT=47.30% PIDS=26
+ticket-service CPU=0.25% MEM=355.9MiB / 576MiB MEM_PCT=61.79% PIDS=40
+payment-service CPU=0.41% MEM=349.5MiB / 576MiB MEM_PCT=60.68% PIDS=39
+booking-service CPU=0.47% MEM=378.6MiB / 576MiB MEM_PCT=65.73% PIDS=51
+seat-service CPU=0.57% MEM=427.8MiB / 640MiB MEM_PCT=66.84% PIDS=98
+auth-service CPU=0.14% MEM=322MiB / 576MiB MEM_PCT=55.90% PIDS=34
+performance-service CPU=0.15% MEM=361.8MiB / 576MiB MEM_PCT=62.81% PIDS=34
+user-service CPU=0.14% MEM=327.9MiB / 576MiB MEM_PCT=56.93% PIDS=34
+ticketrush-kafka CPU=1.75% MEM=424.9MiB / 1GiB MEM_PCT=41.49% PIDS=92
+ticketrush-redis CPU=0.45% MEM=3.812MiB / 128MiB MEM_PCT=2.98% PIDS=6
+ticketrush-mysql CPU=0.52% MEM=391MiB / 768MiB MEM_PCT=50.92% PIDS=108
+
+===== 2026-07-11T15:09:56+00:00 =====
+HOST_CPU_BUSY=6.0%
+               total        used        free      shared  buff/cache   available
+Mem:            7778        4217        2363           3        1453        3560
+gateway-service CPU=2.70% MEM=242.8MiB / 512MiB MEM_PCT=47.42% PIDS=28
+ticket-service CPU=0.33% MEM=356.2MiB / 576MiB MEM_PCT=61.84% PIDS=40
+payment-service CPU=0.26% MEM=349.3MiB / 576MiB MEM_PCT=60.65% PIDS=39
+booking-service CPU=0.45% MEM=378.6MiB / 576MiB MEM_PCT=65.73% PIDS=51
+seat-service CPU=4.43% MEM=427.9MiB / 640MiB MEM_PCT=66.86% PIDS=98
+auth-service CPU=0.15% MEM=322MiB / 576MiB MEM_PCT=55.90% PIDS=34
+performance-service CPU=0.14% MEM=361.8MiB / 576MiB MEM_PCT=62.81% PIDS=34
+user-service CPU=0.14% MEM=327.9MiB / 576MiB MEM_PCT=56.93% PIDS=34
+ticketrush-kafka CPU=1.58% MEM=424.6MiB / 1GiB MEM_PCT=41.47% PIDS=92
+ticketrush-redis CPU=0.42% MEM=3.562MiB / 128MiB MEM_PCT=2.78% PIDS=6
+ticketrush-mysql CPU=1.98% MEM=391MiB / 768MiB MEM_PCT=50.92% PIDS=108
+
+===== 2026-07-11T15:10:03+00:00 =====
+HOST_CPU_BUSY=8.0%
+               total        used        free      shared  buff/cache   available
+Mem:            7778        4222        2359           3        1453        3555
+gateway-service CPU=2.72% MEM=242.7MiB / 512MiB MEM_PCT=47.41% PIDS=28
+ticket-service CPU=0.43% MEM=355.7MiB / 576MiB MEM_PCT=61.75% PIDS=40
+payment-service CPU=0.26% MEM=349.3MiB / 576MiB MEM_PCT=60.65% PIDS=39
+booking-service CPU=0.64% MEM=378.6MiB / 576MiB MEM_PCT=65.73% PIDS=51
+seat-service CPU=5.96% MEM=427.9MiB / 640MiB MEM_PCT=66.87% PIDS=98
+auth-service CPU=0.17% MEM=322MiB / 576MiB MEM_PCT=55.90% PIDS=34
+performance-service CPU=0.14% MEM=361.8MiB / 576MiB MEM_PCT=62.81% PIDS=34
+user-service CPU=0.15% MEM=327.9MiB / 576MiB MEM_PCT=56.93% PIDS=34
+ticketrush-kafka CPU=1.61% MEM=425.8MiB / 1GiB MEM_PCT=41.58% PIDS=92
+ticketrush-redis CPU=0.48% MEM=3.598MiB / 128MiB MEM_PCT=2.81% PIDS=6
+ticketrush-mysql CPU=1.97% MEM=391.3MiB / 768MiB MEM_PCT=50.95% PIDS=108
+
+===== 2026-07-11T15:10:10+00:00 =====
+HOST_CPU_BUSY=6.0%
+               total        used        free      shared  buff/cache   available
+Mem:            7778        4224        2357           3        1453        3553
+gateway-service CPU=2.61% MEM=242.9MiB / 512MiB MEM_PCT=47.44% PIDS=28
+ticket-service CPU=0.28% MEM=356MiB / 576MiB MEM_PCT=61.80% PIDS=40
+payment-service CPU=0.34% MEM=349.6MiB / 576MiB MEM_PCT=60.69% PIDS=39
+booking-service CPU=0.42% MEM=378.4MiB / 576MiB MEM_PCT=65.69% PIDS=51
+seat-service CPU=2.95% MEM=427.8MiB / 640MiB MEM_PCT=66.84% PIDS=98
+auth-service CPU=0.14% MEM=322MiB / 576MiB MEM_PCT=55.90% PIDS=34
+performance-service CPU=0.18% MEM=361.8MiB / 576MiB MEM_PCT=62.81% PIDS=34
+user-service CPU=0.13% MEM=327.9MiB / 576MiB MEM_PCT=56.93% PIDS=34
+ticketrush-kafka CPU=1.46% MEM=425.7MiB / 1GiB MEM_PCT=41.57% PIDS=92
+ticketrush-redis CPU=0.44% MEM=3.602MiB / 128MiB MEM_PCT=2.81% PIDS=6
+ticketrush-mysql CPU=1.77% MEM=391MiB / 768MiB MEM_PCT=50.92% PIDS=108
+
+===== 2026-07-11T15:10:17+00:00 =====
+HOST_CPU_BUSY=7.0%
+               total        used        free      shared  buff/cache   available
+Mem:            7778        4218        2362           3        1453        3559
+gateway-service CPU=10.08% MEM=243.2MiB / 512MiB MEM_PCT=47.50% PIDS=28
+ticket-service CPU=0.31% MEM=356.2MiB / 576MiB MEM_PCT=61.84% PIDS=40
+payment-service CPU=0.28% MEM=349.6MiB / 576MiB MEM_PCT=60.69% PIDS=39
+booking-service CPU=0.37% MEM=378.1MiB / 576MiB MEM_PCT=65.65% PIDS=51
+seat-service CPU=6.37% MEM=428.6MiB / 640MiB MEM_PCT=66.96% PIDS=99
+auth-service CPU=0.18% MEM=322MiB / 576MiB MEM_PCT=55.90% PIDS=34
+performance-service CPU=0.14% MEM=361.8MiB / 576MiB MEM_PCT=62.81% PIDS=34
+user-service CPU=0.14% MEM=327.9MiB / 576MiB MEM_PCT=56.93% PIDS=34
+ticketrush-kafka CPU=1.50% MEM=424.6MiB / 1GiB MEM_PCT=41.47% PIDS=92
+ticketrush-redis CPU=2.21% MEM=3.562MiB / 128MiB MEM_PCT=2.78% PIDS=6
+ticketrush-mysql CPU=1.96% MEM=391.3MiB / 768MiB MEM_PCT=50.95% PIDS=108
+
+===== 2026-07-11T15:10:24+00:00 =====
+HOST_CPU_BUSY=6.0%
+               total        used        free      shared  buff/cache   available
+Mem:            7778        4222        2359           3        1453        3555
+gateway-service CPU=5.61% MEM=243.2MiB / 512MiB MEM_PCT=47.50% PIDS=28
+ticket-service CPU=0.23% MEM=355.9MiB / 576MiB MEM_PCT=61.80% PIDS=40
+payment-service CPU=0.36% MEM=349.4MiB / 576MiB MEM_PCT=60.65% PIDS=39
+booking-service CPU=0.54% MEM=378.1MiB / 576MiB MEM_PCT=65.65% PIDS=51
+seat-service CPU=15.12% MEM=428.4MiB / 640MiB MEM_PCT=66.94% PIDS=99
+auth-service CPU=0.14% MEM=322MiB / 576MiB MEM_PCT=55.90% PIDS=34
+performance-service CPU=0.14% MEM=361.8MiB / 576MiB MEM_PCT=62.81% PIDS=34
+user-service CPU=0.21% MEM=327.9MiB / 576MiB MEM_PCT=56.93% PIDS=34
+ticketrush-kafka CPU=1.62% MEM=425.1MiB / 1GiB MEM_PCT=41.52% PIDS=92
+ticketrush-redis CPU=0.45% MEM=3.562MiB / 128MiB MEM_PCT=2.78% PIDS=6
+ticketrush-mysql CPU=1.93% MEM=391MiB / 768MiB MEM_PCT=50.92% PIDS=108
+
+===== 2026-07-11T15:10:32+00:00 =====
+HOST_CPU_BUSY=10.0%
+               total        used        free      shared  buff/cache   available
+Mem:            7778        4223        2357           3        1453        3554
+gateway-service CPU=1.36% MEM=243.2MiB / 512MiB MEM_PCT=47.49% PIDS=28
+ticket-service CPU=0.29% MEM=356MiB / 576MiB MEM_PCT=61.80% PIDS=40
+payment-service CPU=0.26% MEM=349.6MiB / 576MiB MEM_PCT=60.70% PIDS=39
+booking-service CPU=0.50% MEM=378.4MiB / 576MiB MEM_PCT=65.69% PIDS=51
+seat-service CPU=4.27% MEM=428.4MiB / 640MiB MEM_PCT=66.94% PIDS=100
+auth-service CPU=0.15% MEM=322MiB / 576MiB MEM_PCT=55.90% PIDS=34
+performance-service CPU=0.16% MEM=361.8MiB / 576MiB MEM_PCT=62.81% PIDS=34
+user-service CPU=0.12% MEM=327.9MiB / 576MiB MEM_PCT=56.93% PIDS=34
+ticketrush-kafka CPU=1.59% MEM=425.1MiB / 1GiB MEM_PCT=41.52% PIDS=92
+ticketrush-redis CPU=0.58% MEM=3.773MiB / 128MiB MEM_PCT=2.95% PIDS=6
+ticketrush-mysql CPU=1.68% MEM=391.1MiB / 768MiB MEM_PCT=50.92% PIDS=108
+
+===== 2026-07-11T15:10:39+00:00 =====
+HOST_CPU_BUSY=12.0%
+               total        used        free      shared  buff/cache   available
+Mem:            7778        4223        2357           3        1453        3554
+gateway-service CPU=2.96% MEM=243.5MiB / 512MiB MEM_PCT=47.56% PIDS=28
+ticket-service CPU=0.23% MEM=356MiB / 576MiB MEM_PCT=61.80% PIDS=40
+payment-service CPU=0.34% MEM=349.6MiB / 576MiB MEM_PCT=60.70% PIDS=39
+booking-service CPU=0.38% MEM=378.1MiB / 576MiB MEM_PCT=65.65% PIDS=51
+seat-service CPU=7.81% MEM=430.2MiB / 640MiB MEM_PCT=67.22% PIDS=99
+auth-service CPU=0.16% MEM=322MiB / 576MiB MEM_PCT=55.91% PIDS=34
+performance-service CPU=0.15% MEM=361.8MiB / 576MiB MEM_PCT=62.81% PIDS=34
+user-service CPU=0.15% MEM=327.9MiB / 576MiB MEM_PCT=56.93% PIDS=34
+ticketrush-kafka CPU=1.47% MEM=425.1MiB / 1GiB MEM_PCT=41.52% PIDS=92
+ticketrush-redis CPU=0.45% MEM=3.602MiB / 128MiB MEM_PCT=2.81% PIDS=6
+ticketrush-mysql CPU=2.05% MEM=391.1MiB / 768MiB MEM_PCT=50.92% PIDS=108
+
+===== 2026-07-11T15:10:46+00:00 =====
+HOST_CPU_BUSY=16.0%
+               total        used        free      shared  buff/cache   available
+Mem:            7778        4220        2360           3        1453        3557
+gateway-service CPU=10.12% MEM=243.8MiB / 512MiB MEM_PCT=47.61% PIDS=28
+ticket-service CPU=0.25% MEM=356MiB / 576MiB MEM_PCT=61.80% PIDS=40
+payment-service CPU=0.38% MEM=349.4MiB / 576MiB MEM_PCT=60.65% PIDS=39
+booking-service CPU=0.64% MEM=378.4MiB / 576MiB MEM_PCT=65.69% PIDS=51
+seat-service CPU=7.51% MEM=430.5MiB / 640MiB MEM_PCT=67.26% PIDS=99
+auth-service CPU=0.15% MEM=322MiB / 576MiB MEM_PCT=55.91% PIDS=34
+performance-service CPU=0.14% MEM=361.8MiB / 576MiB MEM_PCT=62.81% PIDS=34
+user-service CPU=0.20% MEM=327.9MiB / 576MiB MEM_PCT=56.93% PIDS=34
+ticketrush-kafka CPU=1.83% MEM=425.1MiB / 1GiB MEM_PCT=41.52% PIDS=92
+ticketrush-redis CPU=0.44% MEM=3.562MiB / 128MiB MEM_PCT=2.78% PIDS=6
+ticketrush-mysql CPU=2.15% MEM=391.1MiB / 768MiB MEM_PCT=50.92% PIDS=108
+
+===== 2026-07-11T15:10:53+00:00 =====
+HOST_CPU_BUSY=7.0%
+               total        used        free      shared  buff/cache   available
+Mem:            7778        4223        2358           3        1453        3554
+gateway-service CPU=2.00% MEM=243.8MiB / 512MiB MEM_PCT=47.62% PIDS=28
+ticket-service CPU=0.34% MEM=355.7MiB / 576MiB MEM_PCT=61.75% PIDS=40
+payment-service CPU=0.25% MEM=349.4MiB / 576MiB MEM_PCT=60.65% PIDS=39
+booking-service CPU=0.37% MEM=378.4MiB / 576MiB MEM_PCT=65.69% PIDS=51
+seat-service CPU=2.82% MEM=430.6MiB / 640MiB MEM_PCT=67.28% PIDS=99
+auth-service CPU=0.21% MEM=322MiB / 576MiB MEM_PCT=55.91% PIDS=34
+performance-service CPU=0.15% MEM=361.8MiB / 576MiB MEM_PCT=62.81% PIDS=34
+user-service CPU=0.14% MEM=327.9MiB / 576MiB MEM_PCT=56.93% PIDS=34
+ticketrush-kafka CPU=1.56% MEM=424.9MiB / 1GiB MEM_PCT=41.49% PIDS=92
+ticketrush-redis CPU=0.45% MEM=3.562MiB / 128MiB MEM_PCT=2.78% PIDS=6
+ticketrush-mysql CPU=4.09% MEM=391.2MiB / 768MiB MEM_PCT=50.94% PIDS=108
+
+===== 2026-07-11T15:11:00+00:00 =====
+HOST_CPU_BUSY=6.0%
+               total        used        free      shared  buff/cache   available
+Mem:            7778        4223        2358           3        1453        3554
+gateway-service CPU=1.81% MEM=243.9MiB / 512MiB MEM_PCT=47.64% PIDS=28
+ticket-service CPU=0.27% MEM=355.9MiB / 576MiB MEM_PCT=61.80% PIDS=40
+payment-service CPU=0.32% MEM=349.4MiB / 576MiB MEM_PCT=60.65% PIDS=39
+booking-service CPU=0.62% MEM=378.4MiB / 576MiB MEM_PCT=65.70% PIDS=51
+seat-service CPU=2.71% MEM=430.4MiB / 640MiB MEM_PCT=67.25% PIDS=99
+auth-service CPU=0.14% MEM=322MiB / 576MiB MEM_PCT=55.91% PIDS=34
+performance-service CPU=0.20% MEM=361.8MiB / 576MiB MEM_PCT=62.81% PIDS=34
+user-service CPU=0.14% MEM=327.9MiB / 576MiB MEM_PCT=56.93% PIDS=34
+ticketrush-kafka CPU=1.95% MEM=425.1MiB / 1GiB MEM_PCT=41.52% PIDS=92
+ticketrush-redis CPU=0.48% MEM=4.059MiB / 128MiB MEM_PCT=3.17% PIDS=6
+ticketrush-mysql CPU=1.90% MEM=391.3MiB / 768MiB MEM_PCT=50.95% PIDS=108
+
+===== 2026-07-11T15:11:07+00:00 =====
+HOST_CPU_BUSY=6.0%
+               total        used        free      shared  buff/cache   available
+Mem:            7778        4228        2352           3        1453        3549
+gateway-service CPU=2.00% MEM=244MiB / 512MiB MEM_PCT=47.65% PIDS=29
+ticket-service CPU=0.26% MEM=355.7MiB / 576MiB MEM_PCT=61.75% PIDS=40
+payment-service CPU=0.32% MEM=349.6MiB / 576MiB MEM_PCT=60.70% PIDS=39
+booking-service CPU=0.42% MEM=378.4MiB / 576MiB MEM_PCT=65.70% PIDS=51
+seat-service CPU=6.36% MEM=430.8MiB / 640MiB MEM_PCT=67.32% PIDS=100
+auth-service CPU=0.18% MEM=322MiB / 576MiB MEM_PCT=55.91% PIDS=34
+performance-service CPU=0.16% MEM=361.8MiB / 576MiB MEM_PCT=62.81% PIDS=34
+user-service CPU=0.14% MEM=327.9MiB / 576MiB MEM_PCT=56.93% PIDS=34
+ticketrush-kafka CPU=1.54% MEM=424.7MiB / 1GiB MEM_PCT=41.47% PIDS=92
+ticketrush-redis CPU=2.31% MEM=3.699MiB / 128MiB MEM_PCT=2.89% PIDS=6
+ticketrush-mysql CPU=1.93% MEM=391.5MiB / 768MiB MEM_PCT=50.98% PIDS=108
+
+===== 2026-07-11T15:11:14+00:00 =====
+HOST_CPU_BUSY=5.0%
+               total        used        free      shared  buff/cache   available
+Mem:            7778        4223        2357           3        1453        3554
+gateway-service CPU=4.33% MEM=244MiB / 512MiB MEM_PCT=47.65% PIDS=29
+ticket-service CPU=0.30% MEM=356MiB / 576MiB MEM_PCT=61.80% PIDS=40
+payment-service CPU=0.40% MEM=349.9MiB / 576MiB MEM_PCT=60.74% PIDS=39
+booking-service CPU=0.39% MEM=378.7MiB / 576MiB MEM_PCT=65.75% PIDS=51
+seat-service CPU=3.14% MEM=430.8MiB / 640MiB MEM_PCT=67.32% PIDS=99
+auth-service CPU=0.15% MEM=322MiB / 576MiB MEM_PCT=55.91% PIDS=34
+performance-service CPU=0.15% MEM=361.8MiB / 576MiB MEM_PCT=62.81% PIDS=34
+user-service CPU=0.19% MEM=327.9MiB / 576MiB MEM_PCT=56.93% PIDS=34
+ticketrush-kafka CPU=1.65% MEM=424.7MiB / 1GiB MEM_PCT=41.47% PIDS=92
+ticketrush-redis CPU=0.45% MEM=3.852MiB / 128MiB MEM_PCT=3.01% PIDS=6
+ticketrush-mysql CPU=4.15% MEM=391.7MiB / 768MiB MEM_PCT=51.00% PIDS=108
+
+===== 2026-07-11T15:11:21+00:00 =====
+HOST_CPU_BUSY=7.0%
+               total        used        free      shared  buff/cache   available
+Mem:            7778        4227        2354           3        1453        3550
+gateway-service CPU=5.71% MEM=244.3MiB / 512MiB MEM_PCT=47.71% PIDS=29
+ticket-service CPU=0.35% MEM=355.9MiB / 576MiB MEM_PCT=61.80% PIDS=40
+payment-service CPU=0.34% MEM=349.6MiB / 576MiB MEM_PCT=60.70% PIDS=39
+booking-service CPU=0.68% MEM=378.2MiB / 576MiB MEM_PCT=65.66% PIDS=51
+seat-service CPU=6.82% MEM=431.4MiB / 640MiB MEM_PCT=67.41% PIDS=100
+auth-service CPU=0.14% MEM=322MiB / 576MiB MEM_PCT=55.91% PIDS=34
+performance-service CPU=0.15% MEM=361.8MiB / 576MiB MEM_PCT=62.81% PIDS=34
+user-service CPU=0.15% MEM=327.9MiB / 576MiB MEM_PCT=56.93% PIDS=34
+ticketrush-kafka CPU=1.70% MEM=424.9MiB / 1GiB MEM_PCT=41.49% PIDS=92
+ticketrush-redis CPU=0.41% MEM=3.812MiB / 128MiB MEM_PCT=2.98% PIDS=6
+ticketrush-mysql CPU=1.94% MEM=391.3MiB / 768MiB MEM_PCT=50.95% PIDS=108
+
+===== 2026-07-11T15:11:28+00:00 =====
+HOST_CPU_BUSY=10.0%
+               total        used        free      shared  buff/cache   available
+Mem:            7778        4228        2352           3        1454        3549
+gateway-service CPU=11.87% MEM=244.2MiB / 512MiB MEM_PCT=47.69% PIDS=29
+ticket-service CPU=0.22% MEM=355.7MiB / 576MiB MEM_PCT=61.75% PIDS=40
+payment-service CPU=0.30% MEM=349.6MiB / 576MiB MEM_PCT=60.70% PIDS=39
+booking-service CPU=0.35% MEM=378.5MiB / 576MiB MEM_PCT=65.71% PIDS=51
+seat-service CPU=4.00% MEM=431.3MiB / 640MiB MEM_PCT=67.40% PIDS=99
+auth-service CPU=0.15% MEM=322MiB / 576MiB MEM_PCT=55.91% PIDS=34
+performance-service CPU=0.14% MEM=361.8MiB / 576MiB MEM_PCT=62.81% PIDS=34
+user-service CPU=0.14% MEM=327.9MiB / 576MiB MEM_PCT=56.93% PIDS=34
+ticketrush-kafka CPU=1.51% MEM=424.9MiB / 1GiB MEM_PCT=41.50% PIDS=92
+ticketrush-redis CPU=0.43% MEM=3.812MiB / 128MiB MEM_PCT=2.98% PIDS=6
+ticketrush-mysql CPU=2.09% MEM=391.5MiB / 768MiB MEM_PCT=50.98% PIDS=108
+
+===== 2026-07-11T15:11:36+00:00 =====
+HOST_CPU_BUSY=11.0%
+               total        used        free      shared  buff/cache   available
+Mem:            7778        4226        2354           3        1454        3551
+gateway-service CPU=9.74% MEM=244.5MiB / 512MiB MEM_PCT=47.75% PIDS=29
+ticket-service CPU=0.37% MEM=355.9MiB / 576MiB MEM_PCT=61.80% PIDS=40
+payment-service CPU=0.30% MEM=349.6MiB / 576MiB MEM_PCT=60.69% PIDS=39
+booking-service CPU=0.40% MEM=378.5MiB / 576MiB MEM_PCT=65.71% PIDS=51
+seat-service CPU=7.08% MEM=431.2MiB / 640MiB MEM_PCT=67.37% PIDS=99
+auth-service CPU=0.15% MEM=322MiB / 576MiB MEM_PCT=55.91% PIDS=34
+performance-service CPU=0.16% MEM=361.8MiB / 576MiB MEM_PCT=62.81% PIDS=34
+user-service CPU=0.16% MEM=327.9MiB / 576MiB MEM_PCT=56.93% PIDS=34
+ticketrush-kafka CPU=1.69% MEM=424.7MiB / 1GiB MEM_PCT=41.47% PIDS=92
+ticketrush-redis CPU=0.46% MEM=3.852MiB / 128MiB MEM_PCT=3.01% PIDS=6
+ticketrush-mysql CPU=2.15% MEM=391.3MiB / 768MiB MEM_PCT=50.95% PIDS=108
+
+===== 2026-07-11T15:11:43+00:00 =====
+HOST_CPU_BUSY=9.0%
+               total        used        free      shared  buff/cache   available
+Mem:            7778        4224        2356           3        1454        3553
+gateway-service CPU=2.37% MEM=244.4MiB / 512MiB MEM_PCT=47.74% PIDS=29
+ticket-service CPU=0.23% MEM=355.7MiB / 576MiB MEM_PCT=61.76% PIDS=40
+payment-service CPU=0.34% MEM=349.4MiB / 576MiB MEM_PCT=60.65% PIDS=39
+booking-service CPU=0.50% MEM=378.5MiB / 576MiB MEM_PCT=65.71% PIDS=51
+seat-service CPU=2.87% MEM=432MiB / 640MiB MEM_PCT=67.50% PIDS=99
+auth-service CPU=0.16% MEM=322MiB / 576MiB MEM_PCT=55.91% PIDS=34
+performance-service CPU=0.14% MEM=361.8MiB / 576MiB MEM_PCT=62.81% PIDS=34
+user-service CPU=0.16% MEM=327.9MiB / 576MiB MEM_PCT=56.93% PIDS=34
+ticketrush-kafka CPU=1.74% MEM=424.7MiB / 1GiB MEM_PCT=41.47% PIDS=92
+ticketrush-redis CPU=0.43% MEM=3.602MiB / 128MiB MEM_PCT=2.81% PIDS=6
+ticketrush-mysql CPU=1.99% MEM=391.4MiB / 768MiB MEM_PCT=50.96% PIDS=108
+
+===== 2026-07-11T15:11:50+00:00 =====
+HOST_CPU_BUSY=8.0%
+               total        used        free      shared  buff/cache   available
+Mem:            7778        4231        2349           3        1454        3546
+gateway-service CPU=2.52% MEM=244.5MiB / 512MiB MEM_PCT=47.75% PIDS=29
+ticket-service CPU=0.31% MEM=356MiB / 576MiB MEM_PCT=61.80% PIDS=40
+payment-service CPU=0.30% MEM=349.4MiB / 576MiB MEM_PCT=60.65% PIDS=39
+booking-service CPU=0.40% MEM=378.5MiB / 576MiB MEM_PCT=65.70% PIDS=51
+seat-service CPU=2.86% MEM=431.8MiB / 640MiB MEM_PCT=67.47% PIDS=99
+auth-service CPU=0.15% MEM=322MiB / 576MiB MEM_PCT=55.91% PIDS=34
+performance-service CPU=0.20% MEM=361.8MiB / 576MiB MEM_PCT=62.81% PIDS=34
+user-service CPU=0.17% MEM=327.9MiB / 576MiB MEM_PCT=56.93% PIDS=34
+ticketrush-kafka CPU=1.78% MEM=424.9MiB / 1GiB MEM_PCT=41.50% PIDS=92
+ticketrush-redis CPU=0.44% MEM=4.059MiB / 128MiB MEM_PCT=3.17% PIDS=6
+ticketrush-mysql CPU=1.92% MEM=391.8MiB / 768MiB MEM_PCT=51.02% PIDS=108
+
+===== 2026-07-11T15:11:57+00:00 =====
+HOST_CPU_BUSY=3.0%
+               total        used        free      shared  buff/cache   available
+Mem:            7778        4229        2351           3        1454        3548
+gateway-service CPU=0.09% MEM=244.4MiB / 512MiB MEM_PCT=47.73% PIDS=29
+ticket-service CPU=0.36% MEM=356MiB / 576MiB MEM_PCT=61.80% PIDS=40
+payment-service CPU=0.29% MEM=349.6MiB / 576MiB MEM_PCT=60.70% PIDS=39
+booking-service CPU=0.51% MEM=378.2MiB / 576MiB MEM_PCT=65.66% PIDS=51
+seat-service CPU=1.45% MEM=431.8MiB / 640MiB MEM_PCT=67.47% PIDS=99
+auth-service CPU=0.27% MEM=322.3MiB / 576MiB MEM_PCT=55.95% PIDS=34
+performance-service CPU=0.17% MEM=361.8MiB / 576MiB MEM_PCT=62.82% PIDS=34
+user-service CPU=0.15% MEM=327.9MiB / 576MiB MEM_PCT=56.93% PIDS=34
+ticketrush-kafka CPU=1.55% MEM=424.9MiB / 1GiB MEM_PCT=41.50% PIDS=92
+ticketrush-redis CPU=0.48% MEM=4.055MiB / 128MiB MEM_PCT=3.17% PIDS=6
+ticketrush-mysql CPU=0.59% MEM=391.6MiB / 768MiB MEM_PCT=50.98% PIDS=108
+
+===== 2026-07-11T15:12:04+00:00 =====
+HOST_CPU_BUSY=3.0%
+               total        used        free      shared  buff/cache   available
+Mem:            7778        4233        2347           3        1454        3544
+gateway-service CPU=0.10% MEM=244.4MiB / 512MiB MEM_PCT=47.73% PIDS=29
+ticket-service CPU=0.27% MEM=356MiB / 576MiB MEM_PCT=61.81% PIDS=40
+payment-service CPU=0.40% MEM=349.9MiB / 576MiB MEM_PCT=60.74% PIDS=39
+booking-service CPU=0.59% MEM=378.6MiB / 576MiB MEM_PCT=65.72% PIDS=51
+seat-service CPU=0.56% MEM=431.8MiB / 640MiB MEM_PCT=67.47% PIDS=99
+auth-service CPU=0.18% MEM=322MiB / 576MiB MEM_PCT=55.91% PIDS=34
+performance-service CPU=0.14% MEM=361.8MiB / 576MiB MEM_PCT=62.82% PIDS=34
+user-service CPU=0.20% MEM=327.9MiB / 576MiB MEM_PCT=56.93% PIDS=34
+ticketrush-kafka CPU=1.90% MEM=424.9MiB / 1GiB MEM_PCT=41.50% PIDS=92
+ticketrush-redis CPU=0.44% MEM=4.012MiB / 128MiB MEM_PCT=3.13% PIDS=6
+ticketrush-mysql CPU=2.82% MEM=391.3MiB / 768MiB MEM_PCT=50.95% PIDS=108
+
+===== 2026-07-11T15:12:11+00:00 =====
+HOST_CPU_BUSY=6.0%
+               total        used        free      shared  buff/cache   available
+Mem:            7778        4229        2350           3        1454        3548
+gateway-service CPU=1.81% MEM=244.6MiB / 512MiB MEM_PCT=47.77% PIDS=29
+ticket-service CPU=0.40% MEM=356MiB / 576MiB MEM_PCT=61.81% PIDS=40
+payment-service CPU=0.27% MEM=349.6MiB / 576MiB MEM_PCT=60.70% PIDS=39
+booking-service CPU=0.40% MEM=378.6MiB / 576MiB MEM_PCT=65.72% PIDS=51
+seat-service CPU=2.74% MEM=431.7MiB / 640MiB MEM_PCT=67.45% PIDS=100
+auth-service CPU=0.13% MEM=322MiB / 576MiB MEM_PCT=55.91% PIDS=34
+performance-service CPU=0.14% MEM=361.8MiB / 576MiB MEM_PCT=62.82% PIDS=34
+user-service CPU=0.15% MEM=327.9MiB / 576MiB MEM_PCT=56.93% PIDS=34
+ticketrush-kafka CPU=1.66% MEM=425.2MiB / 1GiB MEM_PCT=41.52% PIDS=92
+ticketrush-redis CPU=0.42% MEM=3.602MiB / 128MiB MEM_PCT=2.81% PIDS=6
+ticketrush-mysql CPU=1.78% MEM=391.3MiB / 768MiB MEM_PCT=50.95% PIDS=108
+
+===== 2026-07-11T15:12:18+00:00 =====
+HOST_CPU_BUSY=6.0%
+               total        used        free      shared  buff/cache   available
+Mem:            7778        4233        2347           3        1454        3544
+gateway-service CPU=1.91% MEM=244.6MiB / 512MiB MEM_PCT=47.77% PIDS=29
+ticket-service CPU=0.32% MEM=355.8MiB / 576MiB MEM_PCT=61.76% PIDS=40
+payment-service CPU=0.28% MEM=349.6MiB / 576MiB MEM_PCT=60.70% PIDS=39
+booking-service CPU=0.52% MEM=378.6MiB / 576MiB MEM_PCT=65.72% PIDS=51
+seat-service CPU=3.78% MEM=431.8MiB / 640MiB MEM_PCT=67.47% PIDS=100
+auth-service CPU=0.18% MEM=322MiB / 576MiB MEM_PCT=55.91% PIDS=34
+performance-service CPU=0.13% MEM=361.8MiB / 576MiB MEM_PCT=62.82% PIDS=34
+user-service CPU=0.17% MEM=327.9MiB / 576MiB MEM_PCT=56.93% PIDS=34
+ticketrush-kafka CPU=1.69% MEM=425MiB / 1GiB MEM_PCT=41.50% PIDS=92
+ticketrush-redis CPU=0.43% MEM=3.559MiB / 128MiB MEM_PCT=2.78% PIDS=6
+ticketrush-mysql CPU=1.93% MEM=391.3MiB / 768MiB MEM_PCT=50.95% PIDS=108
+
+===== 2026-07-11T15:12:25+00:00 =====
+HOST_CPU_BUSY=6.0%
+               total        used        free      shared  buff/cache   available
+Mem:            7778        4225        2355           3        1454        3552
+gateway-service CPU=2.20% MEM=244.5MiB / 512MiB MEM_PCT=47.76% PIDS=28
+ticket-service CPU=0.28% MEM=356.2MiB / 576MiB MEM_PCT=61.85% PIDS=40
+payment-service CPU=0.37% MEM=349.6MiB / 576MiB MEM_PCT=60.70% PIDS=39
+booking-service CPU=0.36% MEM=378.6MiB / 576MiB MEM_PCT=65.73% PIDS=51
+seat-service CPU=5.19% MEM=432MiB / 640MiB MEM_PCT=67.50% PIDS=101
+auth-service CPU=0.14% MEM=322MiB / 576MiB MEM_PCT=55.91% PIDS=34
+performance-service CPU=0.16% MEM=361.8MiB / 576MiB MEM_PCT=62.82% PIDS=34
+user-service CPU=0.13% MEM=327.9MiB / 576MiB MEM_PCT=56.93% PIDS=34
+ticketrush-kafka CPU=1.61% MEM=425.2MiB / 1GiB MEM_PCT=41.52% PIDS=92
+ticketrush-redis CPU=0.46% MEM=3.812MiB / 128MiB MEM_PCT=2.98% PIDS=6
+ticketrush-mysql CPU=1.84% MEM=391.3MiB / 768MiB MEM_PCT=50.95% PIDS=108
+
+===== 2026-07-11T15:12:32+00:00 =====
+HOST_CPU_BUSY=5.0%
+               total        used        free      shared  buff/cache   available
+Mem:            7778        4229        2351           3        1454        3548
+gateway-service CPU=1.74% MEM=244.5MiB / 512MiB MEM_PCT=47.76% PIDS=28
+ticket-service CPU=0.36% MEM=356MiB / 576MiB MEM_PCT=61.81% PIDS=40
+payment-service CPU=0.33% MEM=349.6MiB / 576MiB MEM_PCT=60.70% PIDS=39
+booking-service CPU=0.40% MEM=378.8MiB / 576MiB MEM_PCT=65.77% PIDS=51
+seat-service CPU=3.83% MEM=431.9MiB / 640MiB MEM_PCT=67.49% PIDS=100
+auth-service CPU=0.17% MEM=322.1MiB / 576MiB MEM_PCT=55.91% PIDS=34
+performance-service CPU=0.14% MEM=361.8MiB / 576MiB MEM_PCT=62.82% PIDS=34
+user-service CPU=0.15% MEM=327.9MiB / 576MiB MEM_PCT=56.93% PIDS=34
+ticketrush-kafka CPU=1.66% MEM=425MiB / 1GiB MEM_PCT=41.50% PIDS=92
+ticketrush-redis CPU=0.67% MEM=3.852MiB / 128MiB MEM_PCT=3.01% PIDS=6
+ticketrush-mysql CPU=1.87% MEM=391.3MiB / 768MiB MEM_PCT=50.96% PIDS=108
+
+===== 2026-07-11T15:12:39+00:00 =====
+HOST_CPU_BUSY=11.0%
+               total        used        free      shared  buff/cache   available
+Mem:            7778        4232        2348           3        1454        3545
+gateway-service CPU=4.07% MEM=244.8MiB / 512MiB MEM_PCT=47.80% PIDS=28
+ticket-service CPU=0.24% MEM=355.8MiB / 576MiB MEM_PCT=61.76% PIDS=40
+payment-service CPU=0.36% MEM=349.6MiB / 576MiB MEM_PCT=60.70% PIDS=39
+booking-service CPU=0.50% MEM=378.3MiB / 576MiB MEM_PCT=65.68% PIDS=51
+seat-service CPU=4.74% MEM=432MiB / 640MiB MEM_PCT=67.50% PIDS=100
+auth-service CPU=0.20% MEM=322.1MiB / 576MiB MEM_PCT=55.91% PIDS=34
+performance-service CPU=0.21% MEM=361.8MiB / 576MiB MEM_PCT=62.82% PIDS=34
+user-service CPU=0.18% MEM=327.9MiB / 576MiB MEM_PCT=56.93% PIDS=34
+ticketrush-kafka CPU=1.83% MEM=425MiB / 1GiB MEM_PCT=41.50% PIDS=92
+ticketrush-redis CPU=0.43% MEM=3.852MiB / 128MiB MEM_PCT=3.01% PIDS=6
+ticketrush-mysql CPU=1.97% MEM=391.3MiB / 768MiB MEM_PCT=50.96% PIDS=108
+
+===== 2026-07-11T15:12:47+00:00 =====
+HOST_CPU_BUSY=5.0%
+               total        used        free      shared  buff/cache   available
+Mem:            7778        4230        2349           3        1454        3547
+gateway-service CPU=1.72% MEM=244.9MiB / 512MiB MEM_PCT=47.84% PIDS=28
+ticket-service CPU=0.34% MEM=356.2MiB / 576MiB MEM_PCT=61.85% PIDS=40
+payment-service CPU=0.27% MEM=349.4MiB / 576MiB MEM_PCT=60.66% PIDS=39
+booking-service CPU=0.59% MEM=378.6MiB / 576MiB MEM_PCT=65.72% PIDS=51
+seat-service CPU=2.66% MEM=432.1MiB / 640MiB MEM_PCT=67.52% PIDS=101
+auth-service CPU=0.18% MEM=322.1MiB / 576MiB MEM_PCT=55.91% PIDS=34
+performance-service CPU=0.14% MEM=361.8MiB / 576MiB MEM_PCT=62.82% PIDS=34
+user-service CPU=0.14% MEM=327.9MiB / 576MiB MEM_PCT=56.93% PIDS=34
+ticketrush-kafka CPU=1.63% MEM=425.2MiB / 1GiB MEM_PCT=41.52% PIDS=92
+ticketrush-redis CPU=0.43% MEM=3.562MiB / 128MiB MEM_PCT=2.78% PIDS=6
+ticketrush-mysql CPU=1.74% MEM=391.8MiB / 768MiB MEM_PCT=51.02% PIDS=108
+
+===== 2026-07-11T15:12:54+00:00 =====
+HOST_CPU_BUSY=5.0%
+               total        used        free      shared  buff/cache   available
+Mem:            7778        4229        2351           3        1454        3548
+gateway-service CPU=1.75% MEM=244.7MiB / 512MiB MEM_PCT=47.80% PIDS=28
+ticket-service CPU=0.35% MEM=356MiB / 576MiB MEM_PCT=61.81% PIDS=40
+payment-service CPU=0.28% MEM=349.4MiB / 576MiB MEM_PCT=60.66% PIDS=39
+booking-service CPU=0.41% MEM=378.8MiB / 576MiB MEM_PCT=65.77% PIDS=51
+seat-service CPU=2.43% MEM=432.3MiB / 640MiB MEM_PCT=67.55% PIDS=101
+auth-service CPU=0.15% MEM=322.1MiB / 576MiB MEM_PCT=55.91% PIDS=34
+performance-service CPU=0.14% MEM=361.8MiB / 576MiB MEM_PCT=62.82% PIDS=34
+user-service CPU=0.19% MEM=327.9MiB / 576MiB MEM_PCT=56.93% PIDS=34
+ticketrush-kafka CPU=1.59% MEM=425MiB / 1GiB MEM_PCT=41.50% PIDS=92
+ticketrush-redis CPU=0.42% MEM=3.559MiB / 128MiB MEM_PCT=2.78% PIDS=6
+ticketrush-mysql CPU=1.89% MEM=391.6MiB / 768MiB MEM_PCT=50.98% PIDS=108
+
+===== 2026-07-11T15:13:01+00:00 =====
+HOST_CPU_BUSY=3.0%
+               total        used        free      shared  buff/cache   available
+Mem:            7778        4233        2346           3        1454        3544
+gateway-service CPU=3.25% MEM=245.1MiB / 512MiB MEM_PCT=47.87% PIDS=30
+ticket-service CPU=0.31% MEM=355.8MiB / 576MiB MEM_PCT=61.77% PIDS=40
+payment-service CPU=0.38% MEM=349.9MiB / 576MiB MEM_PCT=60.74% PIDS=39
+booking-service CPU=0.57% MEM=378.4MiB / 576MiB MEM_PCT=65.69% PIDS=51
+seat-service CPU=2.69% MEM=432.3MiB / 640MiB MEM_PCT=67.55% PIDS=102
+auth-service CPU=0.15% MEM=322.1MiB / 576MiB MEM_PCT=55.91% PIDS=34
+performance-service CPU=0.16% MEM=361.8MiB / 576MiB MEM_PCT=62.82% PIDS=34
+user-service CPU=0.19% MEM=327.9MiB / 576MiB MEM_PCT=56.93% PIDS=34
+ticketrush-kafka CPU=1.77% MEM=424.7MiB / 1GiB MEM_PCT=41.48% PIDS=92
+ticketrush-redis CPU=0.42% MEM=3.562MiB / 128MiB MEM_PCT=2.78% PIDS=6
+ticketrush-mysql CPU=1.72% MEM=391.6MiB / 768MiB MEM_PCT=50.99% PIDS=108
+
+===== 2026-07-11T15:13:08+00:00 =====
+HOST_CPU_BUSY=6.0%
+               total        used        free      shared  buff/cache   available
+Mem:            7778        4231        2349           3        1454        3546
+gateway-service CPU=1.33% MEM=245.5MiB / 512MiB MEM_PCT=47.94% PIDS=30
+ticket-service CPU=0.34% MEM=356MiB / 576MiB MEM_PCT=61.81% PIDS=40
+payment-service CPU=0.27% MEM=349.4MiB / 576MiB MEM_PCT=60.66% PIDS=39
+booking-service CPU=0.38% MEM=378.4MiB / 576MiB MEM_PCT=65.69% PIDS=51
+seat-service CPU=2.22% MEM=432.4MiB / 640MiB MEM_PCT=67.57% PIDS=101
+auth-service CPU=0.17% MEM=322.1MiB / 576MiB MEM_PCT=55.91% PIDS=34
+performance-service CPU=0.15% MEM=361.8MiB / 576MiB MEM_PCT=62.82% PIDS=34
+user-service CPU=0.15% MEM=327.9MiB / 576MiB MEM_PCT=56.94% PIDS=34
+ticketrush-kafka CPU=1.67% MEM=425.3MiB / 1GiB MEM_PCT=41.53% PIDS=92
+ticketrush-redis CPU=2.36% MEM=3.945MiB / 128MiB MEM_PCT=3.08% PIDS=6
+ticketrush-mysql CPU=1.40% MEM=391.3MiB / 768MiB MEM_PCT=50.96% PIDS=108
+
+===== 2026-07-11T15:13:15+00:00 =====
+HOST_CPU_BUSY=5.0%
+               total        used        free      shared  buff/cache   available
+Mem:            7778        4224        2356           3        1454        3553
+gateway-service CPU=1.62% MEM=245MiB / 512MiB MEM_PCT=47.85% PIDS=30
+ticket-service CPU=0.27% MEM=356MiB / 576MiB MEM_PCT=61.81% PIDS=40
+payment-service CPU=0.32% MEM=349.6MiB / 576MiB MEM_PCT=60.70% PIDS=39
+booking-service CPU=0.39% MEM=378.4MiB / 576MiB MEM_PCT=65.69% PIDS=51
+seat-service CPU=2.53% MEM=432.6MiB / 640MiB MEM_PCT=67.59% PIDS=102
+auth-service CPU=0.16% MEM=322.1MiB / 576MiB MEM_PCT=55.91% PIDS=34
+performance-service CPU=0.15% MEM=361.9MiB / 576MiB MEM_PCT=62.82% PIDS=34
+user-service CPU=0.16% MEM=328MiB / 576MiB MEM_PCT=56.94% PIDS=34
+ticketrush-kafka CPU=1.67% MEM=424.8MiB / 1GiB MEM_PCT=41.48% PIDS=92
+ticketrush-redis CPU=0.47% MEM=3.809MiB / 128MiB MEM_PCT=2.98% PIDS=6
+ticketrush-mysql CPU=4.01% MEM=391.4MiB / 768MiB MEM_PCT=50.96% PIDS=108
+
+===== 2026-07-11T15:13:22+00:00 =====
+HOST_CPU_BUSY=6.0%
+               total        used        free      shared  buff/cache   available
+Mem:            7778        4232        2348           3        1454        3545
+gateway-service CPU=1.60% MEM=245MiB / 512MiB MEM_PCT=47.86% PIDS=30
+ticket-service CPU=0.29% MEM=356.3MiB / 576MiB MEM_PCT=61.86% PIDS=40
+payment-service CPU=0.32% MEM=349.4MiB / 576MiB MEM_PCT=60.66% PIDS=39
+booking-service CPU=0.47% MEM=378.6MiB / 576MiB MEM_PCT=65.74% PIDS=51
+seat-service CPU=2.61% MEM=432.3MiB / 640MiB MEM_PCT=67.55% PIDS=102
+auth-service CPU=0.15% MEM=322.1MiB / 576MiB MEM_PCT=55.92% PIDS=34
+performance-service CPU=0.13% MEM=361.9MiB / 576MiB MEM_PCT=62.83% PIDS=34
+user-service CPU=0.15% MEM=328MiB / 576MiB MEM_PCT=56.94% PIDS=34
+ticketrush-kafka CPU=1.56% MEM=425.3MiB / 1GiB MEM_PCT=41.53% PIDS=92
+ticketrush-redis CPU=0.47% MEM=3.809MiB / 128MiB MEM_PCT=2.98% PIDS=6
+ticketrush-mysql CPU=1.85% MEM=391.8MiB / 768MiB MEM_PCT=51.02% PIDS=108
+
+===== 2026-07-11T15:13:29+00:00 =====
+HOST_CPU_BUSY=6.0%
+               total        used        free      shared  buff/cache   available
+Mem:            7778        4236        2343           3        1454        3541
+gateway-service CPU=5.53% MEM=245.1MiB / 512MiB MEM_PCT=47.87% PIDS=30
+ticket-service CPU=0.34% MEM=356.1MiB / 576MiB MEM_PCT=61.82% PIDS=40
+payment-service CPU=0.33% MEM=349.7MiB / 576MiB MEM_PCT=60.70% PIDS=39
+booking-service CPU=0.36% MEM=378.6MiB / 576MiB MEM_PCT=65.74% PIDS=51
+seat-service CPU=2.52% MEM=432.6MiB / 640MiB MEM_PCT=67.59% PIDS=102
+auth-service CPU=0.15% MEM=322.1MiB / 576MiB MEM_PCT=55.92% PIDS=34
+performance-service CPU=0.17% MEM=361.9MiB / 576MiB MEM_PCT=62.83% PIDS=34
+user-service CPU=0.16% MEM=328MiB / 576MiB MEM_PCT=56.94% PIDS=34
+ticketrush-kafka CPU=1.93% MEM=425MiB / 1GiB MEM_PCT=41.51% PIDS=92
+ticketrush-redis CPU=0.42% MEM=3.812MiB / 128MiB MEM_PCT=2.98% PIDS=6
+ticketrush-mysql CPU=1.87% MEM=391.6MiB / 768MiB MEM_PCT=50.99% PIDS=108
+
+===== 2026-07-11T15:13:36+00:00 =====
+HOST_CPU_BUSY=10.0%
+               total        used        free      shared  buff/cache   available
+Mem:            7778        4234        2345           3        1454        3543
+gateway-service CPU=1.70% MEM=245.2MiB / 512MiB MEM_PCT=47.89% PIDS=30
+ticket-service CPU=0.35% MEM=355.8MiB / 576MiB MEM_PCT=61.78% PIDS=40
+payment-service CPU=0.27% MEM=349.4MiB / 576MiB MEM_PCT=60.66% PIDS=39
+booking-service CPU=0.57% MEM=378.6MiB / 576MiB MEM_PCT=65.74% PIDS=51
+seat-service CPU=2.47% MEM=432.5MiB / 640MiB MEM_PCT=67.57% PIDS=102
+auth-service CPU=0.15% MEM=322.1MiB / 576MiB MEM_PCT=55.92% PIDS=34
+performance-service CPU=0.15% MEM=361.9MiB / 576MiB MEM_PCT=62.83% PIDS=34
+user-service CPU=0.19% MEM=328.2MiB / 576MiB MEM_PCT=56.98% PIDS=34
+ticketrush-kafka CPU=1.56% MEM=425.3MiB / 1GiB MEM_PCT=41.53% PIDS=92
+ticketrush-redis CPU=0.41% MEM=3.852MiB / 128MiB MEM_PCT=3.01% PIDS=6
+ticketrush-mysql CPU=1.76% MEM=391.4MiB / 768MiB MEM_PCT=50.96% PIDS=108
+
+===== 2026-07-11T15:13:43+00:00 =====
+HOST_CPU_BUSY=5.0%
+               total        used        free      shared  buff/cache   available
+Mem:            7778        4231        2348           3        1454        3546
+gateway-service CPU=1.86% MEM=245.2MiB / 512MiB MEM_PCT=47.88% PIDS=30
+ticket-service CPU=0.42% MEM=356.1MiB / 576MiB MEM_PCT=61.82% PIDS=40
+payment-service CPU=0.30% MEM=349.7MiB / 576MiB MEM_PCT=60.71% PIDS=39
+booking-service CPU=0.37% MEM=378.9MiB / 576MiB MEM_PCT=65.78% PIDS=51
+seat-service CPU=2.66% MEM=432.5MiB / 640MiB MEM_PCT=67.57% PIDS=102
+auth-service CPU=0.17% MEM=322.1MiB / 576MiB MEM_PCT=55.92% PIDS=34
+performance-service CPU=0.15% MEM=361.9MiB / 576MiB MEM_PCT=62.83% PIDS=34
+user-service CPU=0.17% MEM=328MiB / 576MiB MEM_PCT=56.94% PIDS=34
+ticketrush-kafka CPU=1.61% MEM=425.3MiB / 1GiB MEM_PCT=41.53% PIDS=92
+ticketrush-redis CPU=0.43% MEM=3.602MiB / 128MiB MEM_PCT=2.81% PIDS=6
+ticketrush-mysql CPU=1.83% MEM=391.4MiB / 768MiB MEM_PCT=50.96% PIDS=108
+
+===== 2026-07-11T15:13:50+00:00 =====
+HOST_CPU_BUSY=6.0%
+               total        used        free      shared  buff/cache   available
+Mem:            7778        4231        2349           3        1454        3546
+gateway-service CPU=2.80% MEM=245.3MiB / 512MiB MEM_PCT=47.91% PIDS=30
+ticket-service CPU=0.37% MEM=356.1MiB / 576MiB MEM_PCT=61.82% PIDS=40
+payment-service CPU=0.35% MEM=349.4MiB / 576MiB MEM_PCT=60.66% PIDS=39
+booking-service CPU=0.41% MEM=378.6MiB / 576MiB MEM_PCT=65.74% PIDS=51
+seat-service CPU=2.63% MEM=432.5MiB / 640MiB MEM_PCT=67.59% PIDS=102
+auth-service CPU=0.13% MEM=322.1MiB / 576MiB MEM_PCT=55.92% PIDS=34
+performance-service CPU=0.21% MEM=361.9MiB / 576MiB MEM_PCT=62.83% PIDS=34
+user-service CPU=0.20% MEM=328MiB / 576MiB MEM_PCT=56.94% PIDS=34
+ticketrush-kafka CPU=1.45% MEM=425.3MiB / 1GiB MEM_PCT=41.53% PIDS=92
+ticketrush-redis CPU=0.43% MEM=3.812MiB / 128MiB MEM_PCT=2.98% PIDS=6
+ticketrush-mysql CPU=1.77% MEM=391.6MiB / 768MiB MEM_PCT=50.99% PIDS=108
+
+===== 2026-07-11T15:13:58+00:00 =====
+HOST_CPU_BUSY=6.0%
+               total        used        free      shared  buff/cache   available
+Mem:            7778        4234        2345           3        1454        3543
+gateway-service CPU=1.57% MEM=245.3MiB / 512MiB MEM_PCT=47.92% PIDS=30
+ticket-service CPU=0.28% MEM=355.9MiB / 576MiB MEM_PCT=61.78% PIDS=40
+payment-service CPU=0.35% MEM=349.4MiB / 576MiB MEM_PCT=60.67% PIDS=39
+booking-service CPU=0.55% MEM=378.6MiB / 576MiB MEM_PCT=65.74% PIDS=51
+seat-service CPU=2.78% MEM=432.6MiB / 640MiB MEM_PCT=67.59% PIDS=102
+auth-service CPU=0.18% MEM=322.1MiB / 576MiB MEM_PCT=55.92% PIDS=34
+performance-service CPU=0.16% MEM=361.9MiB / 576MiB MEM_PCT=62.83% PIDS=34
+user-service CPU=0.15% MEM=328MiB / 576MiB MEM_PCT=56.94% PIDS=34
+ticketrush-kafka CPU=1.64% MEM=425.3MiB / 1GiB MEM_PCT=41.53% PIDS=92
+ticketrush-redis CPU=2.26% MEM=3.762MiB / 128MiB MEM_PCT=2.94% PIDS=6
+ticketrush-mysql CPU=1.81% MEM=391.4MiB / 768MiB MEM_PCT=50.96% PIDS=108
+
+===== 2026-07-11T15:14:05+00:00 =====
+HOST_CPU_BUSY=6.0%
+               total        used        free      shared  buff/cache   available
+Mem:            7778        4231        2348           3        1454        3546
+gateway-service CPU=0.31% MEM=245.1MiB / 512MiB MEM_PCT=47.88% PIDS=30
+ticket-service CPU=0.27% MEM=356.1MiB / 576MiB MEM_PCT=61.83% PIDS=40
+payment-service CPU=0.34% MEM=349.5MiB / 576MiB MEM_PCT=60.67% PIDS=39
+booking-service CPU=0.53% MEM=378.7MiB / 576MiB MEM_PCT=65.74% PIDS=51
+seat-service CPU=0.67% MEM=432.5MiB / 640MiB MEM_PCT=67.57% PIDS=101
+auth-service CPU=0.14% MEM=322.1MiB / 576MiB MEM_PCT=55.92% PIDS=34
+performance-service CPU=0.15% MEM=361.9MiB / 576MiB MEM_PCT=62.83% PIDS=34
+user-service CPU=0.16% MEM=328MiB / 576MiB MEM_PCT=56.94% PIDS=34
+ticketrush-kafka CPU=1.64% MEM=425.1MiB / 1GiB MEM_PCT=41.51% PIDS=92
+ticketrush-redis CPU=0.43% MEM=3.602MiB / 128MiB MEM_PCT=2.81% PIDS=6
+ticketrush-mysql CPU=2.87% MEM=391.8MiB / 768MiB MEM_PCT=51.02% PIDS=108
+
+===== 2026-07-11T15:14:12+00:00 =====
+HOST_CPU_BUSY=3.0%
+               total        used        free      shared  buff/cache   available
+Mem:            7778        4238        2341           3        1454        3539
+gateway-service CPU=0.09% MEM=245.1MiB / 512MiB MEM_PCT=47.87% PIDS=30
+ticket-service CPU=0.45% MEM=356.1MiB / 576MiB MEM_PCT=61.83% PIDS=40
+payment-service CPU=0.34% MEM=349.7MiB / 576MiB MEM_PCT=60.71% PIDS=39
+booking-service CPU=0.48% MEM=378.4MiB / 576MiB MEM_PCT=65.70% PIDS=51
+seat-service CPU=0.55% MEM=432.7MiB / 640MiB MEM_PCT=67.61% PIDS=101
+auth-service CPU=0.15% MEM=322.1MiB / 576MiB MEM_PCT=55.92% PIDS=34
+performance-service CPU=0.16% MEM=361.9MiB / 576MiB MEM_PCT=62.83% PIDS=34
+user-service CPU=0.15% MEM=328MiB / 576MiB MEM_PCT=56.94% PIDS=34
+ticketrush-kafka CPU=5.29% MEM=429.2MiB / 1GiB MEM_PCT=41.92% PIDS=92
+ticketrush-redis CPU=0.49% MEM=3.852MiB / 128MiB MEM_PCT=3.01% PIDS=6
+ticketrush-mysql CPU=0.57% MEM=391.6MiB / 768MiB MEM_PCT=50.99% PIDS=108
+
+===== 2026-07-11T15:14:19+00:00 =====
+HOST_CPU_BUSY=3.0%
+               total        used        free      shared  buff/cache   available
+Mem:            7778        4235        2345           3        1454        3542
+gateway-service CPU=0.07% MEM=245.1MiB / 512MiB MEM_PCT=47.87% PIDS=30
+ticket-service CPU=0.27% MEM=356.1MiB / 576MiB MEM_PCT=61.83% PIDS=40
+payment-service CPU=0.57% MEM=349.7MiB / 576MiB MEM_PCT=60.72% PIDS=39
+booking-service CPU=0.53% MEM=378.9MiB / 576MiB MEM_PCT=65.79% PIDS=51
+seat-service CPU=0.57% MEM=432.7MiB / 640MiB MEM_PCT=67.61% PIDS=101
+auth-service CPU=0.14% MEM=322.1MiB / 576MiB MEM_PCT=55.93% PIDS=34
+performance-service CPU=0.20% MEM=361.9MiB / 576MiB MEM_PCT=62.83% PIDS=34
+user-service CPU=0.15% MEM=328MiB / 576MiB MEM_PCT=56.95% PIDS=34
+ticketrush-kafka CPU=1.60% MEM=425.3MiB / 1GiB MEM_PCT=41.54% PIDS=92
+ticketrush-redis CPU=0.43% MEM=3.812MiB / 128MiB MEM_PCT=2.98% PIDS=6
+ticketrush-mysql CPU=0.55% MEM=391.4MiB / 768MiB MEM_PCT=50.96% PIDS=108
+
+===== 2026-07-11T15:14:26+00:00 =====
+HOST_CPU_BUSY=5.0%
+               total        used        free      shared  buff/cache   available
+Mem:            7778        4235        2344           3        1454        3542
+gateway-service CPU=0.09% MEM=244.9MiB / 512MiB MEM_PCT=47.84% PIDS=28
+ticket-service CPU=0.37% MEM=356.4MiB / 576MiB MEM_PCT=61.87% PIDS=40
+payment-service CPU=0.31% MEM=349.7MiB / 576MiB MEM_PCT=60.72% PIDS=39
+booking-service CPU=0.42% MEM=378.7MiB / 576MiB MEM_PCT=65.74% PIDS=51
+seat-service CPU=0.74% MEM=432.5MiB / 640MiB MEM_PCT=67.58% PIDS=101
+auth-service CPU=0.14% MEM=322.1MiB / 576MiB MEM_PCT=55.93% PIDS=34
+performance-service CPU=0.16% MEM=361.9MiB / 576MiB MEM_PCT=62.84% PIDS=34
+user-service CPU=0.18% MEM=328MiB / 576MiB MEM_PCT=56.95% PIDS=34
+ticketrush-kafka CPU=1.63% MEM=424.9MiB / 1GiB MEM_PCT=41.49% PIDS=92
+ticketrush-redis CPU=0.42% MEM=3.809MiB / 128MiB MEM_PCT=2.98% PIDS=6
+ticketrush-mysql CPU=0.51% MEM=391.4MiB / 768MiB MEM_PCT=50.96% PIDS=108
+
+===== 2026-07-11T15:14:33+00:00 =====
+HOST_CPU_BUSY=3.0%
+               total        used        free      shared  buff/cache   available
+Mem:            7778        4229        2350           3        1454        3548
+gateway-service CPU=0.09% MEM=244.9MiB / 512MiB MEM_PCT=47.84% PIDS=28
+ticket-service CPU=0.28% MEM=355.9MiB / 576MiB MEM_PCT=61.79% PIDS=40
+payment-service CPU=0.29% MEM=349.7MiB / 576MiB MEM_PCT=60.72% PIDS=39
+booking-service CPU=0.52% MEM=378.7MiB / 576MiB MEM_PCT=65.75% PIDS=51
+seat-service CPU=0.69% MEM=433MiB / 640MiB MEM_PCT=67.65% PIDS=101
+auth-service CPU=0.17% MEM=322.1MiB / 576MiB MEM_PCT=55.93% PIDS=34
+performance-service CPU=0.15% MEM=361.9MiB / 576MiB MEM_PCT=62.84% PIDS=34
+user-service CPU=0.19% MEM=328.3MiB / 576MiB MEM_PCT=56.99% PIDS=34
+ticketrush-kafka CPU=2.68% MEM=426.3MiB / 1GiB MEM_PCT=41.64% PIDS=92
+ticketrush-redis CPU=0.49% MEM=3.848MiB / 128MiB MEM_PCT=3.01% PIDS=6
+ticketrush-mysql CPU=0.66% MEM=391.4MiB / 768MiB MEM_PCT=50.96% PIDS=108
+
+===== 2026-07-11T15:14:40+00:00 =====
+HOST_CPU_BUSY=5.0%
+               total        used        free      shared  buff/cache   available
+Mem:            7778        4239        2341           3        1454        3538
+gateway-service CPU=0.10% MEM=244.9MiB / 512MiB MEM_PCT=47.84% PIDS=28
+ticket-service CPU=0.31% MEM=356.1MiB / 576MiB MEM_PCT=61.83% PIDS=40
+payment-service CPU=0.44% MEM=349.8MiB / 576MiB MEM_PCT=60.72% PIDS=39
+booking-service CPU=0.43% MEM=379MiB / 576MiB MEM_PCT=65.79% PIDS=51
+seat-service CPU=0.57% MEM=432.5MiB / 640MiB MEM_PCT=67.58% PIDS=101
+auth-service CPU=0.14% MEM=322.1MiB / 576MiB MEM_PCT=55.93% PIDS=34
+performance-service CPU=0.20% MEM=361.9MiB / 576MiB MEM_PCT=62.84% PIDS=34
+user-service CPU=0.15% MEM=328MiB / 576MiB MEM_PCT=56.95% PIDS=34
+ticketrush-kafka CPU=1.65% MEM=425.4MiB / 1GiB MEM_PCT=41.54% PIDS=92
+ticketrush-redis CPU=0.43% MEM=3.848MiB / 128MiB MEM_PCT=3.01% PIDS=6
+ticketrush-mysql CPU=0.52% MEM=391.4MiB / 768MiB MEM_PCT=50.96% PIDS=108
+
+===== 2026-07-11T15:14:47+00:00 =====
+HOST_CPU_BUSY=4.0%
+               total        used        free      shared  buff/cache   available
+Mem:            7778        4234        2345           3        1454        3543
+gateway-service CPU=0.09% MEM=244.9MiB / 512MiB MEM_PCT=47.84% PIDS=28
+ticket-service CPU=0.36% MEM=356.2MiB / 576MiB MEM_PCT=61.83% PIDS=40
+payment-service CPU=0.26% MEM=349.5MiB / 576MiB MEM_PCT=60.68% PIDS=39
+booking-service CPU=0.43% MEM=378.7MiB / 576MiB MEM_PCT=65.75% PIDS=51
+seat-service CPU=0.91% MEM=432.5MiB / 640MiB MEM_PCT=67.58% PIDS=101
+auth-service CPU=0.17% MEM=322.1MiB / 576MiB MEM_PCT=55.93% PIDS=34
+performance-service CPU=0.15% MEM=361.9MiB / 576MiB MEM_PCT=62.84% PIDS=34
+user-service CPU=0.20% MEM=328.3MiB / 576MiB MEM_PCT=56.99% PIDS=34
+ticketrush-kafka CPU=1.61% MEM=425.2MiB / 1GiB MEM_PCT=41.52% PIDS=92
+ticketrush-redis CPU=0.45% MEM=4.055MiB / 128MiB MEM_PCT=3.17% PIDS=6
+ticketrush-mysql CPU=0.61% MEM=391.6MiB / 768MiB MEM_PCT=50.99% PIDS=108
+
+===== 2026-07-11T15:14:54+00:00 =====
+HOST_CPU_BUSY=3.0%
+               total        used        free      shared  buff/cache   available
+Mem:            7778        4237        2342           3        1454        3540
+gateway-service CPU=0.08% MEM=244.9MiB / 512MiB MEM_PCT=47.84% PIDS=28
+ticket-service CPU=0.32% MEM=356.2MiB / 576MiB MEM_PCT=61.83% PIDS=40
+payment-service CPU=0.37% MEM=350MiB / 576MiB MEM_PCT=60.77% PIDS=39
+booking-service CPU=0.51% MEM=378.5MiB / 576MiB MEM_PCT=65.71% PIDS=51
+seat-service CPU=0.52% MEM=432.5MiB / 640MiB MEM_PCT=67.58% PIDS=101
+auth-service CPU=0.15% MEM=322.1MiB / 576MiB MEM_PCT=55.93% PIDS=34
+performance-service CPU=0.18% MEM=362.2MiB / 576MiB MEM_PCT=62.88% PIDS=34
+user-service CPU=0.19% MEM=328MiB / 576MiB MEM_PCT=56.95% PIDS=34
+ticketrush-kafka CPU=1.78% MEM=425.2MiB / 1GiB MEM_PCT=41.52% PIDS=92
+ticketrush-redis CPU=0.43% MEM=3.562MiB / 128MiB MEM_PCT=2.78% PIDS=6
+ticketrush-mysql CPU=2.79% MEM=391.6MiB / 768MiB MEM_PCT=51.00% PIDS=108
+
+===== 2026-07-11T15:15:01+00:00 =====
+HOST_CPU_BUSY=2.0%
+               total        used        free      shared  buff/cache   available
+Mem:            7778        4232        2348           3        1454        3545
+gateway-service CPU=0.08% MEM=244.9MiB / 512MiB MEM_PCT=47.84% PIDS=28
+ticket-service CPU=0.34% MEM=356.2MiB / 576MiB MEM_PCT=61.83% PIDS=40
+payment-service CPU=0.32% MEM=349.5MiB / 576MiB MEM_PCT=60.68% PIDS=39
+booking-service CPU=0.54% MEM=378.5MiB / 576MiB MEM_PCT=65.72% PIDS=51
+seat-service CPU=0.84% MEM=432.8MiB / 640MiB MEM_PCT=67.62% PIDS=101
+auth-service CPU=0.15% MEM=322.1MiB / 576MiB MEM_PCT=55.93% PIDS=34
+performance-service CPU=0.14% MEM=361.9MiB / 576MiB MEM_PCT=62.84% PIDS=34
+user-service CPU=0.15% MEM=328MiB / 576MiB MEM_PCT=56.95% PIDS=34
+ticketrush-kafka CPU=1.63% MEM=424.9MiB / 1GiB MEM_PCT=41.50% PIDS=92
+ticketrush-redis CPU=0.46% MEM=3.801MiB / 128MiB MEM_PCT=2.97% PIDS=6
+ticketrush-mysql CPU=0.51% MEM=391.4MiB / 768MiB MEM_PCT=50.96% PIDS=108
+
+===== 2026-07-11T15:15:08+00:00 =====
+HOST_CPU_BUSY=4.0%
+               total        used        free      shared  buff/cache   available
+Mem:            7778        4233        2346           3        1454        3544
+gateway-service CPU=0.10% MEM=244.9MiB / 512MiB MEM_PCT=47.83% PIDS=28
+ticket-service CPU=0.34% MEM=356.2MiB / 576MiB MEM_PCT=61.83% PIDS=40
+payment-service CPU=0.31% MEM=349.8MiB / 576MiB MEM_PCT=60.72% PIDS=39
+booking-service CPU=0.40% MEM=378.8MiB / 576MiB MEM_PCT=65.76% PIDS=51
+seat-service CPU=0.52% MEM=431.8MiB / 640MiB MEM_PCT=67.47% PIDS=94
+auth-service CPU=0.13% MEM=322.1MiB / 576MiB MEM_PCT=55.93% PIDS=34
+performance-service CPU=0.15% MEM=361.9MiB / 576MiB MEM_PCT=62.84% PIDS=34
+user-service CPU=0.13% MEM=328MiB / 576MiB MEM_PCT=56.95% PIDS=34
+ticketrush-kafka CPU=1.49% MEM=425.4MiB / 1GiB MEM_PCT=41.55% PIDS=92
+ticketrush-redis CPU=2.28% MEM=3.602MiB / 128MiB MEM_PCT=2.81% PIDS=6
+ticketrush-mysql CPU=0.63% MEM=391.6MiB / 768MiB MEM_PCT=50.99% PIDS=108
+
+===== 2026-07-11T15:15:16+00:00 =====
+HOST_CPU_BUSY=3.0%
+               total        used        free      shared  buff/cache   available
+Mem:            7778        4230        2349           3        1454        3547
+gateway-service CPU=0.08% MEM=244.9MiB / 512MiB MEM_PCT=47.83% PIDS=28
+ticket-service CPU=0.29% MEM=356.2MiB / 576MiB MEM_PCT=61.83% PIDS=40
+payment-service CPU=0.40% MEM=350MiB / 576MiB MEM_PCT=60.77% PIDS=39
+booking-service CPU=0.53% MEM=378.8MiB / 576MiB MEM_PCT=65.76% PIDS=51
+seat-service CPU=0.61% MEM=431.7MiB / 640MiB MEM_PCT=67.45% PIDS=94
+auth-service CPU=0.15% MEM=322.1MiB / 576MiB MEM_PCT=55.93% PIDS=34
+performance-service CPU=0.17% MEM=361.9MiB / 576MiB MEM_PCT=62.84% PIDS=34
+user-service CPU=0.17% MEM=328MiB / 576MiB MEM_PCT=56.95% PIDS=34
+ticketrush-kafka CPU=5.51% MEM=427.4MiB / 1GiB MEM_PCT=41.74% PIDS=92
+ticketrush-redis CPU=0.46% MEM=3.812MiB / 128MiB MEM_PCT=2.98% PIDS=6
+ticketrush-mysql CPU=2.79% MEM=391.4MiB / 768MiB MEM_PCT=50.97% PIDS=108
+
+===== 2026-07-11T15:15:23+00:00 =====
+HOST_CPU_BUSY=4.0%
+               total        used        free      shared  buff/cache   available
+Mem:            7778        4231        2349           3        1454        3546
+gateway-service CPU=0.08% MEM=244.3MiB / 512MiB MEM_PCT=47.72% PIDS=22
+ticket-service CPU=0.36% MEM=356.2MiB / 576MiB MEM_PCT=61.83% PIDS=40
+payment-service CPU=0.28% MEM=349.5MiB / 576MiB MEM_PCT=60.68% PIDS=39
+booking-service CPU=0.38% MEM=378.8MiB / 576MiB MEM_PCT=65.76% PIDS=51
+seat-service CPU=0.93% MEM=432MiB / 640MiB MEM_PCT=67.50% PIDS=94
+auth-service CPU=0.18% MEM=322.1MiB / 576MiB MEM_PCT=55.93% PIDS=34
+performance-service CPU=0.15% MEM=361.9MiB / 576MiB MEM_PCT=62.84% PIDS=34
+user-service CPU=0.15% MEM=328MiB / 576MiB MEM_PCT=56.95% PIDS=34
+ticketrush-kafka CPU=1.46% MEM=424.9MiB / 1GiB MEM_PCT=41.50% PIDS=92
+ticketrush-redis CPU=0.47% MEM=3.812MiB / 128MiB MEM_PCT=2.98% PIDS=6
+ticketrush-mysql CPU=0.52% MEM=391.4MiB / 768MiB MEM_PCT=50.96% PIDS=108
+
+===== 2026-07-11T15:15:30+00:00 =====
+HOST_CPU_BUSY=4.0%
+               total        used        free      shared  buff/cache   available
+Mem:            7778        4233        2346           3        1454        3544
+gateway-service CPU=0.07% MEM=244.3MiB / 512MiB MEM_PCT=47.72% PIDS=22
+ticket-service CPU=0.26% MEM=356.2MiB / 576MiB MEM_PCT=61.83% PIDS=40
+payment-service CPU=0.31% MEM=349.8MiB / 576MiB MEM_PCT=60.72% PIDS=39
+booking-service CPU=0.39% MEM=378.8MiB / 576MiB MEM_PCT=65.76% PIDS=51
+seat-service CPU=0.54% MEM=432MiB / 640MiB MEM_PCT=67.51% PIDS=94
+auth-service CPU=0.16% MEM=322.1MiB / 576MiB MEM_PCT=55.93% PIDS=34
+performance-service CPU=0.18% MEM=361.9MiB / 576MiB MEM_PCT=62.84% PIDS=34
+user-service CPU=0.16% MEM=328MiB / 576MiB MEM_PCT=56.95% PIDS=34
+ticketrush-kafka CPU=1.76% MEM=425.2MiB / 1GiB MEM_PCT=41.52% PIDS=92
+ticketrush-redis CPU=0.47% MEM=3.812MiB / 128MiB MEM_PCT=2.98% PIDS=6
+ticketrush-mysql CPU=0.58% MEM=391.4MiB / 768MiB MEM_PCT=50.96% PIDS=108
+
+===== 2026-07-11T15:15:37+00:00 =====
+HOST_CPU_BUSY=6.0%
+               total        used        free      shared  buff/cache   available
+Mem:            7778        4236        2344           3        1454        3541
+gateway-service CPU=0.10% MEM=244.3MiB / 512MiB MEM_PCT=47.72% PIDS=22
+ticket-service CPU=0.40% MEM=356.2MiB / 576MiB MEM_PCT=61.83% PIDS=40
+payment-service CPU=0.36% MEM=349.8MiB / 576MiB MEM_PCT=60.72% PIDS=39
+booking-service CPU=0.63% MEM=378.8MiB / 576MiB MEM_PCT=65.76% PIDS=51
+seat-service CPU=0.85% MEM=432.3MiB / 640MiB MEM_PCT=67.55% PIDS=94
+auth-service CPU=0.21% MEM=322.1MiB / 576MiB MEM_PCT=55.93% PIDS=34
+performance-service CPU=0.17% MEM=361.9MiB / 576MiB MEM_PCT=62.84% PIDS=34
+user-service CPU=0.15% MEM=328MiB / 576MiB MEM_PCT=56.95% PIDS=34
+ticketrush-kafka CPU=1.60% MEM=427.2MiB / 1GiB MEM_PCT=41.72% PIDS=92
+ticketrush-redis CPU=0.49% MEM=3.844MiB / 128MiB MEM_PCT=3.00% PIDS=6
+ticketrush-mysql CPU=0.60% MEM=391.4MiB / 768MiB MEM_PCT=50.96% PIDS=108
+
+===== 2026-07-11T15:15:44+00:00 =====
+HOST_CPU_BUSY=3.0%
+               total        used        free      shared  buff/cache   available
+Mem:            7778        4231        2348           3        1454        3546
+gateway-service CPU=0.08% MEM=244.3MiB / 512MiB MEM_PCT=47.72% PIDS=22
+ticket-service CPU=0.34% MEM=356.1MiB / 576MiB MEM_PCT=61.83% PIDS=40
+payment-service CPU=0.31% MEM=349.5MiB / 576MiB MEM_PCT=60.68% PIDS=39
+booking-service CPU=0.52% MEM=378.8MiB / 576MiB MEM_PCT=65.76% PIDS=51
+seat-service CPU=0.57% MEM=431.9MiB / 640MiB MEM_PCT=67.48% PIDS=94
+auth-service CPU=0.17% MEM=322.1MiB / 576MiB MEM_PCT=55.93% PIDS=34
+performance-service CPU=0.16% MEM=361.9MiB / 576MiB MEM_PCT=62.84% PIDS=34
+user-service CPU=0.18% MEM=328MiB / 576MiB MEM_PCT=56.95% PIDS=34
+ticketrush-kafka CPU=2.54% MEM=427MiB / 1GiB MEM_PCT=41.70% PIDS=92
+ticketrush-redis CPU=0.42% MEM=3.852MiB / 128MiB MEM_PCT=3.01% PIDS=6
+ticketrush-mysql CPU=0.60% MEM=391.4MiB / 768MiB MEM_PCT=50.96% PIDS=108
+
+===== 2026-07-11T15:15:51+00:00 =====
+HOST_CPU_BUSY=3.0%
+               total        used        free      shared  buff/cache   available
+Mem:            7778        4231        2348           3        1454        3546
+gateway-service CPU=0.09% MEM=244.3MiB / 512MiB MEM_PCT=47.72% PIDS=22
+ticket-service CPU=0.34% MEM=356.2MiB / 576MiB MEM_PCT=61.83% PIDS=40
+payment-service CPU=0.27% MEM=350MiB / 576MiB MEM_PCT=60.77% PIDS=39
+booking-service CPU=0.66% MEM=378.8MiB / 576MiB MEM_PCT=65.76% PIDS=51
+seat-service CPU=0.65% MEM=432.3MiB / 640MiB MEM_PCT=67.55% PIDS=94
+auth-service CPU=0.15% MEM=322.1MiB / 576MiB MEM_PCT=55.93% PIDS=34
+performance-service CPU=0.14% MEM=361.9MiB / 576MiB MEM_PCT=62.84% PIDS=34
+user-service CPU=0.14% MEM=328MiB / 576MiB MEM_PCT=56.95% PIDS=34
+ticketrush-kafka CPU=1.47% MEM=425.5MiB / 1GiB MEM_PCT=41.55% PIDS=92
+ticketrush-redis CPU=0.42% MEM=3.562MiB / 128MiB MEM_PCT=2.78% PIDS=6
+ticketrush-mysql CPU=0.53% MEM=391.4MiB / 768MiB MEM_PCT=50.96% PIDS=108
+
+===== 2026-07-11T15:15:58+00:00 =====
+HOST_CPU_BUSY=3.0%
+               total        used        free      shared  buff/cache   available
+Mem:            7778        4232        2347           3        1454        3545
+gateway-service CPU=0.09% MEM=244.3MiB / 512MiB MEM_PCT=47.72% PIDS=22
+ticket-service CPU=0.28% MEM=356.2MiB / 576MiB MEM_PCT=61.83% PIDS=40
+payment-service CPU=0.34% MEM=349.5MiB / 576MiB MEM_PCT=60.68% PIDS=39
+booking-service CPU=1.08% MEM=378.8MiB / 576MiB MEM_PCT=65.76% PIDS=51
+seat-service CPU=0.86% MEM=432.3MiB / 640MiB MEM_PCT=67.55% PIDS=94
+auth-service CPU=0.15% MEM=322.2MiB / 576MiB MEM_PCT=55.93% PIDS=34
+performance-service CPU=0.44% MEM=361.9MiB / 576MiB MEM_PCT=62.84% PIDS=34
+user-service CPU=0.15% MEM=328MiB / 576MiB MEM_PCT=56.95% PIDS=34
+ticketrush-kafka CPU=1.52% MEM=425.2MiB / 1GiB MEM_PCT=41.53% PIDS=92
+ticketrush-redis CPU=2.34% MEM=3.812MiB / 128MiB MEM_PCT=2.98% PIDS=6
+ticketrush-mysql CPU=0.65% MEM=391.6MiB / 768MiB MEM_PCT=50.99% PIDS=108
+
+===== 2026-07-11T15:16:05+00:00 =====
+HOST_CPU_BUSY=2.0%
+               total        used        free      shared  buff/cache   available
+Mem:            7778        4225        2354           3        1454        3552
+gateway-service CPU=0.09% MEM=244.3MiB / 512MiB MEM_PCT=47.72% PIDS=22
+ticket-service CPU=0.36% MEM=355.9MiB / 576MiB MEM_PCT=61.79% PIDS=40
+payment-service CPU=0.32% MEM=349.5MiB / 576MiB MEM_PCT=60.68% PIDS=39
+booking-service CPU=0.38% MEM=378.8MiB / 576MiB MEM_PCT=65.77% PIDS=51
+seat-service CPU=0.72% MEM=431.9MiB / 640MiB MEM_PCT=67.49% PIDS=93
+auth-service CPU=0.14% MEM=322.2MiB / 576MiB MEM_PCT=55.93% PIDS=34
+performance-service CPU=0.17% MEM=361.9MiB / 576MiB MEM_PCT=62.84% PIDS=34
+user-service CPU=0.16% MEM=328MiB / 576MiB MEM_PCT=56.95% PIDS=34
+ticketrush-kafka CPU=1.70% MEM=425.5MiB / 1GiB MEM_PCT=41.55% PIDS=92
+ticketrush-redis CPU=0.46% MEM=3.848MiB / 128MiB MEM_PCT=3.01% PIDS=6
+ticketrush-mysql CPU=2.77% MEM=391.6MiB / 768MiB MEM_PCT=50.99% PIDS=108
+
+===== 2026-07-11T15:16:12+00:00 =====
+HOST_CPU_BUSY=3.0%
+               total        used        free      shared  buff/cache   available
+Mem:            7778        4232        2347           3        1454        3545
+gateway-service CPU=0.10% MEM=244.3MiB / 512MiB MEM_PCT=47.72% PIDS=22
+ticket-service CPU=0.37% MEM=356.2MiB / 576MiB MEM_PCT=61.83% PIDS=40
+payment-service CPU=0.36% MEM=349.8MiB / 576MiB MEM_PCT=60.73% PIDS=39
+booking-service CPU=0.65% MEM=378.8MiB / 576MiB MEM_PCT=65.76% PIDS=51
+seat-service CPU=0.83% MEM=432.2MiB / 640MiB MEM_PCT=67.53% PIDS=93
+auth-service CPU=0.20% MEM=322.4MiB / 576MiB MEM_PCT=55.97% PIDS=34
+performance-service CPU=0.16% MEM=361.9MiB / 576MiB MEM_PCT=62.84% PIDS=34
+user-service CPU=0.15% MEM=328MiB / 576MiB MEM_PCT=56.95% PIDS=34
+ticketrush-kafka CPU=1.55% MEM=425MiB / 1GiB MEM_PCT=41.50% PIDS=92
+ticketrush-redis CPU=0.47% MEM=3.602MiB / 128MiB MEM_PCT=2.81% PIDS=6
+ticketrush-mysql CPU=0.69% MEM=391.4MiB / 768MiB MEM_PCT=50.96% PIDS=108
+
+===== 2026-07-11T15:16:19+00:00 =====
+HOST_CPU_BUSY=2.0%
+               total        used        free      shared  buff/cache   available
+Mem:            7778        4249        2330           3        1454        3528
+gateway-service CPU=0.10% MEM=244.3MiB / 512MiB MEM_PCT=47.72% PIDS=22
+ticket-service CPU=0.29% MEM=356.4MiB / 576MiB MEM_PCT=61.88% PIDS=40
+payment-service CPU=0.33% MEM=349.6MiB / 576MiB MEM_PCT=60.69% PIDS=39
+booking-service CPU=0.40% MEM=378.6MiB / 576MiB MEM_PCT=65.72% PIDS=51
+seat-service CPU=0.69% MEM=432MiB / 640MiB MEM_PCT=67.50% PIDS=93
+auth-service CPU=0.14% MEM=322.2MiB / 576MiB MEM_PCT=55.93% PIDS=34
+performance-service CPU=0.28% MEM=361.9MiB / 576MiB MEM_PCT=62.84% PIDS=34
+user-service CPU=0.16% MEM=328MiB / 576MiB MEM_PCT=56.95% PIDS=34
+ticketrush-kafka CPU=2.61% MEM=445.9MiB / 1GiB MEM_PCT=43.54% PIDS=92
+ticketrush-redis CPU=2.20% MEM=3.75MiB / 128MiB MEM_PCT=2.93% PIDS=6
+ticketrush-mysql CPU=0.57% MEM=391.4MiB / 768MiB MEM_PCT=50.96% PIDS=108
+
+===== 2026-07-11T15:16:27+00:00 =====
+HOST_CPU_BUSY=5.0%
+               total        used        free      shared  buff/cache   available
+Mem:            7778        4229        2350           3        1454        3548
+gateway-service CPU=0.09% MEM=244.3MiB / 512MiB MEM_PCT=47.72% PIDS=22
+ticket-service CPU=0.44% MEM=356.2MiB / 576MiB MEM_PCT=61.83% PIDS=40
+payment-service CPU=0.30% MEM=349.6MiB / 576MiB MEM_PCT=60.69% PIDS=39
+booking-service CPU=0.54% MEM=379MiB / 576MiB MEM_PCT=65.81% PIDS=51
+seat-service CPU=0.52% MEM=432MiB / 640MiB MEM_PCT=67.50% PIDS=93
+auth-service CPU=0.18% MEM=322.2MiB / 576MiB MEM_PCT=55.93% PIDS=34
+performance-service CPU=0.14% MEM=362MiB / 576MiB MEM_PCT=62.84% PIDS=34
+user-service CPU=0.14% MEM=328MiB / 576MiB MEM_PCT=56.95% PIDS=34
+ticketrush-kafka CPU=1.49% MEM=425.6MiB / 1GiB MEM_PCT=41.56% PIDS=92
+ticketrush-redis CPU=0.41% MEM=3.812MiB / 128MiB MEM_PCT=2.98% PIDS=6
+ticketrush-mysql CPU=0.53% MEM=391.4MiB / 768MiB MEM_PCT=50.96% PIDS=108
+
+===== 2026-07-11T15:16:34+00:00 =====
+HOST_CPU_BUSY=2.0%
+               total        used        free      shared  buff/cache   available
+Mem:            7778        4229        2350           3        1455        3548
+gateway-service CPU=0.09% MEM=244.3MiB / 512MiB MEM_PCT=47.72% PIDS=22
+ticket-service CPU=0.26% MEM=356.4MiB / 576MiB MEM_PCT=61.88% PIDS=40
+payment-service CPU=0.34% MEM=349.8MiB / 576MiB MEM_PCT=60.74% PIDS=39
+booking-service CPU=0.66% MEM=378.8MiB / 576MiB MEM_PCT=65.76% PIDS=51
+seat-service CPU=0.53% MEM=432.2MiB / 640MiB MEM_PCT=67.53% PIDS=93
+auth-service CPU=0.16% MEM=322.2MiB / 576MiB MEM_PCT=55.93% PIDS=34
+performance-service CPU=0.24% MEM=362MiB / 576MiB MEM_PCT=62.84% PIDS=34
+user-service CPU=0.19% MEM=328MiB / 576MiB MEM_PCT=56.95% PIDS=34
+ticketrush-kafka CPU=1.67% MEM=425.4MiB / 1GiB MEM_PCT=41.54% PIDS=92
+ticketrush-redis CPU=0.42% MEM=3.852MiB / 128MiB MEM_PCT=3.01% PIDS=6
+ticketrush-mysql CPU=0.56% MEM=391.4MiB / 768MiB MEM_PCT=50.96% PIDS=108
+
+===== 2026-07-11T15:16:41+00:00 =====
+HOST_CPU_BUSY=5.0%
+               total        used        free      shared  buff/cache   available
+Mem:            7778        4228        2351           3        1455        3549
+gateway-service CPU=0.09% MEM=244.3MiB / 512MiB MEM_PCT=47.72% PIDS=22
+ticket-service CPU=0.38% MEM=356.2MiB / 576MiB MEM_PCT=61.83% PIDS=40
+payment-service CPU=0.33% MEM=349.8MiB / 576MiB MEM_PCT=60.74% PIDS=39
+booking-service CPU=0.45% MEM=378.8MiB / 576MiB MEM_PCT=65.77% PIDS=51
+seat-service CPU=0.51% MEM=432.2MiB / 640MiB MEM_PCT=67.53% PIDS=93
+auth-service CPU=0.14% MEM=322.2MiB / 576MiB MEM_PCT=55.93% PIDS=34
+performance-service CPU=0.15% MEM=362MiB / 576MiB MEM_PCT=62.84% PIDS=34
+user-service CPU=0.28% MEM=328.5MiB / 576MiB MEM_PCT=57.04% PIDS=34
+ticketrush-kafka CPU=1.52% MEM=425.4MiB / 1GiB MEM_PCT=41.54% PIDS=92
+ticketrush-redis CPU=0.44% MEM=3.602MiB / 128MiB MEM_PCT=2.81% PIDS=6
+ticketrush-mysql CPU=0.50% MEM=391.6MiB / 768MiB MEM_PCT=50.99% PIDS=108
+
+===== 2026-07-11T15:16:48+00:00 =====
+HOST_CPU_BUSY=3.0%
+               total        used        free      shared  buff/cache   available
+Mem:            7778        4235        2345           3        1454        3542
+gateway-service CPU=0.09% MEM=244.3MiB / 512MiB MEM_PCT=47.72% PIDS=22
+ticket-service CPU=0.27% MEM=355.9MiB / 576MiB MEM_PCT=61.79% PIDS=40
+payment-service CPU=0.27% MEM=349.8MiB / 576MiB MEM_PCT=60.73% PIDS=39
+booking-service CPU=0.39% MEM=378.6MiB / 576MiB MEM_PCT=65.73% PIDS=51
+seat-service CPU=0.82% MEM=431.7MiB / 640MiB MEM_PCT=67.46% PIDS=93
+auth-service CPU=0.17% MEM=322.2MiB / 576MiB MEM_PCT=55.93% PIDS=34
+performance-service CPU=0.18% MEM=362MiB / 576MiB MEM_PCT=62.84% PIDS=34
+user-service CPU=0.16% MEM=328MiB / 576MiB MEM_PCT=56.95% PIDS=34
+ticketrush-kafka CPU=1.48% MEM=425.4MiB / 1GiB MEM_PCT=41.54% PIDS=92
+ticketrush-redis CPU=0.47% MEM=3.812MiB / 128MiB MEM_PCT=2.98% PIDS=6
+ticketrush-mysql CPU=0.51% MEM=391.4MiB / 768MiB MEM_PCT=50.96% PIDS=108
+
+===== 2026-07-11T15:16:55+00:00 =====
+HOST_CPU_BUSY=3.0%
+               total        used        free      shared  buff/cache   available
+Mem:            7778        4232        2347           3        1455        3545
+gateway-service CPU=0.08% MEM=244.3MiB / 512MiB MEM_PCT=47.72% PIDS=22
+ticket-service CPU=0.26% MEM=355.9MiB / 576MiB MEM_PCT=61.79% PIDS=40
+payment-service CPU=0.55% MEM=349.8MiB / 576MiB MEM_PCT=60.73% PIDS=39
+booking-service CPU=0.49% MEM=378.6MiB / 576MiB MEM_PCT=65.73% PIDS=51
+seat-service CPU=0.59% MEM=432MiB / 640MiB MEM_PCT=67.50% PIDS=93
+auth-service CPU=0.13% MEM=322.2MiB / 576MiB MEM_PCT=55.93% PIDS=34
+performance-service CPU=0.16% MEM=362MiB / 576MiB MEM_PCT=62.84% PIDS=34
+user-service CPU=0.16% MEM=328MiB / 576MiB MEM_PCT=56.95% PIDS=34
+ticketrush-kafka CPU=1.56% MEM=425.6MiB / 1GiB MEM_PCT=41.56% PIDS=92
+ticketrush-redis CPU=0.46% MEM=4.059MiB / 128MiB MEM_PCT=3.17% PIDS=6
+ticketrush-mysql CPU=0.51% MEM=391.6MiB / 768MiB MEM_PCT=50.99% PIDS=108
+
+===== 2026-07-11T15:17:02+00:00 =====
+HOST_CPU_BUSY=4.0%
+               total        used        free      shared  buff/cache   available
+Mem:            7778        4229        2350           3        1455        3548
+gateway-service CPU=0.09% MEM=244.3MiB / 512MiB MEM_PCT=47.72% PIDS=22
+ticket-service CPU=0.42% MEM=356.2MiB / 576MiB MEM_PCT=61.84% PIDS=40
+payment-service CPU=0.26% MEM=349.6MiB / 576MiB MEM_PCT=60.70% PIDS=39
+booking-service CPU=0.47% MEM=378.9MiB / 576MiB MEM_PCT=65.79% PIDS=51
+seat-service CPU=1.36% MEM=432.1MiB / 640MiB MEM_PCT=67.51% PIDS=93
+auth-service CPU=0.15% MEM=322.2MiB / 576MiB MEM_PCT=55.93% PIDS=34
+performance-service CPU=0.19% MEM=362MiB / 576MiB MEM_PCT=62.84% PIDS=34
+user-service CPU=0.19% MEM=328.3MiB / 576MiB MEM_PCT=57.00% PIDS=34
+ticketrush-kafka CPU=1.59% MEM=425.2MiB / 1GiB MEM_PCT=41.52% PIDS=92
+ticketrush-redis CPU=0.60% MEM=3.594MiB / 128MiB MEM_PCT=2.81% PIDS=6
+ticketrush-mysql CPU=0.65% MEM=391.4MiB / 768MiB MEM_PCT=50.96% PIDS=108
+
+===== 2026-07-11T15:17:09+00:00 =====
+HOST_CPU_BUSY=3.0%
+               total        used        free      shared  buff/cache   available
+Mem:            7778        4238        2342           3        1455        3539
+gateway-service CPU=0.09% MEM=244.3MiB / 512MiB MEM_PCT=47.72% PIDS=22
+ticket-service CPU=0.26% MEM=356.2MiB / 576MiB MEM_PCT=61.84% PIDS=40
+payment-service CPU=0.33% MEM=349.6MiB / 576MiB MEM_PCT=60.69% PIDS=39
+booking-service CPU=0.53% MEM=378.7MiB / 576MiB MEM_PCT=65.75% PIDS=51
+seat-service CPU=0.53% MEM=432.1MiB / 640MiB MEM_PCT=67.51% PIDS=93
+auth-service CPU=0.15% MEM=322.2MiB / 576MiB MEM_PCT=55.93% PIDS=34
+performance-service CPU=0.15% MEM=362MiB / 576MiB MEM_PCT=62.84% PIDS=34
+user-service CPU=0.17% MEM=328MiB / 576MiB MEM_PCT=56.95% PIDS=34
+ticketrush-kafka CPU=1.52% MEM=425.2MiB / 1GiB MEM_PCT=41.52% PIDS=92
+ticketrush-redis CPU=0.42% MEM=3.699MiB / 128MiB MEM_PCT=2.89% PIDS=6
+ticketrush-mysql CPU=0.48% MEM=391.4MiB / 768MiB MEM_PCT=50.96% PIDS=108
+
+===== 2026-07-11T15:17:16+00:00 =====
+HOST_CPU_BUSY=2.0%
+               total        used        free      shared  buff/cache   available
+Mem:            7778        4233        2346           3        1455        3544
+gateway-service CPU=0.08% MEM=244.3MiB / 512MiB MEM_PCT=47.72% PIDS=22
+ticket-service CPU=0.34% MEM=356.4MiB / 576MiB MEM_PCT=61.88% PIDS=40
+payment-service CPU=0.33% MEM=349.8MiB / 576MiB MEM_PCT=60.74% PIDS=39
+booking-service CPU=0.47% MEM=378.9MiB / 576MiB MEM_PCT=65.79% PIDS=51
+seat-service CPU=0.66% MEM=432MiB / 640MiB MEM_PCT=67.51% PIDS=93
+auth-service CPU=0.14% MEM=322.2MiB / 576MiB MEM_PCT=55.93% PIDS=34
+performance-service CPU=0.14% MEM=362MiB / 576MiB MEM_PCT=62.84% PIDS=34
+user-service CPU=0.15% MEM=328MiB / 576MiB MEM_PCT=56.95% PIDS=34
+ticketrush-kafka CPU=1.36% MEM=425.4MiB / 1GiB MEM_PCT=41.54% PIDS=92
+ticketrush-redis CPU=0.45% MEM=4.062MiB / 128MiB MEM_PCT=3.17% PIDS=6
+ticketrush-mysql CPU=0.54% MEM=391.4MiB / 768MiB MEM_PCT=50.96% PIDS=108
+
+===== 2026-07-11T15:17:23+00:00 =====
+HOST_CPU_BUSY=2.0%
+               total        used        free      shared  buff/cache   available
+Mem:            7778        4233        2346           3        1455        3544
+gateway-service CPU=0.09% MEM=244.3MiB / 512MiB MEM_PCT=47.72% PIDS=22
+ticket-service CPU=0.33% MEM=356.2MiB / 576MiB MEM_PCT=61.83% PIDS=40
+payment-service CPU=0.32% MEM=349.8MiB / 576MiB MEM_PCT=60.74% PIDS=39
+booking-service CPU=0.36% MEM=379.2MiB / 576MiB MEM_PCT=65.83% PIDS=51
+seat-service CPU=0.63% MEM=432.1MiB / 640MiB MEM_PCT=67.51% PIDS=93
+auth-service CPU=0.18% MEM=322.2MiB / 576MiB MEM_PCT=55.93% PIDS=34
+performance-service CPU=0.14% MEM=362MiB / 576MiB MEM_PCT=62.84% PIDS=34
+user-service CPU=0.16% MEM=328MiB / 576MiB MEM_PCT=56.95% PIDS=34
+ticketrush-kafka CPU=2.08% MEM=426.1MiB / 1GiB MEM_PCT=41.61% PIDS=92
+ticketrush-redis CPU=0.42% MEM=3.797MiB / 128MiB MEM_PCT=2.97% PIDS=6
+ticketrush-mysql CPU=0.60% MEM=391.4MiB / 768MiB MEM_PCT=50.96% PIDS=108
+
+===== 2026-07-11T15:17:30+00:00 =====
+HOST_CPU_BUSY=6.0%
+               total        used        free      shared  buff/cache   available
+Mem:            7778        4232        2347           3        1455        3545
+gateway-service CPU=0.08% MEM=244.3MiB / 512MiB MEM_PCT=47.72% PIDS=22
+ticket-service CPU=0.34% MEM=356.2MiB / 576MiB MEM_PCT=61.84% PIDS=40
+payment-service CPU=0.40% MEM=349.9MiB / 576MiB MEM_PCT=60.74% PIDS=39
+booking-service CPU=0.54% MEM=378.7MiB / 576MiB MEM_PCT=65.75% PIDS=51
+seat-service CPU=0.63% MEM=432.3MiB / 640MiB MEM_PCT=67.55% PIDS=93
+auth-service CPU=0.15% MEM=322.2MiB / 576MiB MEM_PCT=55.93% PIDS=34
+performance-service CPU=0.17% MEM=362MiB / 576MiB MEM_PCT=62.84% PIDS=34
+user-service CPU=0.14% MEM=328MiB / 576MiB MEM_PCT=56.95% PIDS=34
+ticketrush-kafka CPU=1.58% MEM=425.4MiB / 1GiB MEM_PCT=41.55% PIDS=92
+ticketrush-redis CPU=0.46% MEM=3.809MiB / 128MiB MEM_PCT=2.98% PIDS=6
+ticketrush-mysql CPU=0.51% MEM=391.4MiB / 768MiB MEM_PCT=50.96% PIDS=108
+
+===== 2026-07-11T15:17:38+00:00 =====
+HOST_CPU_BUSY=6.0%
+               total        used        free      shared  buff/cache   available
+Mem:            7778        4238        2341           3        1455        3539
+gateway-service CPU=0.08% MEM=244.3MiB / 512MiB MEM_PCT=47.72% PIDS=22
+ticket-service CPU=0.27% MEM=356.4MiB / 576MiB MEM_PCT=61.88% PIDS=40
+payment-service CPU=0.47% MEM=349.9MiB / 576MiB MEM_PCT=60.74% PIDS=39
+booking-service CPU=0.38% MEM=378.7MiB / 576MiB MEM_PCT=65.75% PIDS=51
+seat-service CPU=1.01% MEM=431.8MiB / 640MiB MEM_PCT=67.47% PIDS=93
+auth-service CPU=0.16% MEM=322.2MiB / 576MiB MEM_PCT=55.93% PIDS=34
+performance-service CPU=0.13% MEM=362MiB / 576MiB MEM_PCT=62.84% PIDS=34
+user-service CPU=0.13% MEM=328MiB / 576MiB MEM_PCT=56.95% PIDS=34
+ticketrush-kafka CPU=1.48% MEM=425.4MiB / 1GiB MEM_PCT=41.55% PIDS=92
+ticketrush-redis CPU=0.47% MEM=3.848MiB / 128MiB MEM_PCT=3.01% PIDS=6
+ticketrush-mysql CPU=0.51% MEM=391.5MiB / 768MiB MEM_PCT=50.97% PIDS=108
+
+===== 2026-07-11T15:17:45+00:00 =====
+HOST_CPU_BUSY=3.0%
+               total        used        free      shared  buff/cache   available
+Mem:            7778        4234        2345           3        1455        3543
+gateway-service CPU=0.09% MEM=244.3MiB / 512MiB MEM_PCT=47.72% PIDS=22
+ticket-service CPU=0.33% MEM=356.2MiB / 576MiB MEM_PCT=61.84% PIDS=40
+payment-service CPU=0.28% MEM=349.6MiB / 576MiB MEM_PCT=60.70% PIDS=39
+booking-service CPU=0.38% MEM=379.2MiB / 576MiB MEM_PCT=65.83% PIDS=51
+seat-service CPU=0.51% MEM=432.1MiB / 640MiB MEM_PCT=67.51% PIDS=93
+auth-service CPU=0.14% MEM=322.2MiB / 576MiB MEM_PCT=55.93% PIDS=34
+performance-service CPU=0.14% MEM=362MiB / 576MiB MEM_PCT=62.84% PIDS=34
+user-service CPU=0.16% MEM=328MiB / 576MiB MEM_PCT=56.95% PIDS=34
+ticketrush-kafka CPU=1.45% MEM=425.5MiB / 1GiB MEM_PCT=41.55% PIDS=92
+ticketrush-redis CPU=0.43% MEM=3.602MiB / 128MiB MEM_PCT=2.81% PIDS=6
+ticketrush-mysql CPU=0.54% MEM=391.4MiB / 768MiB MEM_PCT=50.96% PIDS=108
+
+===== 2026-07-11T15:17:52+00:00 =====
+HOST_CPU_BUSY=3.0%
+               total        used        free      shared  buff/cache   available
+Mem:            7778        4231        2348           3        1455        3546
+gateway-service CPU=0.09% MEM=244.3MiB / 512MiB MEM_PCT=47.72% PIDS=22
+ticket-service CPU=0.32% MEM=356.4MiB / 576MiB MEM_PCT=61.88% PIDS=40
+payment-service CPU=0.32% MEM=349.9MiB / 576MiB MEM_PCT=60.74% PIDS=39
+booking-service CPU=0.66% MEM=379MiB / 576MiB MEM_PCT=65.79% PIDS=51
+seat-service CPU=0.55% MEM=431.8MiB / 640MiB MEM_PCT=67.47% PIDS=93
+auth-service CPU=0.14% MEM=322.2MiB / 576MiB MEM_PCT=55.93% PIDS=34
+performance-service CPU=0.14% MEM=362MiB / 576MiB MEM_PCT=62.84% PIDS=34
+user-service CPU=0.15% MEM=328MiB / 576MiB MEM_PCT=56.95% PIDS=34
+ticketrush-kafka CPU=1.45% MEM=425.2MiB / 1GiB MEM_PCT=41.53% PIDS=92
+ticketrush-redis CPU=0.41% MEM=4.062MiB / 128MiB MEM_PCT=3.17% PIDS=6
+ticketrush-mysql CPU=0.52% MEM=391.4MiB / 768MiB MEM_PCT=50.96% PIDS=108
+
+===== 2026-07-11T15:17:59+00:00 =====
+HOST_CPU_BUSY=3.0%
+               total        used        free      shared  buff/cache   available
+Mem:            7778        4237        2343           3        1455        3540
+gateway-service CPU=0.09% MEM=244.3MiB / 512MiB MEM_PCT=47.72% PIDS=22
+ticket-service CPU=0.32% MEM=356.2MiB / 576MiB MEM_PCT=61.84% PIDS=40
+payment-service CPU=0.30% MEM=349.6MiB / 576MiB MEM_PCT=60.70% PIDS=39
+booking-service CPU=1.66% MEM=379MiB / 576MiB MEM_PCT=65.79% PIDS=51
+seat-service CPU=0.81% MEM=432.4MiB / 640MiB MEM_PCT=67.55% PIDS=93
+auth-service CPU=0.13% MEM=322.2MiB / 576MiB MEM_PCT=55.93% PIDS=34
+performance-service CPU=0.15% MEM=362MiB / 576MiB MEM_PCT=62.84% PIDS=34
+user-service CPU=0.14% MEM=328MiB / 576MiB MEM_PCT=56.95% PIDS=34
+ticketrush-kafka CPU=1.47% MEM=425.5MiB / 1GiB MEM_PCT=41.55% PIDS=92
+ticketrush-redis CPU=2.32% MEM=3.883MiB / 128MiB MEM_PCT=3.03% PIDS=6
+ticketrush-mysql CPU=0.65% MEM=391.4MiB / 768MiB MEM_PCT=50.96% PIDS=108
+
+===== 2026-07-11T15:18:06+00:00 =====
+HOST_CPU_BUSY=3.0%
+               total        used        free      shared  buff/cache   available
+Mem:            7778        4234        2345           3        1455        3543
+gateway-service CPU=0.10% MEM=244.3MiB / 512MiB MEM_PCT=47.72% PIDS=22
+ticket-service CPU=3.10% MEM=356.7MiB / 576MiB MEM_PCT=61.92% PIDS=42
+payment-service CPU=0.30% MEM=350.1MiB / 576MiB MEM_PCT=60.79% PIDS=39
+booking-service CPU=0.47% MEM=379MiB / 576MiB MEM_PCT=65.80% PIDS=51
+seat-service CPU=0.66% MEM=431.9MiB / 640MiB MEM_PCT=67.48% PIDS=93
+auth-service CPU=0.20% MEM=322.2MiB / 576MiB MEM_PCT=55.93% PIDS=34
+performance-service CPU=0.17% MEM=362MiB / 576MiB MEM_PCT=62.84% PIDS=34
+user-service CPU=0.16% MEM=328MiB / 576MiB MEM_PCT=56.95% PIDS=34
+ticketrush-kafka CPU=1.42% MEM=425.5MiB / 1GiB MEM_PCT=41.55% PIDS=92
+ticketrush-redis CPU=0.48% MEM=3.852MiB / 128MiB MEM_PCT=3.01% PIDS=6
+ticketrush-mysql CPU=0.93% MEM=391.4MiB / 768MiB MEM_PCT=50.96% PIDS=108
+
+===== 2026-07-11T15:18:13+00:00 =====
+HOST_CPU_BUSY=3.0%
+               total        used        free      shared  buff/cache   available
+Mem:            7778        4238        2341           3        1455        3539
+gateway-service CPU=0.08% MEM=244.3MiB / 512MiB MEM_PCT=47.72% PIDS=22
+ticket-service CPU=0.31% MEM=356.3MiB / 576MiB MEM_PCT=61.85% PIDS=40
+payment-service CPU=0.34% MEM=349.9MiB / 576MiB MEM_PCT=60.74% PIDS=39
+booking-service CPU=0.51% MEM=378.7MiB / 576MiB MEM_PCT=65.75% PIDS=51
+seat-service CPU=0.55% MEM=432.1MiB / 640MiB MEM_PCT=67.52% PIDS=93
+auth-service CPU=0.16% MEM=322.2MiB / 576MiB MEM_PCT=55.93% PIDS=34
+performance-service CPU=0.17% MEM=362MiB / 576MiB MEM_PCT=62.84% PIDS=34
+user-service CPU=0.15% MEM=328.1MiB / 576MiB MEM_PCT=56.96% PIDS=34
+ticketrush-kafka CPU=1.43% MEM=425.2MiB / 1GiB MEM_PCT=41.53% PIDS=92
+ticketrush-redis CPU=0.44% MEM=3.598MiB / 128MiB MEM_PCT=2.81% PIDS=6
+ticketrush-mysql CPU=0.67% MEM=391.6MiB / 768MiB MEM_PCT=50.99% PIDS=108
+
+===== 2026-07-11T15:18:20+00:00 =====
+HOST_CPU_BUSY=3.0%
+               total        used        free      shared  buff/cache   available
+Mem:            7778        4231        2348           3        1455        3546
+gateway-service CPU=0.11% MEM=244.3MiB / 512MiB MEM_PCT=47.72% PIDS=22
+ticket-service CPU=0.34% MEM=356MiB / 576MiB MEM_PCT=61.81% PIDS=40
+payment-service CPU=0.34% MEM=350.1MiB / 576MiB MEM_PCT=60.78% PIDS=39
+booking-service CPU=0.42% MEM=378.8MiB / 576MiB MEM_PCT=65.76% PIDS=51
+seat-service CPU=0.70% MEM=432.1MiB / 640MiB MEM_PCT=67.52% PIDS=93
+auth-service CPU=0.14% MEM=322.2MiB / 576MiB MEM_PCT=55.93% PIDS=34
+performance-service CPU=0.19% MEM=362MiB / 576MiB MEM_PCT=62.84% PIDS=34
+user-service CPU=0.15% MEM=328.1MiB / 576MiB MEM_PCT=56.96% PIDS=34
+ticketrush-kafka CPU=1.62% MEM=425.2MiB / 1GiB MEM_PCT=41.53% PIDS=92
+ticketrush-redis CPU=0.44% MEM=3.809MiB / 128MiB MEM_PCT=2.98% PIDS=6
+ticketrush-mysql CPU=0.55% MEM=391.6MiB / 768MiB MEM_PCT=50.99% PIDS=108
+
+Terminated

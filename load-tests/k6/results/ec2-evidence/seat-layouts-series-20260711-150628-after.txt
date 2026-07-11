@@ -1,0 +1,37 @@
+===== SERIES TEST AFTER =====
+SERIES_ID=seat-layouts-series-20260711-150628
+SERIES_START_UTC=2026-07-11T15:06:28Z
+SERIES_END_UTC=2026-07-11T15:18:36Z
+2026-07-11T15:18:42+00:00
+
+===== HOST MEMORY =====
+               total        used        free      shared  buff/cache   available
+Mem:           7.6Gi       4.1Gi       2.3Gi       3.9Mi       1.4Gi       3.5Gi
+Swap:             0B          0B          0B
+
+===== CONTAINER STATS =====
+NAME                  CPU %     MEM USAGE / LIMIT   MEM %     PIDS
+gateway-service       0.09%     244.3MiB / 512MiB   47.72%    22
+ticket-service        0.35%     356.3MiB / 576MiB   61.85%    40
+payment-service       0.33%     350MiB / 576MiB     60.76%    39
+booking-service       0.56%     379MiB / 576MiB     65.80%    51
+seat-service          0.93%     431.9MiB / 640MiB   67.49%    93
+auth-service          0.14%     322.2MiB / 576MiB   55.93%    34
+performance-service   0.17%     362MiB / 576MiB     62.84%    34
+user-service          0.17%     328.1MiB / 576MiB   56.96%    34
+ticketrush-kafka      1.49%     425.5MiB / 1GiB     41.55%    92
+ticketrush-redis      0.47%     3.852MiB / 128MiB   3.01%     6
+ticketrush-mysql      0.52%     391.4MiB / 768MiB   50.96%    108
+
+===== RESTART AND OOM =====
+/gateway-service Status=running RestartCount=0 OOMKilled=false ExitCode=0
+/user-service Status=running RestartCount=0 OOMKilled=false ExitCode=0
+/auth-service Status=running RestartCount=0 OOMKilled=false ExitCode=0
+/performance-service Status=running RestartCount=0 OOMKilled=false ExitCode=0
+/booking-service Status=running RestartCount=0 OOMKilled=false ExitCode=0
+/payment-service Status=running RestartCount=0 OOMKilled=false ExitCode=0
+/seat-service Status=running RestartCount=0 OOMKilled=false ExitCode=0
+/ticket-service Status=running RestartCount=0 OOMKilled=false ExitCode=0
+
+===== HEALTH =====
+{"groups":["liveness","readiness"],"status":"UP"}
