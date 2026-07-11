@@ -20,7 +20,7 @@ import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
 
 @WebMvcSliceTest(SeatInternalController.class)
-@Import({SecurityConfig.class, InternalApiTokenFilter.class, CustomSecurityProperties.class})
+@Import({SecurityConfig.class, CustomSecurityProperties.class})
 @TestPropertySource(
     properties = {
       "custom.security.internal-token=test-internal-token",

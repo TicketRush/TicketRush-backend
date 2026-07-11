@@ -11,7 +11,6 @@ import com.ticketrush.boundedcontext.seat.app.dto.response.SeatNumberResponse;
 import com.ticketrush.boundedcontext.seat.app.dto.response.SeatStatusCountsResponse;
 import com.ticketrush.boundedcontext.seat.app.facade.SeatFacade;
 import com.ticketrush.global.config.CustomSecurityProperties;
-import com.ticketrush.global.config.InternalApiTokenFilter;
 import com.ticketrush.global.config.SecurityConfig;
 import com.ticketrush.global.types.SeatStatus;
 import com.ticketrush.support.WebMvcSliceTest;
@@ -26,7 +25,7 @@ import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
 
 @WebMvcSliceTest(SeatController.class)
-@Import({SecurityConfig.class, InternalApiTokenFilter.class, CustomSecurityProperties.class})
+@Import({SecurityConfig.class, CustomSecurityProperties.class})
 class SeatControllerTest {
 
   @Autowired private MockMvc mockMvc;
