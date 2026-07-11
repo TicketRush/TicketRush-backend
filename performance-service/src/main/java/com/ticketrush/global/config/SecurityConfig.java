@@ -1,6 +1,7 @@
 package com.ticketrush.global.config;
 
 import com.ticketrush.global.filter.GatewayHeaderFilter;
+import com.ticketrush.global.security.InternalApiTokenFilter;
 import lombok.RequiredArgsConstructor;
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
 import org.springframework.boot.security.autoconfigure.SecurityProperties;
@@ -19,18 +20,21 @@ import org.springframework.security.web.authentication.UsernamePasswordAuthentic
 @RequiredArgsConstructor
 public class SecurityConfig {
 
+  private static final String INTERNAL_PERFORMANCE_API_PREFIX = "/api/v1/internal/performance";
+
   private final GatewayHeaderFilter gatewayHeaderFilter;
-  private final InternalApiTokenFilter internalApiTokenFilter;
 
   @Bean
-  public SecurityFilterChain filterChain(HttpSecurity http) throws Exception {
+  public InternalApiTokenFilter internalApiTokenFilter(
+      CustomSecurityProperties securityProperties) {
+    return new InternalApiTokenFilter(securityProperties, INTERNAL_PERFORMANCE_API_PREFIX);
+  }
+
+  @Bean
+  public SecurityFilterChain filterChain(
+      HttpSecurity http, InternalApiTokenFilter internalApiTokenFilter) throws Exception {
     http.csrf(csrf -> csrf.disable())
         .cors(cors -> {})
-        // 필터 순서 주의: gatewayHeaderFilter가 internalApiTokenFilter보다 먼저 실행돼야 한다.
-        // 현재는 두 필터가 동일 시크릿(GATEWAY_INTERNAL_TOKEN)을 공유해 gateway가 clear하지 않으므로 안전하나,
-        // 향후 custom.security.internal-token을 gateway.internal-token과 분리하면 gatewayHeaderFilter가
-        // 토큰 불일치 시 SecurityContext를 clear한다. 그때 순서가 뒤집히면 internalApiTokenFilter가 세팅한
-        // ROLE_INTERNAL이 지워져 내부 호출이 403이 되므로, 이 순서를 반드시 유지한다.
         .addFilterBefore(gatewayHeaderFilter, UsernamePasswordAuthenticationFilter.class)
         .addFilterBefore(internalApiTokenFilter, UsernamePasswordAuthenticationFilter.class)
         .authorizeHttpRequests(

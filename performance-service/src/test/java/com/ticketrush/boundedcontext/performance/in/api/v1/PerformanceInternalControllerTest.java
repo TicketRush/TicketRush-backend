@@ -8,7 +8,6 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 
 import com.ticketrush.boundedcontext.performance.app.facade.PerformanceFacade;
 import com.ticketrush.global.config.CustomSecurityProperties;
-import com.ticketrush.global.config.InternalApiTokenFilter;
 import com.ticketrush.global.config.SecurityConfig;
 import com.ticketrush.global.exception.BusinessException;
 import com.ticketrush.global.filter.GatewayHeaderFilter;
@@ -23,12 +22,7 @@ import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
 
 @WebMvcTest(PerformanceInternalController.class)
-@Import({
-  SecurityConfig.class,
-  InternalApiTokenFilter.class,
-  GatewayHeaderFilter.class,
-  CustomSecurityProperties.class
-})
+@Import({SecurityConfig.class, GatewayHeaderFilter.class, CustomSecurityProperties.class})
 @TestPropertySource(properties = "custom.security.internal-token=test-internal-token")
 class PerformanceInternalControllerTest {
 
