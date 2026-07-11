@@ -23,25 +23,25 @@ public class SecurityConfig {
 
   @Bean
   public InternalApiTokenFilter internalApiTokenFilter(
-    CustomSecurityProperties securityProperties) {
+      CustomSecurityProperties securityProperties) {
     return new InternalApiTokenFilter(securityProperties, INTERNAL_SEAT_API_PREFIX);
   }
 
   @Bean
   public SecurityFilterChain filterChain(
-    HttpSecurity http, InternalApiTokenFilter internalApiTokenFilter) throws Exception {
+      HttpSecurity http, InternalApiTokenFilter internalApiTokenFilter) throws Exception {
     http.csrf(csrf -> csrf.disable())
-      .cors(cors -> {})
-      .addFilterBefore(internalApiTokenFilter, UsernamePasswordAuthenticationFilter.class)
-      .authorizeHttpRequests(
-        auth ->
-          auth.requestMatchers("/v3/api-docs/**", "/swagger-ui/**", "/swagger-ui.html")
-            // TODO: 인증 이후 허용 범위 수정
-            .permitAll()
-            .requestMatchers("/api/v1/internal/seat/**")
-            .hasRole("INTERNAL")
-            .anyRequest()
-            .permitAll());
+        .cors(cors -> {})
+        .addFilterBefore(internalApiTokenFilter, UsernamePasswordAuthenticationFilter.class)
+        .authorizeHttpRequests(
+            auth ->
+                auth.requestMatchers("/v3/api-docs/**", "/swagger-ui/**", "/swagger-ui.html")
+                    // TODO: 인증 이후 허용 범위 수정
+                    .permitAll()
+                    .requestMatchers("/api/v1/internal/seat/**")
+                    .hasRole("INTERNAL")
+                    .anyRequest()
+                    .permitAll());
 
     return http.build();
   }

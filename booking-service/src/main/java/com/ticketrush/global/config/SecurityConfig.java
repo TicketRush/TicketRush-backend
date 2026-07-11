@@ -29,48 +29,48 @@ public class SecurityConfig {
 
   @Bean
   public InternalApiTokenFilter internalApiTokenFilter(
-    CustomSecurityProperties securityProperties) {
+      CustomSecurityProperties securityProperties) {
     return new InternalApiTokenFilter(securityProperties, INTERNAL_BOOKING_API_PREFIX);
   }
 
   @Bean
   public SecurityFilterChain filterChain(
-    HttpSecurity http, InternalApiTokenFilter internalApiTokenFilter) throws Exception {
+      HttpSecurity http, InternalApiTokenFilter internalApiTokenFilter) throws Exception {
     http.csrf(csrf -> csrf.disable())
-      .cors(cors -> {})
-      .httpBasic(httpBasic -> httpBasic.disable())
-      .formLogin(formLogin -> formLogin.disable())
-      .addFilterBefore(gatewayHeaderFilter, UsernamePasswordAuthenticationFilter.class)
-      .addFilterBefore(internalApiTokenFilter, UsernamePasswordAuthenticationFilter.class)
-      .exceptionHandling(
-        exception ->
-          exception.authenticationEntryPoint(
-            (request, response, authException) -> {
-              response.setStatus(ErrorStatus.UNAUTHORIZED.getHttpStatus().value());
-              response.setContentType(MediaType.APPLICATION_JSON_VALUE);
-              response
-                .getWriter()
-                .write(
-                  """
+        .cors(cors -> {})
+        .httpBasic(httpBasic -> httpBasic.disable())
+        .formLogin(formLogin -> formLogin.disable())
+        .addFilterBefore(gatewayHeaderFilter, UsernamePasswordAuthenticationFilter.class)
+        .addFilterBefore(internalApiTokenFilter, UsernamePasswordAuthenticationFilter.class)
+        .exceptionHandling(
+            exception ->
+                exception.authenticationEntryPoint(
+                    (request, response, authException) -> {
+                      response.setStatus(ErrorStatus.UNAUTHORIZED.getHttpStatus().value());
+                      response.setContentType(MediaType.APPLICATION_JSON_VALUE);
+                      response
+                          .getWriter()
+                          .write(
+                              """
                   {"is_success":false,"code":"%s","message":"%s"}
                   """
-                    .formatted(
-                      ErrorStatus.UNAUTHORIZED.getCode(),
-                      ErrorStatus.UNAUTHORIZED.getMessage()));
-            }))
-      .authorizeHttpRequests(
-        auth ->
-          auth.requestMatchers("/v3/api-docs/**", "/swagger-ui/**", "/swagger-ui.html")
-            // TODO: 인증 이후 허용 범위 수정
-            .permitAll()
-            .requestMatchers("/api/v1/internal/booking/**")
-            .hasRole("INTERNAL")
-            .requestMatchers("/api/v1/booking/admin/**")
-            .hasRole("ADMIN")
-            .requestMatchers(HttpMethod.POST, "/api/v1/booking")
-            .authenticated()
-            .anyRequest()
-            .permitAll());
+                                  .formatted(
+                                      ErrorStatus.UNAUTHORIZED.getCode(),
+                                      ErrorStatus.UNAUTHORIZED.getMessage()));
+                    }))
+        .authorizeHttpRequests(
+            auth ->
+                auth.requestMatchers("/v3/api-docs/**", "/swagger-ui/**", "/swagger-ui.html")
+                    // TODO: 인증 이후 허용 범위 수정
+                    .permitAll()
+                    .requestMatchers("/api/v1/internal/booking/**")
+                    .hasRole("INTERNAL")
+                    .requestMatchers("/api/v1/booking/admin/**")
+                    .hasRole("ADMIN")
+                    .requestMatchers(HttpMethod.POST, "/api/v1/booking")
+                    .authenticated()
+                    .anyRequest()
+                    .permitAll());
 
     return http.build();
   }
