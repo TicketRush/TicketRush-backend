@@ -11,7 +11,6 @@ import com.ticketrush.boundedcontext.user.app.facade.UserFacade;
 import com.ticketrush.global.config.CustomSecurityProperties;
 import com.ticketrush.global.config.SecurityConfig;
 import com.ticketrush.global.filter.GatewayHeaderFilter;
-import com.ticketrush.global.security.InternalApiTokenFilter;
 import com.ticketrush.support.WebMvcSliceTest;
 import java.time.LocalDateTime;
 import org.junit.jupiter.api.DisplayName;
@@ -25,7 +24,6 @@ import org.springframework.test.web.servlet.MockMvc;
 @WebMvcSliceTest(UserController.class)
 @Import({
   SecurityConfig.class,
-  InternalApiTokenFilter.class,
   GatewayHeaderFilter.class,
   CustomSecurityProperties.class
 })

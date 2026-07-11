@@ -31,7 +31,6 @@ import org.springframework.test.web.servlet.MockMvc;
 @WebMvcSliceTest({InternalUserController.class, UserController.class})
 @Import({
   SecurityConfig.class,
-  InternalApiTokenFilter.class,
   GatewayHeaderFilter.class,
   CustomSecurityProperties.class
 })
