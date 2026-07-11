@@ -29,9 +29,9 @@ import org.springframework.stereotype.Component;
  *
  * <ul>
  *   <li><b>PG 거절({@link ErrorStatus#PAYMENT_REFUND_FAILED}, 4xx)</b> = 결정적 실패 → {@code
- *       RefundFailedEvent}로 booking을 REFUND_FAILED로 보상하고 ack 한다(재시도 무의미).
+ *       RefundFailedEvent}로 booking을 CONFIRMED로 복원시키고 ack 한다(재시도 무의미).
  *   <li><b>PG 통신 실패({@link ErrorStatus#PAYMENT_PG_COMMUNICATION_FAILED}, 5xx/timeout)</b> = 일시적 실패
- *       → 재시도→DLT로 위임한다. 환불 성공 여부가 불명이라 섣불리 REFUND_FAILED로 확정하지 않는다(멱등 키로 재시도는 안전).
+ *       → 재시도→DLT로 위임한다. 환불 성공 여부가 불명이라 섣불리 환불 실패로 확정하지 않는다(멱등 키로 재시도는 안전).
  *   <li><b>동시/중복 환불(unique 경합, #296)</b> = 이미 환불됨 → 멱등 ack(보상 아님).
  *   <li><b>그 외(역직렬화 등)</b> = 재시도→DLT로 보존한다.
  * </ul>
@@ -92,7 +92,7 @@ public class RefundRequestedEventListener {
           event != null ? event.bookingId() : null);
       ack.acknowledge();
     } catch (BusinessException e) {
-      // PG 거절(결정적)만 보상한다. 통신 실패는 환불 성공 여부가 불명이라 재시도→DLT로 넘겨 섣부른 REFUND_FAILED 확정을 피한다.
+      // PG 거절(결정적)만 보상한다. 통신 실패는 환불 성공 여부가 불명이라 재시도→DLT로 넘겨 섣부른 환불 실패 확정을 피한다.
       // 결정적 거절 판별은 FAILED 이력 기록(FailedRefundRecorder)과 동일한 술어를 공유해 저장/보상 짝이 어긋나지 않게 한다(#334).
       if (event != null && FailedRefundRecorder.isDeterministicRejection(e)) {
         log.error(

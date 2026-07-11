@@ -20,8 +20,8 @@ public interface TicketMapper {
   @Mapping(source = "ticket.createdAt", target = "issuedAt")
   TicketQrResponse toTicketQrResponse(Ticket ticket, String payload, LocalDateTime expiresAt);
 
-  // 식별자 + 계산된 토큰 해시 -> Entity. @Builder 대상(bookingId/ticketTokenHash/ticketStatus)만 target이라
+  // 식별자 + 계산된 토큰 해시 -> Entity. @Builder 대상(bookingId/userId/ticketTokenHash/ticketStatus)만 target이라
   // id/usedAt은 ignore가 불필요하며, 발급 시 상태는 UNUSED로 고정한다.
   @Mapping(target = "ticketStatus", constant = "UNUSED")
-  Ticket toEntity(Long bookingId, String ticketTokenHash);
+  Ticket toEntity(Long bookingId, Long userId, String ticketTokenHash);
 }

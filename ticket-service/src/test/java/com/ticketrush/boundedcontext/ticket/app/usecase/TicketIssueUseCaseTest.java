@@ -45,10 +45,11 @@ class TicketIssueUseCaseTest {
   @Spy private MeterRegistry meterRegistry = new SimpleMeterRegistry();
 
   @Test
-  @DisplayName("성공: 예매 ID 기준으로 티켓 토큰 해시와 UNUSED 상태를 저장한다")
+  @DisplayName("성공: 예매 ID 기준으로 예매자(userId)·티켓 토큰 해시와 UNUSED 상태를 저장한다")
   void execute_issues_ticket() {
     // given
     Long bookingId = 1L;
+    Long userId = 42L;
     String token = "raw-ticket-token";
     String tokenHash = "5ef9a9d540243d7534e3d322d14817b1290f0f2f7f57feafe57f5e5d1f13b450";
     given(ticketRepository.existsByBookingId(bookingId)).willReturn(false);
@@ -56,7 +57,7 @@ class TicketIssueUseCaseTest {
     given(ticketTokenHasher.hash(token)).willReturn(tokenHash);
 
     // when
-    TicketIssueResponse response = ticketIssueUseCase.execute(bookingId);
+    TicketIssueResponse response = ticketIssueUseCase.execute(bookingId, userId);
 
     // then
     ArgumentCaptor<Ticket> ticketCaptor = ArgumentCaptor.forClass(Ticket.class);
@@ -65,6 +66,8 @@ class TicketIssueUseCaseTest {
     assertThat(response.issued()).isTrue();
     assertThat(response.token()).isEqualTo(token);
     assertThat(savedTicket.getBookingId()).isEqualTo(bookingId);
+    // QR 조회가 booking 동기 호출 없이 소유권을 확인하려면 발급 시점에 userId가 복제돼야 한다(#364).
+    assertThat(savedTicket.getUserId()).isEqualTo(userId);
     assertThat(savedTicket.getTicketTokenHash()).isEqualTo(tokenHash);
     assertThat(savedTicket.getTicketTokenHash()).doesNotContain("raw-ticket-token");
     assertThat(savedTicket.getTicketStatus()).isEqualTo(TicketStatus.UNUSED);
@@ -85,7 +88,7 @@ class TicketIssueUseCaseTest {
     given(ticketRepository.existsByBookingId(bookingId)).willReturn(true);
 
     // when
-    TicketIssueResponse response = ticketIssueUseCase.execute(bookingId);
+    TicketIssueResponse response = ticketIssueUseCase.execute(bookingId, 42L);
 
     // then
     assertThat(response.issued()).isFalse();
@@ -118,7 +121,7 @@ class TicketIssueUseCaseTest {
         .saveAndFlush(any(Ticket.class));
 
     // when & then: DIVE는 그대로 전파된다(#269상 일시 실패로 분류→재소비). 삼키지 않는다.
-    assertThatThrownBy(() -> ticketIssueUseCase.execute(bookingId))
+    assertThatThrownBy(() -> ticketIssueUseCase.execute(bookingId, 42L))
         .isInstanceOf(DataIntegrityViolationException.class);
   }
 }

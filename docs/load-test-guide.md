@@ -33,10 +33,11 @@ curl -s -o /dev/null -w "%{http_code}\n" -XPOST http://localhost:9090/api/v1/wri
 
 ### 2.3 앱 스택
 MySQL(3306)과 측정 대상 서비스를 호스트에서 기동한다. 최소 구성:
-- 게이트웨이 8080, auth 8082(DevToken), booking 8084, seat 8086
+- 게이트웨이 8080, auth 8082(로그인), user 8081, booking 8084, seat 8086
 - DB 계정은 `.env.local`의 `MYSQL_USERNAME`/`MYSQL_PASSWORD`
 
-> DevToken(`/api/v1/dev/auth/token`)은 `local`/`dev` 프로파일에서만 노출된다.
+> `booking-create`는 `POST /api/v1/auth/login`으로 인증한다. 계정은 3장에서 함께 시딩된다.
+> DevToken(`/api/v1/dev/auth/token`)은 로컬 프론트엔드 테스트 전용이며 부하 테스트는 쓰지 않는다.
 
 ## 3. 대량 데이터 시딩
 
@@ -51,21 +52,32 @@ MySQL(3306)과 측정 대상 서비스를 호스트에서 기동한다. 최소 �
 
 총 좌석 = `perf_count × rows_per × cols_per`. 수십만 건은 `perf_count`/`cols_per`를 키운다.
 
+두 스크립트 모두 **오실행 가드**가 걸려 있다. `@i_confirm_loadtest_db=1`을 명시하지 않으면 `ERROR 1146`으로 즉시 중단되고 본문은 돌지 않는다. 시드가 실제로 로그인되는 계정을 만들기 때문에, 운영 DB에 잘못 실행하면 그대로 백도어가 된다.
+
 ```bash
+GUARD='SET @i_confirm_loadtest_db=1'
+
 # 시딩 (idempotent: 마커 LOADTEST 기준, 재실행은 cleanup 먼저)
-mysql -h 127.0.0.1 -u "$MYSQL_USERNAME" -p"$MYSQL_PASSWORD" ticket_rush < load-test/seed/seed_load.sql
+mysql -h 127.0.0.1 -u "$MYSQL_USERNAME" -p"$MYSQL_PASSWORD" \
+  --init-command="$GUARD" ticket_rush < load-test/seed/seed_load.sql
 
 # 리셋(규모 변경/정리) → 반드시 cleanup 먼저, 그다음 재시딩
-mysql -h 127.0.0.1 -u "$MYSQL_USERNAME" -p"$MYSQL_PASSWORD" ticket_rush < load-test/seed/cleanup_load.sql
+mysql -h 127.0.0.1 -u "$MYSQL_USERNAME" -p"$MYSQL_PASSWORD" \
+  --init-command="$GUARD" ticket_rush < load-test/seed/cleanup_load.sql
 ```
 
-시딩 끝에 검증 카운트(performances/seats/bookings)가 출력된다. `@booking_pct>0`이면 이슈의 "PENDING 예매 대량 생성(만료/조회/인덱스 측정)" 요건을 만족한다.
+시딩 끝에 검증 카운트(load_users/performances/seats/bookings)가 출력된다. `@booking_pct>0`이면 이슈의 "PENDING 예매 대량 생성(만료/조회/인덱스 측정)" 요건을 만족한다.
+
+시드는 공연·좌석과 함께 **부하테스트 전용 계정 1개**(`loadtest@ticketrush.local`)를 만든다. `booking-create`가 이 계정으로 로그인한다.
+
+> 비밀번호 **평문은 커밋하지 않는다.** `seed_load.sql`의 `@load_pw_hash`(bcrypt cost 10)와 쌍을 이루며, 평문은 팀 내부에서만 공유하고 k6 실행 시 `-e LOAD_USER_PASSWORD=...`로 넘긴다.
+> bcrypt 해시에는 salt가 그대로 들어 있어 저장소를 가진 사람은 무제한 오프라인 대입을 할 수 있다. 평문은 **길고 무작위**여야 하며, 다른 계정·환경에서 재사용하지 않는다.
 
 ## 4. k6 실행
 
 k6는 `loadtest` profile 컨테이너로 실행한다. remote-write 관련 설정(`K6_OUT`, `K6_PROMETHEUS_RW_SERVER_URL`, `K6_PROMETHEUS_RW_TREND_STATS`)과 `BASE_URL`(→ `host.docker.internal:8080`)은 compose에 정의돼 있어 매번 `-o`/URL을 줄 필요가 없다.
 
-스크립트는 `./load-test`가 컨테이너 안 `/scripts`로 마운트된다. 시나리오 파라미터는 `-e KEY=VALUE`로 덮는다 (`BASE_URL, PERF_ID, USER_ID, SEAT_ID_MIN, SEAT_ID_MAX, VUS, RAMP, STEADY`).
+스크립트는 `./load-test`가 컨테이너 안 `/scripts`로 마운트된다. 시나리오 파라미터는 `-e KEY=VALUE`로 덮는다 (`BASE_URL, PERF_ID, LOAD_USER_EMAIL, LOAD_USER_PASSWORD, SEAT_ID_MIN, SEAT_ID_MAX, VUS, RAMP, STEADY`).
 
 ```bash
 # (b) 좌석 조회 — 인증 불필요, 먼저 파이프라인 검증용
@@ -73,9 +85,10 @@ docker compose run --rm k6 run \
   -e PERF_ID=1 -e VUS=50 \
   /scripts/scenarios/seat-layouts.js
 
-# (a) 예매 생성 — setup()에서 DevToken 자동 발급 후 Bearer 호출
+# (a) 예매 생성 — setup()에서 1회 로그인 후 Bearer 호출
 docker compose run --rm k6 run \
-  -e PERF_ID=1 -e USER_ID=1 -e SEAT_ID_MIN=1 -e SEAT_ID_MAX=6000 \
+  -e PERF_ID=1 -e LOAD_USER_PASSWORD='<평문>' \
+  -e SEAT_ID_MIN=1 -e SEAT_ID_MAX=6000 \
   /scripts/scenarios/booking-create.js
 ```
 
@@ -126,8 +139,8 @@ k6 (로컬 loadtest 컨테이너) ──HTTP────────────
 - 부하 대상 앱을 AWS에 배포하고 게이트웨이 공인 엔드포인트(`https://<aws-gateway>`)를 확보한다.
 - 관측 스택이 기동 중이고, Prometheus 9090이 **본인 공인 IP에 대해서만** 열려 있어야 한다. remote-write 수신에는 인증이 없다.
 - `seat-layouts`(read)는 **인증 불필요** → 배포 프로파일과 무관하게 바로 가능.
-- `booking-create`(write)는 `DevToken(/api/v1/dev/auth/token)`을 사용하는데 이는 **`local`/`dev` 프로파일에서만 노출**된다. → AWS 배포본을 **`dev` 프로파일(부하테스트 전용 환경)**로 띄우지 않으면 write 시나리오는 **인증 실패**한다.
-- 시딩은 3장과 동일하게 **AWS의 부하테스트용 DB**에 대해 수행한다(운영 DB 금지).
+- `booking-create`(write)도 정상 로그인(`/api/v1/auth/login`)을 쓰므로 배포 프로파일과 무관하다. 다만 AWS에서 실제로 돌릴지는 배포본의 컨테이너·리소스 구성 결정을 따른다(#378).
+- 시딩은 3장과 동일하게 **AWS의 부하테스트용 DB**에 대해 수행한다(운영 DB 금지). 부하테스트 계정도 함께 시딩된다.
 
 ### 7.2 k6 실행 (로컬)
 4장과 동일하되 `BASE_URL`과 `K6_PROMETHEUS_RW_SERVER_URL`을 덮는다.
@@ -146,12 +159,13 @@ docker compose run --rm --no-deps \
   -e PERF_ID=1 -e VUS=50 \
   /scripts/scenarios/seat-layouts.js
 
-# (a) 예매 생성 — AWS가 dev 프로파일(DevToken 노출)일 때만 가능
+# (a) 예매 생성 — booking-create 가 배포본에 포함돼 있을 때
 docker compose run --rm --no-deps \
   -e K6_PROMETHEUS_RW_SERVER_URL=http://<PROM_HOST>:9090/api/v1/write \
   k6 run \
   -e BASE_URL=https://<aws-gateway> \
-  -e PERF_ID=1 -e USER_ID=1 -e SEAT_ID_MIN=1 -e SEAT_ID_MAX=6000 \
+  -e PERF_ID=1 -e LOAD_USER_PASSWORD='<평문>' \
+  -e SEAT_ID_MIN=1 -e SEAT_ID_MAX=6000 \
   /scripts/scenarios/booking-create.js
 ```
 
@@ -163,4 +177,4 @@ docker compose run --rm --no-deps \
 비테스트 시간엔 AWS 리소스를 **반드시 중지**하는 **온디맨드 전제**로 운용한다. 상시 기동 시 24/7 과금된다.
 
 ### 7.4 보안
-부하 대상 공인 엔드포인트, `dev` 프로파일(DevToken 노출), 인증 없는 Prometheus 9090은 **측정 시간에만** 열고, 끝나면 접근을 닫는다. 보안 그룹은 본인 공인 IP `/32`로 제한한다. 부하테스트용 DB·환경을 운영과 분리한다.
+부하 대상 공인 엔드포인트와 인증 없는 Prometheus 9090은 **측정 시간에만** 열고, 끝나면 접근을 닫는다. 보안 그룹은 본인 공인 IP `/32`로 제한한다. 부하테스트용 DB·환경을 운영과 분리한다. 부하테스트 계정 비밀번호 평문은 저장소에 남기지 않는다.
