@@ -29,8 +29,8 @@ gateway:
 custom:
   security:
     # 운영은 내부 API 토큰을 반드시 주입(base의 test-token 기본값 오버라이드, 미주입 시 fail-fast).
-    # gateway.internal-token과 동일한 GATEWAY_INTERNAL_TOKEN 시크릿을 의도적으로 공유한다.
-    internal-token: ${GATEWAY_INTERNAL_TOKEN}
+    # 서비스 간 내부 API 호출에 사용하는 전용 토큰
+    internal-token: ${INTERNAL_API_TOKEN}
     permit-urls:
       - /swagger-ui/**
       - /v3/api-docs/**

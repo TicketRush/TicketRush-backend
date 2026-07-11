@@ -31,7 +31,7 @@ import org.springframework.test.web.servlet.MockMvc;
     properties = {
       "custom.security.internal-token=test-internal-token",
       "custom.security.permit-all=true",
-      "gateway.internal-token=test-internal-token"
+      "gateway.internal-token=test-gateway-token"
     })
 class DevTokenControllerTest {
 
