@@ -23,6 +23,9 @@ import org.springframework.security.web.authentication.UsernamePasswordAuthentic
 @RequiredArgsConstructor
 public class SecurityConfig {
 
+  private static final String UNAUTHORIZED_RESPONSE_TEMPLATE =
+      "{\"is_success\":false,\"code\":\"%s\",\"message\":\"%s\"}";
+
   private static final String INTERNAL_BOOKING_API_PREFIX = "/api/v1/internal/booking";
 
   private final GatewayHeaderFilter gatewayHeaderFilter;
@@ -51,12 +54,9 @@ public class SecurityConfig {
                       response
                           .getWriter()
                           .write(
-                              """
-                  {"is_success":false,"code":"%s","message":"%s"}
-                  """
-                                  .formatted(
-                                      ErrorStatus.UNAUTHORIZED.getCode(),
-                                      ErrorStatus.UNAUTHORIZED.getMessage()));
+                              UNAUTHORIZED_RESPONSE_TEMPLATE.formatted(
+                                  ErrorStatus.UNAUTHORIZED.getCode(),
+                                  ErrorStatus.UNAUTHORIZED.getMessage()));
                     }))
         .authorizeHttpRequests(
             auth ->

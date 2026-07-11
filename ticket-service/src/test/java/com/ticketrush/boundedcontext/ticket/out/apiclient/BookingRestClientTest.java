@@ -47,18 +47,18 @@ class BookingRestClientTest {
   @DisplayName("성공: 공통 ApiResponse 래퍼의 snake_case 본문을 역직렬화하고 X-Internal-Token을 전송한다")
   void getBooking_deserializes_snake_case_and_sends_token() {
     String responseBody =
-        """
-      {
-        "is_success": true,
-        "code": "COMMON_200",
-        "message": "성공입니다.",
-        "result": {
-          "booking_id": 100,
-          "user_id": 10,
-          "booking_status": "CONFIRMED"
-        }
-      }
-      """;
+        String.join(
+            "\n",
+            "{",
+            "  \"is_success\": true,",
+            "  \"code\": \"COMMON_200\",",
+            "  \"message\": \"성공입니다.\",",
+            "  \"result\": {",
+            "    \"booking_id\": 100,",
+            "    \"user_id\": 10,",
+            "    \"booking_status\": \"CONFIRMED\"",
+            "  }",
+            "}");
 
     mockServer
         .expect(requestTo(REQUEST_URL))
@@ -129,14 +129,14 @@ class BookingRestClientTest {
   @DisplayName("실패: 200이지만 result 본문이 비어 있으면 통신 실패로 매핑한다")
   void getBooking_maps_empty_result_to_communication_failed() {
     String responseBody =
-        """
-      {
-        "is_success": true,
-        "code": "COMMON_200",
-        "message": "성공입니다.",
-        "result": null
-      }
-      """;
+        String.join(
+            "\n",
+            "{",
+            "  \"is_success\": true,",
+            "  \"code\": \"COMMON_200\",",
+            "  \"message\": \"성공입니다.\",",
+            "  \"result\": null",
+            "}");
 
     mockServer
         .expect(requestTo(REQUEST_URL))
