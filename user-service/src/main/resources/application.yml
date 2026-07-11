@@ -27,7 +27,7 @@ custom:
   swagger:
     serverUrl: ${SWAGGER_SERVER_URL:http://localhost:8080}
   security:
-    internal-token: ${GATEWAY_INTERNAL_TOKEN}
+    internal-token: ${INTERNAL_API_TOKEN}
     permit-all: false
     permit-urls:
       # ========== 개발 도구 ==========

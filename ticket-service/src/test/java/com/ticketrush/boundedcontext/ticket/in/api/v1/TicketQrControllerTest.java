@@ -52,7 +52,7 @@ class TicketQrControllerTest {
     mockMvc
         .perform(
             get("/api/v1/ticket/bookings/{bookingId}/qr", bookingId)
-                .header("X-Internal-Token", INTERNAL_TOKEN)
+                .header("X-Gateway-Token", INTERNAL_TOKEN)
                 .header("X-User-Id", userId)
                 .header("X-User-Role", "USER"))
         .andExpect(status().isOk())
@@ -89,7 +89,7 @@ class TicketQrControllerTest {
     mockMvc
         .perform(
             get("/api/v1/ticket/bookings/{bookingId}/qr", bookingId)
-                .header("X-Internal-Token", INTERNAL_TOKEN)
+                .header("X-Gateway-Token", INTERNAL_TOKEN)
                 .header("X-User-Id", userId)
                 .header("X-User-Role", "USER"))
         .andExpect(status().isNotFound())
@@ -110,7 +110,7 @@ class TicketQrControllerTest {
     mockMvc
         .perform(
             get("/api/v1/ticket/bookings/{bookingId}/qr", bookingId)
-                .header("X-Internal-Token", INTERNAL_TOKEN)
+                .header("X-Gateway-Token", INTERNAL_TOKEN)
                 .header("X-User-Id", userId)
                 .header("X-User-Role", "USER"))
         .andExpect(status().isConflict())

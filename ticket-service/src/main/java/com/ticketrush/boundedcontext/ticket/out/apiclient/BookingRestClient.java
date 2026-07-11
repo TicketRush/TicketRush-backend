@@ -2,11 +2,11 @@ package com.ticketrush.boundedcontext.ticket.out.apiclient;
 
 import com.ticketrush.boundedcontext.ticket.out.apiclient.dto.BookingApiResponse;
 import com.ticketrush.boundedcontext.ticket.out.apiclient.dto.BookingInfoResponse;
+import com.ticketrush.global.config.CustomSecurityProperties;
 import com.ticketrush.global.exception.BusinessException;
 import com.ticketrush.global.status.ErrorStatus;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
 import org.springframework.web.client.ResourceAccessException;
 import org.springframework.web.client.RestClient;
@@ -19,9 +19,7 @@ public class BookingRestClient {
   private static final String INTERNAL_TOKEN_HEADER = "X-Internal-Token";
 
   private final RestClient bookingServiceRestClient;
-
-  @Value("${gateway.internal-token}")
-  private String internalToken;
+  private final CustomSecurityProperties customSecurityProperties;
 
   /**
    * booking-service에서 예매 소유자/상태를 동기 조회한다. 예매가 없으면(404) 입장권 미존재와 동일한 TICKET_NOT_FOUND로 통일해 다른 사용자
@@ -35,7 +33,7 @@ public class BookingRestClient {
           bookingServiceRestClient
               .get()
               .uri("/api/v1/internal/booking/{bookingId}", bookingId)
-              .header(INTERNAL_TOKEN_HEADER, internalToken)
+              .header(INTERNAL_TOKEN_HEADER, customSecurityProperties.getInternalToken())
               .retrieve()
               .onStatus(
                   status -> status.value() == 404,

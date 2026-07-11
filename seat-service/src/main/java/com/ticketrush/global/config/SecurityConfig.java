@@ -1,5 +1,6 @@
 package com.ticketrush.global.config;
 
+import com.ticketrush.global.security.InternalApiTokenFilter;
 import lombok.RequiredArgsConstructor;
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
 import org.springframework.boot.security.autoconfigure.SecurityProperties;
@@ -18,10 +19,17 @@ import org.springframework.security.web.authentication.UsernamePasswordAuthentic
 @RequiredArgsConstructor
 public class SecurityConfig {
 
-  private final InternalApiTokenFilter internalApiTokenFilter;
+  private static final String INTERNAL_SEAT_API_PREFIX = "/api/v1/internal/seat";
 
   @Bean
-  public SecurityFilterChain filterChain(HttpSecurity http) throws Exception {
+  public InternalApiTokenFilter internalApiTokenFilter(
+      CustomSecurityProperties securityProperties) {
+    return new InternalApiTokenFilter(securityProperties, INTERNAL_SEAT_API_PREFIX);
+  }
+
+  @Bean
+  public SecurityFilterChain filterChain(
+      HttpSecurity http, InternalApiTokenFilter internalApiTokenFilter) throws Exception {
     http.csrf(csrf -> csrf.disable())
         .cors(cors -> {})
         .addFilterBefore(internalApiTokenFilter, UsernamePasswordAuthenticationFilter.class)
