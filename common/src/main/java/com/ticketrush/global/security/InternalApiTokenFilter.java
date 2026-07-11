@@ -10,26 +10,29 @@ import jakarta.servlet.http.HttpServletResponse;
 import java.io.IOException;
 import java.security.MessageDigest;
 import java.util.List;
-import lombok.RequiredArgsConstructor;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.authority.SimpleGrantedAuthority;
 import org.springframework.security.core.context.SecurityContextHolder;
-import org.springframework.stereotype.Component;
 import org.springframework.util.StringUtils;
 import org.springframework.web.filter.OncePerRequestFilter;
 
-@Component
-@RequiredArgsConstructor
 public class InternalApiTokenFilter extends OncePerRequestFilter {
 
   private static final String INTERNAL_TOKEN_HEADER = "X-Internal-Token";
-  private static final String INTERNAL_AUTH_API_PREFIX = "/api/v1/internal/auth";
 
   private final CustomSecurityProperties securityProperties;
+  private final String prefix;
+
+  public InternalApiTokenFilter(CustomSecurityProperties securityProperties, String prefix) {
+    this.securityProperties = securityProperties;
+    this.prefix = prefix;
+  }
 
   @Override
   protected boolean shouldNotFilter(HttpServletRequest request) {
-    return !isInternalAuthApi(request);
+    String path = request.getRequestURI();
+
+    return !(path.equals(prefix) || path.startsWith(prefix + "/"));
   }
 
   @Override
@@ -55,11 +58,5 @@ public class InternalApiTokenFilter extends OncePerRequestFilter {
     SecurityContextHolder.getContext().setAuthentication(authentication);
 
     filterChain.doFilter(request, response);
-  }
-
-  private boolean isInternalAuthApi(HttpServletRequest request) {
-    String path = request.getRequestURI();
-
-    return INTERNAL_AUTH_API_PREFIX.equals(path) || path.startsWith(INTERNAL_AUTH_API_PREFIX + "/");
   }
 }

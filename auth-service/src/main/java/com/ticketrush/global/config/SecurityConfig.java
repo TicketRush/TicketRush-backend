@@ -18,11 +18,19 @@ import org.springframework.security.web.authentication.UsernamePasswordAuthentic
 @RequiredArgsConstructor
 public class SecurityConfig {
 
+  private static final String INTERNAL_AUTH_API_PREFIX = "/api/v1/internal/auth";
+
   private final GatewayHeaderFilter gatewayHeaderFilter;
-  private final InternalApiTokenFilter internalApiTokenFilter;
 
   @Bean
-  public SecurityFilterChain filterChain(HttpSecurity http) throws Exception {
+  public InternalApiTokenFilter internalApiTokenFilter(
+      CustomSecurityProperties securityProperties) {
+    return new InternalApiTokenFilter(securityProperties, INTERNAL_AUTH_API_PREFIX);
+  }
+
+  @Bean
+  public SecurityFilterChain filterChain(
+      HttpSecurity http, InternalApiTokenFilter internalApiTokenFilter) throws Exception {
     http.csrf(csrf -> csrf.disable())
         .cors(cors -> {})
         .addFilterBefore(gatewayHeaderFilter, UsernamePasswordAuthenticationFilter.class)

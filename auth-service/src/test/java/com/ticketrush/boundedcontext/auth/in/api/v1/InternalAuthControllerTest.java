@@ -15,7 +15,6 @@ import com.ticketrush.boundedcontext.auth.app.facade.AuthFacade;
 import com.ticketrush.global.config.CustomSecurityProperties;
 import com.ticketrush.global.config.SecurityConfig;
 import com.ticketrush.global.filter.GatewayHeaderFilter;
-import com.ticketrush.global.security.InternalApiTokenFilter;
 import com.ticketrush.support.WebMvcSliceTest;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -29,12 +28,7 @@ import org.springframework.test.web.servlet.MockMvc;
 
 @ActiveProfiles("local")
 @WebMvcSliceTest(InternalAuthController.class)
-@Import({
-  SecurityConfig.class,
-  InternalApiTokenFilter.class,
-  GatewayHeaderFilter.class,
-  CustomSecurityProperties.class
-})
+@Import({SecurityConfig.class, GatewayHeaderFilter.class, CustomSecurityProperties.class})
 @TestPropertySource(
     properties = {
       "custom.security.internal-token=test-internal-token",
@@ -96,10 +90,10 @@ class InternalAuthControllerTest {
                 .contentType(MediaType.APPLICATION_JSON)
                 .content(
                     """
-    {
-      "email": "test@example.com"
-    }
-    """))
+            {
+              "email": "test@example.com"
+            }
+            """))
         .andDo(print())
         .andExpect(status().isOk())
         .andExpect(jsonPath("$.is_success").value(true));
@@ -118,10 +112,10 @@ class InternalAuthControllerTest {
                 .contentType(MediaType.APPLICATION_JSON)
                 .content(
                     """
-    {
-      "email": "test@example.com"
-    }
-    """))
+            {
+              "email": "test@example.com"
+            }
+            """))
         .andDo(print())
         .andExpect(status().isForbidden());
   }
