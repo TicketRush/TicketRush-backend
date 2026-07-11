@@ -12,7 +12,6 @@ import com.ticketrush.boundedcontext.booking.app.dto.response.BookingSummaryResp
 import com.ticketrush.boundedcontext.booking.app.facade.BookingFacade;
 import com.ticketrush.boundedcontext.booking.domain.types.BookingStatus;
 import com.ticketrush.global.config.CustomSecurityProperties;
-import com.ticketrush.global.config.InternalApiTokenFilter;
 import com.ticketrush.global.config.JacksonConfig;
 import com.ticketrush.global.config.SecurityConfig;
 import com.ticketrush.global.dto.request.OffsetPageRequest;
@@ -35,7 +34,6 @@ import org.springframework.test.web.servlet.MockMvc;
   JacksonConfig.class,
   SecurityConfig.class,
   GatewayHeaderFilter.class,
-  InternalApiTokenFilter.class,
   CustomSecurityProperties.class
 })
 @TestPropertySource(properties = "gateway.internal-token=test-token")
