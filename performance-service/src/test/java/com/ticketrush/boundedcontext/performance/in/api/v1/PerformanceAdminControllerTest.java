@@ -37,7 +37,7 @@ class PerformanceAdminControllerTest {
     mockMvc
         .perform(
             delete(BASE_URL + "/1")
-                .header("X-Internal-Token", INTERNAL_TOKEN)
+                .header("X-Gateway-Token", INTERNAL_TOKEN)
                 .header("X-User-Id", "1")
                 .header("X-User-Role", "ADMIN"))
         .andExpect(status().isOk());
@@ -49,7 +49,7 @@ class PerformanceAdminControllerTest {
     mockMvc
         .perform(
             delete(BASE_URL + "/1")
-                .header("X-Internal-Token", INTERNAL_TOKEN)
+                .header("X-Gateway-Token", INTERNAL_TOKEN)
                 .header("X-User-Id", "1")
                 .header("X-User-Role", "USER"))
         .andExpect(status().isForbidden());
@@ -75,7 +75,7 @@ class PerformanceAdminControllerTest {
     mockMvc
         .perform(
             delete(BASE_URL + "/1")
-                .header("X-Internal-Token", "invalid-token")
+                .header("X-Gateway-Token", "invalid-token")
                 .header("X-User-Id", "1")
                 .header("X-User-Role", "ADMIN"))
         .andExpect(status().isForbidden());

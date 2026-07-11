@@ -69,7 +69,7 @@ class BookingAdminControllerTest {
     mockMvc
         .perform(
             get("/api/v1/booking/admin/bookings/refund-failed")
-                .header("X-Internal-Token", INTERNAL_TOKEN)
+                .header("X-Gateway-Token", INTERNAL_TOKEN)
                 .header("X-User-Id", 1L)
                 .header("X-User-Role", "ADMIN"))
         .andExpect(status().isOk())
@@ -90,7 +90,7 @@ class BookingAdminControllerTest {
     mockMvc
         .perform(
             post("/api/v1/booking/admin/{bookingNumber}/refund-retry", BOOKING_NUMBER)
-                .header("X-Internal-Token", INTERNAL_TOKEN)
+                .header("X-Gateway-Token", INTERNAL_TOKEN)
                 .header("X-User-Id", 1L)
                 .header("X-User-Role", "ADMIN"))
         .andExpect(status().isOk())
@@ -106,7 +106,7 @@ class BookingAdminControllerTest {
     mockMvc
         .perform(
             get("/api/v1/booking/admin/bookings/refund-failed")
-                .header("X-Internal-Token", INTERNAL_TOKEN)
+                .header("X-Gateway-Token", INTERNAL_TOKEN)
                 .header("X-User-Id", 1L)
                 .header("X-User-Role", "USER"))
         .andExpect(status().isForbidden());

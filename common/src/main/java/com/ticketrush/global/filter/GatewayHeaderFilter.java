@@ -19,20 +19,20 @@ public class GatewayHeaderFilter extends OncePerRequestFilter {
 
   private static final String USER_ID_HEADER = "X-User-Id";
   private static final String USER_ROLE_HEADER = "X-User-Role";
-  private static final String INTERNAL_TOKEN_HEADER = "X-Internal-Token";
+  private static final String GATEWAY_TOKEN_HEADER = "X-Gateway-Token";
 
   @Value("${gateway.internal-token}")
-  private String internalToken;
+  private String gatewayToken;
 
   @Override
   protected void doFilterInternal(
       HttpServletRequest request, HttpServletResponse response, FilterChain filterChain)
       throws ServletException, IOException {
 
-    String internalHeader = request.getHeader(INTERNAL_TOKEN_HEADER);
+    String gatewayTokenHeader = request.getHeader(GATEWAY_TOKEN_HEADER);
 
-    // Gateway 내부 토큰 검증 실패 시 인증 무효
-    if (!internalToken.equals(internalHeader)) {
+    // Gateway 토큰 검증 실패 시 사용자 인증 무효
+    if (!gatewayToken.equals(gatewayTokenHeader)) {
       SecurityContextHolder.clearContext();
       filterChain.doFilter(request, response);
       return;
@@ -41,9 +41,8 @@ public class GatewayHeaderFilter extends OncePerRequestFilter {
     String userIdHeader = request.getHeader(USER_ID_HEADER);
     String roleHeader = request.getHeader(USER_ROLE_HEADER);
 
-    // 헤더가 모두 존재할 때만 인증 처리
+    // 사용자 식별 헤더가 모두 존재할 때만 인증 처리
     if (userIdHeader != null && roleHeader != null) {
-
       try {
         Long userId = Long.valueOf(userIdHeader);
 
@@ -56,9 +55,7 @@ public class GatewayHeaderFilter extends OncePerRequestFilter {
             new UsernamePasswordAuthenticationToken(principal, null, authorities);
 
         SecurityContextHolder.getContext().setAuthentication(authentication);
-
       } catch (NumberFormatException e) {
-
         SecurityContextHolder.clearContext();
       }
     }

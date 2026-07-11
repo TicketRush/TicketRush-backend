@@ -73,7 +73,7 @@ class PaymentControllerTest {
     mockMvc
         .perform(
             post("/api/v1/payment/confirm")
-                .header("X-Internal-Token", INTERNAL_TOKEN)
+                .header("X-Gateway-Token", INTERNAL_TOKEN)
                 .header("X-User-Id", userId)
                 .header("X-User-Role", "USER")
                 .contentType(MediaType.APPLICATION_JSON)
@@ -133,7 +133,7 @@ class PaymentControllerTest {
     mockMvc
         .perform(
             post("/api/v1/payment/confirm")
-                .header("X-Internal-Token", INTERNAL_TOKEN)
+                .header("X-Gateway-Token", INTERNAL_TOKEN)
                 .header("X-User-Id", 10L)
                 .header("X-User-Role", "USER")
                 .contentType(MediaType.APPLICATION_JSON)
@@ -166,7 +166,7 @@ class PaymentControllerTest {
     mockMvc
         .perform(
             post("/api/v1/payment/confirm")
-                .header("X-Internal-Token", INTERNAL_TOKEN)
+                .header("X-Gateway-Token", INTERNAL_TOKEN)
                 .header("X-User-Id", userId)
                 .header("X-User-Role", "USER")
                 .contentType(MediaType.APPLICATION_JSON)
@@ -201,7 +201,7 @@ class PaymentControllerTest {
     mockMvc
         .perform(
             post("/api/v1/payment/{paymentId}/cancel", paymentId)
-                .header("X-Internal-Token", INTERNAL_TOKEN)
+                .header("X-Gateway-Token", INTERNAL_TOKEN)
                 .header("X-User-Id", userId)
                 .header("X-User-Role", "USER")
                 .contentType(MediaType.APPLICATION_JSON)
@@ -227,7 +227,7 @@ class PaymentControllerTest {
     mockMvc
         .perform(
             post("/api/v1/payment/{paymentId}/cancel", 1L)
-                .header("X-Internal-Token", INTERNAL_TOKEN)
+                .header("X-Gateway-Token", INTERNAL_TOKEN)
                 .header("X-User-Id", 10L)
                 .header("X-User-Role", "USER")
                 .contentType(MediaType.APPLICATION_JSON)
@@ -257,7 +257,7 @@ class PaymentControllerTest {
     mockMvc
         .perform(
             post("/api/v1/payment/{paymentId}/cancel", paymentId)
-                .header("X-Internal-Token", INTERNAL_TOKEN)
+                .header("X-Gateway-Token", INTERNAL_TOKEN)
                 .header("X-User-Id", userId)
                 .header("X-User-Role", "USER")
                 .contentType(MediaType.APPLICATION_JSON)
@@ -287,7 +287,7 @@ class PaymentControllerTest {
     mockMvc
         .perform(
             get("/api/v1/payment")
-                .header("X-Internal-Token", INTERNAL_TOKEN)
+                .header("X-Gateway-Token", INTERNAL_TOKEN)
                 .header("X-User-Id", userId)
                 .header("X-User-Role", "USER"))
         .andExpect(status().isOk())
@@ -320,7 +320,7 @@ class PaymentControllerTest {
     mockMvc
         .perform(
             get("/api/v1/payment/{paymentId}", paymentId)
-                .header("X-Internal-Token", INTERNAL_TOKEN)
+                .header("X-Gateway-Token", INTERNAL_TOKEN)
                 .header("X-User-Id", userId)
                 .header("X-User-Role", "USER"))
         .andExpect(status().isOk())
@@ -344,7 +344,7 @@ class PaymentControllerTest {
     mockMvc
         .perform(
             get("/api/v1/payment/{paymentId}", paymentId)
-                .header("X-Internal-Token", INTERNAL_TOKEN)
+                .header("X-Gateway-Token", INTERNAL_TOKEN)
                 .header("X-User-Id", userId)
                 .header("X-User-Role", "USER"))
         .andExpect(status().isNotFound())

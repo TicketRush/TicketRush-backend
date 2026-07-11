@@ -31,7 +31,7 @@ import org.springframework.test.web.servlet.MockMvc;
     })
 class UserControllerTest {
 
-  private static final String INTERNAL_TOKEN_HEADER = "X-Internal-Token";
+  private static final String GATEWAY_TOKEN_HEADER = "X-Gateway-Token";
   private static final String USER_ID_HEADER = "X-User-Id";
   private static final String USER_ROLE_HEADER = "X-User-Role";
 
@@ -57,7 +57,7 @@ class UserControllerTest {
     mockMvc
         .perform(
             get("/api/v1/user/me")
-                .header(INTERNAL_TOKEN_HEADER, INTERNAL_TOKEN)
+                .header(GATEWAY_TOKEN_HEADER, INTERNAL_TOKEN)
                 .header(USER_ID_HEADER, String.valueOf(USER_ID))
                 .header(USER_ROLE_HEADER, USER_ROLE))
         .andDo(print())

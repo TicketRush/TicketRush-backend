@@ -74,7 +74,7 @@ class BookingControllerTest {
     mockMvc
         .perform(
             post("/api/v1/booking")
-                .header("X-Internal-Token", INTERNAL_TOKEN)
+                .header("X-Gateway-Token", INTERNAL_TOKEN)
                 .header("X-User-Id", userId)
                 .header("X-User-Role", "USER")
                 .contentType(MediaType.APPLICATION_JSON)
@@ -112,7 +112,7 @@ class BookingControllerTest {
         .perform(
             get("/api/v1/booking/me")
                 .param("status", "CONFIRMED")
-                .header("X-Internal-Token", INTERNAL_TOKEN)
+                .header("X-Gateway-Token", INTERNAL_TOKEN)
                 .header("X-User-Id", userId)
                 .header("X-User-Role", "USER"))
         .andExpect(status().isOk())
@@ -144,7 +144,7 @@ class BookingControllerTest {
         .perform(
             get("/api/v1/booking/me/count")
                 .param("status", "CONFIRMED")
-                .header("X-Internal-Token", INTERNAL_TOKEN)
+                .header("X-Gateway-Token", INTERNAL_TOKEN)
                 .header("X-User-Id", userId)
                 .header("X-User-Role", "USER"))
         .andExpect(status().isOk())
@@ -166,7 +166,7 @@ class BookingControllerTest {
     mockMvc
         .perform(
             delete("/api/v1/booking/{bookingNumber}", bookingNumber)
-                .header("X-Internal-Token", INTERNAL_TOKEN)
+                .header("X-Gateway-Token", INTERNAL_TOKEN)
                 .header("X-User-Id", userId)
                 .header("X-User-Role", "USER"))
         .andExpect(status().isOk())

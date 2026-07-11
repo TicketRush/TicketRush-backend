@@ -18,10 +18,15 @@ import reactor.core.publisher.Mono;
 @RequiredArgsConstructor
 public class JwtAuthenticationFilter implements GlobalFilter, Ordered {
 
+  private static final String USER_ID_HEADER = "X-User-Id";
+  private static final String USER_ROLE_HEADER = "X-User-Role";
+  private static final String GATEWAY_TOKEN_HEADER = "X-Gateway-Token";
+  private static final String INTERNAL_TOKEN_HEADER = "X-Internal-Token";
+
   private final JwtTokenProvider jwtTokenProvider;
 
   @Value("${gateway.internal-token}")
-  private String internalToken;
+  private String gatewayToken;
 
   @Override
   public Mono<Void> filter(ServerWebExchange exchange, GatewayFilterChain chain) {
@@ -36,9 +41,11 @@ public class JwtAuthenticationFilter implements GlobalFilter, Ordered {
             .mutate()
             .headers(
                 headers -> {
-                  headers.remove("X-User-Id");
-                  headers.remove("X-User-Role");
-                  headers.remove("X-Internal-Token");
+                  // 외부 사용자가 신뢰 헤더를 임의로 전달하지 못하도록 모두 제거한다.
+                  headers.remove(USER_ID_HEADER);
+                  headers.remove(USER_ROLE_HEADER);
+                  headers.remove(GATEWAY_TOKEN_HEADER);
+                  headers.remove(INTERNAL_TOKEN_HEADER);
                 });
 
     if (token == null) {
@@ -68,9 +75,9 @@ public class JwtAuthenticationFilter implements GlobalFilter, Ordered {
         requestBuilder
             .headers(
                 headers -> {
-                  headers.set("X-User-Id", String.valueOf(userId));
-                  headers.set("X-User-Role", role);
-                  headers.set("X-Internal-Token", internalToken);
+                  headers.set(USER_ID_HEADER, String.valueOf(userId));
+                  headers.set(USER_ROLE_HEADER, role);
+                  headers.set(GATEWAY_TOKEN_HEADER, gatewayToken);
                 })
             .build();
 
