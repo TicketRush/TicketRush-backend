@@ -53,8 +53,10 @@ jobs:
             exit 1
           fi
 
+          cp deploy/.env.prod.example deploy/.env
+          trap 'rm -f deploy/.env' EXIT
+
           docker compose \
-            --env-file deploy/.env.prod.example \
             -f deploy/docker-compose.prod.yml \
             config -q
 
