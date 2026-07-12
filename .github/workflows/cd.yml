@@ -4,42 +4,74 @@ on:
   push:
     branches:
       - develop
-      - "feature/246*"
   workflow_dispatch:
 
+concurrency:
+  group: ticketrush-production-deploy
+  cancel-in-progress: false
+
 env:
-  AWS_REGION: ${{ secrets.AWS_REGION }}
-  AWS_ACCOUNT_ID: ${{ secrets.AWS_ACCOUNT_ID }}
-  ECR_REGISTRY: ${{ secrets.ECR_REGISTRY }}
+  AWS_REGION: ${{ vars.AWS_REGION }}
+  ECR_REGISTRY: ${{ vars.ECR_REGISTRY }}
   EC2_HOST: ${{ secrets.EC2_HOST }}
-  EC2_USER: ${{ secrets.EC2_USER }}
+  EC2_USER: ${{ vars.EC2_USER }}
   IMAGE_TAG: ${{ github.sha }}
 
 jobs:
   deploy:
     name: Build, Push, Deploy
     runs-on: ubuntu-latest
+    environment: production
 
     permissions:
       contents: read
+      id-token: write
 
     steps:
       - name: Checkout source code
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
+
+      - name: Validate deployment files
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+
+          test -f Dockerfile
+          test -f deploy/docker-compose.prod.yml
+          test -f deploy/.env.prod.example
+
+          if [[ -f deploy/.env ]]; then
+            echo "::error::deploy/.env must not be committed."
+            exit 1
+          fi
+
+          docker compose \
+            --env-file deploy/.env.prod.example \
+            -f deploy/docker-compose.prod.yml \
+            config -q
+
+      - name: Run tests
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+
+          chmod +x gradlew
+          ./gradlew test
 
       - name: Configure AWS credentials
-        uses: aws-actions/configure-aws-credentials@v4
+        uses: aws-actions/configure-aws-credentials@v6
         with:
-          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
-          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-          aws-region: ${{ secrets.AWS_REGION }}
+          role-to-assume: ${{ vars.AWS_DEPLOY_ROLE_ARN }}
+          role-session-name: ticketrush-cd-${{ github.run_id }}
+          aws-region: ${{ env.AWS_REGION }}
 
       - name: Login to Amazon ECR
         uses: aws-actions/amazon-ecr-login@v2
 
       - name: Build and push Docker images
+        shell: bash
         run: |
-          set -e
+          set -Eeuo pipefail
 
           SERVICES=(
             gateway-service
@@ -53,54 +85,257 @@ jobs:
           )
 
           for SERVICE in "${SERVICES[@]}"; do
-            IMAGE="${ECR_REGISTRY}/ticketrush/${SERVICE}"
+            REPOSITORY="ticketrush/${SERVICE}"
+            IMAGE="${ECR_REGISTRY}/${REPOSITORY}:${IMAGE_TAG}"
 
-            echo "Building ${SERVICE}..."
+            echo "Checking ECR repository: ${REPOSITORY}"
+
+            aws ecr describe-repositories \
+              --region "${AWS_REGION}" \
+              --repository-names "${REPOSITORY}" \
+              > /dev/null
+
+            echo "Building ${IMAGE}"
+
             docker build \
               --build-arg SERVICE="${SERVICE}" \
-              -t "${IMAGE}:${IMAGE_TAG}" \
-              -t "${IMAGE}:latest" \
+              --tag "${IMAGE}" \
               .
 
-            echo "Pushing ${SERVICE}..."
-            docker push "${IMAGE}:${IMAGE_TAG}"
-            docker push "${IMAGE}:latest"
+            echo "Pushing ${IMAGE}"
+            docker push "${IMAGE}"
           done
 
-      - name: Prepare SSH key
+      - name: Prepare SSH
+        shell: bash
         run: |
-          mkdir -p ~/.ssh
-          printf '%s\n' "${{ secrets.EC2_SSH_KEY }}" > ~/.ssh/ticketrush-key.pem
+          set -Eeuo pipefail
+
+          install -m 700 -d ~/.ssh
+
+          printf '%s\n' "${{ secrets.EC2_SSH_KEY }}" \
+            > ~/.ssh/ticketrush-key.pem
+
           chmod 600 ~/.ssh/ticketrush-key.pem
-          ssh-keyscan -H "${EC2_HOST}" >> ~/.ssh/known_hosts
 
-      - name: Copy docker compose file to EC2
+          printf '%s\n' "${{ secrets.EC2_KNOWN_HOSTS }}" \
+            > ~/.ssh/known_hosts
+
+          chmod 600 ~/.ssh/known_hosts
+
+      - name: Package deployment files
+        shell: bash
         run: |
-          ssh -i ~/.ssh/ticketrush-key.pem "${EC2_USER}@${EC2_HOST}" "mkdir -p ~/ticketrush"
+          set -Eeuo pipefail
 
-          scp -i ~/.ssh/ticketrush-key.pem \
-            deploy/docker-compose.prod.yml \
-            "${EC2_USER}@${EC2_HOST}:~/ticketrush/docker-compose.prod.yml"
+          tar \
+            --exclude='.env' \
+            --exclude='.env.local' \
+            -C deploy \
+            -czf deploy-bundle.tar.gz \
+            .
+
+      - name: Copy deployment files to EC2
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+
+          SSH_OPTIONS=(
+            -i ~/.ssh/ticketrush-key.pem
+            -o BatchMode=yes
+            -o StrictHostKeyChecking=yes
+          )
+
+          ssh "${SSH_OPTIONS[@]}" \
+            "${EC2_USER}@${EC2_HOST}" \
+            "mkdir -p ~/ticketrush/deploy"
+
+          scp "${SSH_OPTIONS[@]}" \
+            deploy-bundle.tar.gz \
+            "${EC2_USER}@${EC2_HOST}:~/ticketrush/deploy-bundle.tar.gz"
 
       - name: Deploy on EC2
+        shell: bash
         run: |
-          ssh -i ~/.ssh/ticketrush-key.pem "${EC2_USER}@${EC2_HOST}" << EOF
-            set -e
+          set -Eeuo pipefail
 
-            cd ~/ticketrush
+          SSH_OPTIONS=(
+            -i ~/.ssh/ticketrush-key.pem
+            -o BatchMode=yes
+            -o StrictHostKeyChecking=yes
+          )
 
-            cat > .env << ENVEOF
-          AWS_REGION=${AWS_REGION}
-          AWS_ACCOUNT_ID=${AWS_ACCOUNT_ID}
-          ECR_REGISTRY=${ECR_REGISTRY}
-          IMAGE_TAG=${IMAGE_TAG}
-          SPRING_PROFILES_ACTIVE=prod
-          ENVEOF
+          # shellcheck disable=SC2029
+          ssh "${SSH_OPTIONS[@]}" \
+            "${EC2_USER}@${EC2_HOST}" \
+            "AWS_REGION='${AWS_REGION}' ECR_REGISTRY='${ECR_REGISTRY}' IMAGE_TAG='${IMAGE_TAG}' bash -s" \
+            <<'REMOTE_SCRIPT'
+          set -Eeuo pipefail
 
-            aws ecr get-login-password --region "${AWS_REGION}" \
-              | docker login --username AWS --password-stdin "${ECR_REGISTRY}"
+          cd "${HOME}/ticketrush"
 
-            docker compose --env-file .env -f docker-compose.prod.yml pull
-            docker compose --env-file .env -f docker-compose.prod.yml up -d
-            docker image prune -f
-          EOF
+          mkdir -p deploy
+
+          tar \
+            -xzf deploy-bundle.tar.gz \
+            -C deploy
+
+          rm -f deploy-bundle.tar.gz
+
+          if [[ ! -f deploy/.env ]]; then
+            echo "deploy/.env does not exist on EC2."
+            exit 1
+          fi
+
+          chmod 600 deploy/.env
+
+          aws ecr get-login-password \
+            --region "${AWS_REGION}" \
+            | docker login \
+                --username AWS \
+                --password-stdin "${ECR_REGISTRY}"
+
+          export AWS_REGION
+          export ECR_REGISTRY
+          export IMAGE_TAG
+
+          COMPOSE=(
+            docker compose
+            --env-file deploy/.env
+            -f deploy/docker-compose.prod.yml
+          )
+
+          "${COMPOSE[@]}" config -q
+          "${COMPOSE[@]}" pull
+          "${COMPOSE[@]}" up -d --remove-orphans
+
+          EXPECTED_SERVICES=(
+            mysql
+            redis
+            kafka
+            gateway-service
+            auth-service
+            user-service
+            booking-service
+            payment-service
+            performance-service
+            ticket-service
+            seat-service
+          )
+
+          READY=false
+
+          for ATTEMPT in $(seq 1 48); do
+            ALL_READY=true
+
+            for SERVICE in "${EXPECTED_SERVICES[@]}"; do
+              CONTAINER_ID="$("${COMPOSE[@]}" ps -q "${SERVICE}")"
+
+              if [[ -z "${CONTAINER_ID}" ]]; then
+                echo "${SERVICE}: container not created"
+                ALL_READY=false
+                continue
+              fi
+
+              STATUS="$(
+                docker inspect \
+                  --format '{{.State.Status}}' \
+                  "${CONTAINER_ID}"
+              )"
+
+              HEALTH="$(
+                docker inspect \
+                  --format '{{if .State.Health}}{{.State.Health.Status}}{{else}}none{{end}}' \
+                  "${CONTAINER_ID}"
+              )"
+
+              OOM_KILLED="$(
+                docker inspect \
+                  --format '{{.State.OOMKilled}}' \
+                  "${CONTAINER_ID}"
+              )"
+
+              if [[ "${STATUS}" != "running" ]]; then
+                echo "${SERVICE}: status=${STATUS}"
+                ALL_READY=false
+              fi
+
+              if [[ "${HEALTH}" == "starting" || "${HEALTH}" == "unhealthy" ]]; then
+                echo "${SERVICE}: health=${HEALTH}"
+                ALL_READY=false
+              fi
+
+              if [[ "${OOM_KILLED}" == "true" ]]; then
+                echo "${SERVICE}: OOMKilled=true"
+                ALL_READY=false
+              fi
+            done
+
+            if [[ "${ALL_READY}" == "true" ]]; then
+              READY=true
+              break
+            fi
+
+            sleep 5
+          done
+
+          if [[ "${READY}" != "true" ]]; then
+            echo "Containers did not become ready."
+
+            "${COMPOSE[@]}" ps --all
+            "${COMPOSE[@]}" logs --tail=100
+
+            exit 1
+          fi
+
+          HEALTH_RESPONSE="$(
+            curl \
+              --fail \
+              --silent \
+              --show-error \
+              --retry 12 \
+              --retry-delay 5 \
+              --retry-all-errors \
+              http://127.0.0.1:8080/actuator/health
+          )"
+
+          echo "${HEALTH_RESPONSE}"
+
+          if ! grep -Eq '"status"[[:space:]]*:[[:space:]]*"UP"' \
+            <<< "${HEALTH_RESPONSE}"; then
+            echo "Gateway health status is not UP."
+            exit 1
+          fi
+
+          PREVIOUS_RELEASE=""
+
+          if [[ -f deploy/CURRENT_RELEASE ]]; then
+            PREVIOUS_RELEASE="$(cat deploy/CURRENT_RELEASE)"
+          fi
+
+          if [[ -n "${PREVIOUS_RELEASE}" && "${PREVIOUS_RELEASE}" != "${IMAGE_TAG}" ]]; then
+            printf '%s\n' "${PREVIOUS_RELEASE}" \
+              > deploy/PREVIOUS_RELEASE
+          fi
+
+          printf '%s\n' "${IMAGE_TAG}" \
+            > deploy/CURRENT_RELEASE
+
+          echo "Deployment completed."
+          echo "Current release: ${IMAGE_TAG}"
+
+          "${COMPOSE[@]}" ps --all
+          REMOTE_SCRIPT
+
+      - name: Write deployment summary
+        shell: bash
+        run: |
+          {
+            echo "## TicketRush deployment"
+            echo
+            echo "- Branch: \`${GITHUB_REF_NAME}\`"
+            echo "- Commit: \`${IMAGE_TAG}\`"
+            echo "- Region: \`${AWS_REGION}\`"
+            echo "- Registry: \`${ECR_REGISTRY}\`"
+            echo "- Result: success"
+          } >> "${GITHUB_STEP_SUMMARY}"
