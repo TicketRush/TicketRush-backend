@@ -61,6 +61,11 @@ public class BookingAdminController {
           머뭅니다 — 돈을 돌려받지 못한 채 좌석은 SOLD로 묶이고 입장도 차단됩니다. 이 조회로 식별한 예매는
           환불 재시도 API로 환불 요청 이벤트를 재발행해 복구할 수 있습니다. `updatedAt`이 REFUNDING에
           진입한 시각입니다.
+
+          **재시도를 눌러도 이 목록에서 즉시 사라지지 않습니다.** 재발행은 예매를 변경하지 않으므로, 환불
+          종결 이벤트가 실제로 도착해 상태가 REFUNDED(또는 CONFIRMED)로 바뀔 때 목록에서 빠집니다.
+          즉 목록에 남아 있다는 것은 아직 미해결이라는 뜻입니다. 이미 재시도를 눌렀는지는 ADMIN-AUDIT
+          로그로 확인하세요.
           """)
   @GetMapping("/bookings/refunding-stuck")
   public ResponseEntity<ApiResponse<List<BookingSummaryResponse>>> getRefundingStuckBookings(
@@ -80,6 +85,10 @@ public class BookingAdminController {
           멈춘 고착 예매입니다.** 고착 예매는 이미 REFUNDING이므로 상태 전이 없이 환불 요청 이벤트만
           재발행합니다. 그 외(실패 이력이 없는 정상 예매, 정상 진행 중인 REFUNDING, 이미 종결된 예매)는
           `BOOKING_409_005`로 거절합니다.
+
+          고착 건에 대한 재발행은 예매를 변경하지 않으므로 반복 호출해도 막히지 않습니다. 그만큼 PG 호출이
+          나가지만 payment가 재수신에 멱등이라 이중 환불은 발생하지 않습니다. 불필요한 재호출을 피하려면
+          ADMIN-AUDIT 로그로 이전 시도 여부를 먼저 확인하세요.
 
           결제가 아직 완료 상태면 PG 환불을 재실행하고, 결제 취소 API로 이미 우회 환불된 상태면 결제 취소 이벤트를
           재발행해 예매·좌석 정합을 회복합니다. 사용자도 예매를 다시 취소해 재환불할 수 있으며, 이 API는 CS가 사용자를
