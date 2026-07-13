@@ -43,9 +43,10 @@ app:
     release:
       # 청크의 첫 좌석에 걸린 행 잠금은 나머지 좌석의 UPDATE를 모두 지나 청크 커밋까지 유지된다.
       # 그 사이 같은 좌석의 결제 확정(confirmSoldById)이 블로킹되므로, 러시 중 경합을 줄이려 청크를 짧게 끊는다.
-      # max-chunks와 곱해 tick당 처리 상한은 500건이다.
+      # 대신 max-chunks를 함께 올려 tick당 처리 상한(2000건)은 유지한다. 이 경로는 Redis 만료 리스너가
+      # 못 살린 좌석을 쓸어담는 fallback이라, 정작 일해야 하는 순간이 곧 대량 만료가 밀린 순간이다.
       chunk-size: 25
-      max-chunks: 20
+      max-chunks: 80
   event-publisher:
     type: outbox
   outbox:

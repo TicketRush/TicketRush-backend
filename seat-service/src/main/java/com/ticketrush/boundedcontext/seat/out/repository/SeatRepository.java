@@ -76,22 +76,33 @@ public interface SeatRepository extends JpaRepository<Seat, Long> {
    *
    * 1. 결제 확정(confirmSoldById)이 먼저 커밋 -> 팔린 좌석(SOLD)을 AVAILABLE로 되돌려 재판매한다.
    *    -> seatStatus = HOLD 가드가 막는다.
-   * 2. 다른 해제 경로가 먼저 커밋하고 그 좌석이 곧바로 재선점된다(ABA). 상태는 다시 HOLD지만 예매도 만료 시각도
-   *    바뀌었다 -> 살아있는 남의 홀드를 풀어버린다. 상태 가드만으로는 통과한다.
-   *    -> bookingNumber(내가 본 그 선점인가) + holdExpiredAt <= now(여전히 만료 상태인가)가 막는다.
+   * 2. 다른 해제 경로가 먼저 커밋하고 그 좌석이 곧바로 재선점된다(ABA). 상태는 다시 HOLD라 상태 가드는 통과하지만,
+   *    살아있는 남의 선점을 풀어버린다.
+   *    -> holdExpiredAt 동등 비교가 막는다. 재선점은 만료 시각을 반드시 미래로 새로 쓰므로(Seat.hold가 과거
+   *       시각을 거부한다) 조회 스냅샷의 만료 시각과 절대 같을 수 없다.
    *
-   * confirmSoldById가 seatStatus 하나가 아니라 bookingNumber까지 함께 거는 것과 같은 이유다.
+   * 즉 holdExpiredAt = :holdExpiredAt은 "여전히 만료 상태인가"가 아니라 <b>"내가 본 그 선점 그대로인가"</b>를
+   * 묻는다. bookingNumber를 함께 걸지 않는 이유도 이것이다. 방어력을 더하지 못하면서, booking_number가 NULL인
+   * HOLD 좌석(#95 이전 hold(expiredAt)로 만들어진 행)을 영구히 해제 불가로 만든다 -- SQL에서 `= NULL`은 항상
+   * UNKNOWN이라 매치되지 않는다. 그런 좌석은 조회에는 계속 잡히면서 해제만 안 되어, 페이지 0만 반복 조회하는
+   * 청크 루프의 앞자리를 영원히 점유한다(뒤의 만료 좌석이 굶는다).
+   *
+   * holdExpiredAt은 HOLD 좌석이면 반드시 non-null이다(Seat.hold가 null 시각을 거부하고, 시각을 null로 되돌리는
+   * releaseHold/releaseBooking은 동시에 HOLD를 벗어난다). 그래서 bookingNumber와 달리 `= NULL` 함정이 없다.
+   *
+   * <b>:holdExpiredAt에는 반드시 DB에서 읽어온 엔티티의 값을 넘긴다.</b> LocalDateTime.now()는 나노초지만
+   * datetime(6) 컬럼은 마이크로초라 저장 시 절삭된다. 앱에서 만든 시각을 그대로 넘기면 동등 비교가 빗나가
+   * 해제가 조용히 스킵된다.
    */
   @Modifying(clearAutomatically = true)
   @Query(
       "UPDATE Seat s SET s.seatStatus = :availableStatus, s.holdExpiredAt = null, "
           + "s.bookingNumber = null "
           + "WHERE s.id = :seatId AND s.seatStatus = :holdStatus "
-          + "AND s.bookingNumber = :bookingNumber AND s.holdExpiredAt <= :now")
+          + "AND s.holdExpiredAt = :holdExpiredAt")
   int releaseExpiredHoldById(
       @Param("seatId") Long seatId,
-      @Param("bookingNumber") String bookingNumber,
-      @Param("now") LocalDateTime now,
+      @Param("holdExpiredAt") LocalDateTime holdExpiredAt,
       @Param("holdStatus") SeatStatus holdStatus,
       @Param("availableStatus") SeatStatus availableStatus);
 

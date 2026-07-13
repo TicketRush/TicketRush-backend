@@ -48,11 +48,7 @@ class SeatReleaseExpiredChunkProcessorTest {
         .willReturn(List.of(expiredSeat1, expiredSeat2));
     given(
             seatRepository.releaseExpiredHoldById(
-                any(),
-                any(),
-                any(LocalDateTime.class),
-                eq(SeatStatus.HOLD),
-                eq(SeatStatus.AVAILABLE)))
+                any(), any(LocalDateTime.class), eq(SeatStatus.HOLD), eq(SeatStatus.AVAILABLE)))
         .willReturn(1);
 
     // when
@@ -91,11 +87,7 @@ class SeatReleaseExpiredChunkProcessorTest {
         .willReturn(List.of(seat));
     given(
             seatRepository.releaseExpiredHoldById(
-                any(),
-                any(),
-                any(LocalDateTime.class),
-                eq(SeatStatus.HOLD),
-                eq(SeatStatus.AVAILABLE)))
+                any(), any(LocalDateTime.class), eq(SeatStatus.HOLD), eq(SeatStatus.AVAILABLE)))
         .willReturn(1);
 
     AtomicReference<String> bookingNumberAtPublish = new AtomicReference<>();
@@ -127,11 +119,7 @@ class SeatReleaseExpiredChunkProcessorTest {
         .willReturn(List.of(seat));
     given(
             seatRepository.releaseExpiredHoldById(
-                any(),
-                any(),
-                any(LocalDateTime.class),
-                eq(SeatStatus.HOLD),
-                eq(SeatStatus.AVAILABLE)))
+                any(), any(LocalDateTime.class), eq(SeatStatus.HOLD), eq(SeatStatus.AVAILABLE)))
         .willReturn(0);
 
     // when

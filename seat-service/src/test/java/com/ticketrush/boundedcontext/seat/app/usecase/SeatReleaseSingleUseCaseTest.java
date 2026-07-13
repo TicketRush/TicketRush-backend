@@ -45,13 +45,13 @@ class SeatReleaseSingleUseCaseTest {
             .performanceId(1L)
             .seatNumber("A-1")
             .seatStatus(SeatStatus.HOLD)
+            .holdExpiredAt(LocalDateTime.now().minusMinutes(1))
             .bookingNumber("BK-1")
             .build();
     given(seatRepository.findById(seatId)).willReturn(Optional.of(seat));
     given(
             seatRepository.releaseExpiredHoldById(
                 eq(seatId),
-                eq("BK-1"),
                 any(LocalDateTime.class),
                 eq(SeatStatus.HOLD),
                 eq(SeatStatus.AVAILABLE)))
@@ -111,13 +111,13 @@ class SeatReleaseSingleUseCaseTest {
             .performanceId(1L)
             .seatNumber("A-1")
             .seatStatus(SeatStatus.HOLD)
+            .holdExpiredAt(LocalDateTime.now().minusMinutes(1))
             .bookingNumber("BK-1")
             .build();
     given(seatRepository.findById(seatId)).willReturn(Optional.of(seat));
     given(
             seatRepository.releaseExpiredHoldById(
                 eq(seatId),
-                eq("BK-1"),
                 any(LocalDateTime.class),
                 eq(SeatStatus.HOLD),
                 eq(SeatStatus.AVAILABLE)))

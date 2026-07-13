@@ -51,13 +51,15 @@ public class SeatReleaseExpiredChunkProcessor {
 
     int released = 0;
     for (Seat seat : expiredSeats) {
-      // 조회 이후 결제가 확정됐거나(SOLD) 해제 후 다른 예매로 재선점됐을 수 있다(ABA). 가드가 달린 조건부
-      // UPDATE만이 팔린 좌석과 남의 살아있는 선점을 건드리지 않는다.
+      // 조회 이후 결제가 확정됐거나(SOLD) 해제 후 다른 예매로 재선점됐을 수 있다(ABA). 조회 스냅샷의 만료
+      // 시각을 가드로 넘겨 "내가 본 그 선점 그대로일 때만" 해제한다.
       int updated =
           seatRepository.releaseExpiredHoldById(
-              seat.getId(), seat.getBookingNumber(), now, SeatStatus.HOLD, SeatStatus.AVAILABLE);
+              seat.getId(), seat.getHoldExpiredAt(), SeatStatus.HOLD, SeatStatus.AVAILABLE);
       if (updated == 0) {
-        log.info("좌석 {}은(는) 조회 이후 선점 상태가 바뀌어 해제를 건너뜁니다.", seat.getId());
+        // 레이스를 정확히 막은 정상 동작이고 러시 중엔 청크마다 다발로 찍힌다. 건수는 ChunkResult의
+        // fetched - released로 드러나므로 개별 건은 debug로 둔다.
+        log.debug("좌석 {}은(는) 조회 이후 선점 상태가 바뀌어 해제를 건너뜁니다.", seat.getId());
         continue;
       }
 

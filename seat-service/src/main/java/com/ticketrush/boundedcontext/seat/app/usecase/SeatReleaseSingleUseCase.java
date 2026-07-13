@@ -4,7 +4,6 @@ import com.ticketrush.boundedcontext.seat.app.support.SeatHoldExpiredPublisher;
 import com.ticketrush.boundedcontext.seat.app.support.SeatStatusEventPublisher;
 import com.ticketrush.boundedcontext.seat.out.repository.SeatRepository;
 import com.ticketrush.global.types.SeatStatus;
-import java.time.LocalDateTime;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
@@ -34,15 +33,13 @@ public class SeatReleaseSingleUseCase {
               }
 
               // 위 검사는 조회 스냅샷이라, 그 사이 결제가 확정됐거나 좌석이 다른 예매로 재선점됐을 수 있다.
-              // Redis 만료 이벤트 배달은 지연될 수 있어 재선점이 드문 일이 아니다. 가드가 달린 조건부 UPDATE로만
-              // 갱신한다 — bookingNumber가 조회 시점 그대로이고 여전히 만료 상태일 때만 해제된다.
+              // Redis 만료 이벤트 배달은 지연될 수 있어 재선점이 드문 일이 아니다. 조회 스냅샷의 만료 시각을
+              // 가드로 넘겨 "내가 본 그 선점 그대로일 때만" 해제한다. 만료 여부를 now()로 다시 판정하지 않는다 —
+              // Redis 락 TTL과 holdExpiredAt이 거의 같은 시각이라, 경계에서 아직 만료 전으로 읽혀 즉시 해제를
+              // 놓칠 수 있다. 이 이벤트의 수신 자체가 만료 신호다.
               int updated =
                   seatRepository.releaseExpiredHoldById(
-                      seatId,
-                      seat.getBookingNumber(),
-                      LocalDateTime.now(),
-                      SeatStatus.HOLD,
-                      SeatStatus.AVAILABLE);
+                      seatId, seat.getHoldExpiredAt(), SeatStatus.HOLD, SeatStatus.AVAILABLE);
               if (updated == 0) {
                 log.info("Redis 만료 이벤트 수신: 좌석 {}이(가) 조회 이후 선점 상태가 바뀌어 롤백을 건너뜁니다.", seatId);
                 return;
