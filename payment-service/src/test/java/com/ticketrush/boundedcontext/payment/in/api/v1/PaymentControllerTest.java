@@ -144,6 +144,106 @@ class PaymentControllerTest {
   }
 
   @Test
+  @DisplayName("paymentKey가 200자를 초과하면 400 Bad Request로 앞단에서 거부한다")
+  void confirm_fails_when_payment_key_too_long() throws Exception {
+    // given - paymentKey 201자(형식 상한 200자 초과)
+    String tooLongKey = "a".repeat(201);
+    String requestBody =
+        """
+        {
+          "booking_id": 100,
+          "seat_id": 200,
+          "provider": "KAKAO",
+          "amount": 55000,
+          "payment_key": "%s"
+        }
+        """
+            .formatted(tooLongKey);
+
+    // when & then - VALIDATION_ERROR(@Pattern 위반)로 거부됨을 code까지 단언해 JSON 파싱 실패 등 다른 400과 구분한다.
+    mockMvc
+        .perform(
+            post("/api/v1/payment/confirm")
+                .header("X-Gateway-Token", INTERNAL_TOKEN)
+                .header("X-User-Id", 10L)
+                .header("X-User-Role", "USER")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(requestBody))
+        .andExpect(status().isBadRequest())
+        .andExpect(jsonPath("$.is_success").value(false))
+        .andExpect(jsonPath("$.code").value(ErrorStatus.VALIDATION_ERROR.getCode()));
+
+    verifyNoInteractions(paymentFacade);
+  }
+
+  @Test
+  @DisplayName("paymentKey에 제어문자가 있으면 400 Bad Request로 앞단에서 거부한다")
+  void confirm_fails_when_payment_key_has_control_char() throws Exception {
+    // given - paymentKey에 제어문자(개행)가 포함되어 인쇄가능 ASCII 화이트리스트 위반
+    String requestBody =
+        """
+        {
+          "booking_id": 100,
+          "seat_id": 200,
+          "provider": "KAKAO",
+          "amount": 55000,
+          "payment_key": "pg\\nKey_xyz"
+        }
+        """;
+
+    // when & then - JSON 파싱 실패가 아니라 @Pattern(VALIDATION_ERROR) 위반으로 거부됨을 code로 특정한다.
+    mockMvc
+        .perform(
+            post("/api/v1/payment/confirm")
+                .header("X-Gateway-Token", INTERNAL_TOKEN)
+                .header("X-User-Id", 10L)
+                .header("X-User-Role", "USER")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(requestBody))
+        .andExpect(status().isBadRequest())
+        .andExpect(jsonPath("$.is_success").value(false))
+        .andExpect(jsonPath("$.code").value(ErrorStatus.VALIDATION_ERROR.getCode()));
+
+    verifyNoInteractions(paymentFacade);
+  }
+
+  @Test
+  @DisplayName("paymentKey가 상한 200자면 검증을 통과해 confirm으로 전달된다")
+  void confirm_succeeds_when_payment_key_at_max_length() throws Exception {
+    // given - 형식 상한 정확히 200자(off-by-one 회귀 방어: {1,200}이 200자를 허용해야 함)
+    Long userId = 10L;
+    String maxLengthKey = "a".repeat(200);
+    LocalDateTime paidAt = LocalDateTime.of(2026, 5, 22, 10, 0);
+    PaymentConfirmResponse response = new PaymentConfirmResponse(1L, "COMPLETED", paidAt);
+    given(paymentFacade.confirm(eq(userId), any(PaymentConfirmRequest.class))).willReturn(response);
+
+    String requestBody =
+        """
+        {
+          "booking_id": 100,
+          "seat_id": 200,
+          "provider": "KAKAO",
+          "amount": 55000,
+          "payment_key": "%s"
+        }
+        """
+            .formatted(maxLengthKey);
+
+    // when & then
+    mockMvc
+        .perform(
+            post("/api/v1/payment/confirm")
+                .header("X-Gateway-Token", INTERNAL_TOKEN)
+                .header("X-User-Id", userId)
+                .header("X-User-Role", "USER")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(requestBody))
+        .andExpect(status().isOk());
+
+    verify(paymentFacade).confirm(eq(userId), any(PaymentConfirmRequest.class));
+  }
+
+  @Test
   @DisplayName("결제 금액 불일치 시 PAYMENT_400_001로 실패한다")
   void confirm_fails_when_amount_mismatch() throws Exception {
     // given
