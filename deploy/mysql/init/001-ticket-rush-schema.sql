@@ -210,7 +210,8 @@ CREATE TABLE `seat` (
   `seat_number` varchar(10) COLLATE utf8mb4_unicode_ci NOT NULL,
   `seat_status` enum('AVAILABLE','HOLD','SOLD') COLLATE utf8mb4_unicode_ci NOT NULL,
   PRIMARY KEY (`seat_id`),
-  KEY `idx_seat_performance_id` (`performance_id`)
+  KEY `idx_seat_performance_id` (`performance_id`),
+  KEY `idx_seat_status_hold_expired_at` (`seat_status`,`hold_expired_at`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 /*!40101 SET character_set_client = @saved_cs_client */;
 DROP TABLE IF EXISTS `seat_layout`;
