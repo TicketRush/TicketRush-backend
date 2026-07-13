@@ -188,6 +188,12 @@ jobs:
 
           mkdir -p deploy
 
+          # monitoring/ 은 항상 번들 것으로 갈아끼운다.
+          # compose 를 EC2 에서 수동으로 up 하면 bind 소스가 없는 경로를 dockerd 가 '디렉터리'로
+          # 자동 생성한다. 그 상태에서 tar 가 같은 경로에 '파일'을 풀려다 충돌해, 수동 개입 전까지
+          # 배포가 영구히 실패한다. 지워두면 오염된 상태에서도 자동 복구된다.
+          rm -rf deploy/monitoring
+
           tar \
             -xzf deploy-bundle.tar.gz \
             -C deploy
