@@ -64,7 +64,7 @@ jobs:
           prom = yaml.safe_load(open("monitoring/prometheus.aws.yml", encoding="utf-8"))
           comp = yaml.safe_load(open("deploy/docker-compose.prod.yml", encoding="utf-8"))
 
-          MGMT_PORT = "9091"   # prod 프로파일의 management.server.port
+          MGMT_PORT = "8090"   # prod 프로파일의 management.server.port
 
           # 배포되는 앱 = compose 에서 SERVER_PORT 를 가진 서비스
           deployed = {

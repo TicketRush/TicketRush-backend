@@ -37,13 +37,13 @@ Prometheus 자기 자신(`localhost:9090`)도 스크랩한다. 아래 "전환 �
 
 ### 2. actuator를 앱 포트에서 분리한다
 
-**prod 프로파일에서만** `management.server.port: 9091`을 적용한다(각 서비스의 `application-prod.yml`).
+**prod 프로파일에서만** `management.server.port: 8090`을 적용한다(각 서비스의 `application-prod.yml`).
 
 분리하지 않으면 **`/actuator/prometheus`가 인터넷에 무인증 공개된다.** gateway의 8080은 인터넷에 열려 있어야 하고(부하 대상), `SecurityConfig`가 `.anyExchange().permitAll()`이며, `/actuator/**`에 매칭되는 게이트웨이 라우트가 없어 요청이 게이트웨이 자신의 actuator 핸들러로 떨어진다. 즉 `http://<EIP>:8080/actuator/prometheus`가 그대로 읽힌다. 여기에는 내부 라우트 ID, 서비스 호스트명, JVM·힙 상태, uri별 요청·에러율, 결제 성공/실패 카운터, DB 커넥션 풀 상태가 담긴다.
 
-9091은 compose에서 publish 하지 않으므로 **컨테이너 네트워크 안의 Prometheus만 접근할 수 있다.** 예외로 gateway의 9091만 `127.0.0.1:9091`에 바인딩한다. CD가 EC2 호스트에서 헬스체크를 해야 하기 때문이며, 루프백이라 인터넷에서는 닿지 않는다.
+8090은 compose에서 publish 하지 않으므로 **컨테이너 네트워크 안의 Prometheus만 접근할 수 있다.** 예외로 gateway의 8090만 `127.0.0.1:8090`에 바인딩한다. CD가 EC2 호스트에서 헬스체크를 해야 하기 때문이며, 루프백이라 인터넷에서는 닿지 않는다.
 
-**`application.yml`이 아니라 `application-prod.yml`에 두는 이유**: 공통 설정에 두면 로컬에서 앱 8개를 호스트에 직접 실행할 때 8개가 9091을 서로 다퉈 기동이 실패한다. prod에만 두면 로컬은 지금까지처럼 앱 포트에서 actuator를 제공하고, `monitoring/prometheus.yml`도 그대로 동작한다.
+**`application.yml`이 아니라 `application-prod.yml`에 두는 이유**: 공통 설정에 두면 로컬에서 앱 8개를 호스트에 직접 실행할 때 8개가 8090을 서로 다퉈 기동이 실패한다. prod에만 두면 로컬은 지금까지처럼 앱 포트에서 actuator를 제공하고, `monitoring/prometheus.yml`도 그대로 동작한다.
 
 ### 3. 네트워크 노출 — 인터넷에 여는 것은 8080 하나뿐
 
@@ -52,8 +52,8 @@ Prometheus 자기 자신(`localhost:9090`)도 스크랩한다. 아래 "전환 �
 | 8080 | gateway (앱) | `0.0.0.0` | 부하 대상. 열려야 한다 |
 | 9090 | Prometheus | `127.0.0.1` | **SSH 터널** |
 | 3000 | Grafana | `127.0.0.1` | **SSH 터널** |
-| 9091 | gateway actuator | `127.0.0.1` | CD 헬스체크(EC2 호스트 내부) |
-| 9091 | 나머지 7개 actuator | publish 안 함 | 컨테이너 네트워크 전용 |
+| 8090 | gateway actuator | `127.0.0.1` | CD 헬스체크(EC2 호스트 내부) |
+| 8090 | 나머지 7개 actuator | publish 안 함 | 컨테이너 네트워크 전용 |
 
 ```bash
 ssh -i <key>.pem -L 3000:localhost:3000 -L 9090:localhost:9090 <user>@<EIP>

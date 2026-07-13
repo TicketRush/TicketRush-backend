@@ -302,7 +302,7 @@ jobs:
             exit 1
           fi
 
-          # actuator는 prod 에서 9091(management.server.port)로 분리된다. 8080에는 없다.
+          # actuator는 prod 에서 8090(management.server.port)로 분리된다. 8080에는 없다.
           HEALTH_RESPONSE="$(
             curl \
               --fail \
@@ -311,7 +311,7 @@ jobs:
               --retry 12 \
               --retry-delay 5 \
               --retry-all-errors \
-              http://127.0.0.1:9091/actuator/health
+              http://127.0.0.1:8090/actuator/health
           )"
 
           echo "${HEALTH_RESPONSE}"
