@@ -1,6 +1,7 @@
 package com.ticketrush.boundedcontext.booking.app.usecase;
 
 import com.ticketrush.boundedcontext.booking.domain.entity.Booking;
+import com.ticketrush.boundedcontext.booking.domain.policy.RefundingStuckPolicy;
 import com.ticketrush.boundedcontext.booking.domain.types.BookingStatus;
 import com.ticketrush.boundedcontext.booking.out.repository.BookingRepository;
 import com.ticketrush.global.eventpublisher.EventPublisher;
@@ -9,8 +10,8 @@ import com.ticketrush.global.status.ErrorStatus;
 import com.ticketrush.shared.booking.event.RefundRequestedEvent;
 import java.time.Clock;
 import java.time.LocalDateTime;
+import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -23,34 +24,26 @@ import org.springframework.transaction.annotation.Transactional;
  * 있으며, 이 API는 CS가 사용자를 대신해 시도하기 위한 것이다.
  *
  * <p>추가로 <b>REFUNDING 고착 예매의 복구</b>도 이 API가 담당한다 (#397). PG 통신 실패가 DLT로 빠져 종결 이벤트가 오지 않으면 예매는
- * REFUNDING에 영구히 머무는데, 이 상태는 {@code requestRefund()}가 막혀 손댈 수 없었다. 임계 시간 이상 멈춘 건이면 상태 전이 없이(이미
- * REFUNDING) 이벤트만 재발행한다. 임계 미달의 신선한 REFUNDING은 정상 진행 중이므로 여전히 거절한다.
+ * REFUNDING에 영구히 머무는데, 이 상태는 {@code requestRefund()}가 막혀 손댈 수 없었다. 임계({@link RefundingStuckPolicy})
+ * 이상 멈춘 건이면 상태 전이 없이(이미 REFUNDING) 이벤트만 재발행한다. 임계 미달의 신선한 REFUNDING은 정상 진행 중이므로 여전히 거절한다.
+ *
+ * <p>고착 재발행은 예매를 변경하지 않으므로 그 예매는 <b>종결 이벤트가 도착할 때까지 고착 목록에 그대로 남는다</b>(미해결이라는 뜻이다). 같은 이유로 낙관적 락도 이
+ * 경로는 막지 못해 관리자가 반복 호출하면 그만큼 PG 호출이 나가지만, payment가 재수신에 완전 멱등이라 이중 환불은 일어나지 않는다. 누가 언제 눌렀는지는
+ * ADMIN-AUDIT 로그로 추적한다.
  *
  * <p>payment-service는 이 이벤트를 받아 결제가 COMPLETED면 PG 환불을 재실행하고, 이미 CANCELED(결제 취소 API로 우회 환불됐거나 이전 환불이
- * 실제로는 성공한 경우)면 {@code PaymentCanceledEvent}를 재발행해 정합을 self-heal 한다. 재수신에 완전 멱등이므로 관리자가 같은 고착 건을 중복
- * 재발행해도 이중 환불은 일어나지 않는다.
+ * 실제로는 성공한 경우)면 {@code PaymentCanceledEvent}를 재발행해 정합을 self-heal 한다.
  */
 @Slf4j
 @Service
 @Transactional
+@RequiredArgsConstructor
 public class BookingAdminRetryRefundUseCase {
 
   private final BookingRepository bookingRepository;
   private final EventPublisher eventPublisher;
+  private final RefundingStuckPolicy refundingStuckPolicy;
   private final Clock clock;
-  private final long stuckThresholdMinutes;
-
-  public BookingAdminRetryRefundUseCase(
-      BookingRepository bookingRepository,
-      EventPublisher eventPublisher,
-      Clock clock,
-      @Value(BookingGetRefundingStuckBookingsUseCase.STUCK_THRESHOLD_PROPERTY)
-          long stuckThresholdMinutes) {
-    this.bookingRepository = bookingRepository;
-    this.eventPublisher = eventPublisher;
-    this.clock = clock;
-    this.stuckThresholdMinutes = stuckThresholdMinutes;
-  }
 
   public void execute(Long adminId, String bookingNumber) {
     Booking booking =
@@ -58,8 +51,7 @@ public class BookingAdminRetryRefundUseCase {
             .findByBookingNumber(bookingNumber)
             .orElseThrow(() -> new BusinessException(ErrorStatus.BOOKING_NOT_FOUND));
 
-    LocalDateTime cutoff = LocalDateTime.now(clock).minusMinutes(stuckThresholdMinutes);
-    if (booking.isStuckInRefunding(cutoff)) {
+    if (booking.isStuckInRefunding(refundingStuckPolicy.cutoff())) {
       // 고착 복구 (#397): 상태는 이미 REFUNDING이므로 전이 없이 이벤트만 재발행한다.
       publishRefundRequested(adminId, booking, "REFUNDING 고착 재발행");
       return;

@@ -10,6 +10,7 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 
 import com.ticketrush.boundedcontext.booking.domain.entity.Booking;
+import com.ticketrush.boundedcontext.booking.domain.policy.RefundingStuckPolicy;
 import com.ticketrush.boundedcontext.booking.domain.types.BookingStatus;
 import com.ticketrush.boundedcontext.booking.out.repository.BookingRepository;
 import com.ticketrush.global.eventpublisher.EventPublisher;
@@ -46,7 +47,10 @@ class BookingAdminRetryRefundUseCaseTest {
         Clock.fixed(NOW.atZone(ZoneId.systemDefault()).toInstant(), ZoneId.systemDefault());
     bookingAdminRetryRefundUseCase =
         new BookingAdminRetryRefundUseCase(
-            bookingRepository, eventPublisher, fixedClock, STUCK_THRESHOLD_MINUTES);
+            bookingRepository,
+            eventPublisher,
+            new RefundingStuckPolicy(fixedClock, STUCK_THRESHOLD_MINUTES),
+            fixedClock);
   }
 
   private Booking bookingWithStatus(BookingStatus status) {

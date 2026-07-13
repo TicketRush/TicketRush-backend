@@ -7,6 +7,7 @@ import static org.mockito.BDDMockito.given;
 
 import com.ticketrush.boundedcontext.booking.app.dto.response.BookingSummaryResponse;
 import com.ticketrush.boundedcontext.booking.domain.entity.Booking;
+import com.ticketrush.boundedcontext.booking.domain.policy.RefundingStuckPolicy;
 import com.ticketrush.boundedcontext.booking.domain.types.BookingStatus;
 import com.ticketrush.boundedcontext.booking.out.repository.BookingRepository;
 import com.ticketrush.global.dto.request.OffsetPageRequest;
@@ -42,7 +43,7 @@ class BookingGetRefundingStuckBookingsUseCaseTest {
         Clock.fixed(NOW.atZone(ZoneId.systemDefault()).toInstant(), ZoneId.systemDefault());
     bookingGetRefundingStuckBookingsUseCase =
         new BookingGetRefundingStuckBookingsUseCase(
-            bookingRepository, fixedClock, STUCK_THRESHOLD_MINUTES);
+            bookingRepository, new RefundingStuckPolicy(fixedClock, STUCK_THRESHOLD_MINUTES));
   }
 
   @Test
