@@ -390,6 +390,37 @@ jobs:
             exit 1
           fi
 
+          echo "Checking external HTTPS health..."
+
+          if ! EXTERNAL_HEALTH_RESPONSE="$(
+            curl \
+              --fail \
+              --silent \
+              --show-error \
+              --connect-timeout 10 \
+              --max-time 30 \
+              --retry 6 \
+              --retry-delay 5 \
+              --retry-all-errors \
+              https://api.ticketrush.store/actuator/health \
+              2>&1
+          )"; then
+            echo "${EXTERNAL_HEALTH_RESPONSE}"
+            echo "External HTTPS health request failed."
+            echo "Check DNS, TLS certificate, Nginx, and public network reachability."
+            exit 1
+          fi
+
+          echo "${EXTERNAL_HEALTH_RESPONSE}"
+
+          if ! grep -Eq '"status"[[:space:]]*:[[:space:]]*"UP"' \
+            <<< "${EXTERNAL_HEALTH_RESPONSE}"; then
+            echo "External HTTPS health status is not UP."
+            exit 1
+          fi
+
+          echo "External HTTPS health check passed."
+
           PREVIOUS_RELEASE=""
 
           if [[ -f deploy/CURRENT_RELEASE ]]; then
