@@ -1,6 +1,7 @@
 package com.ticketrush.boundedcontext.ticket.app.mapper;
 
 import com.ticketrush.boundedcontext.ticket.app.dto.response.EntryVerifyResponse;
+import com.ticketrush.boundedcontext.ticket.app.dto.response.TicketInternalResponse;
 import com.ticketrush.boundedcontext.ticket.app.dto.response.TicketQrResponse;
 import com.ticketrush.boundedcontext.ticket.domain.entity.Ticket;
 import java.time.LocalDateTime;
@@ -19,6 +20,9 @@ public interface TicketMapper {
   @Mapping(source = "ticket.ticketStatus", target = "ticketStatus")
   @Mapping(source = "ticket.createdAt", target = "issuedAt")
   TicketQrResponse toTicketQrResponse(Ticket ticket, String payload, LocalDateTime expiresAt);
+
+  // 단일 소스 Entity -> DTO. bookingId/ticketStatus 모두 동명 자동 매핑된다.
+  TicketInternalResponse toTicketInternalResponse(Ticket ticket);
 
   // 식별자 + 계산된 토큰 해시 -> Entity. @Builder 대상(bookingId/userId/ticketTokenHash/ticketStatus)만 target이라
   // id/usedAt은 ignore가 불필요하며, 발급 시 상태는 UNUSED로 고정한다.

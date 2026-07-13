@@ -93,6 +93,9 @@ public class BookingAdminController {
           결제가 아직 완료 상태면 PG 환불을 재실행하고, 결제 취소 API로 이미 우회 환불된 상태면 결제 취소 이벤트를
           재발행해 예매·좌석 정합을 회복합니다. 사용자도 예매를 다시 취소해 재환불할 수 있으며, 이 API는 CS가 사용자를
           대신해 시도하기 위한 것입니다.
+
+          이미 입장을 완료한(입장권 사용됨) 예매는 관리자도 재환불할 수 없습니다(409 `BOOKING_409_006`).
+          착석한 좌석이 재판매되는 것을 막기 위한 정책이며, 사용자 취소 경로와 동일하게 적용됩니다.
           """)
   @PostMapping("/{bookingNumber}/refund-retry")
   public ResponseEntity<ApiResponse<Void>> retryRefund(

@@ -84,10 +84,16 @@ public enum ErrorStatus {
   BOOKING_SEAT_MISMATCH(HttpStatus.CONFLICT, "BOOKING_409_004", "예매와 좌석 정보가 일치하지 않습니다."),
   BOOKING_REFUND_RETRY_NOT_ALLOWED(
       HttpStatus.CONFLICT, "BOOKING_409_005", "환불에 실패한 예매만 재환불할 수 있습니다."),
+  BOOKING_CANCEL_NOT_ALLOWED_TICKET_USED(
+      HttpStatus.CONFLICT, "BOOKING_409_006", "이미 입장한 예매는 환불할 수 없습니다."),
 
   // Booking 500
   BOOKING_NUMBER_RETRY_EXCEEDED(
       HttpStatus.INTERNAL_SERVER_ERROR, "BOOKING_500_001", "재시도 횟수를 초과하여 고유한 예약 번호를 생성할 수 없습니다."),
+
+  // Booking 503
+  BOOKING_TICKET_COMMUNICATION_FAILED(
+      HttpStatus.SERVICE_UNAVAILABLE, "BOOKING_503_001", "입장권 정보 조회에 실패했습니다. 잠시 후 다시 시도해 주세요."),
 
   // Seat 400
   SEAT_HOLD_TIME_INVALID(HttpStatus.BAD_REQUEST, "SEAT_400_001", "선점 만료 시간은 현재 시간 이후여야 합니다."),

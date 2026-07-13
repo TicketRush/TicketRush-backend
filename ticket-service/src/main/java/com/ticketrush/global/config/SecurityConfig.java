@@ -1,6 +1,7 @@
 package com.ticketrush.global.config;
 
 import com.ticketrush.global.filter.GatewayHeaderFilter;
+import com.ticketrush.global.security.InternalApiTokenFilter;
 import com.ticketrush.global.status.ErrorStatus;
 import lombok.RequiredArgsConstructor;
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
@@ -22,15 +23,25 @@ import org.springframework.security.web.authentication.UsernamePasswordAuthentic
 @RequiredArgsConstructor
 public class SecurityConfig {
 
+  private static final String INTERNAL_TICKET_API_PREFIX = "/api/v1/internal/ticket";
+
   private final GatewayHeaderFilter gatewayHeaderFilter;
 
   @Bean
-  public SecurityFilterChain filterChain(HttpSecurity http) throws Exception {
+  public InternalApiTokenFilter internalApiTokenFilter(
+      CustomSecurityProperties securityProperties) {
+    return new InternalApiTokenFilter(securityProperties, INTERNAL_TICKET_API_PREFIX);
+  }
+
+  @Bean
+  public SecurityFilterChain filterChain(
+      HttpSecurity http, InternalApiTokenFilter internalApiTokenFilter) throws Exception {
     http.csrf(csrf -> csrf.disable())
         .cors(cors -> {})
         .httpBasic(httpBasic -> httpBasic.disable())
         .formLogin(formLogin -> formLogin.disable())
         .addFilterBefore(gatewayHeaderFilter, UsernamePasswordAuthenticationFilter.class)
+        .addFilterBefore(internalApiTokenFilter, UsernamePasswordAuthenticationFilter.class)
         .exceptionHandling(
             exception ->
                 exception
@@ -66,6 +77,8 @@ public class SecurityConfig {
             auth ->
                 auth.requestMatchers("/v3/api-docs/**", "/swagger-ui/**", "/swagger-ui.html")
                     .permitAll()
+                    .requestMatchers("/api/v1/internal/ticket/**")
+                    .hasRole("INTERNAL")
                     .requestMatchers(HttpMethod.GET, "/api/v1/ticket/bookings/*/qr")
                     .authenticated()
                     .requestMatchers(HttpMethod.POST, "/api/v1/entries/**")
