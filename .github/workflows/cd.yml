@@ -137,12 +137,15 @@ jobs:
         run: |
           set -Eeuo pipefail
 
+          # monitoring/ 은 로컬 스택과 공유하는 SSOT다. deploy/ 밑으로 복사하면 대시보드 JSON이
+          # 중복되므로, 번들에만 함께 담아 EC2에서 deploy/monitoring/** 으로 풀리게 한다.
+          # compose의 상대경로(./monitoring/...)가 그대로 이 위치를 가리킨다.
           tar \
             --exclude='.env' \
             --exclude='.env.local' \
-            -C deploy \
             -czf deploy-bundle.tar.gz \
-            .
+            -C deploy . \
+            -C .. monitoring
 
       - name: Copy deployment files to EC2
         shell: bash
@@ -184,6 +187,12 @@ jobs:
           cd "${HOME}/ticketrush"
 
           mkdir -p deploy
+
+          # monitoring/ 은 항상 번들 것으로 갈아끼운다.
+          # compose 를 EC2 에서 수동으로 up 하면 bind 소스가 없는 경로를 dockerd 가 '디렉터리'로
+          # 자동 생성한다. 그 상태에서 tar 가 같은 경로에 '파일'을 풀려다 충돌해, 수동 개입 전까지
+          # 배포가 영구히 실패한다. 지워두면 오염된 상태에서도 자동 복구된다.
+          rm -rf deploy/monitoring
 
           tar \
             -xzf deploy-bundle.tar.gz \
@@ -230,6 +239,8 @@ jobs:
             performance-service
             ticket-service
             seat-service
+            prometheus
+            grafana
           )
 
           READY=false
@@ -297,6 +308,7 @@ jobs:
             exit 1
           fi
 
+          # actuator는 prod 에서 8090(management.server.port)로 분리된다. 8080에는 없다.
           HEALTH_RESPONSE="$(
             curl \
               --fail \
@@ -305,7 +317,7 @@ jobs:
               --retry 12 \
               --retry-delay 5 \
               --retry-all-errors \
-              http://127.0.0.1:8080/actuator/health
+              http://127.0.0.1:8090/actuator/health
           )"
 
           echo "${HEALTH_RESPONSE}"
@@ -313,6 +325,36 @@ jobs:
           if ! grep -Eq '"status"[[:space:]]*:[[:space:]]*"UP"' \
             <<< "${HEALTH_RESPONSE}"; then
             echo "Gateway health status is not UP."
+            exit 1
+          fi
+
+          # 컨테이너가 떴다고 지표가 수집되는 것은 아니다. 타깃 주소가 틀리면 up=0인 채로
+          # 배포가 초록불로 끝난다. 실제로 스크랩되는지 확인한다(이슈 #380 완료 조건).
+          EXPECTED_TARGETS=9   # 앱 8 + prometheus 자기 자신 1
+
+          for ATTEMPT in $(seq 1 12); do
+            UP_COUNT="$(
+              curl --fail --silent \
+                'http://127.0.0.1:9090/api/v1/query?query=up' \
+                | jq '[.data.result[] | select(.value[1] == "1")] | length'
+            )" || UP_COUNT=0
+
+            if [[ "${UP_COUNT}" == "${EXPECTED_TARGETS}" ]]; then
+              echo "Prometheus targets UP: ${UP_COUNT}/${EXPECTED_TARGETS}"
+              break
+            fi
+
+            echo "Prometheus targets UP: ${UP_COUNT}/${EXPECTED_TARGETS} (retrying)"
+            sleep 10
+          done
+
+          if [[ "${UP_COUNT}" != "${EXPECTED_TARGETS}" ]]; then
+            echo "Prometheus is not scraping all targets."
+
+            curl --silent 'http://127.0.0.1:9090/api/v1/targets' \
+              | jq -r '.data.activeTargets[]
+                  | "\(.scrapeUrl) health=\(.health) \(.lastError)"'
+
             exit 1
           fi
 
