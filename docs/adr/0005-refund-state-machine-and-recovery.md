@@ -72,7 +72,7 @@ payment-service는 손대지 않는다. `RefundFailedEvent`는 Javadoc만 정정
 - **세 결함이 한 번에 해소된다.** 정합성 붕괴는 `markRefunded()` 수정 없이, 입장 차단은 `EntryVerifyUseCase` 수정 없이 해결된다. `ticket-service`는 코드 변경이 전혀 없다 — 이것이 이 설계가 옳다는 신호다.
 - **상태머신이 예매의 생애만 표현한다.** 이후 `bookingStatus`를 다루는 코드는 "환불 시도가 실패한 예매"라는 예외를 기억할 필요가 없다.
 - **사용자가 왜 예매가 유지됐는지 알 수 있다.** `BookingSummaryResponse`에 `refundFailedAt`이 실려, 취소를 눌렀는데 예매가 `CONFIRMED`로 남은 이유를 클라이언트가 표시할 수 있다.
-- (트레이드오프) **결정적 거절 건을 사용자가 반복 시도할 수 있다.** PG 호출이 낭비될 수 있으나, 흡수 상태를 되살리지 않는 편이 낫다고 판단했다. 실측상 문제가 되면 `refundFailedAt` 기반 쿨다운을 추가한다(#397).
+- (트레이드오프) **결정적 거절 건을 사용자가 반복 시도할 수 있다.** PG 호출이 낭비될 수 있으나, 흡수 상태를 되살리지 않는 편이 낫다고 판단했다. #397에서 쿨다운 도입 여부를 검토했고 **실측 전 미도입으로 결정했다** — 고착이 없어 사용자 피해가 없고 비용은 PG 호출뿐이므로, PG 호출량이 실측상 문제가 되면 그때 `refundFailedAt` 기반 쿨다운(시간제한이어야 하며 영구 차단이면 흡수 상태의 부활이다)을 재검토한다.
 - (트레이드오프) **관리자가 재환불을 처리하기 전에 사용자가 입장할 수 있다.** 입장한 뒤 재환불이 성공하면 `TicketCancelUseCase`는 `USED` 티켓을 전이시키지 않지만, `SeatReleaseSoldSeatUseCase`는 티켓 사용 여부를 보지 않고 좌석을 `SOLD → AVAILABLE`로 반환한다 — 실제로 착석한 좌석이 재판매 가능해진다. 이 갭은 이 결정이 만든 것이 아니라(입장한 예매를 사용자가 취소해도 동일하다) 재환불 경로가 늘어 도달성이 넓어졌을 뿐이다. 입장 후 환불을 허용할지는 운영 정책이며, 좌석 반환 차단은 후속 과제로 분리한다. 다만 그 반대(환불도 못 받고 입장도 못 하는 상태)보다는 낫다.
 - (마이그레이션) 마이그레이션 도구가 없고 prod는 `ddl-auto: validate`이므로(ADR [3](0003-shared-database-with-service-boundaries.md)), `infra/mysql/init/01-schema.sql` 갱신과 함께 기존 DB에는 수동 `ALTER`가 필요하다. 작성 시점 기준 아직 프로덕션 배포 전이라 `REFUND_FAILED` 행이 존재하지 않으므로 데이터 변환이 필요 없다. **먼저 그 전제를 확인한다.**
 
@@ -83,6 +83,13 @@ payment-service는 손대지 않는다. `RefundFailedEvent`는 Javadoc만 정정
   ALTER TABLE booking ADD COLUMN refund_failed_at datetime(6) DEFAULT NULL;
   ALTER TABLE booking MODIFY booking_status
     enum('CANCELED','CONFIRMED','EXPIRED','PENDING','REFUNDED','REFUNDING') NOT NULL;
+
+  -- #397 낙관적 락. 배포 전에 실행하지 않으면 ddl-auto: validate가 기동을 실패시킨다.
+  ALTER TABLE booking ADD COLUMN version bigint NOT NULL DEFAULT 0;
+
+  -- #397 REFUNDING 고착 조회용 인덱스(장애 대응 중 반복 조회 경로). validate 대상은 아니라 배포 후에 넣어도 되지만,
+  -- 없으면 booking 풀스캔 + filesort가 된다.
+  ALTER TABLE booking ADD INDEX idx_booking_status_updated_at (booking_status, updated_at);
   ```
 
   **0단계가 0이 아니면 enum을 먼저 축소해선 안 된다.** MySQL이 제거된 enum 값을 빈 문자열로 만든다. 그리고 남은 행을 일괄 `CONFIRMED`로 밀어서도 안 된다 — 위 §맥락 결함 1이 말하듯 그중 일부는 결제 취소 API로 **우회 환불이 실제로 성사된 뒤 booking만 고착된 건**이라(payment=CANCELED, 좌석은 이미 반환·재판매됐을 수 있음), `CONFIRMED`로 되살리면 입장이 허용되고 좌석이 이중 보유된다. 그 경우에만 아래를 enum 축소 **앞에** 끼워 넣는다.
@@ -102,7 +109,7 @@ payment-service는 손대지 않는다. `RefundFailedEvent`는 Javadoc만 정정
 
   로컬은 `ddl-auto: update`가 enum 값 축소를 반영하지 않으므로 컨테이너 볼륨을 재생성하거나 위 `ALTER`를 직접 실행한다.
 - (알려진 한계 · 이벤트 재생) `recordRefundFailure`는 `failedAt`이 기록된 `refundFailedAt`보다 나중일 때만 복원한다. 이 가드가 없으면, Inbox retention(기본 30일)이 만료된 뒤 DLT/토픽을 재생해 **옛 `RefundFailedEvent`가 새 재환불 시도(REFUNDING) 도중 도착**할 때 진행 중인 시도를 조용히 중단시킨다. 가드는 동일 시각 이벤트를 무시하므로 이 창을 닫는다. 다만 시도 식별자(예: `refundId`)로 매칭하는 편이 더 견고하며, 이벤트 계약을 바꿔야 하므로 후속 과제로 남긴다.
-- (알려진 한계 · 동시성) `Booking`에는 `@Version`이 없다. `requestRefund()`가 check-then-act이므로 사용자 취소와 관리자 재환불이 동시에 같은 `CONFIRMED` 예매를 읽으면 둘 다 `REFUNDING`을 쓰고 `RefundRequestedEvent`를 두 번 발행할 수 있다. 이중 PG 환불은 payment의 unique 제약(#296)과 멱등 키가 막으므로 금전 피해는 없으나, booking 계층 자체의 방어는 없다. 낙관적 락 도입은 이 변경의 범위를 넘으므로 후속 과제다(#397).
-- (후속 과제 · #397) **REFUNDING에서 멈춘 예매는 이 조회로 보이지 않는다.** payment 통신 실패로 DLT에 빠져 종결 이벤트가 끝내 오지 않으면 예매는 `REFUNDING`으로 남는다 — 돈도 못 받고, 좌석은 SOLD로 묶이고, 입장까지 차단되는(REFUNDING은 통과 불가) 더 급한 상태다. 이 사각지대를 덮는 리컨실 수단이 필요하다.
+- (해소됨 · #397) ~~`Booking`에는 `@Version`이 없다~~ — `Booking`에 낙관적 락(`@Version`)을 도입했다. `requestRefund()`가 check-then-act이므로 사용자 취소와 관리자 재환불이 동시에 같은 `CONFIRMED` 예매를 읽으면 둘 다 검증을 통과했었는데, 이제 늦은 쪽 커밋이 버전 충돌로 실패한다. 이벤트 발행이 afterCommit이므로 실패한 커밋의 `RefundRequestedEvent`는 발행되지 않는다 — 이중 발행이 booking 계층에서 차단된다(그 아래 payment의 unique 제약 #296과 멱등 키는 그대로 2차 방어로 남는다). 충돌은 HTTP에서 `COMMON_409`로 응답하고, Kafka 리스너에서는 transient로 분류돼 재시도로 수렴한다. 낙관적 락은 `Booking`에만 둔다 — 베이스 엔티티로 확대하면 14개 엔티티 전체의 스키마·리스너 거동이 한꺼번에 바뀌므로 필요가 실증될 때 확대한다. 주의: 벌크 UPDATE(`expirePendingBookingById`)는 version을 증가시키지도 검사하지도 않으므로 confirm-vs-expire 경합(만료 벌크 UPDATE가 EXPIRED로 민 행을 진행 중이던 confirm 커밋이 덮는 lost update)은 이 락의 보호 밖이다 — #397 이전부터 있던 한계이며, 필요해지면 JPQL `UPDATE VERSIONED` 적용을 검토한다.
+- (해소됨 · #397) ~~REFUNDING에서 멈춘 예매는 이 조회로 보이지 않는다~~ — payment 통신 실패로 DLT에 빠져 종결 이벤트가 끝내 오지 않으면 예매는 `REFUNDING`으로 남는다(돈도 못 받고, 좌석은 SOLD로 묶이고, 입장까지 차단). 이 사각지대에 두 수단을 추가했다. **식별**: `GET /api/v1/booking/admin/bookings/refunding-stuck`가 `REFUNDING`에서 임계 시간(기본 30분, `app.booking.refunding-stuck-threshold-minutes`) 이상 멈춘 예매를 오래된 순으로 노출한다. `REFUNDING` 진입 후 엔티티가 갱신되지 않으므로 `updatedAt`이 곧 진입 시각이다. 임계는 Kafka 재시도 소진(약 31초)보다 훨씬 길어 컨슈머 랙·재배포 지연을 오탐하지 않는다. **복구**: 환불 재시도 API가 고착 건(임계 초과 REFUNDING)이면 상태 전이 없이 `RefundRequestedEvent`만 재발행한다. booking이 자체 판단으로 `CONFIRMED` 복원하는 방식은 채택하지 않았다 — 통신 실패는 환불이 실제 성공했을 수도 있는 상태라, 재발행이 payment의 self-heal(COMPLETED면 PG 재실행, CANCELED면 `PaymentCanceledEvent` 재발행)과 맞물려 `REFUNDED` 또는 `CONFIRMED+refundFailedAt`로 안전하게 수렴하는 유일한 경로다. 임계 미달의 신선한 `REFUNDING`은 정상 진행 중이므로 여전히 거절한다. 재발행은 엔티티를 건드리지 않아 관리자 중복 호출을 낙관적 락이 막지 못하지만, payment 멱등성이 이중 환불을 막으므로 감사 로그로만 추적한다. 리컨실 스케줄러·메트릭 자동화는 도입하지 않았다 — DLT 적재 시 Slack 알림이 이미 1차 신호이고, 사람 판단 없는 자동 재발행은 무한 PG 재시도 위험이 있다.
 - (후속 과제 · #399) **입장 완료(ticket=USED) 예매의 환불 시 좌석 재판매를 막을지 결정해야 한다.** 위 트레이드오프 참고. 기존 결함이나 이 변경으로 도달 경로가 늘었다.
 - (후속 과제) payment-service의 결제 취소 API가 booking 상태를 고려하지 않는 문제와 관리자용 재환불 수단은 별도 이슈로 분리돼 있다.

@@ -10,6 +10,7 @@ import jakarta.persistence.Entity;
 import jakarta.persistence.EnumType;
 import jakarta.persistence.Enumerated;
 import jakarta.persistence.Table;
+import jakarta.persistence.Version;
 import java.time.LocalDateTime;
 import lombok.AccessLevel;
 import lombok.Builder;
@@ -45,6 +46,16 @@ public class Booking extends AutoIdBaseEntity {
   /* 마지막으로 PG 환불이 실패한 시각. null이면 환불 실패 이력이 없다. 실패 사유는 payment의 refund 테이블이 SSOT다 (#391). */
   @Column(name = "refund_failed_at")
   private LocalDateTime refundFailedAt;
+
+  /*
+   * 낙관적 락 (#397). requestRefund()가 check-then-act라 사용자 취소와 관리자 재환불이 동시에 검증을 통과하면
+   * RefundRequestedEvent가 이중 발행된다. 이벤트 발행은 afterCommit이므로 늦은 커밋이 버전 충돌로 실패하면 이벤트도 나가지 않는다.
+   * 단, expirePendingBookingById 벌크 UPDATE는 version을 증가시키지도 검사하지도 않는다 — PENDING 전용이라 환불
+   * 경로(CONFIRMED/REFUNDING)와는 겹치지 않지만, confirm-vs-expire 경합은 이 락의 보호 밖이다(기존 한계, ADR 0005).
+   */
+  @Version
+  @Column(nullable = false)
+  private Long version;
 
   @Builder
   public Booking(
@@ -162,5 +173,20 @@ public class Booking extends AutoIdBaseEntity {
       return true;
     }
     return false;
+  }
+
+  /**
+   * REFUNDING에서 {@code cutoff} 이전부터 멈춰 있는 고착 상태인지 판별한다 (#397).
+   *
+   * <p>payment의 PG 통신 실패(성공 여부 불명)는 재시도 소진 후 DLT로 빠지고 종결 이벤트({@code PaymentCanceledEvent}/{@code
+   * RefundFailedEvent})가 끝내 오지 않는다. 이때 예매는 REFUNDING에 영구히 머문다 — 돈은 못 돌려받고 좌석은 SOLD로 묶이고 입장도 막힌다.
+   * REFUNDING 진입 이후 이 엔티티는 갱신되지 않으므로 {@code updatedAt}이 곧 진입 시각이다.
+   *
+   * @param cutoff 고착 판정 기준 시각(현재 시각 - 임계). {@code updatedAt}이 이보다 이전이면 고착이다
+   */
+  public boolean isStuckInRefunding(LocalDateTime cutoff) {
+    return this.bookingStatus == BookingStatus.REFUNDING
+        && getUpdatedAt() != null
+        && getUpdatedAt().isBefore(cutoff);
   }
 }

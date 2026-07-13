@@ -17,7 +17,11 @@ public record BookingSummaryResponse(
     @Schema(
             description = "마지막 환불 실패 시각. null이 아니면 취소를 요청했으나 환불에 실패해 예매가 유지된 것이다.",
             example = "2026-05-23 11:00:00")
-        LocalDateTime refundFailedAt) {
+        LocalDateTime refundFailedAt,
+    @Schema(
+            description = "마지막 변경 시각. REFUNDING이면 환불 요청이 시작된 시각이다 (#397).",
+            example = "2026-05-23 11:00:00")
+        LocalDateTime updatedAt) {
 
   public static BookingSummaryResponse from(Booking booking) {
     return new BookingSummaryResponse(
@@ -28,6 +32,7 @@ public record BookingSummaryResponse(
         booking.getSeatId(),
         booking.getBookingStatus(),
         booking.getConfirmedAt(),
-        booking.getRefundFailedAt());
+        booking.getRefundFailedAt(),
+        booking.getUpdatedAt());
   }
 }

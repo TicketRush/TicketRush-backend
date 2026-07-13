@@ -60,6 +60,7 @@ class BookingAdminControllerTest {
             3L,
             BookingStatus.CONFIRMED,
             LocalDateTime.of(2026, 5, 22, 10, 30),
+            FAILED_AT,
             FAILED_AT);
 
     given(bookingFacade.getRefundFailedBookings(new OffsetPageRequest(0, 10)))
@@ -81,6 +82,43 @@ class BookingAdminControllerTest {
         .andExpect(jsonPath("$.pagination_info.total_elements").value(1));
 
     verify(bookingFacade).getRefundFailedBookings(new OffsetPageRequest(0, 10));
+  }
+
+  @Test
+  @DisplayName("ADMIN이 환불 고착 예매를 조회하면 REFUNDING 진입 시각(updatedAt)이 함께 응답된다")
+  void getRefundingStuckBookings_returns_stuck_bookings_with_updated_at() throws Exception {
+    // given: REFUNDING에서 임계 시간 이상 멈춘 고착 예매 (#397)
+    LocalDateTime stuckSince = LocalDateTime.of(2026, 7, 13, 11, 0);
+    BookingSummaryResponse response =
+        new BookingSummaryResponse(
+            100L,
+            BOOKING_NUMBER,
+            5L,
+            2L,
+            3L,
+            BookingStatus.REFUNDING,
+            LocalDateTime.of(2026, 5, 22, 10, 30),
+            null,
+            stuckSince);
+
+    given(bookingFacade.getRefundingStuckBookings(new OffsetPageRequest(0, 10)))
+        .willReturn(new PageImpl<>(List.of(response), PageRequest.of(0, 10), 1));
+
+    // when & then
+    mockMvc
+        .perform(
+            get("/api/v1/booking/admin/bookings/refunding-stuck")
+                .header("X-Gateway-Token", INTERNAL_TOKEN)
+                .header("X-User-Id", 1L)
+                .header("X-User-Role", "ADMIN"))
+        .andExpect(status().isOk())
+        .andExpect(jsonPath("$.is_success").value(true))
+        .andExpect(jsonPath("$.result[0].booking_number").value(BOOKING_NUMBER))
+        .andExpect(jsonPath("$.result[0].booking_status").value("REFUNDING"))
+        .andExpect(jsonPath("$.result[0].updated_at").value("2026-07-13 11:00:00"))
+        .andExpect(jsonPath("$.pagination_info.total_elements").value(1));
+
+    verify(bookingFacade).getRefundingStuckBookings(new OffsetPageRequest(0, 10));
   }
 
   @Test
