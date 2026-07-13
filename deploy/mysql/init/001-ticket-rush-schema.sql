@@ -125,7 +125,8 @@ CREATE TABLE `payment` (
   `status` enum('CANCELED','COMPLETED','FAILED','PENDING') COLLATE utf8mb4_unicode_ci NOT NULL,
   `user_id` bigint DEFAULT NULL,
   PRIMARY KEY (`payment_id`),
-  UNIQUE KEY `UK6vew52c3hm7vwaiwfvt498x3` (`payment_key`)
+  UNIQUE KEY `UK6vew52c3hm7vwaiwfvt498x3` (`payment_key`),
+  KEY `idx_payment_booking_id` (`booking_id`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 /*!40101 SET character_set_client = @saved_cs_client */;
 DROP TABLE IF EXISTS `performance`;
