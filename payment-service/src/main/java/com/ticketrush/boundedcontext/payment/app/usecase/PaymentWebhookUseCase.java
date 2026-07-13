@@ -1,6 +1,7 @@
 package com.ticketrush.boundedcontext.payment.app.usecase;
 
 import com.ticketrush.boundedcontext.payment.app.dto.request.PaymentWebhookRequest;
+import com.ticketrush.boundedcontext.payment.app.support.PaymentKeyFormat;
 import com.ticketrush.boundedcontext.payment.domain.types.PaymentProvider;
 import com.ticketrush.boundedcontext.payment.out.apiclient.PaymentInquiryClientRouter;
 import com.ticketrush.boundedcontext.payment.out.apiclient.PaymentInquiryResult;
@@ -8,7 +9,6 @@ import com.ticketrush.boundedcontext.payment.out.repository.PaymentRepository;
 import com.ticketrush.global.exception.BusinessException;
 import com.ticketrush.global.status.ErrorStatus;
 import java.util.Optional;
-import java.util.regex.Pattern;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
@@ -34,14 +34,6 @@ import tools.jackson.databind.json.JsonMapper;
 @RequiredArgsConstructor
 public class PaymentWebhookUseCase {
 
-  /*
-   * 재조회(외부 호출) 전에 값싸게 거를 paymentKey 형식 필터. 비인증 webhook 엔드포인트가 요청마다 Toss 조회 API를
-   * 호출하는 증폭(amplification) 벡터를 완화한다(#357). Toss는 paymentKey 최대 길이를 200자로 규정하지만 문자셋은
-   * 공식 규정이 없어(orderId만 규정), 좁은 화이트리스트는 정상 요청을 오탐 기각할 수 있다. 따라서 제어문자/공백/멀티바이트만
-   * 배제하는 넓은 인쇄가능 ASCII(0x21~0x7E, 1~200자)로 잡아 실제 Toss 키는 모두 통과시키고 가비지만 거른다.
-   */
-  private static final Pattern PAYMENT_KEY_PATTERN = Pattern.compile("[\\x21-\\x7E]{1,200}");
-
   private final PaymentInquiryClientRouter inquiryClientRouter;
   private final PaymentRepository paymentRepository;
 
@@ -61,7 +53,7 @@ public class PaymentWebhookUseCase {
     // 사전 필터(#357): 형식상 성립 불가능한 paymentKey는 정상 Toss가 절대 보내지 않으므로, 재조회(외부 호출) 전에
     // 값싸게(CPU만으로) 거부해 비인증 webhook의 증폭(amplification) 공격 표면을 줄인다. 위조/무효로 취급해 재조회
     // 실패와 동일하게 401로 거부한다.
-    if (!PAYMENT_KEY_PATTERN.matcher(paymentKey).matches()) {
+    if (!PaymentKeyFormat.PATTERN.matcher(paymentKey).matches()) {
       // 형식 위반 값은 제어문자/CRLF를 담을 수 있어(마스킹은 새니타이즈가 아님) 로그에 내용을 찍지 않고 길이만 남긴다(로그 인젝션 방지).
       log.warn(
           "[PG-WEBHOOK] paymentKey 형식이 유효하지 않습니다. 재조회 없이 거부합니다. paymentKeyLength={}",
