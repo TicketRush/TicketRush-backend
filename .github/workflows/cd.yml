@@ -232,10 +232,50 @@ jobs:
             seat-service
           )
 
-          READY=false
+          APPLICATION_SERVICES=(
+            gateway-service
+            auth-service
+            user-service
+            booking-service
+            payment-service
+            performance-service
+            ticket-service
+            seat-service
+          )
 
-          for ATTEMPT in $(seq 1 48); do
+          declare -A APPLICATION_SERVICE_SET
+          declare -A BASE_RESTART_COUNTS
+
+          for SERVICE in "${APPLICATION_SERVICES[@]}"; do
+            APPLICATION_SERVICE_SET["${SERVICE}"]=true
+          done
+
+          for SERVICE in "${EXPECTED_SERVICES[@]}"; do
+            CONTAINER_ID="$("${COMPOSE[@]}" ps -q "${SERVICE}")"
+
+            if [[ -z "${CONTAINER_ID}" ]]; then
+              echo "${SERVICE}: container not created"
+              "${COMPOSE[@]}" ps --all
+              exit 1
+            fi
+
+            BASE_RESTART_COUNTS["${SERVICE}"]="$(
+              docker inspect \
+                --format '{{.RestartCount}}' \
+                "${CONTAINER_ID}"
+            )"
+          done
+
+          READY=false
+          STABLE_PASSES=0
+          REQUIRED_STABLE_PASSES=6
+          MAX_ATTEMPTS=60
+
+          for ATTEMPT in $(seq 1 "${MAX_ATTEMPTS}"); do
             ALL_READY=true
+            RESTART_DETECTED=false
+
+            echo "Container readiness check ${ATTEMPT}/${MAX_ATTEMPTS}"
 
             for SERVICE in "${EXPECTED_SERVICES[@]}"; do
               CONTAINER_ID="$("${COMPOSE[@]}" ps -q "${SERVICE}")"
@@ -264,6 +304,14 @@ jobs:
                   "${CONTAINER_ID}"
               )"
 
+              RESTART_COUNT="$(
+                docker inspect \
+                  --format '{{.RestartCount}}' \
+                  "${CONTAINER_ID}"
+              )"
+
+              BASE_RESTART_COUNT="${BASE_RESTART_COUNTS[$SERVICE]}"
+
               if [[ "${STATUS}" != "running" ]]; then
                 echo "${SERVICE}: status=${STATUS}"
                 ALL_READY=false
@@ -278,18 +326,44 @@ jobs:
                 echo "${SERVICE}: OOMKilled=true"
                 ALL_READY=false
               fi
+
+              if (( RESTART_COUNT > BASE_RESTART_COUNT )); then
+                echo "${SERVICE}: restart count increased from ${BASE_RESTART_COUNT} to ${RESTART_COUNT}"
+                ALL_READY=false
+                RESTART_DETECTED=true
+              fi
+
+              if [[ -n "${APPLICATION_SERVICE_SET[$SERVICE]:-}" ]]; then
+                if ! docker logs "${CONTAINER_ID}" 2>&1 \
+                  | grep -Eq 'Started .*Application in .* seconds'; then
+                  echo "${SERVICE}: Spring Boot startup not confirmed"
+                  ALL_READY=false
+                fi
+              fi
             done
 
-            if [[ "${ALL_READY}" == "true" ]]; then
-              READY=true
+            if [[ "${RESTART_DETECTED}" == "true" ]]; then
+              echo "A container restarted during deployment."
               break
+            fi
+
+            if [[ "${ALL_READY}" == "true" ]]; then
+              STABLE_PASSES=$((STABLE_PASSES + 1))
+              echo "Stable readiness pass ${STABLE_PASSES}/${REQUIRED_STABLE_PASSES}"
+
+              if (( STABLE_PASSES >= REQUIRED_STABLE_PASSES )); then
+                READY=true
+                break
+              fi
+            else
+              STABLE_PASSES=0
             fi
 
             sleep 5
           done
 
           if [[ "${READY}" != "true" ]]; then
-            echo "Containers did not become ready."
+            echo "Containers did not become ready and remain stable."
 
             "${COMPOSE[@]}" ps --all
             "${COMPOSE[@]}" logs --tail=100
