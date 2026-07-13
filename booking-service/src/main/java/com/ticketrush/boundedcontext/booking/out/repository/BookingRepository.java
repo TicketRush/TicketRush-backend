@@ -29,7 +29,7 @@ public interface BookingRepository extends JpaRepository<Booking, Long> {
 
   /*
    * REFUNDING에서 cutoff 이전부터 멈춰 있는(종결 이벤트가 오지 않는) 고착 예매를 관리자가 조회한다 (#397).
-   * ponytail: updated_at 인덱스 없음 — 관리자 저빈도 조회라 수용, 규모가 커지면 인덱스 추가.
+   * 장애 대응 중 반복 조회하는 경로이므로 (booking_status, updated_at) 복합 인덱스로 받는다.
    */
   Page<Booking> findByBookingStatusAndUpdatedAtBefore(
       BookingStatus bookingStatus, LocalDateTime cutoff, Pageable pageable);

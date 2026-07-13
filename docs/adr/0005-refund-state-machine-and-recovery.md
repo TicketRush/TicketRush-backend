@@ -86,6 +86,10 @@ payment-service는 손대지 않는다. `RefundFailedEvent`는 Javadoc만 정정
 
   -- #397 낙관적 락. 배포 전에 실행하지 않으면 ddl-auto: validate가 기동을 실패시킨다.
   ALTER TABLE booking ADD COLUMN version bigint NOT NULL DEFAULT 0;
+
+  -- #397 REFUNDING 고착 조회용 인덱스(장애 대응 중 반복 조회 경로). validate 대상은 아니라 배포 후에 넣어도 되지만,
+  -- 없으면 booking 풀스캔 + filesort가 된다.
+  ALTER TABLE booking ADD INDEX idx_booking_status_updated_at (booking_status, updated_at);
   ```
 
   **0단계가 0이 아니면 enum을 먼저 축소해선 안 된다.** MySQL이 제거된 enum 값을 빈 문자열로 만든다. 그리고 남은 행을 일괄 `CONFIRMED`로 밀어서도 안 된다 — 위 §맥락 결함 1이 말하듯 그중 일부는 결제 취소 API로 **우회 환불이 실제로 성사된 뒤 booking만 고착된 건**이라(payment=CANCELED, 좌석은 이미 반환·재판매됐을 수 있음), `CONFIRMED`로 되살리면 입장이 허용되고 좌석이 이중 보유된다. 그 경우에만 아래를 enum 축소 **앞에** 끼워 넣는다.
