@@ -10,6 +10,7 @@ import com.ticketrush.boundedcontext.booking.app.usecase.BookingCountUseCase;
 import com.ticketrush.boundedcontext.booking.app.usecase.BookingCreateUseCase;
 import com.ticketrush.boundedcontext.booking.app.usecase.BookingGetMyBookingsUseCase;
 import com.ticketrush.boundedcontext.booking.app.usecase.BookingGetRefundFailedBookingsUseCase;
+import com.ticketrush.boundedcontext.booking.app.usecase.BookingGetRefundingStuckBookingsUseCase;
 import com.ticketrush.boundedcontext.booking.app.usecase.BookingIssueNumberUseCase;
 import com.ticketrush.boundedcontext.booking.app.usecase.BookingValidateReferencesUseCase;
 import com.ticketrush.boundedcontext.booking.app.usecase.BookingValidateSeatAvailableUseCase;
@@ -34,6 +35,7 @@ public class BookingFacade {
   private final BookingValidateReferencesUseCase bookingValidateReferencesUseCase;
   private final BookingValidateSeatAvailableUseCase bookingValidateSeatAvailableUseCase;
   private final BookingGetRefundFailedBookingsUseCase bookingGetRefundFailedBookingsUseCase;
+  private final BookingGetRefundingStuckBookingsUseCase bookingGetRefundingStuckBookingsUseCase;
   private final BookingAdminRetryRefundUseCase bookingAdminRetryRefundUseCase;
 
   public BookingPendingResponse createBooking(Long userId, Long performanceId, Long seatId) {
@@ -68,6 +70,10 @@ public class BookingFacade {
 
   public Page<BookingSummaryResponse> getRefundFailedBookings(OffsetPageRequest pageRequest) {
     return bookingGetRefundFailedBookingsUseCase.execute(pageRequest);
+  }
+
+  public Page<BookingSummaryResponse> getRefundingStuckBookings(OffsetPageRequest pageRequest) {
+    return bookingGetRefundingStuckBookingsUseCase.execute(pageRequest);
   }
 
   public void retryRefund(Long adminId, String bookingNumber) {

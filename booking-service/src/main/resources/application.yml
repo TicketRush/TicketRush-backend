@@ -49,6 +49,10 @@ gateway:
 # 기본은 비활성이며, 운영 환경에서 환경변수로 켠다(DLT_MONITOR_ENABLED=true, SLACK_ENABLED=true, SLACK_WEBHOOK_URL=...).
 # local/test는 미설정(기본 false)으로 비활성.
 app:
+  booking:
+    # REFUNDING에서 이 시간(분) 이상 멈춘 예매를 고착으로 판정한다 (#397).
+    # Kafka 재시도 소진(약 31초)보다 훨씬 길게 잡아 컨슈머 랙·재배포 중 일시 지연의 오탐을 막는다.
+    refunding-stuck-threshold-minutes: 30
   event-publisher:
     type: kafka
   outbox:

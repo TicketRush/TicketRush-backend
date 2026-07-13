@@ -52,13 +52,34 @@ public class BookingAdminController {
   }
 
   @Operation(
+      summary = "환불 고착 예매 조회",
+      description =
+          """
+          환불 진행 중(REFUNDING) 상태에서 임계 시간(기본 30분) 이상 멈춰 있는 예매를 오래된 순으로 조회합니다.
+
+          PG 통신 실패가 재시도 끝에 DLT로 빠지면 환불 종결 이벤트가 오지 않아 예매가 REFUNDING에 영구히
+          머뭅니다 — 돈을 돌려받지 못한 채 좌석은 SOLD로 묶이고 입장도 차단됩니다. 이 조회로 식별한 예매는
+          환불 재시도 API로 환불 요청 이벤트를 재발행해 복구할 수 있습니다. `updatedAt`이 REFUNDING에
+          진입한 시각입니다.
+          """)
+  @GetMapping("/bookings/refunding-stuck")
+  public ResponseEntity<ApiResponse<List<BookingSummaryResponse>>> getRefundingStuckBookings(
+      @ModelAttribute OffsetPageRequest pageRequest) {
+    Page<BookingSummaryResponse> response = bookingFacade.getRefundingStuckBookings(pageRequest);
+
+    return ApiResponse.onSuccess(SuccessStatus.OK, response);
+  }
+
+  @Operation(
       summary = "환불 재시도",
       description =
           """
           환불에 실패한 예매의 환불을 다시 시도합니다. 예매를 REFUNDING으로 전환하고 환불 요청 이벤트를 발행합니다.
 
-          **대상은 환불 실패 이력이 있는 CONFIRMED 예매뿐입니다.** 실패 이력이 없는 정상 예매나 이미 환불이
-          진행·종결된 예매는 `BOOKING_409_005`로 거절합니다.
+          **대상은 환불 실패 이력이 있는 CONFIRMED 예매, 그리고 REFUNDING에서 임계 시간(기본 30분) 이상
+          멈춘 고착 예매입니다.** 고착 예매는 이미 REFUNDING이므로 상태 전이 없이 환불 요청 이벤트만
+          재발행합니다. 그 외(실패 이력이 없는 정상 예매, 정상 진행 중인 REFUNDING, 이미 종결된 예매)는
+          `BOOKING_409_005`로 거절합니다.
 
           결제가 아직 완료 상태면 PG 환불을 재실행하고, 결제 취소 API로 이미 우회 환불된 상태면 결제 취소 이벤트를
           재발행해 예매·좌석 정합을 회복합니다. 사용자도 예매를 다시 취소해 재환불할 수 있으며, 이 API는 CS가 사용자를

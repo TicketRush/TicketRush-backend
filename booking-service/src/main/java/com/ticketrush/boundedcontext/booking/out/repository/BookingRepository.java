@@ -27,6 +27,13 @@ public interface BookingRepository extends JpaRepository<Booking, Long> {
   Page<Booking> findByBookingStatusAndRefundFailedAtIsNotNull(
       BookingStatus bookingStatus, Pageable pageable);
 
+  /*
+   * REFUNDING에서 cutoff 이전부터 멈춰 있는(종결 이벤트가 오지 않는) 고착 예매를 관리자가 조회한다 (#397).
+   * ponytail: updated_at 인덱스 없음 — 관리자 저빈도 조회라 수용, 규모가 커지면 인덱스 추가.
+   */
+  Page<Booking> findByBookingStatusAndUpdatedAtBefore(
+      BookingStatus bookingStatus, LocalDateTime cutoff, Pageable pageable);
+
   @Query("SELECT b.id FROM Booking b WHERE b.bookingNumber = :bookingNumber")
   Optional<Long> findIdByBookingNumber(@Param("bookingNumber") String bookingNumber);
 

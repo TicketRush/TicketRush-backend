@@ -7,9 +7,10 @@ import com.ticketrush.global.eventpublisher.EventPublisher;
 import com.ticketrush.global.exception.BusinessException;
 import com.ticketrush.global.status.ErrorStatus;
 import com.ticketrush.shared.booking.event.RefundRequestedEvent;
+import java.time.Clock;
 import java.time.LocalDateTime;
-import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -21,23 +22,48 @@ import org.springframework.transaction.annotation.Transactional;
  * 예매</b>로 대상을 제한한다 — 소유자의 의도적 취소와 달리 CS 도구가 정상 예매를 강제 취소해선 안 되기 때문이다. 사용자도 자신의 예매를 다시 취소해 재환불할 수
  * 있으며, 이 API는 CS가 사용자를 대신해 시도하기 위한 것이다.
  *
- * <p>payment-service는 이 이벤트를 받아 결제가 COMPLETED면 PG 환불을 재실행하고, 이미 CANCELED(결제 취소 API로 우회 환불된 경우)면
- * {@code PaymentCanceledEvent}를 재발행해 정합을 self-heal 한다.
+ * <p>추가로 <b>REFUNDING 고착 예매의 복구</b>도 이 API가 담당한다 (#397). PG 통신 실패가 DLT로 빠져 종결 이벤트가 오지 않으면 예매는
+ * REFUNDING에 영구히 머무는데, 이 상태는 {@code requestRefund()}가 막혀 손댈 수 없었다. 임계 시간 이상 멈춘 건이면 상태 전이 없이(이미
+ * REFUNDING) 이벤트만 재발행한다. 임계 미달의 신선한 REFUNDING은 정상 진행 중이므로 여전히 거절한다.
+ *
+ * <p>payment-service는 이 이벤트를 받아 결제가 COMPLETED면 PG 환불을 재실행하고, 이미 CANCELED(결제 취소 API로 우회 환불됐거나 이전 환불이
+ * 실제로는 성공한 경우)면 {@code PaymentCanceledEvent}를 재발행해 정합을 self-heal 한다. 재수신에 완전 멱등이므로 관리자가 같은 고착 건을 중복
+ * 재발행해도 이중 환불은 일어나지 않는다.
  */
 @Slf4j
 @Service
 @Transactional
-@RequiredArgsConstructor
 public class BookingAdminRetryRefundUseCase {
 
   private final BookingRepository bookingRepository;
   private final EventPublisher eventPublisher;
+  private final Clock clock;
+  private final long stuckThresholdMinutes;
+
+  public BookingAdminRetryRefundUseCase(
+      BookingRepository bookingRepository,
+      EventPublisher eventPublisher,
+      Clock clock,
+      @Value(BookingGetRefundingStuckBookingsUseCase.STUCK_THRESHOLD_PROPERTY)
+          long stuckThresholdMinutes) {
+    this.bookingRepository = bookingRepository;
+    this.eventPublisher = eventPublisher;
+    this.clock = clock;
+    this.stuckThresholdMinutes = stuckThresholdMinutes;
+  }
 
   public void execute(Long adminId, String bookingNumber) {
     Booking booking =
         bookingRepository
             .findByBookingNumber(bookingNumber)
             .orElseThrow(() -> new BusinessException(ErrorStatus.BOOKING_NOT_FOUND));
+
+    LocalDateTime cutoff = LocalDateTime.now(clock).minusMinutes(stuckThresholdMinutes);
+    if (booking.isStuckInRefunding(cutoff)) {
+      // 고착 복구 (#397): 상태는 이미 REFUNDING이므로 전이 없이 이벤트만 재발행한다.
+      publishRefundRequested(adminId, booking, "REFUNDING 고착 재발행");
+      return;
+    }
 
     // 이 API의 계약은 "환불 실패 건의 재시도"다. 실패 이력이 없는 예매(또는 이미 환불이 진행·종결된 예매)에
     // 걸리면 관리자 오조작만으로 정상 예매가 강제 취소된다. 소유자의 의도적 취소와는 계약이 다르므로 여기서 막는다.
@@ -48,9 +74,14 @@ public class BookingAdminRetryRefundUseCase {
 
     booking.requestRefund();
 
+    publishRefundRequested(adminId, booking, "환불 재시도");
+  }
+
+  private void publishRefundRequested(Long adminId, Booking booking, String action) {
     // 실제 PG 환불을 유발하는 관리자 행위다. 누가 누구의 예매를 건드렸는지 추적 가능해야 한다.
     log.info(
-        "[ADMIN-AUDIT] 환불 재시도. adminId: {}, bookingNumber: {}, bookingId: {}, userId: {}",
+        "[ADMIN-AUDIT] {}. adminId: {}, bookingNumber: {}, bookingId: {}, userId: {}",
+        action,
         adminId,
         booking.getBookingNumber(),
         booking.getId(),
@@ -62,6 +93,6 @@ public class BookingAdminRetryRefundUseCase {
             booking.getBookingNumber(),
             booking.getSeatId(),
             booking.getUserId(),
-            LocalDateTime.now()));
+            LocalDateTime.now(clock)));
   }
 }

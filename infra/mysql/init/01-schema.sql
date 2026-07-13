@@ -22,6 +22,7 @@ CREATE TABLE `booking` (
   `performance_id` bigint NOT NULL,
   `seat_id` bigint NOT NULL,
   `user_id` bigint NOT NULL,
+  `version` bigint NOT NULL DEFAULT '0',
   PRIMARY KEY (`booking_id`),
   UNIQUE KEY `UK6j74n7w8mp19sixr5272028mk` (`booking_number`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;

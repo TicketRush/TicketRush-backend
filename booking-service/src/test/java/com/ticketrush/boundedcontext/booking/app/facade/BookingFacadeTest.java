@@ -17,6 +17,7 @@ import com.ticketrush.boundedcontext.booking.app.usecase.BookingCancelMyBookingU
 import com.ticketrush.boundedcontext.booking.app.usecase.BookingCountUseCase;
 import com.ticketrush.boundedcontext.booking.app.usecase.BookingCreateUseCase;
 import com.ticketrush.boundedcontext.booking.app.usecase.BookingGetMyBookingsUseCase;
+import com.ticketrush.boundedcontext.booking.app.usecase.BookingGetRefundingStuckBookingsUseCase;
 import com.ticketrush.boundedcontext.booking.app.usecase.BookingIssueNumberUseCase;
 import com.ticketrush.boundedcontext.booking.app.usecase.BookingValidateReferencesUseCase;
 import com.ticketrush.boundedcontext.booking.app.usecase.BookingValidateSeatAvailableUseCase;
@@ -47,6 +48,7 @@ class BookingFacadeTest {
   @Mock private BookingCancelMyBookingUseCase bookingCancelMyBookingUseCase;
   @Mock private BookingValidateReferencesUseCase bookingValidateReferencesUseCase;
   @Mock private BookingValidateSeatAvailableUseCase bookingValidateSeatAvailableUseCase;
+  @Mock private BookingGetRefundingStuckBookingsUseCase bookingGetRefundingStuckBookingsUseCase;
 
   @Test
   @DisplayName("성공: 참조 검증 후 예약번호를 발급하고 예매를 생성한다")
@@ -140,6 +142,7 @@ class BookingFacadeTest {
             3L,
             BookingStatus.CONFIRMED,
             LocalDateTime.of(2026, 5, 22, 10, 30),
+            null,
             null);
 
     given(
@@ -171,6 +174,34 @@ class BookingFacadeTest {
     // then
     assertThat(result).isEqualTo(response);
     verify(bookingCountUseCase).execute(userId, BookingStatus.CONFIRMED);
+  }
+
+  @Test
+  @DisplayName("성공: 환불 고착 예매 조회를 위임한다")
+  void getRefundingStuckBookings_success() {
+    // given
+    BookingSummaryResponse response =
+        new BookingSummaryResponse(
+            100L,
+            "BOOK-1234",
+            1L,
+            2L,
+            3L,
+            BookingStatus.REFUNDING,
+            LocalDateTime.of(2026, 5, 22, 10, 30),
+            null,
+            LocalDateTime.of(2026, 7, 13, 11, 0));
+
+    given(bookingGetRefundingStuckBookingsUseCase.execute(new OffsetPageRequest(0, 10)))
+        .willReturn(new PageImpl<>(List.of(response)));
+
+    // when
+    Page<BookingSummaryResponse> result =
+        bookingFacade.getRefundingStuckBookings(new OffsetPageRequest(0, 10));
+
+    // then
+    assertThat(result.getContent()).containsExactly(response);
+    verify(bookingGetRefundingStuckBookingsUseCase).execute(new OffsetPageRequest(0, 10));
   }
 
   @Test
