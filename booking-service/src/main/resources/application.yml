@@ -15,6 +15,10 @@ service:
     url: ${SEAT_SERVICE_URL:http://localhost:8086}
   ticket:
     url: ${TICKET_SERVICE_URL:http://localhost:8087}
+    # 취소 경로의 입장권 판정 전용. 단일 행 조회이므로 공용 예산(3s/10s)을 쓰지 않는다 —
+    # ticket-service가 느려질 때 취소 요청이 톰캣 스레드를 오래 붙잡아 예매 경로까지 마르는 것을 막는다.
+    connect-timeout-ms: ${TICKET_HTTP_CONNECT_TIMEOUT_MS:1000}
+    read-timeout-ms: ${TICKET_HTTP_READ_TIMEOUT_MS:2000}
   http:
     connect-timeout-ms: ${SERVICE_HTTP_CONNECT_TIMEOUT_MS:3000}
     read-timeout-ms: ${SERVICE_HTTP_READ_TIMEOUT_MS:10000}

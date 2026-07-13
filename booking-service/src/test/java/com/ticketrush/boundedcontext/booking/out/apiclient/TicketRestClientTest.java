@@ -57,12 +57,31 @@ class TicketRestClientTest {
         "}");
   }
 
+  /** ticket-service가 입장권 미발급 시 내려주는 에러 본문(공통 ApiResponse 형식). */
+  private static String ticketNotFoundBody() {
+    return String.join(
+        "\n",
+        "{",
+        "  \"is_success\": false,",
+        "  \"code\": \"TICKET_404_001\",",
+        "  \"message\": \"입장권을 찾을 수 없습니다.\"",
+        "}");
+  }
+
   private void expectGetAndRespondWith(String ticketStatus) {
     mockServer
         .expect(requestTo(REQUEST_URL))
         .andExpect(method(HttpMethod.GET))
         .andExpect(header("X-Internal-Token", INTERNAL_TOKEN))
         .andRespond(withSuccess(successBody(ticketStatus), MediaType.APPLICATION_JSON));
+  }
+
+  private void expectGetAndRespondWithStatus(HttpStatus status, String body) {
+    mockServer
+        .expect(requestTo(REQUEST_URL))
+        .andExpect(method(HttpMethod.GET))
+        .andExpect(header("X-Internal-Token", INTERNAL_TOKEN))
+        .andRespond(withStatus(status).contentType(MediaType.APPLICATION_JSON).body(body));
   }
 
   @Test
@@ -96,15 +115,55 @@ class TicketRestClientTest {
   }
 
   @Test
-  @DisplayName("성공: 입장권 없음(404)은 발급 전이므로 미사용(false)으로 판정한다 — 예외를 던지지 않는다")
-  void isTicketUsed_returns_false_when_ticket_not_found() {
+  @DisplayName("실패: 알 수 없는 입장권 상태는 통과시키지 않는다 — 모르는 값을 미입장으로 낙관하면 정책이 뚫린다")
+  void isTicketUsed_rejects_unknown_status() {
+    expectGetAndRespondWith("CHECKED_IN");
+
+    assertThatThrownBy(() -> client.isTicketUsed(BOOKING_ID))
+        .isInstanceOf(BusinessException.class)
+        .hasFieldOrPropertyWithValue(
+            "errorStatus", ErrorStatus.BOOKING_TICKET_COMMUNICATION_FAILED);
+
+    mockServer.verify();
+  }
+
+  @Test
+  @DisplayName("성공: TICKET_404_001(입장권 미발급)만 미입장(false)으로 해석한다")
+  void isTicketUsed_returns_false_when_ticket_not_issued() {
+    expectGetAndRespondWithStatus(HttpStatus.NOT_FOUND, ticketNotFoundBody());
+
+    assertThat(client.isTicketUsed(BOOKING_ID)).isFalse();
+
+    mockServer.verify();
+  }
+
+  @Test
+  @DisplayName("실패: 본문 없는 404(경로·라우팅 오설정)는 미입장으로 해석하지 않는다 — 정책이 조용히 무력화되면 안 된다")
+  void isTicketUsed_rejects_404_without_body() {
     mockServer
         .expect(requestTo(REQUEST_URL))
         .andExpect(method(HttpMethod.GET))
         .andExpect(header("X-Internal-Token", INTERNAL_TOKEN))
         .andRespond(withStatus(HttpStatus.NOT_FOUND));
 
-    assertThat(client.isTicketUsed(BOOKING_ID)).isFalse();
+    assertThatThrownBy(() -> client.isTicketUsed(BOOKING_ID))
+        .isInstanceOf(BusinessException.class)
+        .hasFieldOrPropertyWithValue(
+            "errorStatus", ErrorStatus.BOOKING_TICKET_COMMUNICATION_FAILED);
+
+    mockServer.verify();
+  }
+
+  @Test
+  @DisplayName("실패: 다른 code의 404도 미입장으로 해석하지 않는다")
+  void isTicketUsed_rejects_404_with_other_code() {
+    expectGetAndRespondWithStatus(
+        HttpStatus.NOT_FOUND, "{\"is_success\": false, \"code\": \"COMMON_404\"}");
+
+    assertThatThrownBy(() -> client.isTicketUsed(BOOKING_ID))
+        .isInstanceOf(BusinessException.class)
+        .hasFieldOrPropertyWithValue(
+            "errorStatus", ErrorStatus.BOOKING_TICKET_COMMUNICATION_FAILED);
 
     mockServer.verify();
   }
