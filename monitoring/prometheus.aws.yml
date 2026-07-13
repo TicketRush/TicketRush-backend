@@ -1,0 +1,43 @@
+global:
+  scrape_interval: 15s
+
+# AWS 배포본(deploy/docker-compose.prod.yml) 전용. 앱 8개가 같은 compose 네트워크의 컨테이너로 뜨므로
+# host.docker.internal 대신 서비스명으로 스크랩한다. 로컬 개발용은 prometheus.yml을 쓴다.
+#
+# 포트가 9091인 이유: prod 프로파일은 actuator를 앱 포트에서 분리한다(management.server.port).
+# gateway의 8080은 인터넷에 열려 있어, 분리하지 않으면 /actuator/prometheus 가 무인증 공개된다(ADR 0007).
+# 9091은 compose에서 publish 하지 않으므로 이 네트워크 안에서만 닿는다.
+#
+# 스택별 대시보드 분리(#45)를 위해 gateway(WebFlux/리액티브)와 나머지(MVC)를 별도 job으로 나눈다.
+# 대시보드 JSON은 datasource uid 'prometheus'를 참조하므로 이 파일 교체만으로 그대로 동작한다.
+scrape_configs:
+  - job_name: 'gateway'
+    metrics_path: /actuator/prometheus
+    static_configs:
+      - targets:
+          - 'gateway-service:9091'  # gateway-service (WebFlux), 앱 포트는 8080
+        labels:
+          stack: reactive
+
+  - job_name: 'ticketrush-services'
+    metrics_path: /actuator/prometheus
+    static_configs:
+      - targets:
+          - 'user-service:9091'         # 앱 포트 8081
+          - 'auth-service:9091'         # 앱 포트 8082
+          - 'performance-service:9091'  # 앱 포트 8083
+          - 'booking-service:9091'      # 앱 포트 8084
+          - 'payment-service:9091'      # 앱 포트 8085
+          - 'seat-service:9091'         # 앱 포트 8086
+          - 'ticket-service:9091'       # 앱 포트 8087
+        labels:
+          stack: mvc
+
+  # 자기 자신. ADR 0007이 "전환 시점"의 기준으로 삼은 '부하 중 Prometheus의 CPU·메모리 점유'를
+  # 재려면 prometheus_* 자기 지표가 필요하다. mem_limit(384m) 재평가 근거도 여기서 나온다.
+  - job_name: 'prometheus'
+    static_configs:
+      - targets:
+          - 'localhost:9090'
+        labels:
+          stack: observability
