@@ -293,6 +293,79 @@ class PaymentConfirmUseCaseTest {
   }
 
   @Test
+  @DisplayName("booking당 FAILED 이력이 상한에 도달하면 화이트리스트 실패라도 저장하지 않고 억제 메트릭만 남긴다(#333)")
+  void execute_does_not_record_failed_when_cap_reached() {
+    // given
+    Long userId = 10L;
+    Long bookingId = 100L;
+    PaymentConfirmRequest request =
+        new PaymentConfirmRequest(bookingId, 200L, PaymentProvider.TOSS, 55_000L, "pgKey_xyz");
+
+    given(paymentRepository.existsByBookingIdAndStatus(bookingId, PaymentStatus.COMPLETED))
+        .willReturn(false);
+    given(paymentApprovalClientRouter.approve(any()))
+        .willThrow(new BusinessException(ErrorStatus.PAYMENT_METHOD_REJECTED));
+    // 이미 상한(5)만큼 FAILED 이력이 쌓여 있다.
+    given(paymentRepository.countByBookingIdAndStatus(bookingId, PaymentStatus.FAILED))
+        .willReturn(5L);
+
+    // when & then: 결제 실패 예외 자체는 그대로 전파된다.
+    assertThatThrownBy(() -> paymentConfirmUseCase.execute(userId, request))
+        .isInstanceOf(BusinessException.class)
+        .extracting("errorStatus")
+        .isEqualTo(ErrorStatus.PAYMENT_METHOD_REJECTED);
+
+    // 상한 초과라 FAILED row는 저장하지 않는다.
+    verify(paymentRepository, never()).saveAndFlush(any(Payment.class));
+    // 대신 억제 메트릭이 사유 태그와 함께 1 증가한다.
+    assertThat(
+            meterRegistry
+                .counter(
+                    MetricNames.PAYMENT_FAILED_RECORD_SUPPRESSED,
+                    MetricNames.TAG_REASON,
+                    ErrorStatus.PAYMENT_METHOD_REJECTED.getCode())
+                .count())
+        .isEqualTo(1.0);
+  }
+
+  @Test
+  @DisplayName("booking당 FAILED 이력이 상한 직전(4건)이면 이번 실패는 저장되고 억제 메트릭은 증가하지 않는다(#333 경계)")
+  void execute_records_failed_when_below_cap() {
+    // given
+    Long userId = 10L;
+    Long bookingId = 100L;
+    PaymentConfirmRequest request =
+        new PaymentConfirmRequest(bookingId, 200L, PaymentProvider.TOSS, 55_000L, "pgKey_xyz");
+
+    given(paymentRepository.existsByBookingIdAndStatus(bookingId, PaymentStatus.COMPLETED))
+        .willReturn(false);
+    given(paymentApprovalClientRouter.approve(any()))
+        .willThrow(new BusinessException(ErrorStatus.PAYMENT_METHOD_REJECTED));
+    // 상한(5) 직전인 4건 → 이번 실패는 5번째로 기록되어야 한다.
+    given(paymentRepository.countByBookingIdAndStatus(bookingId, PaymentStatus.FAILED))
+        .willReturn(4L);
+
+    // when & then
+    assertThatThrownBy(() -> paymentConfirmUseCase.execute(userId, request))
+        .isInstanceOf(BusinessException.class)
+        .extracting("errorStatus")
+        .isEqualTo(ErrorStatus.PAYMENT_METHOD_REJECTED);
+
+    ArgumentCaptor<Payment> failedCaptor = ArgumentCaptor.forClass(Payment.class);
+    verify(paymentRepository).saveAndFlush(failedCaptor.capture());
+    assertThat(failedCaptor.getValue().getStatus()).isEqualTo(PaymentStatus.FAILED);
+    // 억제 메트릭은 증가하지 않는다.
+    assertThat(
+            meterRegistry
+                .counter(
+                    MetricNames.PAYMENT_FAILED_RECORD_SUPPRESSED,
+                    MetricNames.TAG_REASON,
+                    ErrorStatus.PAYMENT_METHOD_REJECTED.getCode())
+                .count())
+        .isEqualTo(0.0);
+  }
+
+  @Test
   @DisplayName("PG 통신 실패(결과 불명)는 고아 청구 위험이 있어 FAILED 이력을 남기지 않는다")
   void execute_does_not_record_when_pg_communication_failed() {
     // given
