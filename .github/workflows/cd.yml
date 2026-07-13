@@ -3,7 +3,7 @@ name: CD - Deploy to EC2
 on:
   push:
     branches:
-      - develop
+      - main
   workflow_dispatch:
 
 concurrency:
