@@ -14,6 +14,7 @@ import com.ticketrush.boundedcontext.booking.app.usecase.BookingGetRefundingStuc
 import com.ticketrush.boundedcontext.booking.app.usecase.BookingIssueNumberUseCase;
 import com.ticketrush.boundedcontext.booking.app.usecase.BookingValidateReferencesUseCase;
 import com.ticketrush.boundedcontext.booking.app.usecase.BookingValidateSeatAvailableUseCase;
+import com.ticketrush.boundedcontext.booking.app.usecase.BookingValidateTicketNotUsedUseCase;
 import com.ticketrush.boundedcontext.booking.domain.entity.Booking;
 import com.ticketrush.boundedcontext.booking.domain.types.BookingStatus;
 import com.ticketrush.global.dto.request.OffsetPageRequest;
@@ -34,6 +35,7 @@ public class BookingFacade {
   private final BookingCancelMyBookingUseCase bookingCancelMyBookingUseCase;
   private final BookingValidateReferencesUseCase bookingValidateReferencesUseCase;
   private final BookingValidateSeatAvailableUseCase bookingValidateSeatAvailableUseCase;
+  private final BookingValidateTicketNotUsedUseCase bookingValidateTicketNotUsedUseCase;
   private final BookingGetRefundFailedBookingsUseCase bookingGetRefundFailedBookingsUseCase;
   private final BookingGetRefundingStuckBookingsUseCase bookingGetRefundingStuckBookingsUseCase;
   private final BookingAdminRetryRefundUseCase bookingAdminRetryRefundUseCase;
@@ -65,6 +67,9 @@ public class BookingFacade {
   }
 
   public void cancelMyBooking(Long userId, String bookingNumber) {
+    // 입장 완료 예매의 환불 차단 (#399). 소유권을 함께 검증해 비소유자에게 타인 예매의 입장 여부가 새지 않게 한다.
+    bookingValidateTicketNotUsedUseCase.execute(userId, bookingNumber);
+
     bookingCancelMyBookingUseCase.execute(userId, bookingNumber);
   }
 
@@ -77,6 +82,11 @@ public class BookingFacade {
   }
 
   public void retryRefund(Long adminId, String bookingNumber) {
+    // 관리자 재환불에도 같은 정책을 적용한다 (#399). 사용자만 막고 CS 도구로 우회되면 좌석은 여전히 반환된다.
+    // 다만 차단 대상은 CONFIRMED에서의 환불 개시뿐이다 — REFUNDING 고착 재발행(#397)은 통과시킨다.
+    // 막으면 REFUNDING을 빠져나올 유일한 수단이 사라져 흡수 상태가 되살아난다(가드 Javadoc 참고).
+    bookingValidateTicketNotUsedUseCase.executeForAdmin(bookingNumber);
+
     bookingAdminRetryRefundUseCase.execute(adminId, bookingNumber);
   }
 }

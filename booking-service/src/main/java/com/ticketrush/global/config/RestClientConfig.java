@@ -18,4 +18,15 @@ public class RestClientConfig {
         .requestFactory(RestClientFactorySupport.withTimeouts(connectTimeoutMs, readTimeoutMs))
         .build();
   }
+
+  @Bean
+  public RestClient ticketServiceRestClient(
+      @Value("${service.ticket.url}") String ticketServiceUrl,
+      @Value("${service.http.connect-timeout-ms:3000}") long connectTimeoutMs,
+      @Value("${service.http.read-timeout-ms:10000}") long readTimeoutMs) {
+    return RestClient.builder()
+        .baseUrl(ticketServiceUrl)
+        .requestFactory(RestClientFactorySupport.withTimeouts(connectTimeoutMs, readTimeoutMs))
+        .build();
+  }
 }
