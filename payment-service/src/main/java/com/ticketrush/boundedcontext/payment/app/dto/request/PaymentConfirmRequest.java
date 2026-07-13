@@ -1,9 +1,11 @@
 package com.ticketrush.boundedcontext.payment.app.dto.request;
 
+import com.ticketrush.boundedcontext.payment.app.support.PaymentKeyFormat;
 import com.ticketrush.boundedcontext.payment.domain.types.PaymentProvider;
 import io.swagger.v3.oas.annotations.media.Schema;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
+import jakarta.validation.constraints.Pattern;
 import jakarta.validation.constraints.Positive;
 
 @Schema(description = "결제 Confirm 요청 DTO")
@@ -18,4 +20,5 @@ public record PaymentConfirmRequest(
         Long amount,
     @Schema(description = "PG사가 발급한 결제 키", example = "tossKey_xxxxxxxx")
         @NotBlank(message = "결제 키는 필수입니다.")
+        @Pattern(regexp = PaymentKeyFormat.REGEX, message = "결제 키 형식이 올바르지 않습니다.")
         String paymentKey) {}
