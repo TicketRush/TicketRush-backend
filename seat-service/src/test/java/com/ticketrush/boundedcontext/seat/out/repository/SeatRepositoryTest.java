@@ -282,4 +282,52 @@ class SeatRepositoryTest {
     assertThat(updatedSeat1.getHoldExpiredAt()).isNull();
     assertThat(notUpdatedSeat.getSeatStatus()).isEqualTo(SeatStatus.AVAILABLE);
   }
+
+  @Test
+  @DisplayName("HOLD 좌석만 AVAILABLE로 해제하고, 이미 SOLD가 된 좌석은 되돌리지 않는다")
+  void releaseHoldById_OnlyReleasesHoldSeat() {
+    // given
+    Seat holdSeat =
+        Seat.builder()
+            .seatLayoutId(1L)
+            .performanceId(100L)
+            .seatNumber("A1")
+            .seatStatus(SeatStatus.HOLD)
+            .holdExpiredAt(LocalDateTime.now().minusMinutes(1))
+            .bookingNumber("BOOK-1234")
+            .build();
+
+    // 스케줄러가 조회한 뒤 결제가 확정된 좌석을 흉내낸다
+    Seat soldSeat =
+        Seat.builder()
+            .seatLayoutId(1L)
+            .performanceId(100L)
+            .seatNumber("A2")
+            .seatStatus(SeatStatus.SOLD)
+            .bookingNumber("BOOK-5678")
+            .build();
+
+    seatRepository.saveAll(List.of(holdSeat, soldSeat));
+    entityManager.flush();
+    entityManager.clear();
+
+    // when
+    int releasedHold =
+        seatRepository.releaseHoldById(holdSeat.getId(), SeatStatus.HOLD, SeatStatus.AVAILABLE);
+    int releasedSold =
+        seatRepository.releaseHoldById(soldSeat.getId(), SeatStatus.HOLD, SeatStatus.AVAILABLE);
+
+    // then
+    assertThat(releasedHold).isEqualTo(1);
+    assertThat(releasedSold).isZero(); // 팔린 좌석은 가드에 걸려 되돌아가지 않는다
+
+    Seat released = seatRepository.findById(holdSeat.getId()).orElseThrow();
+    assertThat(released.getSeatStatus()).isEqualTo(SeatStatus.AVAILABLE);
+    assertThat(released.getHoldExpiredAt()).isNull();
+    assertThat(released.getBookingNumber()).isNull();
+
+    Seat untouched = seatRepository.findById(soldSeat.getId()).orElseThrow();
+    assertThat(untouched.getSeatStatus()).isEqualTo(SeatStatus.SOLD);
+    assertThat(untouched.getBookingNumber()).isEqualTo("BOOK-5678");
+  }
 }
