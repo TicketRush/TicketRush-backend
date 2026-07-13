@@ -1,6 +1,8 @@
 package com.ticketrush.boundedcontext.seat.app.usecase;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.BDDMockito.given;
 import static org.mockito.BDDMockito.willAnswer;
 import static org.mockito.Mockito.mock;
@@ -13,6 +15,7 @@ import com.ticketrush.boundedcontext.seat.app.support.SeatStatusEventPublisher;
 import com.ticketrush.boundedcontext.seat.domain.entity.Seat;
 import com.ticketrush.boundedcontext.seat.out.repository.SeatRepository;
 import com.ticketrush.global.types.SeatStatus;
+import java.time.LocalDateTime;
 import java.util.Optional;
 import java.util.concurrent.atomic.AtomicReference;
 import org.junit.jupiter.api.DisplayName;
@@ -45,7 +48,13 @@ class SeatReleaseSingleUseCaseTest {
             .bookingNumber("BK-1")
             .build();
     given(seatRepository.findById(seatId)).willReturn(Optional.of(seat));
-    given(seatRepository.releaseHoldById(seatId, SeatStatus.HOLD, SeatStatus.AVAILABLE))
+    given(
+            seatRepository.releaseExpiredHoldById(
+                eq(seatId),
+                eq("BK-1"),
+                any(LocalDateTime.class),
+                eq(SeatStatus.HOLD),
+                eq(SeatStatus.AVAILABLE)))
         .willReturn(1);
 
     // hold 만료 이벤트 발행은 releaseHold() '전에' 일어나야 bookingNumber가 살아있다 → 발행 시점 값을 캡처
@@ -105,7 +114,13 @@ class SeatReleaseSingleUseCaseTest {
             .bookingNumber("BK-1")
             .build();
     given(seatRepository.findById(seatId)).willReturn(Optional.of(seat));
-    given(seatRepository.releaseHoldById(seatId, SeatStatus.HOLD, SeatStatus.AVAILABLE))
+    given(
+            seatRepository.releaseExpiredHoldById(
+                eq(seatId),
+                eq("BK-1"),
+                any(LocalDateTime.class),
+                eq(SeatStatus.HOLD),
+                eq(SeatStatus.AVAILABLE)))
         .willReturn(0);
 
     // when

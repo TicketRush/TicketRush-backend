@@ -44,10 +44,13 @@ public class SeatReleaseExpiredChunkProcessor {
 
     int released = 0;
     for (Seat seat : expiredSeats) {
-      // 조회 이후 결제가 확정됐을 수 있다. 상태 가드가 달린 조건부 UPDATE만이 SOLD 좌석을 되돌리지 않는다.
-      if (seatRepository.releaseHoldById(seat.getId(), SeatStatus.HOLD, SeatStatus.AVAILABLE)
-          == 0) {
-        log.info("좌석 {}은(는) 조회 이후 HOLD가 아니게 되어 해제를 건너뜁니다.", seat.getId());
+      // 조회 이후 결제가 확정됐거나(SOLD) 해제 후 다른 예매로 재선점됐을 수 있다(ABA). 가드가 달린 조건부
+      // UPDATE만이 팔린 좌석과 남의 살아있는 선점을 건드리지 않는다.
+      int updated =
+          seatRepository.releaseExpiredHoldById(
+              seat.getId(), seat.getBookingNumber(), now, SeatStatus.HOLD, SeatStatus.AVAILABLE);
+      if (updated == 0) {
+        log.info("좌석 {}은(는) 조회 이후 선점 상태가 바뀌어 해제를 건너뜁니다.", seat.getId());
         continue;
       }
 

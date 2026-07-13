@@ -46,7 +46,13 @@ class SeatReleaseExpiredChunkProcessorTest {
             seatRepository.findExpiredHoldSeats(
                 eq(SeatStatus.HOLD), any(LocalDateTime.class), any(Pageable.class)))
         .willReturn(List.of(expiredSeat1, expiredSeat2));
-    given(seatRepository.releaseHoldById(any(), eq(SeatStatus.HOLD), eq(SeatStatus.AVAILABLE)))
+    given(
+            seatRepository.releaseExpiredHoldById(
+                any(),
+                any(),
+                any(LocalDateTime.class),
+                eq(SeatStatus.HOLD),
+                eq(SeatStatus.AVAILABLE)))
         .willReturn(1);
 
     // when
@@ -83,7 +89,13 @@ class SeatReleaseExpiredChunkProcessorTest {
             seatRepository.findExpiredHoldSeats(
                 eq(SeatStatus.HOLD), any(LocalDateTime.class), any(Pageable.class)))
         .willReturn(List.of(seat));
-    given(seatRepository.releaseHoldById(any(), eq(SeatStatus.HOLD), eq(SeatStatus.AVAILABLE)))
+    given(
+            seatRepository.releaseExpiredHoldById(
+                any(),
+                any(),
+                any(LocalDateTime.class),
+                eq(SeatStatus.HOLD),
+                eq(SeatStatus.AVAILABLE)))
         .willReturn(1);
 
     AtomicReference<String> bookingNumberAtPublish = new AtomicReference<>();
@@ -113,7 +125,13 @@ class SeatReleaseExpiredChunkProcessorTest {
             seatRepository.findExpiredHoldSeats(
                 eq(SeatStatus.HOLD), any(LocalDateTime.class), any(Pageable.class)))
         .willReturn(List.of(seat));
-    given(seatRepository.releaseHoldById(any(), eq(SeatStatus.HOLD), eq(SeatStatus.AVAILABLE)))
+    given(
+            seatRepository.releaseExpiredHoldById(
+                any(),
+                any(),
+                any(LocalDateTime.class),
+                eq(SeatStatus.HOLD),
+                eq(SeatStatus.AVAILABLE)))
         .willReturn(0);
 
     // when
