@@ -19,6 +19,13 @@ import org.springframework.transaction.annotation.Transactional;
  * <p>{@link SeatReleaseExpiredUseCase}(오케스트레이터)와 별도 빈으로 분리한 이유: 오케스트레이터의 반복 호출이 Spring 프록시를 거쳐
  * <b>청크마다 새 트랜잭션</b>을 열도록 하기 위함이다. 같은 클래스의 메서드로 두면 self-invocation으로 프록시를 우회해 단일 트랜잭션이 되어버린다. 청크마다
  * 커밋되므로 {@code afterCommit} SSE 이벤트도 청크 단위로 발화되고, 트랜잭션 범위는 {@code chunkSize}로 제한된다.
+ *
+ * <p><b>루프 안의 {@code em.clear()}가 아웃박스 INSERT를 버리지 않는 것은 ID 전략에 달려 있다.</b> 조건부 UPDATE에 붙은
+ * {@code @Modifying(clearAutomatically = true)}는 반복마다 영속성 컨텍스트를 비우는데, 직전 반복이 발행한 아웃박스 엔티티가 그 안에 보류
+ * 중이면 함께 버려진다. 지금 안전한 이유는 {@code OutboxEntity}가 {@code GenerationType.IDENTITY}라 {@code save()} 시점에
+ * INSERT가 <b>즉시 실행</b>되기 때문이다(이미 나간 INSERT는 clear가 되돌리지 못한다). 벌크 JPQL의 query space는 {@code seat}
+ * 테이블뿐이라 auto-flush도 아웃박스를 밀어주지 않는다. <b>ID 전략이 sequence/TABLE로 바뀌면 만료 이벤트가 조용히 유실된다</b>(에러 로그도 남지
+ * 않는다).
  */
 @Slf4j
 @Service
@@ -54,6 +61,13 @@ public class SeatReleaseExpiredChunkProcessor {
         continue;
       }
 
+      /* 아래 seat는 detach 상태다. @Modifying(clearAutomatically = true)가 UPDATE 직후 영속성 컨텍스트를
+       * 비우기 때문이다. 그래서 seat.releaseHold()는 DB에 나가지 않는 순수 in-memory 조정이고(위 조건부
+       * UPDATE가 이미 DB를 바꿨다), publish에는 조회 스냅샷의 bookingNumber가 실린다(DB는 이미 null).
+       * 가드가 통과했다는 것이 곧 그 스냅샷이 최신이라는 뜻이므로 페이로드는 정확하다.
+       *
+       * clearAutomatically를 끄면 releaseHold()가 관리 상태 엔티티를 건드려 가드 없는
+       * UPDATE ... WHERE seat_id = ? 더티 체킹 쓰기가 되살아난다. 즉 위 가드가 무력화된다. */
       seatHoldExpiredPublisher.publish(seat);
       seat.releaseHold();
       seatStatusEventPublisher.publishAfterCommit(seat);

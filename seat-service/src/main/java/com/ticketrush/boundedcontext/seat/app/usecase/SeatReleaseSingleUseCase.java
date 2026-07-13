@@ -48,6 +48,8 @@ public class SeatReleaseSingleUseCase {
                 return;
               }
 
+              // seat는 이 시점에 detach다(clearAutomatically). releaseHold()는 DB에 나가지 않는 in-memory
+              // 조정이고, 위 조건부 UPDATE가 이미 DB를 바꿨다. 가드가 통과했으므로 스냅샷은 최신이다.
               seatHoldExpiredPublisher.publish(seat);
               seat.releaseHold();
               seatStatusEventPublisher.publishAfterCommit(seat);

@@ -41,7 +41,10 @@ gateway:
 app:
   seat:
     release:
-      chunk-size: 100
+      # 청크의 첫 좌석에 걸린 행 잠금은 나머지 좌석의 UPDATE를 모두 지나 청크 커밋까지 유지된다.
+      # 그 사이 같은 좌석의 결제 확정(confirmSoldById)이 블로킹되므로, 러시 중 경합을 줄이려 청크를 짧게 끊는다.
+      # max-chunks와 곱해 tick당 처리 상한은 500건이다.
+      chunk-size: 25
       max-chunks: 20
   event-publisher:
     type: outbox
