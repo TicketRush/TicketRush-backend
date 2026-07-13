@@ -52,6 +52,20 @@ public class PaymentConfirmUseCase {
           ErrorStatus.PAYMENT_LIMIT_EXCEEDED,
           ErrorStatus.PAYMENT_SESSION_NOT_FOUND);
 
+  /**
+   * booking당 보존하는 FAILED 이력 상한(#333).
+   *
+   * <p>FAILED row는 unique 제약에 걸리지 않아 동일 booking에 무제한 누적될 수 있다. 화이트리스트({@link
+   * #RECORDABLE_FAILURES})가 무작위 스팸은 이미 거르지만, 인증 사용자의 정상 거절 반복은 여전히 쌓인다. 첫 {@value}건까지는 재시도 이력으로
+   * 보존하고(#297) 초과분은 저장하지 않아 팽창을 유계로 만든다. 초과 억제는 {@link
+   * MetricNames#PAYMENT_FAILED_RECORD_SUPPRESSED} 메트릭으로 관측한다.
+   *
+   * <p>{@code execute}에 트랜잭션이 없어 count→insert 사이 TOCTOU가 있으므로 이 상한은 정확한 하드 리밋이 아니라 <b>근사 상한(soft
+   * cap)</b>이다. 동시 실패가 겹치면 상한을 근소하게 넘길 수 있으나, 목적이 "무제한 누적 방지(유계화)"라 수용한다(엄밀 상한은 DDL/락이 필요하나 이번 범위는
+   * 스키마 무변경).
+   */
+  private static final long MAX_FAILED_HISTORY_PER_BOOKING = 5;
+
   private final PaymentRepository paymentRepository;
   private final PaymentApprovalClientRouter paymentApprovalClientRouter;
   private final PaymentEventPublisher paymentEventPublisher;
@@ -171,6 +185,23 @@ public class PaymentConfirmUseCase {
       pgFailureReason = pge.getRawMessage();
     }
     try {
+      // booking당 FAILED 이력이 상한에 도달하면 더 쌓지 않는다(무제한 누적/쓰기 증폭 방어, #333). 첫 상한건까지는 이력으로
+      // 보존되고, 초과 실패는 저장 대신 억제 메트릭으로만 관측한다. count 조회도 이 try 안에서 수행해, 조회가 DB 장애로 실패하더라도
+      // 아래 catch가 삼켜 원래의 결제 실패 예외를 가리지 않게 한다(저장 실패와 동일한 불변식).
+      if (paymentRepository.countByBookingIdAndStatus(request.bookingId(), PaymentStatus.FAILED)
+          >= MAX_FAILED_HISTORY_PER_BOOKING) {
+        Counter.builder(MetricNames.PAYMENT_FAILED_RECORD_SUPPRESSED)
+            .tag(MetricNames.TAG_REASON, e.getErrorStatus().getCode())
+            .register(meterRegistry)
+            .increment();
+        // 억제 자체는 위 메트릭으로 관측한다. 상한 도달 booking의 반복 재시도로 로그가 증폭되지 않도록 debug로 남긴다.
+        log.debug(
+            "FAILED 결제 이력이 booking당 상한({})에 도달해 기록을 억제합니다. bookingId={}, failureCode={}",
+            MAX_FAILED_HISTORY_PER_BOOKING,
+            request.bookingId(),
+            e.getErrorStatus().getCode());
+        return;
+      }
       Payment failed =
           Payment.failed(
               request.bookingId(),
@@ -189,9 +220,10 @@ public class PaymentConfirmUseCase {
           .register(meterRegistry)
           .increment();
     } catch (Exception ex) {
-      // 추적이 목적인 기능이라 이력 저장 실패는 집계 누락이다. error 레벨로 올려 알람/메트릭 대상이 되게 한다.
+      // 추적이 목적인 기능이라 이력 기록 실패는 집계 누락이다. error 레벨로 올려 알람/메트릭 대상이 되게 한다.
+      // 상한 조회(count)와 저장(saveAndFlush)이 같은 try 안이라, 어느 단계에서 실패했든 이 경로로 모인다(원 결제 실패 예외는 호출부가 재던진다).
       log.error(
-          "FAILED 결제 이력 저장에 실패했습니다. bookingId={}, failureCode={}",
+          "FAILED 결제 이력 기록(상한 조회·저장)에 실패했습니다. bookingId={}, failureCode={}",
           request.bookingId(),
           e.getErrorStatus().getCode(),
           ex);
