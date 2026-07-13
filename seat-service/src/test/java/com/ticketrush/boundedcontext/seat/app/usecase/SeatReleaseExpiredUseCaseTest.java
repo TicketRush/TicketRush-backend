@@ -8,6 +8,7 @@ import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoMoreInteractions;
 
+import com.ticketrush.boundedcontext.seat.app.usecase.SeatReleaseExpiredChunkProcessor.ChunkResult;
 import com.ticketrush.global.config.SeatReleaseProperties;
 import java.time.LocalDateTime;
 import java.util.List;
@@ -44,7 +45,8 @@ class SeatReleaseExpiredUseCaseTest {
   @DisplayName("만료 좌석이 청크 크기 미만이면 한 번의 청크 처리로 종료한다")
   void execute_ReleasesSingleChunkAndStops() {
     // given
-    given(chunkProcessor.releaseChunk(any(LocalDateTime.class), eq(CHUNK_SIZE))).willReturn(30);
+    given(chunkProcessor.releaseChunk(any(LocalDateTime.class), eq(CHUNK_SIZE)))
+        .willReturn(new ChunkResult(30, 30));
 
     // when
     seatReleaseExpiredUseCase.execute();
@@ -58,7 +60,8 @@ class SeatReleaseExpiredUseCaseTest {
   @DisplayName("만료 좌석이 없으면 한 번의 청크 처리로 종료한다")
   void execute_WhenNoExpiredSeats_StopsAfterSingleChunk() {
     // given: 첫 청크가 0건 반환
-    given(chunkProcessor.releaseChunk(any(LocalDateTime.class), eq(CHUNK_SIZE))).willReturn(0);
+    given(chunkProcessor.releaseChunk(any(LocalDateTime.class), eq(CHUNK_SIZE)))
+        .willReturn(new ChunkResult(0, 0));
 
     // when
     seatReleaseExpiredUseCase.execute();
@@ -73,7 +76,10 @@ class SeatReleaseExpiredUseCaseTest {
   void execute_ProcessesMultipleChunksUntilDrained() {
     // given: 100, 100 처리 후 40에서 소진
     given(chunkProcessor.releaseChunk(any(LocalDateTime.class), eq(CHUNK_SIZE)))
-        .willReturn(CHUNK_SIZE, CHUNK_SIZE, 40);
+        .willReturn(
+            new ChunkResult(CHUNK_SIZE, CHUNK_SIZE),
+            new ChunkResult(CHUNK_SIZE, CHUNK_SIZE),
+            new ChunkResult(40, 40));
 
     // when
     seatReleaseExpiredUseCase.execute();
@@ -91,7 +97,7 @@ class SeatReleaseExpiredUseCaseTest {
   void execute_StopsAtMaxChunks() {
     // given: 매 청크가 가득 차 상한에 도달
     given(chunkProcessor.releaseChunk(any(LocalDateTime.class), eq(CHUNK_SIZE)))
-        .willReturn(CHUNK_SIZE);
+        .willReturn(new ChunkResult(CHUNK_SIZE, CHUNK_SIZE));
 
     // when
     seatReleaseExpiredUseCase.execute();
