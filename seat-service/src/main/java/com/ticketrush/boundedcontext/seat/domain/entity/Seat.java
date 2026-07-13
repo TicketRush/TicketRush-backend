@@ -17,12 +17,37 @@ import lombok.Builder;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
 
+/**
+ * 좌석. 인덱스 두 개를 두는 근거는 아래와 같다.
+ *
+ * <p><b>idx_seat_performance_id</b> — {@code SeatRepository.findSeatLayoutsByPerformanceId}가
+ * performanceId로만 필터한다. 인덱스가 없으면 공연당 수천 행을 매 요청 풀스캔해 부하 테스트 수치가 앱이 아닌 인덱스 부재를 반영한다.
+ *
+ * <p><b>idx_seat_status_hold_expired_at</b> — 만료 HOLD 조회가 주기 스케줄러의 핫패스다(#343). {@code
+ * SeatStatusScheduler}(60초)의 {@code findExpiredHoldSeats}와 {@code SeatHeldGaugeMetrics}(30초)의
+ * {@code countHeldSeats}가 모두 {@code seat_status} + {@code hold_expired_at} 조건을 쓰는데, 인덱스가 없으면 <b>만료
+ * 좌석이 0건이어도 매 tick마다 테이블 전체를 스캔한다</b>(좌석 30만 기준 335ms → 0.03ms). 컬럼 순서는 equality({@code
+ * seat_status})가 선두, range({@code hold_expired_at})가 후미다. seat_status는 카디널리티가 3이라 단독 선택도는 낮지만,
+ * range 컬럼을 선두에 두면 뒤 컬럼을 seek에 쓰지 못한다. 대가로 좌석 전이(HOLD/확정/해제) 쓰기가 약 20% 느려진다 — 상시 반복되는 풀스캔을 없애는 값으로
+ * 수용한다.
+ *
+ * <p><b>기존 가동 DB에는 수동 DDL이 필요하다.</b> {@code @Table}의 {@code @Index}는 ddl-auto=update인 로컬/신규 초기화
+ * DB(init SQL)에서만 생성되고, prod(validate)는 인덱스 부재를 검출하지 못한다(#296 수동 DDL 관행과 동일). 아래는 인덱스가 없는 기존 DB에만
+ * 실행한다(신규 초기화 DB는 init SQL이 이미 만들어 Duplicate key name 실패):
+ *
+ * <pre>
+ *   ALTER TABLE seat
+ *     ADD INDEX idx_seat_status_hold_expired_at (seat_status, hold_expired_at),
+ *     ALGORITHM=INPLACE, LOCK=NONE;
+ * </pre>
+ */
 @Entity
-// SeatRepository.findSeatLayoutsByPerformanceId가 performanceId로만 필터한다.
-// 인덱스가 없으면 공연당 수천 행을 매 요청 풀스캔해 부하 테스트 수치가 앱이 아닌 인덱스 부재를 반영한다.
 @Table(
     name = "seat",
-    indexes = @Index(name = "idx_seat_performance_id", columnList = "performance_id"))
+    indexes = {
+      @Index(name = "idx_seat_performance_id", columnList = "performance_id"),
+      @Index(name = "idx_seat_status_hold_expired_at", columnList = "seat_status, hold_expired_at")
+    })
 @Getter
 @NoArgsConstructor(access = AccessLevel.PROTECTED)
 @AttributeOverride(name = "id", column = @Column(name = "seat_id"))

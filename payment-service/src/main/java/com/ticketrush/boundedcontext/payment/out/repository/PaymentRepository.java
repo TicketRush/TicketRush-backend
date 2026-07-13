@@ -23,4 +23,11 @@ public interface PaymentRepository extends JpaRepository<Payment, Long> {
   Optional<Payment> findByIdAndUserId(Long id, Long userId);
 
   Optional<Payment> findByPaymentKey(String paymentKey);
+
+  /*
+   * booking당 FAILED 이력 누적 상한을 판정하기 위해 현재 개수를 센다(#333). FAILED row는
+   * payment_key·completed_booking_id가 NULL이라 어떤 unique 제약에도 걸리지 않아 동일 booking에 무제한 누적될 수
+   * 있으므로, 기록 직전 이 개수로 상한을 건다.
+   */
+  long countByBookingIdAndStatus(Long bookingId, PaymentStatus status);
 }

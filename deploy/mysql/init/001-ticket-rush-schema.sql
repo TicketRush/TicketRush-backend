@@ -17,14 +17,17 @@ CREATE TABLE `booking` (
   `created_at` datetime(6) DEFAULT NULL,
   `updated_at` datetime(6) DEFAULT NULL,
   `booking_number` varchar(50) COLLATE utf8mb4_unicode_ci NOT NULL,
-  `booking_status` enum('CANCELED','CONFIRMED','EXPIRED','PENDING','REFUNDED','REFUNDING','REFUND_FAILED') COLLATE utf8mb4_unicode_ci NOT NULL,
+  `booking_status` enum('CANCELED','CONFIRMED','EXPIRED','PENDING','REFUNDED','REFUNDING') COLLATE utf8mb4_unicode_ci NOT NULL,
   `confirmed_at` datetime(6) DEFAULT NULL,
   `refund_failed_at` datetime(6) DEFAULT NULL,
   `performance_id` bigint NOT NULL,
+  `refund_failed_at` datetime(6) DEFAULT NULL,
   `seat_id` bigint NOT NULL,
   `user_id` bigint NOT NULL,
+  `version` bigint NOT NULL DEFAULT '0',
   PRIMARY KEY (`booking_id`),
-  UNIQUE KEY `UK6j74n7w8mp19sixr5272028mk` (`booking_number`)
+  UNIQUE KEY `UK6j74n7w8mp19sixr5272028mk` (`booking_number`),
+  KEY `idx_booking_status_updated_at` (`booking_status`,`updated_at`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 /*!40101 SET character_set_client = @saved_cs_client */;
 DROP TABLE IF EXISTS `dead_letter_record`;
@@ -125,7 +128,8 @@ CREATE TABLE `payment` (
   `status` enum('CANCELED','COMPLETED','FAILED','PENDING') COLLATE utf8mb4_unicode_ci NOT NULL,
   `user_id` bigint DEFAULT NULL,
   PRIMARY KEY (`payment_id`),
-  UNIQUE KEY `UK6vew52c3hm7vwaiwfvt498x3` (`payment_key`)
+  UNIQUE KEY `UK6vew52c3hm7vwaiwfvt498x3` (`payment_key`),
+  KEY `idx_payment_booking_id` (`booking_id`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 /*!40101 SET character_set_client = @saved_cs_client */;
 DROP TABLE IF EXISTS `performance`;
@@ -207,7 +211,8 @@ CREATE TABLE `seat` (
   `seat_number` varchar(10) COLLATE utf8mb4_unicode_ci NOT NULL,
   `seat_status` enum('AVAILABLE','HOLD','SOLD') COLLATE utf8mb4_unicode_ci NOT NULL,
   PRIMARY KEY (`seat_id`),
-  KEY `idx_seat_performance_id` (`performance_id`)
+  KEY `idx_seat_performance_id` (`performance_id`),
+  KEY `idx_seat_status_hold_expired_at` (`seat_status`,`hold_expired_at`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 /*!40101 SET character_set_client = @saved_cs_client */;
 DROP TABLE IF EXISTS `seat_layout`;
@@ -252,6 +257,7 @@ CREATE TABLE `ticket` (
   `ticket_status` enum('CANCELED','UNUSED','USED') COLLATE utf8mb4_unicode_ci NOT NULL,
   `ticket_token_hash` varchar(64) COLLATE utf8mb4_unicode_ci NOT NULL,
   `used_at` datetime(6) DEFAULT NULL,
+  `user_id` bigint DEFAULT NULL,
   PRIMARY KEY (`ticket_id`),
   UNIQUE KEY `UKgco27k8cbs8j67db3oadbna6o` (`booking_id`),
   UNIQUE KEY `UKgbou3cclxytcn7k5xlag9s0n8` (`ticket_token_hash`)

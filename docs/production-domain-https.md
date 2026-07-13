@@ -193,6 +193,16 @@ server {
 
     server_name api.ticketrush.store;
 
+    location = /actuator/health {
+        proxy_pass http://127.0.0.1:8090/actuator/health;
+        proxy_http_version 1.1;
+
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+    }
+
     location / {
         proxy_pass http://127.0.0.1:8080;
         proxy_http_version 1.1;
@@ -466,7 +476,7 @@ CD Workflow는 컨테이너 안정화 확인 후 두 단계의 Health Check를 �
 ### 내부 Gateway Health Check
 
 ```bash
-curl -fsS http://127.0.0.1:8080/actuator/health
+curl -fsS http://127.0.0.1:8090/actuator/health
 ```
 
 Gateway가 EC2 내부에서 정상적으로 응답하는지 확인한다.
@@ -531,7 +541,7 @@ ExitCode=0
 Gateway 내부 Health:
 
 ```bash
-curl -fsS http://127.0.0.1:8080/actuator/health && echo
+curl -fsS http://127.0.0.1:8090/actuator/health && echo
 ```
 
 외부 HTTPS Health:

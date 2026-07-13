@@ -31,11 +31,14 @@ public class SeatReleaseExpiredUseCase {
     boolean capReached = false;
 
     while (processedChunks < maxChunks) {
-      int released = chunkProcessor.releaseChunk(now, chunkSize);
-      totalReleased += released;
+      SeatReleaseExpiredChunkProcessor.ChunkResult result =
+          chunkProcessor.releaseChunk(now, chunkSize);
+      totalReleased += result.released();
       processedChunks++;
 
-      if (released < chunkSize) {
+      // 다음 청크가 남았는지는 '조회된' 건수로 판단한다. 실제 해제 건수(released)로 판단하면, 조회 이후 결제가
+      // 확정돼 건너뛴 좌석 때문에 아직 만료 좌석이 남았는데도 루프가 조기 종료된다.
+      if (result.fetched() < chunkSize) {
         break;
       }
       // 마지막 청크까지 가득 찬 채로 maxChunks에 도달 = 처리 상한 소진(잔여 좌석 존재 여부는 미확인).

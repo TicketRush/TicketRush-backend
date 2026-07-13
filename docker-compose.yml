@@ -71,7 +71,8 @@ services:
       - ticketrush-net
 
   grafana:
-    image: grafana/grafana:11.1.0
+    # 11.1.0은 CVE-2024-9264(인증 후 명령 주입) 영향 범위다. 11.1.7이 그 라인의 수정 버전이다.
+    image: grafana/grafana:11.1.7
     container_name: grafana
     ports:
       - "127.0.0.1:3000:3000"

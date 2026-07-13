@@ -24,6 +24,9 @@ public class MetricNames {
   public static final String PAYMENT_REFUND = "ticketrush.payment.refund";
   public static final String PAYMENT_PG_CANCEL = "ticketrush.payment.pg.cancel"; // Timer
   public static final String PAYMENT_REFUND_FAILED = "ticketrush.payment.refund.failed";
+  // booking당 FAILED 이력 상한 초과로 기록을 억제한 횟수(#333).
+  public static final String PAYMENT_FAILED_RECORD_SUPPRESSED =
+      "ticketrush.payment.failed_record.suppressed";
 
   // ticket
   public static final String TICKET_ISSUE = "ticketrush.ticket.issue";

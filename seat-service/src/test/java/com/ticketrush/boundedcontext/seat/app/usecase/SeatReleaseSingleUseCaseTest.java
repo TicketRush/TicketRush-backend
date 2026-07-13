@@ -1,6 +1,8 @@
 package com.ticketrush.boundedcontext.seat.app.usecase;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.BDDMockito.given;
 import static org.mockito.BDDMockito.willAnswer;
 import static org.mockito.Mockito.mock;
@@ -13,6 +15,7 @@ import com.ticketrush.boundedcontext.seat.app.support.SeatStatusEventPublisher;
 import com.ticketrush.boundedcontext.seat.domain.entity.Seat;
 import com.ticketrush.boundedcontext.seat.out.repository.SeatRepository;
 import com.ticketrush.global.types.SeatStatus;
+import java.time.LocalDateTime;
 import java.util.Optional;
 import java.util.concurrent.atomic.AtomicReference;
 import org.junit.jupiter.api.DisplayName;
@@ -42,9 +45,17 @@ class SeatReleaseSingleUseCaseTest {
             .performanceId(1L)
             .seatNumber("A-1")
             .seatStatus(SeatStatus.HOLD)
+            .holdExpiredAt(LocalDateTime.now().minusMinutes(1))
             .bookingNumber("BK-1")
             .build();
     given(seatRepository.findById(seatId)).willReturn(Optional.of(seat));
+    given(
+            seatRepository.releaseExpiredHoldById(
+                eq(seatId),
+                any(LocalDateTime.class),
+                eq(SeatStatus.HOLD),
+                eq(SeatStatus.AVAILABLE)))
+        .willReturn(1);
 
     // hold 만료 이벤트 발행은 releaseHold() '전에' 일어나야 bookingNumber가 살아있다 → 발행 시점 값을 캡처
     AtomicReference<String> bookingNumberAtPublish = new AtomicReference<>();
@@ -87,6 +98,38 @@ class SeatReleaseSingleUseCaseTest {
     verify(seatRepository).findById(seatId);
     verifyNoInteractions(seatStatusEventPublisher);
     verifyNoInteractions(seatHoldExpiredPublisher);
+  }
+
+  @Test
+  @DisplayName("조회 이후 결제가 확정된 좌석은 해제하지 않고 이벤트도 발행하지 않는다")
+  void execute_WhenSeatConfirmedAfterFetch_SkipsRelease() {
+    // given: 조회 시점엔 HOLD였지만 조건부 UPDATE가 0건 -> 그 사이 confirmSoldById가 SOLD로 확정한 상황
+    Long seatId = 1L;
+    Seat seat =
+        Seat.builder()
+            .seatLayoutId(1L)
+            .performanceId(1L)
+            .seatNumber("A-1")
+            .seatStatus(SeatStatus.HOLD)
+            .holdExpiredAt(LocalDateTime.now().minusMinutes(1))
+            .bookingNumber("BK-1")
+            .build();
+    given(seatRepository.findById(seatId)).willReturn(Optional.of(seat));
+    given(
+            seatRepository.releaseExpiredHoldById(
+                eq(seatId),
+                any(LocalDateTime.class),
+                eq(SeatStatus.HOLD),
+                eq(SeatStatus.AVAILABLE)))
+        .willReturn(0);
+
+    // when
+    seatReleaseSingleUseCase.execute(seatId);
+
+    // then: 팔린 좌석이 풀려 재판매되면 안 된다
+    assertThat(seat.getSeatStatus()).isEqualTo(SeatStatus.HOLD);
+    verifyNoInteractions(seatHoldExpiredPublisher);
+    verifyNoInteractions(seatStatusEventPublisher);
   }
 
   @Test

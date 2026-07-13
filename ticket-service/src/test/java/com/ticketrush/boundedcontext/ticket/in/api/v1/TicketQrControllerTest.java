@@ -9,6 +9,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import com.ticketrush.boundedcontext.ticket.app.dto.response.TicketQrResponse;
 import com.ticketrush.boundedcontext.ticket.app.usecase.TicketQrGetUseCase;
 import com.ticketrush.boundedcontext.ticket.domain.types.TicketStatus;
+import com.ticketrush.global.config.CustomSecurityProperties;
 import com.ticketrush.global.config.SecurityConfig;
 import com.ticketrush.global.exception.BusinessException;
 import com.ticketrush.global.filter.GatewayHeaderFilter;
@@ -24,8 +25,12 @@ import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
 
 @WebMvcSliceTest(TicketQrController.class)
-@Import({SecurityConfig.class, GatewayHeaderFilter.class})
-@TestPropertySource(properties = "gateway.internal-token=test-token")
+@Import({SecurityConfig.class, GatewayHeaderFilter.class, CustomSecurityProperties.class})
+@TestPropertySource(
+    properties = {
+      "gateway.internal-token=test-token",
+      "custom.security.internal-token=test-internal-token"
+    })
 class TicketQrControllerTest {
 
   private static final String INTERNAL_TOKEN = "test-token";

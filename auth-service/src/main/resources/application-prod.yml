@@ -45,3 +45,11 @@ custom:
       - /
       - /favicon.ico
       - /error
+
+# actuator를 앱 포트에서 분리한다. gateway의 8080은 인터넷에 열려 있고 SecurityConfig가
+# permitAll이라, 분리하지 않으면 /actuator/prometheus 가 인증 없이 공개된다(ADR 0007).
+# 8090은 compose에서 publish 하지 않으므로 같은 네트워크의 Prometheus만 접근할 수 있다.
+# prod 에만 둔다. application.yml 에 두면 로컬에서 앱 8개가 8090을 다퉈 기동이 실패한다.
+management:
+  server:
+    port: 8090

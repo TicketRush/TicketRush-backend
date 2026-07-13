@@ -13,6 +13,12 @@ spring:
 service:
   seat:
     url: ${SEAT_SERVICE_URL:http://localhost:8086}
+  ticket:
+    url: ${TICKET_SERVICE_URL:http://localhost:8087}
+    # 취소 경로의 입장권 판정 전용. 단일 행 조회이므로 공용 예산(3s/10s)을 쓰지 않는다 —
+    # ticket-service가 느려질 때 취소 요청이 톰캣 스레드를 오래 붙잡아 예매 경로까지 마르는 것을 막는다.
+    connect-timeout-ms: ${TICKET_HTTP_CONNECT_TIMEOUT_MS:1000}
+    read-timeout-ms: ${TICKET_HTTP_READ_TIMEOUT_MS:2000}
   http:
     connect-timeout-ms: ${SERVICE_HTTP_CONNECT_TIMEOUT_MS:3000}
     read-timeout-ms: ${SERVICE_HTTP_READ_TIMEOUT_MS:10000}
@@ -49,6 +55,10 @@ gateway:
 # 기본은 비활성이며, 운영 환경에서 환경변수로 켠다(DLT_MONITOR_ENABLED=true, SLACK_ENABLED=true, SLACK_WEBHOOK_URL=...).
 # local/test는 미설정(기본 false)으로 비활성.
 app:
+  booking:
+    # REFUNDING에서 이 시간(분) 이상 멈춘 예매를 고착으로 판정한다 (#397).
+    # Kafka 재시도 소진(약 31초)보다 훨씬 길게 잡아 컨슈머 랙·재배포 중 일시 지연의 오탐을 막는다.
+    refunding-stuck-threshold-minutes: 30
   event-publisher:
     type: kafka
   outbox:

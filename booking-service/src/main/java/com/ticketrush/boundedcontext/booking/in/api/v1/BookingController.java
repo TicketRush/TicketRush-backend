@@ -75,7 +75,15 @@ public class BookingController {
     return ApiResponse.onSuccess(SuccessStatus.OK, response);
   }
 
-  @Operation(summary = "내 예매 취소", description = "로그인한 사용자의 확정 예매를 취소하고 좌석 반환 이벤트를 발행합니다.")
+  @Operation(
+      summary = "내 예매 취소",
+      description =
+          """
+          로그인한 사용자의 확정 예매를 취소하고 좌석 반환 이벤트를 발행합니다.
+
+          이미 입장을 완료한(입장권 사용됨) 예매는 취소할 수 없습니다(409 `BOOKING_409_006`). 착석한 좌석이
+          재판매되는 것을 막기 위한 정책이며, 이때 예매는 확정 상태 그대로 유지됩니다.
+          """)
   @DeleteMapping("/{bookingNumber}")
   public ResponseEntity<ApiResponse<Void>> cancelMyBooking(
       @AuthenticationPrincipal CustomUserDetails user, @PathVariable String bookingNumber) {

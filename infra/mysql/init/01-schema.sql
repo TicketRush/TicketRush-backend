@@ -22,8 +22,10 @@ CREATE TABLE `booking` (
   `performance_id` bigint NOT NULL,
   `seat_id` bigint NOT NULL,
   `user_id` bigint NOT NULL,
+  `version` bigint NOT NULL DEFAULT '0',
   PRIMARY KEY (`booking_id`),
-  UNIQUE KEY `UK6j74n7w8mp19sixr5272028mk` (`booking_number`)
+  UNIQUE KEY `UK6j74n7w8mp19sixr5272028mk` (`booking_number`),
+  KEY `idx_booking_status_updated_at` (`booking_status`,`updated_at`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
 /*!40101 SET character_set_client = @saved_cs_client */;
 /*!40101 SET @saved_cs_client     = @@character_set_client */;
@@ -119,7 +121,8 @@ CREATE TABLE `payment` (
   `status` enum('CANCELED','COMPLETED','FAILED','PENDING') NOT NULL,
   `user_id` bigint DEFAULT NULL,
   PRIMARY KEY (`payment_id`),
-  UNIQUE KEY `UK6vew52c3hm7vwaiwfvt498x3` (`payment_key`)
+  UNIQUE KEY `UK6vew52c3hm7vwaiwfvt498x3` (`payment_key`),
+  KEY `idx_payment_booking_id` (`booking_id`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
 /*!40101 SET character_set_client = @saved_cs_client */;
 /*!40101 SET @saved_cs_client     = @@character_set_client */;
@@ -196,7 +199,8 @@ CREATE TABLE `seat` (
   `seat_number` varchar(10) NOT NULL,
   `seat_status` enum('AVAILABLE','HOLD','SOLD') NOT NULL,
   PRIMARY KEY (`seat_id`),
-  KEY `idx_seat_performance_id` (`performance_id`)
+  KEY `idx_seat_performance_id` (`performance_id`),
+  KEY `idx_seat_status_hold_expired_at` (`seat_status`,`hold_expired_at`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
 /*!40101 SET character_set_client = @saved_cs_client */;
 /*!40101 SET @saved_cs_client     = @@character_set_client */;

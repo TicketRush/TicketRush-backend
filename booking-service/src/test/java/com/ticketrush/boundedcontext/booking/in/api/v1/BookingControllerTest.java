@@ -100,6 +100,7 @@ class BookingControllerTest {
             3L,
             BookingStatus.CONFIRMED,
             LocalDateTime.of(2026, 5, 22, 10, 30),
+            null,
             null);
 
     given(
