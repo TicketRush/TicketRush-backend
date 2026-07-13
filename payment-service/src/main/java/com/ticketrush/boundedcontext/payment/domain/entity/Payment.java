@@ -8,6 +8,7 @@ import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.EnumType;
 import jakarta.persistence.Enumerated;
+import jakarta.persistence.Index;
 import jakarta.persistence.Table;
 import java.time.LocalDateTime;
 import lombok.AccessLevel;
@@ -16,12 +17,24 @@ import lombok.Getter;
 import lombok.NoArgsConstructor;
 
 @Entity
-@Table(name = "payment")
+@Table(
+    name = "payment",
+    indexes = @Index(name = "idx_payment_booking_id", columnList = "booking_id"))
 @Getter
 @NoArgsConstructor(access = AccessLevel.PROTECTED)
 @AttributeOverride(name = "id", column = @Column(name = "payment_id"))
 public class Payment extends AutoIdBaseEntity {
 
+  /* bookingId 조건 조회(exists/findFirst/count By BookingId And Status)가 confirm hot path에서 매 요청
+   * 실행되므로 idx_payment_booking_id 인덱스를 둔다(#412). 세 조회 모두 (booking_id, status) 복합 조건이지만,
+   * booking당 payment row가 유계(COMPLETED 최대 1건 + FAILED 상한 #333)라 booking_id 단일 인덱스로 seek하면
+   * status는 소수 잔여 row 필터라 복합 인덱스 실익이 없어 단일로 둔다.
+   *
+   * @Table의 @Index는 ddl-auto=update인 로컬/신규 초기화 DB(init SQL)에서만 생성되고, prod(validate)는 인덱스
+   * 부재를 검출하지 못한다. 따라서 이미 가동 중인 기존 DB에는 배포 전 수동 DDL이 필요하다(#296 수동 DDL 관행과 동일).
+   * 아래 ALTER는 인덱스가 없는 기존 DB에만 실행한다(신규 초기화 DB는 init SQL이 이미 만들어 Duplicate key name 실패):
+   *   ALTER TABLE payment
+   *     ADD INDEX idx_payment_booking_id (booking_id), ALGORITHM=INPLACE, LOCK=NONE; */
   @Column(nullable = false)
   private Long bookingId;
 
