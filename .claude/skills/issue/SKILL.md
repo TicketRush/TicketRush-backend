@@ -95,9 +95,37 @@ gh issue create --title "[공간] 제목" --label <템플릿라벨> --type <Issu
   - `--type`에는 위 매핑표의 **GitHub Issue Type**(`Task`/`Bug`/`Feature`)을 넣는다. `--label`(작업 타입)과 `--type`(Issue Type)은 별개 축이라 이름이 달라도 된다(예: label `fix` ↔ Issue Type `Bug`).
   - `--assignee @me`로 현재 사용자를 담당자로 지정한다.
 
+### 4단계: 선행 이슈가 있으면 blocked-by 설정 (공통)
+**먼저 끝나야 하는 이슈가 있으면 반드시 `blocked-by` 관계를 건다.** 본문에 "선행: #N"이라고 적기만 하면 아무도 안 본다. GitHub 의존성으로 걸어야 담당자가 이슈를 열었을 때 상단에 "Blocked by N issues"로 보인다.
+
+- **판단 기준:** 이 이슈를 먼저 진행하면 **선행 이슈의 작업·결과가 무효가 되거나 방해받는가?** 그렇다면 blocked-by다.
+  - 예: rate limit(#423)을 부하 측정(#344·#348·#403)보다 먼저 머지하면 429로 포화점 측정이 불가능해진다 → #423 blocked by #344·#348·#403
+  - 단순 "관련 있음"은 blocked-by가 아니다. 본문 링크로 충분하다.
+- **담당자가 다르면 특히 중요하다.** 순서를 코드가 아니라 커뮤니케이션으로 지키려 하면 반드시 샌다.
+- **parent(sub-issue) 관계는 설정하지 않는다.** 위 "과도한 분할 금지"의 자식 이슈 X 원칙과 충돌한다. 계층이 아니라 **순서**만 표현한다.
+
+`gh` CLI에 전용 명령이 없으므로 GraphQL `addBlockedBy` mutation을 쓴다:
+```
+# 1. 이슈 node ID 조회 (차단당하는 이슈 + 선행 이슈 각각)
+gh api graphql -f query='{ repository(owner:"TicketRush", name:"TicketRush-backend") {
+  issue(number: 423) { id } } }' --jq '.data.repository.issue.id'
+
+# 2. blocked-by 설정 (issueId = 차단당하는 쪽, blockingIssueId = 선행 이슈)
+gh api graphql -f query='mutation($issueId: ID!, $blockingIssueId: ID!) {
+  addBlockedBy(input: {issueId: $issueId, blockingIssueId: $blockingIssueId}) {
+    issue { number } blockingIssue { number } } }' \
+  -f issueId="<차단당하는 이슈 ID>" -f blockingIssueId="<선행 이슈 ID>"
+
+# 3. 검증
+gh api graphql -f query='{ repository(owner:"TicketRush", name:"TicketRush-backend") {
+  issue(number: 423) { blockedBy(first: 10) { nodes { number title state } } } } }'
+```
+왜 blocked-by를 걸었는지는 **차단당하는 이슈에 코멘트로 근거를 남긴다**(어떤 측정/작업이 왜 무효가 되는지, 파일·라인 근거 포함). 관계만 걸어두면 담당자가 이유를 몰라 그냥 풀어버린다.
+
 ## 보고 형식
 1. 사용한 모드(A/B) + 선택한 템플릿과 그 이유 (1줄)
 2. 생성한 이슈 제목 + 지정한 **label · Issue Type**
 3. **생성된 이슈 URL/번호** (`gh issue create` 출력)
+4. 설정한 **blocked-by 관계**(있으면) — `#N blocked by #A, #B` 형식
 
 B 모드로 만든 이슈는 곧바로 `{이슈 label}/{번호}` 브랜치를 따 작업을 시작하거나 `/dev-cycle {번호}`로 이어갈 수 있음을 안내한다.
