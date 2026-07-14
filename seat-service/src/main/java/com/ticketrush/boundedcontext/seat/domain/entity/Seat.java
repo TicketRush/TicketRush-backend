@@ -104,9 +104,14 @@ public class Seat extends AutoIdBaseEntity {
    * 이 불변식이 깨지면(= HOLD 좌석을 더티 체킹으로 고치는 UseCase를 추가하거나, 위 두 곳의 clearAutomatically를 끄거나,
    * AVAILABLE/SOLD 행에 발화하는 벌크 UPDATE를 추가하면) stale 엔티티가 충돌 없이 덮어써 버전 검사가 조용히 무력화된다.
    * 그때는 JPQL UPDATE VERSIONED를 검토한다(booking도 같은 한계를 안고 있다 — ADR 0005).
+   *
+   * columnDefinition으로 DEFAULT 0을 명시하는 이유는 스키마 스냅샷 때문이다(#433). Hibernate는 DEFAULT를 만들지
+   * 않는데, version을 명시하지 않는 시딩 SQL(load-test/seed/seed_load.sql 등)은 DEFAULT가 없으면 ERROR 1364로
+   * 깨진다. 매핑에 넣지 않으면 스냅샷을 재생성할 때마다 사람이 수동으로 DEFAULT를 넣어줘야 하고, validate CI는
+   * DEFAULT 차이를 검출하지 못해 빠뜨려도 조용히 통과한다. 새 @Version 엔티티도 같은 방식으로 선언한다.
    */
   @Version
-  @Column(nullable = false)
+  @Column(nullable = false, columnDefinition = "bigint NOT NULL DEFAULT 0")
   private Long version;
 
   @Builder

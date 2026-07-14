@@ -69,21 +69,7 @@ init SQL은 **빈 DB의 최초 기동에만** 실행된다. 이미 데이터가 
 
    (gateway는 datasource가 없어 제외한다.)
 
-4. **낙관적 락 컬럼의 `DEFAULT`를 넣는다.** Hibernate DDL은 `DEFAULT`를 만들지 않지만, 스냅샷의
-   `version` 컬럼에는 `DEFAULT '0'`이 있어야 한다 — `version`을 명시하지 않는 시딩 SQL
-   (`load-test/seed/seed_load.sql`, `load-tests/fixtures/seat-layouts-120.sql`)이 없으면 `ERROR 1364`로
-   깨진다. 이 값은 ADR의 운영 `ALTER`(`... ADD COLUMN version bigint NOT NULL DEFAULT 0`)를 친 prod DB
-   형태를 반영한 것이므로, 덤프 전에 임시 DB에도 같은 상태를 만든다.
-
-   ```sh
-   docker exec -e MYSQL_PWD=snapshot mysql-snapshot mysql -uroot ticket_rush -e "
-     ALTER TABLE booking MODIFY version bigint NOT NULL DEFAULT 0;
-     ALTER TABLE seat    MODIFY version bigint NOT NULL DEFAULT 0;"
-   ```
-
-   > `@Version` 엔티티를 새로 추가했다면 여기에도 함께 추가한다. 현재 대상은 `Booking`(#397)·`Seat`(#427)뿐이다.
-
-5. 덤프한다. `--skip-comments`는 버전·타임스탬프 헤더를 지운다.
+4. 덤프한다. `--skip-comments`는 버전·타임스탬프 헤더를 지운다.
    `sed`는 테이블별 `AUTO_INCREMENT=<n>` 시작값을 지운다 — 덤프를 뜬 DB에 몇 행이 있었는지가
    그대로 굳어 재현이 깨지기 때문이다(컬럼의 `AUTO_INCREMENT` 속성 자체는 남는다).
    `DROP TABLE IF EXISTS`는 **지우지 않는다**(mysqldump 기본) — 현재 스냅샷이 그 형태다.
@@ -95,14 +81,17 @@ init SQL은 **빈 DB의 최초 기동에만** 실행된다. 이미 데이터가 
      > deploy/mysql/init/001-ticket-rush-schema.sql
    ```
 
-6. 인덱스·제약·`DEFAULT`가 들어갔는지 확인한다.
+5. 인덱스·제약·`DEFAULT`가 들어갔는지 확인한다.
+
+   `version` 컬럼의 `DEFAULT 0`은 엔티티의 `columnDefinition`이 만들어주므로(#433) 수동 작업이 필요 없다.
+   다만 빠지면 시딩 SQL이 `ERROR 1364`로 깨지고 `validate` CI는 이를 검출하지 못하므로, 여기서 눈으로 확인한다.
 
    ```sh
    grep -E "idx_seat_performance_id|uk_seat_layout_performance_id" deploy/mysql/init/001-ticket-rush-schema.sql
    grep -c "NOT NULL DEFAULT '0'" deploy/mysql/init/001-ticket-rush-schema.sql   # @Version 엔티티 수와 일치해야 한다
    ```
 
-7. 정리한다.
+6. 정리한다.
 
    ```sh
    docker rm -f mysql-snapshot
