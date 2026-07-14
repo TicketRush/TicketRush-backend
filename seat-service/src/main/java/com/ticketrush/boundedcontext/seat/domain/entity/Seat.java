@@ -88,13 +88,22 @@ public class Seat extends AutoIdBaseEntity {
    * 최적화로 남는다.
    *
    * 단, SeatRepository의 벌크 UPDATE(confirmSoldById, releaseExpiredHoldById)는 version을 증가시키지도 검사하지도
-   * 않는다. 그래도 안전한 이유는 가드가 원자적이어서가 아니라 상태 집합이 겹치지 않기 때문이다 — 두 벌크는 HOLD 행에만 발화하고,
-   * 엔티티 더티 체킹으로 쓰는 경로는 AVAILABLE에서 시작하는 hold()와 SOLD/HOLD에서 시작하는 releaseBooking()뿐이다.
-   * 낙관적 락이 실제로 거는 곳도 그 두 곳이다.
+   * 않는다. 그래도 안전한 이유는 가드가 원자적이어서가 아니라 <b>상태 집합이 겹치지 않기 때문이다.</b> 두 벌크는 HOLD 행에만
+   * 발화하는데(WHERE seatStatus = HOLD), DB에 UPDATE를 내보내는 더티 체킹 경로는 둘뿐이고 둘 다 HOLD에서 시작하지 않는다.
    *
-   * 이 불변식이 깨지면(= AVAILABLE/SOLD 행을 건드리는 벌크 UPDATE를 추가하거나, HOLD 좌석을 더티 체킹으로 고치는 UseCase를
-   * 추가하면) stale 엔티티가 충돌 없이 덮어써 버전 검사가 조용히 무력화된다. 그때는 JPQL UPDATE VERSIONED를 검토한다
-   * (booking도 같은 한계를 안고 있다 — ADR 0005).
+   *   - SeatHoldUseCase → hold() : AVAILABLE에서만 시작한다(hold()가 AVAILABLE 아니면 예외).
+   *   - SeatReleaseSoldSeatUseCase → releaseBooking() : SOLD에서만 시작한다. releaseBooking() 자체는 HOLD도
+   *     받지만, 호출부의 SOLD 가드가 HOLD를 먼저 스킵한다.
+   *
+   * releaseHold()를 부르는 두 곳(SeatReleaseSingleUseCase, SeatReleaseExpiredChunkProcessor)은 예외처럼 보이지만
+   * @Modifying(clearAutomatically = true) 직후라 엔티티가 detach 상태다 — DB에 나가지 않는 in-memory 조정이다.
+   *
+   * 즉 HOLD 행을 들고 더티 체킹으로 쓰는 트랜잭션이 없어 벌크와 경합할 수 없고, 어떤 행이 HOLD로 진입하려면 반드시
+   * hold()(version 증가)를 거치므로 stale 엔티티는 낙관적 락에 걸린다.
+   *
+   * 이 불변식이 깨지면(= HOLD 좌석을 더티 체킹으로 고치는 UseCase를 추가하거나, 위 두 곳의 clearAutomatically를 끄거나,
+   * AVAILABLE/SOLD 행에 발화하는 벌크 UPDATE를 추가하면) stale 엔티티가 충돌 없이 덮어써 버전 검사가 조용히 무력화된다.
+   * 그때는 JPQL UPDATE VERSIONED를 검토한다(booking도 같은 한계를 안고 있다 — ADR 0005).
    */
   @Version
   @Column(nullable = false)
