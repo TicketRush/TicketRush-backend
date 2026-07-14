@@ -74,7 +74,7 @@ payment-service는 손대지 않는다. `RefundFailedEvent`는 Javadoc만 정정
 - **사용자가 왜 예매가 유지됐는지 알 수 있다.** `BookingSummaryResponse`에 `refundFailedAt`이 실려, 취소를 눌렀는데 예매가 `CONFIRMED`로 남은 이유를 클라이언트가 표시할 수 있다.
 - (트레이드오프) **결정적 거절 건을 사용자가 반복 시도할 수 있다.** PG 호출이 낭비될 수 있으나, 흡수 상태를 되살리지 않는 편이 낫다고 판단했다. #397에서 쿨다운 도입 여부를 검토했고 **실측 전 미도입으로 결정했다** — 고착이 없어 사용자 피해가 없고 비용은 PG 호출뿐이므로, PG 호출량이 실측상 문제가 되면 그때 `refundFailedAt` 기반 쿨다운(시간제한이어야 하며 영구 차단이면 흡수 상태의 부활이다)을 재검토한다.
 - (트레이드오프) **관리자가 재환불을 처리하기 전에 사용자가 입장할 수 있다.** 입장한 뒤 재환불이 성공하면 `TicketCancelUseCase`는 `USED` 티켓을 전이시키지 않지만, `SeatReleaseSoldSeatUseCase`는 티켓 사용 여부를 보지 않고 좌석을 `SOLD → AVAILABLE`로 반환한다 — 실제로 착석한 좌석이 재판매 가능해진다. 이 갭은 이 결정이 만든 것이 아니라(입장한 예매를 사용자가 취소해도 동일하다) 재환불 경로가 늘어 도달성이 넓어졌을 뿐이다. 입장 후 환불을 허용할지는 운영 정책이며, 좌석 반환 차단은 후속 과제로 분리한다. 다만 그 반대(환불도 못 받고 입장도 못 하는 상태)보다는 낫다.
-- (마이그레이션) 마이그레이션 도구가 없고 prod는 `ddl-auto: validate`이므로(ADR [3](0003-shared-database-with-service-boundaries.md)), `infra/mysql/init/01-schema.sql` 갱신과 함께 기존 DB에는 수동 `ALTER`가 필요하다. 작성 시점 기준 아직 프로덕션 배포 전이라 `REFUND_FAILED` 행이 존재하지 않으므로 데이터 변환이 필요 없다. **먼저 그 전제를 확인한다.**
+- (마이그레이션) 마이그레이션 도구가 없고 prod는 `ddl-auto: validate`이므로(ADR [3](0003-shared-database-with-service-boundaries.md)), 스키마 스냅샷(작성 시점 경로 `infra/mysql/init/01-schema.sql`, 현재는 `deploy/mysql/init/001-ticket-rush-schema.sql` — #430) 갱신과 함께 기존 DB에는 수동 `ALTER`가 필요하다. 작성 시점 기준 아직 프로덕션 배포 전이라 `REFUND_FAILED` 행이 존재하지 않으므로 데이터 변환이 필요 없다. **먼저 그 전제를 확인한다.**
 
   ```sql
   -- 0) 전제 확인: 반드시 0이어야 한다.
