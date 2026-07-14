@@ -52,9 +52,14 @@ public class Booking extends AutoIdBaseEntity {
    * RefundRequestedEvent가 이중 발행된다. 이벤트 발행은 afterCommit이므로 늦은 커밋이 버전 충돌로 실패하면 이벤트도 나가지 않는다.
    * 단, expirePendingBookingById 벌크 UPDATE는 version을 증가시키지도 검사하지도 않는다 — PENDING 전용이라 환불
    * 경로(CONFIRMED/REFUNDING)와는 겹치지 않지만, confirm-vs-expire 경합은 이 락의 보호 밖이다(기존 한계, ADR 0005).
+   *
+   * columnDefinition으로 DEFAULT 0을 명시하는 이유는 스키마 스냅샷 때문이다(#433). Hibernate는 DEFAULT를 만들지
+   * 않는데, version을 명시하지 않는 시딩 SQL은 DEFAULT가 없으면 ERROR 1364로 깨진다. 매핑에 넣지 않으면 스냅샷을
+   * 재생성할 때마다 사람이 수동으로 넣어줘야 하고, validate CI는 DEFAULT 차이를 검출하지 못해 빠뜨려도 조용히
+   * 통과한다. 새 @Version 엔티티도 같은 방식으로 선언한다.
    */
   @Version
-  @Column(nullable = false)
+  @Column(nullable = false, columnDefinition = "bigint NOT NULL DEFAULT 0")
   private Long version;
 
   @Builder
