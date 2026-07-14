@@ -174,6 +174,8 @@ public enum ErrorStatus {
   // Payment 409
   PAYMENT_ALREADY_COMPLETED(HttpStatus.CONFLICT, "PAYMENT_409_001", "이미 결제가 완료된 예매입니다."),
   PAYMENT_NOT_CANCELABLE(HttpStatus.CONFLICT, "PAYMENT_409_002", "환불 가능한 결제 상태가 아닙니다."),
+  PAYMENT_CANCEL_NOT_ALLOWED_TICKET_USED(
+      HttpStatus.CONFLICT, "PAYMENT_409_003", "이미 입장한 예매는 환불할 수 없습니다."),
 
   // Payment 500
   PAYMENT_REFUND_INCONSISTENT(
@@ -190,6 +192,8 @@ public enum ErrorStatus {
   // Payment 503
   PAYMENT_PG_COMMUNICATION_FAILED(
       HttpStatus.SERVICE_UNAVAILABLE, "PAYMENT_503_001", "PG사와 통신에 실패했습니다."),
+  PAYMENT_TICKET_COMMUNICATION_FAILED(
+      HttpStatus.SERVICE_UNAVAILABLE, "PAYMENT_503_002", "입장권 정보 조회에 실패했습니다. 잠시 후 다시 시도해 주세요."),
 
   // Ticket 400
   TICKET_QR_INVALID(HttpStatus.BAD_REQUEST, "TICKET_400_001", "유효하지 않은 QR입니다."),

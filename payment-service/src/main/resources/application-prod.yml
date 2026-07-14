@@ -18,8 +18,17 @@ gateway:
   # 운영은 게이트웨이 내부 토큰을 반드시 주입(base의 test-token 기본값 오버라이드, 미주입 시 fail-fast).
   internal-token: ${GATEWAY_INTERNAL_TOKEN}
 
+service:
+  ticket:
+    # 결제 취소 경로의 입장권 판정 대상 (#416). 운영은 기본값 없이 반드시 주입(미주입 시 fail-fast).
+    # 반드시 ticket-service '직접' 주소를 주입한다 — 내부 API는 게이트웨이 미라우팅(#367)이라
+    # 게이트웨이 주소로 오설정하면 404가 나 취소가 조용히 전건 503 거부된다.
+    url: ${TICKET_SERVICE_URL}
+
 custom:
   security:
+    # 서비스 간 내부 API 호출 토큰. 운영은 base의 test 기본값을 오버라이드해 반드시 주입(미주입 시 ticket 조회 401 → 취소 전건 거부).
+    internal-token: ${INTERNAL_API_TOKEN}
     permit-urls:
       - /swagger-ui/**
       - /v3/api-docs/**
