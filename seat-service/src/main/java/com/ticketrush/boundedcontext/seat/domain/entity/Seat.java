@@ -11,6 +11,7 @@ import jakarta.persistence.EnumType;
 import jakarta.persistence.Enumerated;
 import jakarta.persistence.Index;
 import jakarta.persistence.Table;
+import jakarta.persistence.Version;
 import java.time.LocalDateTime;
 import lombok.AccessLevel;
 import lombok.Builder;
@@ -39,6 +40,14 @@ import lombok.NoArgsConstructor;
  *   ALTER TABLE seat
  *     ADD INDEX idx_seat_status_hold_expired_at (seat_status, hold_expired_at),
  *     ALGORITHM=INPLACE, LOCK=NONE;
+ * </pre>
+ *
+ * <p><b>version 컬럼도 기존 가동 DB에 수동 추가해야 한다(#427).</b> 인덱스와 달리 컬럼은 prod의 ddl-auto=validate가 검출하므로, 배포
+ * <b>전</b>에 실행하지 않으면 기동이 실패한다. {@code DEFAULT 0}이 기존 행을 백필한다({@code booking.version}과 동일 — ADR 0005
+ * 선례).
+ *
+ * <pre>
+ *   ALTER TABLE seat ADD COLUMN version bigint NOT NULL DEFAULT 0;
  * </pre>
  */
 @Entity
@@ -71,6 +80,25 @@ public class Seat extends AutoIdBaseEntity {
 
   @Column(name = "booking_number", length = 50)
   private String bookingNumber;
+
+  /*
+   * 낙관적 락 (#427). SeatHoldUseCase가 read-check-write(findById → isAvailable → hold)라 두 트랜잭션이 같은 좌석을
+   * 동시에 읽으면 둘 다 검증을 통과해 HOLD를 쓸 수 있다. 지금 이걸 막는 건 Redisson 락뿐인데, Redis는 fsync everysec이라
+   * 크래시 시 락 키가 유실될 수 있다(#426). 정합성의 최종 방어선은 DB여야 한다 — Redis 락은 경쟁을 앞단에서 걸러내는 성능
+   * 최적화로 남는다.
+   *
+   * 단, SeatRepository의 벌크 UPDATE(confirmSoldById, releaseExpiredHoldById)는 version을 증가시키지도 검사하지도
+   * 않는다. 그래도 안전한 이유는 가드가 원자적이어서가 아니라 상태 집합이 겹치지 않기 때문이다 — 두 벌크는 HOLD 행에만 발화하고,
+   * 엔티티 더티 체킹으로 쓰는 경로는 AVAILABLE에서 시작하는 hold()와 SOLD/HOLD에서 시작하는 releaseBooking()뿐이다.
+   * 낙관적 락이 실제로 거는 곳도 그 두 곳이다.
+   *
+   * 이 불변식이 깨지면(= AVAILABLE/SOLD 행을 건드리는 벌크 UPDATE를 추가하거나, HOLD 좌석을 더티 체킹으로 고치는 UseCase를
+   * 추가하면) stale 엔티티가 충돌 없이 덮어써 버전 검사가 조용히 무력화된다. 그때는 JPQL UPDATE VERSIONED를 검토한다
+   * (booking도 같은 한계를 안고 있다 — ADR 0005).
+   */
+  @Version
+  @Column(nullable = false)
+  private Long version;
 
   @Builder
   public Seat(

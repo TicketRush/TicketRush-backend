@@ -1,6 +1,7 @@
 package com.ticketrush.boundedcontext.seat.out.repository;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.assertj.core.api.Assertions.tuple;
 
 import com.ticketrush.boundedcontext.seat.app.dto.response.SeatLayoutResponse;
@@ -15,6 +16,7 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.data.jpa.test.autoconfigure.DataJpaTest;
 import org.springframework.boot.jpa.test.autoconfigure.TestEntityManager;
 import org.springframework.data.domain.PageRequest;
+import org.springframework.orm.ObjectOptimisticLockingFailureException;
 
 @DataJpaTest
 class SeatRepositoryTest {
@@ -387,6 +389,35 @@ class SeatRepositoryTest {
     assertThat(untouched.getSeatStatus()).isEqualTo(SeatStatus.HOLD);
     assertThat(untouched.getBookingNumber()).isEqualTo("BOOK-2222");
     assertThat(untouched.getHoldExpiredAt()).isNotNull();
+  }
+
+  @Test
+  @DisplayName("stale 버전 스냅샷으로 HOLD를 쓰면 낙관적 락 충돌로 거부된다 (#427)")
+  void hold_WithStaleVersion_ThrowsOptimisticLockingFailure() {
+    // given: Redis 락이 유실돼 두 처리가 같은 AVAILABLE 좌석을 동시에 읽은 상황.
+    // 실제 런타임 경합(두 영속성 컨텍스트의 동시 flush) 대신 낡은 스냅샷으로 쓰기를 시뮬레이션한다 —
+    // 이 파일의 ABA 가드 테스트들과 같은 방식이다. 검증 대상은 version 매핑이 실제로 UPDATE 가드로 걸리는지다.
+    LocalDateTime holdExpiredAt = LocalDateTime.now().plusMinutes(5);
+    Seat stale = seatRepository.save(buildSeat("A4", SeatStatus.AVAILABLE, null, null));
+    entityManager.flush();
+    entityManager.detach(stale);
+
+    // 먼저 커밋한 쪽이 버전을 올린다
+    Seat winner = seatRepository.findById(stale.getId()).orElseThrow();
+    winner.hold(holdExpiredAt, "BOOK-WINNER");
+    seatRepository.saveAndFlush(winner);
+    entityManager.detach(winner);
+
+    // when & then: 늦은 쪽은 메모리상 AVAILABLE이라 hold() 검증은 통과하지만, DB가 stale 버전을 거부한다
+    stale.hold(holdExpiredAt, "BOOK-LOSER");
+    assertThatThrownBy(() -> seatRepository.saveAndFlush(stale))
+        .isInstanceOf(ObjectOptimisticLockingFailureException.class);
+
+    // 승자의 선점만 남는다
+    entityManager.clear();
+    Seat persisted = seatRepository.findById(stale.getId()).orElseThrow();
+    assertThat(persisted.getSeatStatus()).isEqualTo(SeatStatus.HOLD);
+    assertThat(persisted.getBookingNumber()).isEqualTo("BOOK-WINNER");
   }
 
   private Seat buildSeat(
