@@ -12,6 +12,7 @@ import com.ticketrush.boundedcontext.payment.domain.types.RefundStatus;
 import com.ticketrush.boundedcontext.payment.out.apiclient.PaymentCancelClientRouter;
 import com.ticketrush.boundedcontext.payment.out.apiclient.PaymentCancelCommand;
 import com.ticketrush.boundedcontext.payment.out.apiclient.PaymentCancelResult;
+import com.ticketrush.boundedcontext.payment.out.apiclient.TicketRestClient;
 import com.ticketrush.boundedcontext.payment.out.repository.PaymentRepository;
 import com.ticketrush.boundedcontext.payment.out.repository.RefundRepository;
 import com.ticketrush.global.exception.BusinessException;
@@ -42,6 +43,7 @@ public class PaymentCancelUseCase {
   private final PaymentCancelPersister paymentCancelPersister;
   private final FailedRefundRecorder failedRefundRecorder;
   private final PaymentEventPublisher paymentEventPublisher;
+  private final TicketRestClient ticketRestClient;
   private final PaymentMapper paymentMapper;
 
   public PaymentCancelResponse execute(Long userId, Long paymentId, PaymentCancelRequest request) {
@@ -57,6 +59,12 @@ public class PaymentCancelUseCase {
 
     if (payment.getStatus() != PaymentStatus.COMPLETED) {
       throw new BusinessException(ErrorStatus.PAYMENT_NOT_CANCELABLE);
+    }
+
+    // 이미 입장(ticket=USED)한 예매는 환불을 막는다 (#416). 이 검증이 없으면 결제 취소가 booking을 우회해 착석한 좌석이
+    // 환불 이벤트로 AVAILABLE 반환되어 재판매된다(#399가 세운 정책의 우회). PG 왕복과 마찬가지로 트랜잭션 밖에서 조회한다.
+    if (ticketRestClient.isTicketUsed(payment.getBookingId())) {
+      throw new BusinessException(ErrorStatus.PAYMENT_CANCEL_NOT_ALLOWED_TICKET_USED);
     }
 
     // PG 취소는 트랜잭션 밖에서 호출한다(외부 왕복 동안 DB 커넥션을 점유하지 않기 위함).
