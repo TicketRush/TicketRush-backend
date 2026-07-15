@@ -85,7 +85,33 @@ public class Payment extends AutoIdBaseEntity {
    * unique 제약(uk_payment_completed_booking)으로 동일 booking에 서로 다른 paymentKey를 가진 confirm이 동시에 들어와도
    * COMPLETED 결제가 2건 생성되지 못하게 DB 레벨에서 막는다(#296, TOCTOU 최종 방어선). MySQL은 NULL을 unique 중복으로 보지 않으므로
    * CANCELED/FAILED 후 재결제는 허용된다. 값 계산과 unique 제약은 수동 DDL로만 관리하고(ddl-auto=update가 generated 컬럼을
-   * 만들지 못한다) 애플리케이션은 읽기만 하므로, insertable=false·updatable=false로 매핑한다. */
+   * 만들지 못한다) 애플리케이션은 읽기만 하므로, insertable=false·updatable=false로 매핑한다.
+   *
+   * 이 수동 DDL이 스키마 스냅샷(deploy/mysql/init)에서 누락돼 신규 초기화 DB에 방어선이 빠져 있던 것을
+   * 스냅샷에 복구했다(#422). 신규 초기화 DB는 init SQL이 만들어주므로, 아래 런북은 스냅샷 복구 전에
+   * 초기화된 기존 DB에만 사람이 직접 실행한다. 실행 전 점검 3가지:
+   *   -- ① EXTRA='STORED GENERATED'가 나오면 이미 적용된 DB다. (1)을 생략한다:
+   *   SELECT EXTRA FROM information_schema.COLUMNS WHERE TABLE_SCHEMA='ticket_rush'
+   *     AND TABLE_NAME='payment' AND COLUMN_NAME='completed_booking_id';
+   *   -- ② 인덱스가 나오면 (2)를 생략한다:
+   *   SELECT INDEX_NAME FROM information_schema.STATISTICS WHERE TABLE_SCHEMA='ticket_rush'
+   *     AND TABLE_NAME='payment' AND INDEX_NAME='uk_payment_completed_booking';
+   *   -- ③ 결과가 있으면 (2)가 ERROR 1062로 실패한다. 중복 COMPLETED 정리(어느 건이 진짜인지 CS 판단) 후 진행:
+   *   SELECT booking_id, COUNT(*) FROM payment WHERE status='COMPLETED'
+   *     GROUP BY booking_id HAVING COUNT(*) > 1;
+   *
+   *   -- (1) 일반 컬럼 → STORED generated 전환. MySQL 8.0에서 이 방향 MODIFY는 허용되지만 ALGORITHM=COPY
+   *   --     (테이블 리빌드)라 리빌드 동안 payment 쓰기가 차단된다 → 저트래픽 창에 실행.
+   *   --     기존 COMPLETED row의 값은 전환 시 자동 backfill된다.
+   *   ALTER TABLE payment MODIFY COLUMN completed_booking_id BIGINT
+   *     GENERATED ALWAYS AS (CASE WHEN status = 'COMPLETED' THEN booking_id END) STORED;
+   *   -- (2) unique 제약 추가. 보조 인덱스 생성이라 온라인(INPLACE·LOCK=NONE) 가능:
+   *   ALTER TABLE payment
+   *     ADD CONSTRAINT uk_payment_completed_booking UNIQUE (completed_booking_id),
+   *     ALGORITHM=INPLACE, LOCK=NONE;
+   *   -- 롤백: DROP INDEX uk_payment_completed_booking 후 MODIFY ... BIGINT NULL(일반 컬럼 전환, 무손실).
+   *   --     단 롤백 MODIFY도 generated↔일반 전환이라 (1)과 동일하게 ALGORITHM=COPY(쓰기 차단) —
+   *   --     장애 대응 중이라도 저트래픽 창에 실행한다. */
   @Column(name = "completed_booking_id", insertable = false, updatable = false)
   private Long completedBookingId;
 

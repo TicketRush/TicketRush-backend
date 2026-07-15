@@ -29,7 +29,7 @@ prod MySQL이 **최초 기동할 때 1회** 실행한다.
 
 init SQL은 **빈 DB의 최초 기동에만** 실행된다. 이미 데이터가 있는 prod DB에는 수동 `ALTER`가 따로 필요하다.
 컬럼 추가·타입 변경은 `validate`가 검출하므로 **배포 전에 실행하지 않으면 기동이 실패한다.**
-수동 DDL은 관례상 해당 엔티티의 javadoc(예: `Seat`) 또는 ADR(예:
+수동 DDL은 관례상 해당 엔티티의 javadoc(예: `Seat`, `Payment.completedBookingId`) 또는 ADR(예:
 [ADR 0005](../../docs/adr/0005-refund-state-machine-and-recovery.md))에 적어둔다.
 
 ## 재생성 절차
@@ -69,7 +69,21 @@ init SQL은 **빈 DB의 최초 기동에만** 실행된다. 이미 데이터가 
 
    (gateway는 datasource가 없어 제외한다.)
 
-4. 덤프한다. `--skip-comments`는 버전·타임스탬프 헤더를 지운다.
+4. **수동 DDL을 재적용한다.** `ddl-auto=update`는 generated 컬럼을 만들지 못하므로, 이 단계를 빠뜨리면
+   덤프에서 수동 DDL분이 빠진 스냅샷이 만들어진다 — #422가 실제로 그렇게 유실됐던 사례다.
+   이 DDL의 SSOT는 `Payment.completedBookingId` javadoc 런북이다. 운영 런북의 `ALGORITHM`/`LOCK` 옵션은
+   일회용 임시 컨테이너라 여기서는 생략했다.
+
+   ```sh
+   docker exec -e MYSQL_PWD=snapshot mysql-snapshot mysql -uroot ticket_rush -e "
+     ALTER TABLE payment MODIFY COLUMN completed_booking_id BIGINT
+       GENERATED ALWAYS AS (CASE WHEN status = 'COMPLETED' THEN booking_id END) STORED;
+     ALTER TABLE payment ADD CONSTRAINT uk_payment_completed_booking UNIQUE (completed_booking_id);"
+   ```
+
+   수동 DDL이 새로 생기면 여기와 6번(아래) grep에도 추가한다. 현재 목록은 위 ⚠️ 절의 javadoc/ADR 관례를 따른다.
+
+5. 덤프한다. `--skip-comments`는 버전·타임스탬프 헤더를 지운다.
    `sed`는 테이블별 `AUTO_INCREMENT=<n>` 시작값을 지운다 — 덤프를 뜬 DB에 몇 행이 있었는지가
    그대로 굳어 재현이 깨지기 때문이다(컬럼의 `AUTO_INCREMENT` 속성 자체는 남는다).
    `DROP TABLE IF EXISTS`는 **지우지 않는다**(mysqldump 기본) — 현재 스냅샷이 그 형태다.
@@ -81,7 +95,7 @@ init SQL은 **빈 DB의 최초 기동에만** 실행된다. 이미 데이터가 
      > deploy/mysql/init/001-ticket-rush-schema.sql
    ```
 
-5. 인덱스·제약·`DEFAULT`가 들어갔는지 확인한다.
+6. 인덱스·제약·`DEFAULT`가 들어갔는지 확인한다.
 
    `version` 컬럼의 `DEFAULT 0`은 엔티티의 `columnDefinition`이 만들어주므로(#433) 수동 작업이 필요 없다.
    다만 빠지면 시딩 SQL이 `ERROR 1364`로 깨지고 `validate` CI는 이를 검출하지 못하므로, 여기서 눈으로 확인한다.
@@ -89,9 +103,10 @@ init SQL은 **빈 DB의 최초 기동에만** 실행된다. 이미 데이터가 
    ```sh
    grep -E "idx_seat_performance_id|uk_seat_layout_performance_id" deploy/mysql/init/001-ticket-rush-schema.sql
    grep -c "NOT NULL DEFAULT '0'" deploy/mysql/init/001-ticket-rush-schema.sql   # @Version 엔티티 수와 일치해야 한다
+   grep -E "uk_payment_completed_booking|GENERATED ALWAYS" deploy/mysql/init/001-ticket-rush-schema.sql  # #422 수동 DDL
    ```
 
-6. 정리한다.
+7. 정리한다.
 
    ```sh
    docker rm -f mysql-snapshot
