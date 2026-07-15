@@ -16,6 +16,7 @@ import com.ticketrush.global.config.SecurityConfig;
 import com.ticketrush.global.exception.BusinessException;
 import com.ticketrush.global.status.ErrorStatus;
 import java.time.LocalDate;
+import java.time.LocalDateTime;
 import java.time.LocalTime;
 import java.util.List;
 import org.junit.jupiter.api.DisplayName;
@@ -50,6 +51,7 @@ class PerformanceGetDetailTest {
         500,
         "서울특별시 중구 세종대로 110",
         PerformanceStatus.ON_SALE,
+        LocalDateTime.of(2025, 8, 1, 20, 0),
         "https://s3.example.com/main.jpg",
         "https://s3.example.com/model.glb",
         List.of("https://s3.example.com/gallery1.jpg"),

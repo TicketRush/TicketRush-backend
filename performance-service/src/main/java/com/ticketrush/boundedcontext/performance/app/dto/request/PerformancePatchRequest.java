@@ -7,6 +7,7 @@ import io.swagger.v3.oas.annotations.media.Schema;
 import jakarta.validation.constraints.Positive;
 import jakarta.validation.constraints.Size;
 import java.time.LocalDate;
+import java.time.LocalDateTime;
 import java.time.LocalTime;
 
 @Schema(description = "공연 정보 수정 요청 (null 필드는 수정하지 않음)")
@@ -39,4 +40,9 @@ public record PerformancePatchRequest(
     @Schema(description = "공연장 주소", example = "서울특별시 송파구 올림픽로 25 잠실종합운동장")
         @NullOrNotBlank
         @Size(max = 255, message = "주소는 255자를 초과할 수 없습니다.")
-        String address) {}
+        String address,
+    @Schema(
+            description = "예매 오픈 시각 (yyyy-MM-dd HH:mm:ss, null=수정 안 함 — 한 번 설정하면 해제 불가, 변경만 가능)",
+            example = "2027-08-01 20:00:00")
+        @JsonFormat(shape = JsonFormat.Shape.STRING, pattern = "yyyy-MM-dd HH:mm:ss")
+        LocalDateTime bookingOpenAt) {}

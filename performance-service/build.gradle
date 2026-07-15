@@ -54,6 +54,10 @@ dependencies {
     // MapStruct
     implementation 'org.mapstruct:mapstruct:1.5.5.Final'
 
+    // ShedLock (스케줄러 분산 락)
+    implementation 'net.javacrumbs.shedlock:shedlock-spring:5.13.0'
+    implementation 'net.javacrumbs.shedlock:shedlock-provider-redis-spring:5.13.0'
+
     // AWS S3
     implementation 'io.awspring.cloud:spring-cloud-aws-starter-s3:4.0.0'
 
