@@ -13,6 +13,7 @@ import com.ticketrush.global.eventpublisher.EventPublisher;
 import com.ticketrush.global.util.S3UploadUtils;
 import com.ticketrush.shared.performance.event.PerformanceCreatedEvent;
 import java.time.LocalDate;
+import java.time.LocalDateTime;
 import java.time.LocalTime;
 import java.util.List;
 import org.junit.jupiter.api.DisplayName;
@@ -59,6 +60,7 @@ class PerformanceCreateTest {
             .price(50000L)
             .totalSeats(100)
             .address("서울")
+            .bookingOpenAt(LocalDateTime.of(2025, 8, 1, 20, 0))
             .build();
 
     MockMultipartFile mainImage =
@@ -85,6 +87,7 @@ class PerformanceCreateTest {
     var savedPerformance = performanceRepository.findById(response.performanceId()).orElseThrow();
 
     assertThat(savedPerformance.getTitle()).isEqualTo(request.title());
+    assertThat(savedPerformance.getBookingOpenAt()).isEqualTo(request.bookingOpenAt());
 
     assertThat(savedPerformance.getImageMainUrl()).isEqualTo(expectedMainUrl);
     assertThat(savedPerformance.getImage3dUrl()).isEqualTo(expectedModelUrl);

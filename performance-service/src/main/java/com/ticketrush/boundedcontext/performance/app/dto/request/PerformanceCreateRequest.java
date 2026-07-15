@@ -7,6 +7,7 @@ import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Positive;
 import java.time.LocalDate;
+import java.time.LocalDateTime;
 import java.time.LocalTime;
 import java.util.List;
 import lombok.Builder;
@@ -49,5 +50,11 @@ public record PerformanceCreateRequest(
     @Schema(description = "공연장 주소", example = "서울특별시 송파구 올림픽로 25 잠실종합운동장")
         @NotBlank(message = "공연장 주소는 필수입니다.")
         String address,
+    @Schema(
+            description = "예매 오픈 시각 (yyyy-MM-dd HH:mm:ss, 선택 — 미설정 시 자동 오픈 없이 수동 전환만 가능)",
+            example = "2027-08-01 20:00:00",
+            nullable = true)
+        @JsonFormat(shape = JsonFormat.Shape.STRING, pattern = "yyyy-MM-dd HH:mm:ss")
+        LocalDateTime bookingOpenAt,
     @Schema(description = "편의시설 목록 (선택)", example = "[\"주차장\", \"수유실\", \"장애인석\"]", nullable = true)
         List<String> facilities) {}

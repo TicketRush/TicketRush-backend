@@ -14,6 +14,7 @@ import com.ticketrush.global.status.ErrorStatus;
 import com.ticketrush.global.util.S3UploadUtils;
 import jakarta.persistence.EntityManager;
 import java.time.LocalDate;
+import java.time.LocalDateTime;
 import java.time.LocalTime;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -41,6 +42,8 @@ class PerformancePatchTest {
   @Autowired private PerformanceRepository performanceRepository;
   @Autowired private EntityManager em;
 
+  private static final LocalDateTime ORIGINAL_BOOKING_OPEN_AT = LocalDateTime.of(2025, 8, 1, 20, 0);
+
   private Performance savePerformance() {
     return performanceRepository.save(
         Performance.builder()
@@ -54,6 +57,7 @@ class PerformancePatchTest {
             .price(50000L)
             .totalSeats(100)
             .address("서울")
+            .bookingOpenAt(ORIGINAL_BOOKING_OPEN_AT)
             .build());
   }
 
@@ -63,6 +67,7 @@ class PerformancePatchTest {
     Performance performance = savePerformance();
     LocalDate newShowDate = LocalDate.now().plusDays(60);
     LocalTime newShowTime = LocalTime.of(20, 0);
+    LocalDateTime newBookingOpenAt = LocalDateTime.of(2025, 9, 1, 20, 0);
 
     performancePatchUseCase.execute(
         performance.getId(),
@@ -76,7 +81,8 @@ class PerformancePatchTest {
             150,
             80000L,
             200,
-            "부산"));
+            "부산",
+            newBookingOpenAt));
 
     em.flush();
     em.clear();
@@ -92,6 +98,7 @@ class PerformancePatchTest {
     assertThat(updated.getPrice()).isEqualTo(80000L);
     assertThat(updated.getTotalSeats()).isEqualTo(200);
     assertThat(updated.getAddress()).isEqualTo("부산");
+    assertThat(updated.getBookingOpenAt()).isEqualTo(newBookingOpenAt);
   }
 
   @Test
@@ -102,7 +109,7 @@ class PerformancePatchTest {
     performancePatchUseCase.execute(
         performance.getId(),
         new PerformancePatchRequest(
-            "새로운 공연명", null, null, null, null, null, null, null, null, null));
+            "새로운 공연명", null, null, null, null, null, null, null, null, null, null));
 
     em.flush();
     em.clear();
@@ -113,13 +120,15 @@ class PerformancePatchTest {
     assertThat(updated.getGenre()).isEqualTo(Genre.CONCERT);
     assertThat(updated.getDescription()).isEqualTo("원래 설명");
     assertThat(updated.getPrice()).isEqualTo(50000L);
+    assertThat(updated.getBookingOpenAt()).isEqualTo(ORIGINAL_BOOKING_OPEN_AT);
   }
 
   @Test
   @DisplayName("존재하지 않는 공연 ID로 수정 요청 시 예외 발생")
   void patchPerformance_notFound() {
     PerformancePatchRequest request =
-        new PerformancePatchRequest("새 제목", null, null, null, null, null, null, null, null, null);
+        new PerformancePatchRequest(
+            "새 제목", null, null, null, null, null, null, null, null, null, null);
 
     assertThatThrownBy(() -> performancePatchUseCase.execute(999L, request))
         .isInstanceOf(BusinessException.class)

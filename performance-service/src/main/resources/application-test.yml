@@ -25,3 +25,5 @@ spring:
 app:
   event-publisher:
     type: kafka
+  scheduler:
+    enabled: false

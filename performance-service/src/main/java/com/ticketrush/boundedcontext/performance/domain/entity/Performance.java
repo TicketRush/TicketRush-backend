@@ -69,6 +69,10 @@ public class Performance extends AutoIdBaseEntity {
   @Column(nullable = false)
   private PerformanceStatus performanceStatus;
 
+  // null이면 자동 전환 대상이 아니며 어드민 수동 전환만 가능하다
+  @Column(name = "booking_open_at")
+  private LocalDateTime bookingOpenAt;
+
   private String image3dUrl;
 
   private String imageMainUrl;
@@ -102,6 +106,7 @@ public class Performance extends AutoIdBaseEntity {
       Long price,
       Integer totalSeats,
       String address,
+      LocalDateTime bookingOpenAt,
       String image3dUrl,
       String imageMainUrl,
       List<String> imageGalleryUrls,
@@ -116,6 +121,7 @@ public class Performance extends AutoIdBaseEntity {
     this.price = price;
     this.totalSeats = totalSeats;
     this.address = address;
+    this.bookingOpenAt = bookingOpenAt;
     this.image3dUrl = image3dUrl;
     this.imageMainUrl = imageMainUrl;
     this.imageGalleryUrls = imageGalleryUrls != null ? imageGalleryUrls : new ArrayList<>();
@@ -141,7 +147,8 @@ public class Performance extends AutoIdBaseEntity {
       Integer durationMinutes,
       Long price,
       Integer totalSeats,
-      String address) {
+      String address,
+      LocalDateTime bookingOpenAt) {
     if (title != null) {
       this.title = title;
     }
@@ -171,6 +178,9 @@ public class Performance extends AutoIdBaseEntity {
     }
     if (address != null) {
       this.address = address;
+    }
+    if (bookingOpenAt != null) {
+      this.bookingOpenAt = bookingOpenAt;
     }
   }
 
