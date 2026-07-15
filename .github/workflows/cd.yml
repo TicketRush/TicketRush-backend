@@ -223,10 +223,6 @@ jobs:
             -f deploy/docker-compose.prod.yml
           )
 
-          "${COMPOSE[@]}" config -q
-          "${COMPOSE[@]}" pull
-          "${COMPOSE[@]}" up -d --remove-orphans
-
           EXPECTED_SERVICES=(
             mysql
             redis
@@ -255,27 +251,43 @@ jobs:
           )
 
           declare -A APPLICATION_SERVICE_SET
+          declare -A PREVIOUS_CONTAINER_IDS
           declare -A BASE_RESTART_COUNTS
 
           for SERVICE in "${APPLICATION_SERVICES[@]}"; do
             APPLICATION_SERVICE_SET["${SERVICE}"]=true
           done
 
+          "${COMPOSE[@]}" config -q
+
+          echo "Snapshotting container restart counts before deployment."
+
           for SERVICE in "${EXPECTED_SERVICES[@]}"; do
-            CONTAINER_ID="$("${COMPOSE[@]}" ps -q "${SERVICE}")"
-
-            if [[ -z "${CONTAINER_ID}" ]]; then
-              echo "${SERVICE}: container not created"
-              "${COMPOSE[@]}" ps --all
-              exit 1
-            fi
-
-            BASE_RESTART_COUNTS["${SERVICE}"]="$(
-              docker inspect \
-                --format '{{.RestartCount}}' \
-                "${CONTAINER_ID}"
+            CONTAINER_ID="$(
+              "${COMPOSE[@]}" ps --all -q "${SERVICE}" 2>/dev/null || true
             )"
+
+            if [[ -n "${CONTAINER_ID}" ]] \
+              && docker inspect "${CONTAINER_ID}" > /dev/null 2>&1; then
+              PREVIOUS_CONTAINER_IDS["${SERVICE}"]="${CONTAINER_ID}"
+              BASE_RESTART_COUNTS["${SERVICE}"]="$(
+                docker inspect \
+                  --format '{{.RestartCount}}' \
+                  "${CONTAINER_ID}"
+              )"
+
+              echo \
+                "${SERVICE}: previous container=${CONTAINER_ID}, baseline RestartCount=${BASE_RESTART_COUNTS[$SERVICE]}"
+            else
+              PREVIOUS_CONTAINER_IDS["${SERVICE}"]=""
+              BASE_RESTART_COUNTS["${SERVICE}"]=0
+
+              echo "${SERVICE}: no previous container, baseline RestartCount=0"
+            fi
           done
+
+          "${COMPOSE[@]}" pull
+          "${COMPOSE[@]}" up -d --remove-orphans
 
           READY=false
           STABLE_PASSES=0
@@ -321,7 +333,14 @@ jobs:
                   "${CONTAINER_ID}"
               )"
 
-              BASE_RESTART_COUNT="${BASE_RESTART_COUNTS[$SERVICE]}"
+              PREVIOUS_CONTAINER_ID="${PREVIOUS_CONTAINER_IDS[$SERVICE]:-}"
+
+              if [[ -n "${PREVIOUS_CONTAINER_ID}" ]] \
+                && [[ "${CONTAINER_ID}" == "${PREVIOUS_CONTAINER_ID}" ]]; then
+                BASE_RESTART_COUNT="${BASE_RESTART_COUNTS[$SERVICE]:-0}"
+              else
+                BASE_RESTART_COUNT=0
+              fi
 
               if [[ "${STATUS}" != "running" ]]; then
                 echo "${SERVICE}: status=${STATUS}"
@@ -339,7 +358,11 @@ jobs:
               fi
 
               if (( RESTART_COUNT > BASE_RESTART_COUNT )); then
-                echo "${SERVICE}: restart count increased from ${BASE_RESTART_COUNT} to ${RESTART_COUNT}"
+                RESTART_DELTA=$((RESTART_COUNT - BASE_RESTART_COUNT))
+
+                echo \
+                  "::error::${SERVICE}: RestartCount=${RESTART_COUNT}, baseline=${BASE_RESTART_COUNT}, increased=${RESTART_DELTA} during deployment"
+
                 ALL_READY=false
                 RESTART_DETECTED=true
               fi
