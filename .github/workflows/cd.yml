@@ -226,6 +226,7 @@ jobs:
           EXPECTED_SERVICES=(
             mysql
             redis
+            redis-exporter
             kafka
             gateway-service
             auth-service

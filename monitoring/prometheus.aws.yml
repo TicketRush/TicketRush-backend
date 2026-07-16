@@ -33,6 +33,15 @@ scrape_configs:
         labels:
           stack: mvc
 
+  # Redis SPOF를 수용한 이상 죽었을 때 즉시 아는 것이 유일한 대응책이다(ADR 0008).
+  # redis_up 이 0이면 Grafana Alerting → Slack으로 나간다. exporter는 포트를 publish 하지 않는다.
+  - job_name: 'redis'
+    static_configs:
+      - targets:
+          - 'redis-exporter:9121'
+        labels:
+          stack: observability
+
   # 자기 자신. ADR 0007이 "전환 시점"의 기준으로 삼은 '부하 중 Prometheus의 CPU·메모리 점유'를
   # 재려면 prometheus_* 자기 지표가 필요하다. mem_limit(384m) 재평가 근거도 여기서 나온다.
   - job_name: 'prometheus'

@@ -25,6 +25,12 @@ public enum ErrorStatus {
   INFRA_KAFKA_PUBLISH_FAILED(
       HttpStatus.INTERNAL_SERVER_ERROR, "INFRA_500_001", "카프카 메시지 발행 중 인프라 오류가 발생했습니다."),
 
+  // Infra 503
+  // Redis 불가 시 fail-closed로 요청을 거절한다(ADR 0008). 재시도하면 되는 일시 장애이므로
+  // 500("관리자에게 문의")이 아니라 503 + 재시도 안내로 내보낸다. 내부 구현어(Redis)는 노출하지 않는다.
+  INFRA_TRANSIENT_UNAVAILABLE(
+      HttpStatus.SERVICE_UNAVAILABLE, "INFRA_503_001", "일시적으로 요청을 처리할 수 없습니다. 잠시 후 다시 시도해 주세요."),
+
   // Auth 400
   AUTH_PROVIDER_NOT_SUPPORT(HttpStatus.BAD_REQUEST, "AUTH_400_001", "지원하지 않는 소셜로그인입니다."),
   AUTH_KAKAO_TOKEN_FAILED(HttpStatus.BAD_REQUEST, "AUTH_400_002", "잘못된 카카오 토큰입니다."),

@@ -13,6 +13,7 @@ TicketRush의 아키텍처 결정을 번호 매긴 Markdown으로 축적하는 �
 - [5. 환불 실패를 예매 상태가 아니라 타임스탬프로 기록한다](0005-refund-state-machine-and-recovery.md)
 - [6. 8 GiB 단일 인스턴스에서 컨테이너별 메모리 상한을 적용한다](0006-eight-gib-container-memory-limits.md)
 - [7. 관측 스택을 측정 대상과 같은 EC2에 두고, 관측 포트는 SSH 터널로만 연다](0007-observability-stack-colocation.md)
+- [8. Redis 단일 인스턴스 SPOF를 수용하고, 장애 시 전면 차단(fail-closed)한다](0008-accept-redis-spof-with-fail-closed.md)
 
 ## 사용법
 
