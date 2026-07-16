@@ -1,6 +1,7 @@
 package com.ticketrush.boundedcontext.seat.in.eventlistener;
 
 import com.ticketrush.boundedcontext.seat.app.usecase.SeatReleaseSingleUseCase;
+import com.ticketrush.boundedcontext.seat.domain.constant.SeatLockKey;
 import java.nio.charset.StandardCharsets;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.redis.connection.Message;
@@ -12,7 +13,6 @@ import org.springframework.stereotype.Component;
 @Component
 public class SeatLockExpirationListener extends KeyExpirationEventMessageListener {
 
-  private static final String SEAT_LOCK_PREFIX = "seat:lock:";
   private final SeatReleaseSingleUseCase seatReleaseSingleUseCase;
 
   public SeatLockExpirationListener(
@@ -27,10 +27,10 @@ public class SeatLockExpirationListener extends KeyExpirationEventMessageListene
     String expiredKey = new String(message.getBody(), StandardCharsets.UTF_8);
 
     // 만료된 키가 좌석 락(seat:lock:)인지 확인
-    if (expiredKey.startsWith(SEAT_LOCK_PREFIX)) {
+    if (expiredKey.startsWith(SeatLockKey.PREFIX)) {
       try {
         // "seat:lock:123" 형태에서 "123" 추출
-        String seatIdStr = expiredKey.replace(SEAT_LOCK_PREFIX, "");
+        String seatIdStr = expiredKey.replace(SeatLockKey.PREFIX, "");
         Long seatId = Long.valueOf(seatIdStr);
 
         log.debug("Redis 락 만료 감지됨. seatId: {}", seatId);

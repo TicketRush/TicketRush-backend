@@ -1,5 +1,6 @@
 package com.ticketrush.boundedcontext.seat.app.usecase;
 
+import com.ticketrush.boundedcontext.seat.domain.constant.SeatLockKey;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.redisson.api.RLock;
@@ -13,10 +14,9 @@ import org.springframework.stereotype.Service;
 public class SeatUnlockUseCase {
 
   private final RedissonClient redissonClient;
-  private static final String SEAT_LOCK_PREFIX = "seat:lock:";
 
   public void execute(Long seatId) {
-    String lockKey = SEAT_LOCK_PREFIX + seatId;
+    String lockKey = SeatLockKey.of(seatId);
     RLock lock = redissonClient.getLock(lockKey);
 
     /*
@@ -34,7 +34,7 @@ public class SeatUnlockUseCase {
   }
 
   public void forceRelease(Long seatId) {
-    String lockKey = SEAT_LOCK_PREFIX + seatId;
+    String lockKey = SeatLockKey.of(seatId);
     RLock lock = redissonClient.getLock(lockKey);
 
     if (lock.forceUnlock()) {

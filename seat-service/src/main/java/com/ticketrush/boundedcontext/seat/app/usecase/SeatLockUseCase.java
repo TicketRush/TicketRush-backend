@@ -1,5 +1,6 @@
 package com.ticketrush.boundedcontext.seat.app.usecase;
 
+import com.ticketrush.boundedcontext.seat.domain.constant.SeatLockKey;
 import com.ticketrush.global.constants.MetricNames;
 import io.micrometer.core.instrument.Counter;
 import io.micrometer.core.instrument.MeterRegistry;
@@ -20,11 +21,10 @@ public class SeatLockUseCase {
   private final RedissonClient redissonClient;
   private final MeterRegistry meterRegistry;
 
-  private static final String SEAT_LOCK_PREFIX = "seat:lock:";
   private static final int LOCK_TTL_MINUTES = 5;
 
   public Optional<LocalDateTime> execute(Long seatId, Long userId) {
-    String lockKey = SEAT_LOCK_PREFIX + seatId;
+    String lockKey = SeatLockKey.of(seatId);
     RLock lock = redissonClient.getLock(lockKey);
 
     try {

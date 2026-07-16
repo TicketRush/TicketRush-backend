@@ -5,6 +5,7 @@ import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 
 import com.ticketrush.boundedcontext.seat.app.usecase.SeatReleaseSingleUseCase;
+import com.ticketrush.boundedcontext.seat.domain.constant.SeatLockKey;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -28,7 +29,7 @@ class SeatLockExpirationListenerTest {
   @DisplayName("올바른 키(seat:lock:) 만료 이벤트 수신 시 useCase를 호출한다")
   void onMessage_WithValidKey_CallsUseCase() {
     // given
-    String expiredKey = "seat:lock:123";
+    String expiredKey = SeatLockKey.of(123L);
     Message message = new DefaultMessage(new byte[0], expiredKey.getBytes());
 
     // when

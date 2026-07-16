@@ -4,6 +4,9 @@ services:
   redis:
     image: redis:7-alpine
     container_name: redis
+    # prod(deploy/docker-compose.prod.yml)와 동일하게 keyspace 만료 이벤트(Ex) 활성화.
+    # 없으면 SeatLockExpirationListener가 안 뜨고 1분 주기 스케줄러 fallback에만 의존한다.
+    command: ["redis-server", "--notify-keyspace-events", "Ex"]
     ports:
       - "127.0.0.1:6379:6379"
     networks:

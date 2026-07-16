@@ -7,6 +7,10 @@ spring:
     active: ${SPRING_PROFILES_ACTIVE:local}
   application:
     name: payment-service
+  # payment-service는 Redis를 쓰지 않는다. common의 redis 스타터가 전이돼 오토컨피그가 뜨는 것을 막는다(#425).
+  autoconfigure:
+    exclude:
+      - org.springframework.boot.autoconfigure.data.redis.RedisAutoConfiguration
   jpa:
     open-in-view: false
 

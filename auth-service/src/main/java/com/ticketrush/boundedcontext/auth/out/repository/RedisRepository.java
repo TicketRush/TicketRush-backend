@@ -13,13 +13,16 @@ public class RedisRepository {
 
   private final RedisTemplate<String, String> redisTemplate;
 
-  private static final String REFRESH_TOKEN_PREFIX = "RT:";
+  // Redis 키 컨벤션: {도메인}:{엔티티}[:{식별자}] 소문자 콜론 (docs/backend-convention.md §4)
+  private static final String REFRESH_TOKEN_PREFIX = "auth:refresh-token:";
 
-  private static final String SIGNUP_EMAIL_AUTH_NUMBER_PREFIX = "SIGNUP:EMAIL:AUTH_NUMBER:";
-  private static final String SIGNUP_EMAIL_AUTH_COOLDOWN_PREFIX = "SIGNUP:EMAIL:AUTH_COOLDOWN:";
-  private static final String SIGNUP_EMAIL_AUTH_VERIFIED_PREFIX = "SIGNUP:EMAIL:AUTH_VERIFIED:";
+  private static final String SIGNUP_EMAIL_AUTH_NUMBER_PREFIX = "auth:signup:email:auth-number:";
+  private static final String SIGNUP_EMAIL_AUTH_COOLDOWN_PREFIX =
+      "auth:signup:email:auth-cooldown:";
+  private static final String SIGNUP_EMAIL_AUTH_VERIFIED_PREFIX =
+      "auth:signup:email:auth-verified:";
   private static final String SIGNUP_EMAIL_AUTH_VERIFY_ATTEMPT_PREFIX =
-      "SIGNUP:EMAIL:AUTH_VERIFY_ATTEMPT:";
+      "auth:signup:email:auth-verify-attempt:";
 
   // 인증번호 유효시간 = 5분
   private static final Duration SIGNUP_EMAIL_AUTH_NUMBER_TTL = Duration.ofMinutes(5);

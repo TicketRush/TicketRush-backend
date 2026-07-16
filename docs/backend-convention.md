@@ -342,3 +342,13 @@ class SeatControllerTest {
 * **DLT 자동 보존/삭제** — `dead_letter_record`는 기본 **30일** 보존 후 retention 배치가 자동 삭제합니다.
   보존 기간은 `app.dlt.monitor.retention-days`(환경변수 `DLT_RETENTION_DAYS`)로 조정합니다.
 * **Kafka .DLT 토픽 잔존 주의** — DB 저장값은 마스킹되지만 원본 메시지는 Kafka `.DLT` 토픽에 해당 토픽의 retention 기간 동안 잔존합니다. 운영 환경에서는 Kafka 토픽 retention 설정도 함께 관리하세요.
+
+### 🔑 Redis 키 컨벤션
+
+* **키 포맷** — `{도메인}:{엔티티}[:{식별자}]`, **전부 소문자**, 세그먼트 구분자는 콜론(`:`), 세그먼트 내 멀티워드는 케밥(`-`).
+  * 예: `seat:lock:{seatId}`, `booking:number:{예매번호}`, `auth:refresh-token:{userId}`, `auth:signup:email:auth-number:{email}`
+* **prefix 상수화** — 키 prefix는 도메인별 상수(예: `SeatLockKey`) 또는 Repository 상수 한 곳에서 관리하고, 여러 클래스에 리터럴을 하드코딩하지 않습니다.
+* **예외** — ShedLock 락 네임스페이스는 `{applicationName}-{profile}`(케밥, 예: `seat-service-local`) 형태입니다. 이는 `RedisLockProvider` 라이브러리 규약이라 위 콜론 컨벤션의 예외로 둡니다.
+* **DB 인덱스** — 현재 전 서비스가 단일 Redis 인스턴스의 **DB 0을 공유**하며, 충돌은 위 키 prefix로만 논리 분리합니다. 서비스별 `spring.data.redis.database` 분리는 실익(FLUSHDB 격리) 대비 기존 DB 0 키 마이그레이션·무중단 배포 순서 설계 비용이 커, 현재는 **보류**합니다(#425). 분리가 필요해지면 마이그레이션 절차부터 설계합니다.
+* **미사용 서비스** — Redis를 쓰지 않는 서비스(현재 user/payment/ticket)는 `spring.data.redis` 설정을 두지 않고 `RedisAutoConfiguration`을 exclude합니다. `common`의 `RedisConfig`는 `@ConditionalOnProperty("spring.data.redis.host")`로 게이트되어 host가 없으면 로드되지 않습니다.
+* **인프라 전제** — 좌석 락 만료 즉시 해제(`SeatLockExpirationListener`)는 Redis keyspace 만료 이벤트에 의존합니다. `--notify-keyspace-events Ex`가 로컬(`docker-compose.yml`)·운영(`deploy/docker-compose.prod.yml`) 양쪽에 켜져 있어야 하며, 없으면 1분 주기 `SeatStatusScheduler` fallback에만 의존하게 됩니다.
