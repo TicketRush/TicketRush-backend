@@ -13,6 +13,8 @@ spring:
     redis:
       host: ${REDIS_HOST}
       port: ${REDIS_PORT:6379}
+      # local은 무인증 Redis라 prod 프로파일에만 둔다(ADR 0008). Redisson 락도 이 설정을 물려받는다.
+      password: ${REDIS_PASSWORD}
 
 gateway:
   # 운영은 게이트웨이 내부 토큰을 반드시 주입(base의 test-token 기본값 오버라이드, 미주입 시 fail-fast).

@@ -34,21 +34,69 @@ services:
   redis:
     image: redis:7-alpine
     container_name: ticketrush-redis
+    # 실측 최대 4.1 MiB / 상한의 3.20%로 여유가 30배다(ADR 0006). 상향 근거가 없어 유지한다.
     mem_limit: 128m
     restart: unless-stopped
+    # healthcheck가 `redis-cli -a <비밀번호>`를 쓰지 않아도 되게 한다. redis-cli가 이 값을 자동으로 읽으므로
+    # healthcheck 프로세스 인자에는 비밀번호가 실리지 않고, `-a`가 매번 뱉는 경고도 없다.
+    # (아래 --requirepass는 redis-server의 인자라 `ps`·`docker inspect`에 그대로 보인다. 그걸 없애려면
+    #  redis.conf 마운트가 필요한데, 같은 호스트에서 그 파일을 읽을 수 있는 주체는 어차피 .env도 읽는다.)
+    environment:
+      REDISCLI_AUTH: ${REDIS_PASSWORD:?deploy/.env에 REDIS_PASSWORD를 설정하세요}
     command:
       - redis-server
+      # Redis는 포트를 publish 하지 않아 노출면이 같은 compose 네트워크로 한정되지만,
+      # 컨테이너 하나만 뚫려도 락·토큰·캐시가 통째로 무방비가 된다(ADR 0008).
+      - --requirepass
+      - ${REDIS_PASSWORD:?deploy/.env에 REDIS_PASSWORD를 설정하세요}
       - --appendonly
       - "yes"
       - --notify-keyspace-events
       - Ex
+      # mem_limit(128m)만 있으면 Redis는 자기 상한을 모른 채 커널에 OOMKill 당한다.
+      # SPOF를 수용하기로 한 이상(ADR 0008) 가장 흔한 사망 원인을 방치할 수 없어 스스로 방어하게 한다.
+      #
+      # 64mb인 이유(= 상한의 50%): appendonly가 켜져 있어 AOF rewrite는 fork를 하고 최악의 CoW는
+      # 데이터셋 전체 복사다. 상한에 가깝게 잡으면(예: 96mb) 정작 가득 찬 순간 데이터+CoW+출력 버퍼가
+      # 128m을 넘겨, noeviction이 거절을 시작하기 전에 커널이 먼저 죽인다 — 막으려던 실패 모드가 그대로 남는다.
+      - --maxmemory
+      - 64mb
+      # noeviction이어야 한다. allkeys-lru였다면 좌석 락 키가 evict돼 중복 HOLD 경로가 열린다.
+      # 한도 초과 시 쓰기를 거절하는 편이 fail-closed 원칙과 일치한다.
+      - --maxmemory-policy
+      - noeviction
     volumes:
       - redis-data:/data
     healthcheck:
-      test: ["CMD", "redis-cli", "ping"]
+      # 무인증 ping은 NOAUTH 에러를 "응답"으로 받는다. 종료코드에만 기대면 false-healthy가 될 수 있고,
+      # 그러면 앱 4개가 붙지도 못할 Redis를 향해 기동한다. 응답 문자열을 직접 확인한다.
+      test: ["CMD-SHELL", "redis-cli ping | grep -q PONG"]
       interval: 10s
       timeout: 5s
       retries: 5
+    networks:
+      - ticketrush-network
+
+  # Redis 지표 수집 경로가 없어 장애를 사후에 500 로그로만 인지했다(ADR 0008).
+  # SPOF를 수용하는 이상 죽었을 때 즉시 아는 것이 유일한 대응책이므로 redis_up을 Grafana 알림에 물린다.
+  redis-exporter:
+    image: oliver006/redis_exporter:v1.62.0-alpine
+    container_name: ticketrush-redis-exporter
+    mem_limit: 32m
+    restart: unless-stopped
+    # 관측 포트는 인터넷에 열지 않는다(ADR 0007). Prometheus가 같은 네트워크에서 서비스명으로 스크랩한다.
+    #
+    # 주소는 앱 4개와 같은 ${REDIS_HOST}/${REDIS_PORT}를 쓴다. 여기만 redis:6379로 고정하면
+    # ElastiCache로 옮겼을 때(ADR 0008 재평가 트리거) 앱은 따라가지만 exporter는 사라진 컨테이너를
+    # 계속 보며 redis_up=0을 내고, 알림이 실제 다운을 알리는 신호가 아니게 된다.
+    environment:
+      REDIS_ADDR: redis://${REDIS_HOST}:${REDIS_PORT:-6379}
+      REDIS_PASSWORD: ${REDIS_PASSWORD:?deploy/.env에 REDIS_PASSWORD를 설정하세요}
+    # service_healthy가 아니다. Redis가 죽어 있을 때 redis_up=0을 보고하는 것이 이 컨테이너의 존재
+    # 이유인데, healthy를 조건으로 걸면 정작 감지해야 할 상황에서 exporter 자신이 뜨지 못한다.
+    depends_on:
+      redis:
+        condition: service_started
     networks:
       - ticketrush-network
 
@@ -337,9 +385,25 @@ services:
       GF_SECURITY_ADMIN_USER: ${GRAFANA_ADMIN_USER:?deploy/.env에 GRAFANA_ADMIN_USER를 설정하세요}
       GF_SECURITY_ADMIN_PASSWORD: ${GRAFANA_ADMIN_PASSWORD:?deploy/.env에 GRAFANA_ADMIN_PASSWORD를 설정하세요}
       GF_USERS_ALLOW_SIGN_UP: "false"
+      # Redis 다운 알림의 Slack contact point가 프로비저닝 파일에서 $SLACK_WEBHOOK_URL로 참조한다(ADR 0008).
+      # booking-service DLT 알림과 같은 webhook을 재사용한다.
+      SLACK_WEBHOOK_URL: ${SLACK_WEBHOOK_URL:?deploy/.env에 SLACK_WEBHOOK_URL을 설정하세요}
+    # 로컬(docker-compose.yml)은 provisioning 디렉토리를 통째로 마운트하지만, 배포본은 하위 디렉토리별로
+    # 나눠 마운트한다. 알림만 배포본 전용 소스(provisioning-aws)에서 가져와야 하기 때문이다.
+    #
+    # 알림을 provisioning/ 공용 디렉토리에 두면 로컬 compose가 그것까지 마운트하는데, 로컬 스택에는
+    # redis-exporter가 없어 redis_up 자체가 없다 → noDataState=Alerting → 모든 개발자 로컬에서
+    # "Redis 다운"이 영구 발화한다. prometheus.yml / prometheus.aws.yml 로 로컬·배포본을 나누는
+    # 기존 관행과 같은 이유다.
+    #
+    # 부모(/etc/grafana/provisioning)를 :ro로 통째 마운트한 뒤 그 안에 alerting을 겹쳐 마운트하는 방식은
+    # 쓸 수 없다 — 읽기 전용이라 마운트포인트를 만들지 못해 컨테이너가 기동에 실패한다.
+    # 하위별 마운트는 이미지에 이미 있는 디렉토리를 그대로 쓰므로 그 문제가 없다.
     volumes:
       # datasource url이 http://prometheus:9090(서비스명)이라 로컬과 같은 파일을 그대로 쓴다.
-      - ./monitoring/grafana/provisioning:/etc/grafana/provisioning:ro
+      - ./monitoring/grafana/provisioning/datasources:/etc/grafana/provisioning/datasources:ro
+      - ./monitoring/grafana/provisioning/dashboards:/etc/grafana/provisioning/dashboards:ro
+      - ./monitoring/grafana/provisioning-aws/alerting:/etc/grafana/provisioning/alerting:ro
       - ./monitoring/grafana/dashboards:/var/lib/grafana/dashboards:ro
       - grafana-data:/var/lib/grafana
     depends_on:
