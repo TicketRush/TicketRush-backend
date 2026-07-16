@@ -9,12 +9,14 @@ import com.ticketrush.boundedcontext.performance.domain.entity.Performance;
 import com.ticketrush.boundedcontext.performance.domain.types.Genre;
 import com.ticketrush.boundedcontext.performance.domain.types.PerformanceStatus;
 import com.ticketrush.boundedcontext.performance.out.repository.PerformanceRepository;
+import com.ticketrush.global.dto.request.CursorPageRequest;
 import com.ticketrush.global.eventpublisher.EventPublisher;
 import com.ticketrush.global.exception.BusinessException;
 import com.ticketrush.global.status.ErrorStatus;
 import com.ticketrush.global.util.S3UploadUtils;
 import java.time.LocalDate;
 import java.time.LocalTime;
+import java.util.Comparator;
 import java.util.List;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
@@ -22,10 +24,7 @@ import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.autoconfigure.EnableAutoConfiguration;
 import org.springframework.boot.test.context.SpringBootTest;
-import org.springframework.data.domain.Page;
-import org.springframework.data.domain.PageRequest;
-import org.springframework.data.domain.Pageable;
-import org.springframework.data.domain.Sort;
+import org.springframework.data.domain.Slice;
 import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.transaction.annotation.Transactional;
@@ -56,78 +55,137 @@ class PerformanceGetListTest {
             buildPerformance(Genre.JAZZ, 90000L, PerformanceStatus.CLOSED)));
   }
 
+  private Slice<PerformanceListResponse> execute(
+      Genre genre, Long minPrice, Long maxPrice, PerformanceStatus status, CursorPageRequest req) {
+    return performanceGetListUseCase.execute(genre, minPrice, maxPrice, status, req);
+  }
+
+  private CursorPageRequest firstPage(int size) {
+    return new CursorPageRequest(null, size);
+  }
+
   @Test
   @DisplayName("장르를 지정하지 않으면 전체 공연 목록을 반환한다")
   void getAll_whenGenreIsNull() {
-    Pageable pageable = PageRequest.of(0, 10, Sort.by(Sort.Direction.DESC, "createdAt"));
-    Page<PerformanceListResponse> result =
-        performanceGetListUseCase.execute(null, null, null, null, pageable);
-    assertThat(result.getTotalElements()).isEqualTo(4);
+    Slice<PerformanceListResponse> result = execute(null, null, null, null, firstPage(10));
+
+    assertThat(result.getContent()).hasSize(4);
+    assertThat(result.hasNext()).isFalse();
+  }
+
+  @Test
+  @DisplayName("목록은 performanceId 내림차순(최신 등록순)으로 정렬된다")
+  void getAll_sortedByIdDesc() {
+    Slice<PerformanceListResponse> result = execute(null, null, null, null, firstPage(10));
+
+    assertThat(result.getContent())
+        .isSortedAccordingTo(
+            Comparator.comparing(PerformanceListResponse::performanceId).reversed());
   }
 
   @Test
   @DisplayName("장르를 지정하면 해당 장르 공연만 반환한다")
   void getByGenre_whenGenreIsGiven() {
-    Pageable pageable = PageRequest.of(0, 10, Sort.by(Sort.Direction.DESC, "createdAt"));
-    Page<PerformanceListResponse> result =
-        performanceGetListUseCase.execute(Genre.CONCERT, null, null, null, pageable);
-    assertThat(result.getTotalElements()).isEqualTo(2);
+    Slice<PerformanceListResponse> result = execute(Genre.CONCERT, null, null, null, firstPage(10));
+
+    assertThat(result.getContent()).hasSize(2);
     assertThat(result.getContent()).allMatch(p -> p.genre() == Genre.CONCERT);
   }
 
   @Test
-  @DisplayName("페이지 사이즈에 따라 결과가 올바르게 분할된다")
-  void pagination_splitsByPageSize() {
-    Pageable firstPage = PageRequest.of(0, 2, Sort.by(Sort.Direction.DESC, "createdAt"));
-    Pageable secondPage = PageRequest.of(1, 2, Sort.by(Sort.Direction.DESC, "createdAt"));
+  @DisplayName("첫 페이지는 size만큼 반환하고 남은 데이터가 있으면 hasNext가 true다")
+  void cursorPaging_firstPage_hasNext() {
+    Slice<PerformanceListResponse> firstPage = execute(null, null, null, null, firstPage(2));
 
-    Page<PerformanceListResponse> page1 =
-        performanceGetListUseCase.execute(null, null, null, null, firstPage);
-    Page<PerformanceListResponse> page2 =
-        performanceGetListUseCase.execute(null, null, null, null, secondPage);
+    assertThat(firstPage.getContent()).hasSize(2);
+    assertThat(firstPage.hasNext()).isTrue();
+  }
 
-    assertThat(page1.getContent()).hasSize(2);
-    assertThat(page2.getContent()).hasSize(2);
-    assertThat(page1.getTotalPages()).isEqualTo(2);
+  @Test
+  @DisplayName("마지막 원소 id를 커서로 넘기면 중복·누락 없이 다음 페이지를 반환한다")
+  void cursorPaging_nextPage_noOverlapOrGap() {
+    Slice<PerformanceListResponse> firstPage = execute(null, null, null, null, firstPage(2));
+    Long nextCursor = firstPage.getContent().getLast().performanceId();
+
+    Slice<PerformanceListResponse> secondPage =
+        execute(null, null, null, null, new CursorPageRequest(nextCursor, 2));
+
+    List<Long> firstIds =
+        firstPage.getContent().stream().map(PerformanceListResponse::performanceId).toList();
+    List<Long> secondIds =
+        secondPage.getContent().stream().map(PerformanceListResponse::performanceId).toList();
+
+    assertThat(secondIds).hasSize(2).doesNotContainAnyElementsOf(firstIds);
+    assertThat(secondIds).allMatch(id -> id < nextCursor);
+    // 전체 4건 = 2 + 2, 정확히 size 배수여도 마지막 페이지의 hasNext는 false여야 한다
+    assertThat(secondPage.hasNext()).isFalse();
+  }
+
+  @Test
+  @DisplayName("잔여 데이터가 size보다 적으면 남은 만큼만 반환하고 hasNext가 false다")
+  void cursorPaging_lastPage_partial() {
+    Slice<PerformanceListResponse> firstPage = execute(null, null, null, null, firstPage(3));
+    Long nextCursor = firstPage.getContent().getLast().performanceId();
+
+    Slice<PerformanceListResponse> lastPage =
+        execute(null, null, null, null, new CursorPageRequest(nextCursor, 3));
+
+    assertThat(firstPage.hasNext()).isTrue();
+    assertThat(lastPage.getContent()).hasSize(1);
+    assertThat(lastPage.hasNext()).isFalse();
+  }
+
+  @Test
+  @DisplayName("필터 조건과 커서 조건이 함께 적용된다")
+  void cursorPaging_withFilter() {
+    Slice<PerformanceListResponse> firstPage =
+        execute(Genre.CONCERT, null, null, null, firstPage(1));
+    Long nextCursor = firstPage.getContent().getLast().performanceId();
+
+    Slice<PerformanceListResponse> secondPage =
+        execute(Genre.CONCERT, null, null, null, new CursorPageRequest(nextCursor, 1));
+
+    assertThat(firstPage.hasNext()).isTrue();
+    assertThat(secondPage.getContent()).hasSize(1);
+    assertThat(secondPage.hasNext()).isFalse();
+    assertThat(secondPage.getContent()).allMatch(p -> p.genre() == Genre.CONCERT);
+    assertThat(secondPage.getContent().getFirst().performanceId()).isLessThan(nextCursor);
   }
 
   @Test
   @DisplayName("최소 가격을 지정하면 해당 가격 이상의 공연만 반환한다")
   void filterByMinPrice() {
-    Pageable pageable = PageRequest.of(0, 10, Sort.by(Sort.Direction.DESC, "createdAt"));
-    Page<PerformanceListResponse> result =
-        performanceGetListUseCase.execute(null, 60000L, null, null, pageable);
-    assertThat(result.getTotalElements()).isEqualTo(2);
+    Slice<PerformanceListResponse> result = execute(null, 60000L, null, null, firstPage(10));
+
+    assertThat(result.getContent()).hasSize(2);
     assertThat(result.getContent()).allMatch(p -> p.price() >= 60000L);
   }
 
   @Test
   @DisplayName("최대 가격을 지정하면 해당 가격 이하의 공연만 반환한다")
   void filterByMaxPrice() {
-    Pageable pageable = PageRequest.of(0, 10, Sort.by(Sort.Direction.DESC, "createdAt"));
-    Page<PerformanceListResponse> result =
-        performanceGetListUseCase.execute(null, null, 50000L, null, pageable);
-    assertThat(result.getTotalElements()).isEqualTo(2);
+    Slice<PerformanceListResponse> result = execute(null, null, 50000L, null, firstPage(10));
+
+    assertThat(result.getContent()).hasSize(2);
     assertThat(result.getContent()).allMatch(p -> p.price() <= 50000L);
   }
 
   @Test
   @DisplayName("가격 범위를 지정하면 범위 내 공연만 반환한다")
   void filterByPriceRange() {
-    Pageable pageable = PageRequest.of(0, 10, Sort.by(Sort.Direction.DESC, "createdAt"));
-    Page<PerformanceListResponse> result =
-        performanceGetListUseCase.execute(null, 40000L, 80000L, null, pageable);
-    assertThat(result.getTotalElements()).isEqualTo(2);
+    Slice<PerformanceListResponse> result = execute(null, 40000L, 80000L, null, firstPage(10));
+
+    assertThat(result.getContent()).hasSize(2);
     assertThat(result.getContent()).allMatch(p -> p.price() >= 40000L && p.price() <= 80000L);
   }
 
   @Test
   @DisplayName("상태를 지정하면 해당 상태 공연만 반환한다")
   void filterByStatus() {
-    Pageable pageable = PageRequest.of(0, 10, Sort.by(Sort.Direction.DESC, "createdAt"));
-    Page<PerformanceListResponse> result =
-        performanceGetListUseCase.execute(null, null, null, PerformanceStatus.ON_SALE, pageable);
-    assertThat(result.getTotalElements()).isEqualTo(2);
+    Slice<PerformanceListResponse> result =
+        execute(null, null, null, PerformanceStatus.ON_SALE, firstPage(10));
+
+    assertThat(result.getContent()).hasSize(2);
     assertThat(result.getContent())
         .allMatch(p -> p.performanceStatus() == PerformanceStatus.ON_SALE);
   }
@@ -135,11 +193,10 @@ class PerformanceGetListTest {
   @Test
   @DisplayName("장르, 가격, 상태 복합 조건을 적용하면 모든 조건을 만족하는 공연만 반환한다")
   void filterByMultipleConditions() {
-    Pageable pageable = PageRequest.of(0, 10, Sort.by(Sort.Direction.DESC, "createdAt"));
-    Page<PerformanceListResponse> result =
-        performanceGetListUseCase.execute(
-            Genre.CONCERT, 40000L, 60000L, PerformanceStatus.ON_SALE, pageable);
-    assertThat(result.getTotalElements()).isEqualTo(1);
+    Slice<PerformanceListResponse> result =
+        execute(Genre.CONCERT, 40000L, 60000L, PerformanceStatus.ON_SALE, firstPage(10));
+
+    assertThat(result.getContent()).hasSize(1);
     PerformanceListResponse only = result.getContent().get(0);
     assertThat(only.genre()).isEqualTo(Genre.CONCERT);
     assertThat(only.price()).isBetween(40000L, 60000L);
@@ -149,9 +206,7 @@ class PerformanceGetListTest {
   @Test
   @DisplayName("최소 가격이 최대 가격보다 크면 PERFORMANCE_INVALID_PRICE_RANGE 예외가 발생한다")
   void invalidPriceRange_throwsException() {
-    Pageable pageable = PageRequest.of(0, 10, Sort.by(Sort.Direction.DESC, "createdAt"));
-    assertThatThrownBy(
-            () -> performanceGetListUseCase.execute(null, 80000L, 40000L, null, pageable))
+    assertThatThrownBy(() -> execute(null, 80000L, 40000L, null, firstPage(10)))
         .isInstanceOf(BusinessException.class)
         .hasFieldOrPropertyWithValue("errorStatus", ErrorStatus.PERFORMANCE_INVALID_PRICE_RANGE);
   }

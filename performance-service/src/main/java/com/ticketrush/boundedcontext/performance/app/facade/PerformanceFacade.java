@@ -15,10 +15,10 @@ import com.ticketrush.boundedcontext.performance.app.usecase.PerformancePatchUse
 import com.ticketrush.boundedcontext.performance.app.usecase.PerformanceValidateUseCase;
 import com.ticketrush.boundedcontext.performance.domain.types.Genre;
 import com.ticketrush.boundedcontext.performance.domain.types.PerformanceStatus;
+import com.ticketrush.global.dto.request.CursorPageRequest;
 import java.util.List;
 import lombok.RequiredArgsConstructor;
-import org.springframework.data.domain.Page;
-import org.springframework.data.domain.Pageable;
+import org.springframework.data.domain.Slice;
 import org.springframework.stereotype.Service;
 import org.springframework.web.multipart.MultipartFile;
 
@@ -43,9 +43,13 @@ public class PerformanceFacade {
     return performanceCreateUseCase.execute(request, mainImage, model3d, gallery);
   }
 
-  public Page<PerformanceListResponse> getPerformances(
-      Genre genre, Long minPrice, Long maxPrice, PerformanceStatus status, Pageable pageable) {
-    return performanceGetListUseCase.execute(genre, minPrice, maxPrice, status, pageable);
+  public Slice<PerformanceListResponse> getPerformances(
+      Genre genre,
+      Long minPrice,
+      Long maxPrice,
+      PerformanceStatus status,
+      CursorPageRequest pageRequest) {
+    return performanceGetListUseCase.execute(genre, minPrice, maxPrice, status, pageRequest);
   }
 
   public PerformanceDetailResponse getPerformanceDetail(Long performanceId) {
