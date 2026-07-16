@@ -84,8 +84,14 @@ jobs:
           expected = {f"{name}:{MGMT_PORT}" for name in deployed}
           for miss in sorted(expected - scraped):
               errors.append(f"배포되는데 스크랩하지 않는다: {miss}")
+
+          # 앱이 아닌 타깃(redis-exporter 등)도 스크랩한다. 이 검증의 목적은 up=0 인 타깃을 막는 것이므로,
+          # 앱처럼 :8090 을 강제하는 대신 compose 에 그 서비스가 실제로 있는지만 본다.
+          # (exporter 는 SERVER_PORT 가 없어 deployed 에 잡히지 않고, 포트도 앱과 다르다.)
+          services = set(comp["services"])
           for extra in sorted(scraped - expected):
-              errors.append(f"스크랩하는데 배포되지 않는다 (up=0 이 된다): {extra}")
+              if extra.split(":")[0] not in services:
+                  errors.append(f"스크랩하는데 배포되지 않는다 (up=0 이 된다): {extra}")
 
           # 타깃 포트가 각 서비스의 실제 management.server.port 와 같은가
           for name in sorted(deployed):
