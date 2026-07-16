@@ -9,6 +9,23 @@ spring:
     name: seat-service
   jpa:
     open-in-view: false
+  data:
+    redis:
+      # Lettuce 기본 커맨드 타임아웃(60s)은 hang형 Redis 장애 시 좌석 락 경로를 60초 물린다.
+      # fail-closed는 '거절'이지 '무한 대기'가 아니다(ADR 0008) — 이 경로는 Kafka 리스너 스레드를
+      # 잡으므로, 물려 있는 동안 poll이 밀려 컨슈머 리밸런싱으로 장애가 번진다. 짧게 자른다.
+      # performance-service(application.yml:16-20)가 같은 이유로 먼저 적용한 값이다.
+      #
+      # 주의 — 이 값이 곧 실패까지의 벽시계 시간은 아니다. Redisson 스타터는 이 timeout을 응답
+      # 타임아웃으로 매핑하지만 자체 retryAttempts(기본 3)·retryInterval(기본 1.5s)을 별도로 갖는다.
+      # 즉 최악은 1초가 아니라 수 초다. 60초보다 훨씬 낫지만 "1초 차단"으로 읽으면 안 된다.
+      #
+      # 트레이드오프: 응답 타임아웃이 짧으면 부하·GC 스파이크에 unlock이 타임아웃날 수 있고,
+      # 그러면 좌석 락이 SeatLockUseCase.LOCK_TTL_MINUTES(5분)까지 잔존해 그 좌석이 5분간 잠긴다.
+      # performance-service가 ShedLock(1분) 기준으로 수용한 것과 같은 성질이되 잔존 시간이 5배다.
+      # 정합성은 깨지지 않고(#427의 DB @Version) 가용성만 손해라 수용한다.
+      timeout: 1s
+      connect-timeout: 1s
 
 custom:
   global:
