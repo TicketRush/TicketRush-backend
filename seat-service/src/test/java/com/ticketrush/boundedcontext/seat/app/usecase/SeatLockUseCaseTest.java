@@ -5,6 +5,7 @@ import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.BDDMockito.given;
 import static org.mockito.Mockito.verify;
 
+import com.ticketrush.boundedcontext.seat.domain.constant.SeatLockKey;
 import com.ticketrush.global.constants.MetricNames;
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import java.time.LocalDateTime;
@@ -41,7 +42,7 @@ class SeatLockUseCaseTest {
     // given
     Long seatId = 100L;
     Long userId = 1L;
-    String expectedKey = "seat:lock:" + seatId;
+    String expectedKey = SeatLockKey.of(seatId);
 
     given(redissonClient.getLock(expectedKey)).willReturn(redissonLock);
     // tryLock(waitTime, leaseTime, TimeUnit) 성공(true) 시뮬레이션
