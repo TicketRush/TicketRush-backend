@@ -22,6 +22,10 @@ spring:
     console:
       enabled: false
 
+  # test 프로파일은 Redis가 없어 캐시를 끈다 (캐시 검증은 Testcontainers 테스트가 redis로 오버라이드)
+  cache:
+    type: none
+
 app:
   event-publisher:
     type: kafka

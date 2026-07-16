@@ -36,6 +36,9 @@ dependencies {
 
     implementation 'org.springframework.data:spring-data-commons'
     implementation 'org.springframework.boot:spring-boot-starter-actuator'
+    // 공연 목록 캐싱 (#177) — data-redis는 shedlock 전이 의존에 기대지 않도록 명시 선언
+    implementation 'org.springframework.boot:spring-boot-starter-cache'
+    implementation 'org.springframework.boot:spring-boot-starter-data-redis'
     runtimeOnly 'io.micrometer:micrometer-registry-prometheus'
     implementation 'org.springframework.boot:spring-boot-starter-data-jpa'
     implementation 'org.springframework.boot:spring-boot-starter-security'
@@ -73,6 +76,8 @@ dependencies {
     annotationProcessor 'org.mapstruct:mapstruct-processor:1.5.5.Final'
 
     testImplementation 'com.h2database:h2'
+    // Testcontainers — 공연 목록 캐싱 실 Redis 검증 (#177). 버전은 Boot BOM(testcontainers-bom 2.x) 관리 (payment #422 선례)
+    testImplementation 'org.testcontainers:testcontainers-junit-jupiter'
     testImplementation 'org.springframework.boot:spring-boot-starter-actuator-test'
     testImplementation 'org.springframework.boot:spring-boot-starter-data-jpa-test'
     testImplementation 'org.springframework.boot:spring-boot-starter-security-test'
