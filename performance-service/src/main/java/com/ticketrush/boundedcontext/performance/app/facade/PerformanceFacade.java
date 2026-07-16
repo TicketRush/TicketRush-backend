@@ -49,7 +49,9 @@ public class PerformanceFacade {
       Long maxPrice,
       PerformanceStatus status,
       CursorPageRequest pageRequest) {
-    return performanceGetListUseCase.execute(genre, minPrice, maxPrice, status, pageRequest);
+    return performanceGetListUseCase
+        .execute(genre, minPrice, maxPrice, status, pageRequest)
+        .toSlice(pageRequest.size());
   }
 
   public PerformanceDetailResponse getPerformanceDetail(Long performanceId) {

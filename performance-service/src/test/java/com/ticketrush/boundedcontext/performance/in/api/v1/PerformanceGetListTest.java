@@ -57,7 +57,9 @@ class PerformanceGetListTest {
 
   private Slice<PerformanceListResponse> execute(
       Genre genre, Long minPrice, Long maxPrice, PerformanceStatus status, CursorPageRequest req) {
-    return performanceGetListUseCase.execute(genre, minPrice, maxPrice, status, req);
+    return performanceGetListUseCase
+        .execute(genre, minPrice, maxPrice, status, req)
+        .toSlice(req.size());
   }
 
   private CursorPageRequest firstPage(int size) {

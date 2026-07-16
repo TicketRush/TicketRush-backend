@@ -9,6 +9,15 @@ spring:
     name: performance-service
   jpa:
     open-in-view: false
+  cache:
+    type: redis
+  data:
+    redis:
+      # Lettuce 기본 커맨드 타임아웃(60s)은 hang형 Redis 장애 시 캐시 fail-open을 무력화한다 — 짧게 자른다.
+      # 같은 ConnectionFactory를 쓰는 ShedLock에도 적용됨: Redis 지연 스파이크 시 unlock 타임아웃으로
+      # 락이 lockAtMostFor(1m)까지 잔존할 빈도가 소폭 늘 수 있는 트레이드오프를 수용한 값이다.
+      timeout: 1s
+      connect-timeout: 1s
   servlet:
     multipart:
       enabled: true

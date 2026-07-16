@@ -5,6 +5,7 @@ import com.ticketrush.boundedcontext.performance.app.dto.response.PerformanceCre
 import com.ticketrush.boundedcontext.performance.app.mapper.PerformanceMapper;
 import com.ticketrush.boundedcontext.performance.domain.entity.Performance;
 import com.ticketrush.boundedcontext.performance.out.repository.PerformanceRepository;
+import com.ticketrush.global.constants.CacheConstants;
 import com.ticketrush.global.eventpublisher.EventPublisher;
 import com.ticketrush.global.exception.BusinessException;
 import com.ticketrush.global.status.ErrorStatus;
@@ -12,6 +13,7 @@ import com.ticketrush.global.util.S3UploadUtils;
 import com.ticketrush.shared.performance.event.PerformanceCreatedEvent;
 import java.util.List;
 import lombok.RequiredArgsConstructor;
+import org.springframework.cache.annotation.CacheEvict;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.multipart.MultipartFile;
@@ -26,6 +28,7 @@ public class PerformanceCreateUseCase {
   private final EventPublisher eventPublisher;
 
   /** 공연 정보와 파일들을 받아 S3 업로드 후 DB에 저장 */
+  @CacheEvict(cacheNames = CacheConstants.PERFORMANCE_LIST_CACHE, allEntries = true)
   @Transactional
   public PerformanceCreateResponse execute(
       PerformanceCreateRequest request,
