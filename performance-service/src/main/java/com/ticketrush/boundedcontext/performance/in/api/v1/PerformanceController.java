@@ -5,6 +5,7 @@ import com.ticketrush.boundedcontext.performance.app.dto.response.PerformanceLis
 import com.ticketrush.boundedcontext.performance.app.facade.PerformanceFacade;
 import com.ticketrush.boundedcontext.performance.domain.types.Genre;
 import com.ticketrush.boundedcontext.performance.domain.types.PerformanceStatus;
+import com.ticketrush.global.dto.request.CursorPageRequest;
 import com.ticketrush.global.dto.response.ApiResponse;
 import com.ticketrush.global.status.SuccessStatus;
 import io.swagger.v3.oas.annotations.Operation;
@@ -15,13 +16,11 @@ import jakarta.validation.constraints.PositiveOrZero;
 import java.util.List;
 import lombok.RequiredArgsConstructor;
 import org.springdoc.core.annotations.ParameterObject;
-import org.springframework.data.domain.Page;
-import org.springframework.data.domain.Pageable;
-import org.springframework.data.domain.Sort;
-import org.springframework.data.web.PageableDefault;
+import org.springframework.data.domain.Slice;
 import org.springframework.http.ResponseEntity;
 import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.ModelAttribute;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
@@ -44,6 +43,10 @@ public class PerformanceController {
 
           슬라이드 영역과 그리드 목록 모두 이 API를 사용합니다.
 
+          **커서 페이징(무한 스크롤):** 최신 등록순(performanceId 내림차순) 고정 정렬입니다.
+          첫 요청은 cursorId 없이 호출하고, 응답 `paginationInfo.nextCursor`를
+          다음 요청의 cursorId로 전달합니다. `hasNext=false`면 마지막 페이지입니다.
+
           **장르 코드:**
           | 코드 | 설명 |
           |------|------|
@@ -63,14 +66,13 @@ public class PerformanceController {
       @Parameter(description = "최대 가격") @PositiveOrZero @RequestParam(required = false)
           Long maxPrice,
       @Parameter(description = "공연 상태 필터") @RequestParam(required = false) PerformanceStatus status,
-      @ParameterObject
-          @PageableDefault(size = 8, sort = "createdAt", direction = Sort.Direction.DESC)
-          Pageable pageable) {
+      @ParameterObject @ModelAttribute CursorPageRequest pageRequest) {
 
-    Page<PerformanceListResponse> performances =
-        performanceFacade.getPerformances(genre, minPrice, maxPrice, status, pageable);
+    Slice<PerformanceListResponse> performances =
+        performanceFacade.getPerformances(genre, minPrice, maxPrice, status, pageRequest);
 
-    return ApiResponse.onSuccess(SuccessStatus.OK, performances);
+    return ApiResponse.onSuccess(
+        SuccessStatus.OK, performances, PerformanceListResponse::performanceId);
   }
 
   @Operation(summary = "공연 상세 조회", description = "공연 ID로 상세 정보를 조회합니다. 인증 없이 누구나 접근 가능합니다.")
