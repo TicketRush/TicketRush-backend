@@ -46,6 +46,12 @@ dependencies {
     annotationProcessor 'org.projectlombok:lombok-mapstruct-binding:0.2.0'
     annotationProcessor 'org.mapstruct:mapstruct-processor:1.5.5.Final'
     testImplementation 'com.h2database:h2'
+    // Testcontainers — 동일 좌석 고동시성에서 oversell 0건 실 MySQL·Redis 검증 (#344)
+    // 버전은 Boot BOM(testcontainers-bom 2.x)이 관리한다. 1.x(구 좌표 org.testcontainers:mysql)는
+    // docker-java가 구식 Docker API(1.32)를 요구해 최신 Docker 데몬(최소 1.40)과 호환되지 않는다.
+    // Redis는 GenericContainer(코어)로 띄우므로 전용 좌표가 필요 없다.
+    testImplementation 'org.testcontainers:testcontainers-junit-jupiter'
+    testImplementation 'org.testcontainers:testcontainers-mysql'
     testImplementation 'org.springframework.boot:spring-boot-starter-actuator-test'
     testImplementation 'org.springframework.boot:spring-boot-starter-data-jpa-test'
     testImplementation 'org.springframework.boot:spring-boot-starter-security-test'
