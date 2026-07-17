@@ -11,6 +11,9 @@ export const LOAD_USER_PASSWORD = __ENV.LOAD_USER_PASSWORD || '';
 export const SEAT_ID_MIN = Number(__ENV.SEAT_ID_MIN || 1);
 export const SEAT_ID_MAX = Number(__ENV.SEAT_ID_MAX || 100);
 
+// seat-contention 시나리오가 집중 타격할 단일 좌석. 실행마다 리셋이 필요하다(가이드 §8.2).
+export const TARGET_SEAT_ID = Number(__ENV.TARGET_SEAT_ID || SEAT_ID_MIN);
+
 // 부하 프로파일(램프업)
 export const VUS = Number(__ENV.VUS || 50);
 export const RAMP = __ENV.RAMP || '30s';

@@ -201,3 +201,103 @@ docker compose run --rm --no-deps \
 인터넷에 열리는 것은 부하 대상인 gateway 8080뿐이다. 이것도 **측정 시간에만** 열고, 끝나면 접근을 닫는다. 보안 그룹은 본인 공인 IP `/32`로 제한한다. 앱의 actuator는 prod에서 8090로 분리되어 publish 되지 않으므로 `/actuator/prometheus`가 인터넷에서 읽히지 않는다.
 
 부하테스트용 DB·환경을 운영과 분리한다. 부하테스트 계정 비밀번호 평문은 저장소에 남기지 않는다.
+
+## 8. 동일 좌석 동시성 측정 (#344)
+
+### 8.1 이슈 서사와 실측의 차이 — 먼저 읽을 것
+
+이슈 #344의 제목은 "락 경합 차단율"이지만, **실측에서 `ticketrush_seat_lock_contention_total`은 0이다. 버그가 아니라 구조다.**
+
+- 좌석 홀드는 HTTP API가 아니다. `SeatController`는 GET만 있고, 홀드 진입점은 `BookingCreatedEventListener`의 Kafka 리스너뿐이다. k6는 `POST /api/v1/booking`으로 **간접 유발만** 할 수 있고, 그 201 응답은 "예매 생성됨"이지 "좌석 선점됨"이 아니다.
+- 그 리스너의 컨슈머 스레드는 **1개**다. `common/.../config/KafkaConfig.java`의 컨테이너 팩토리에 `setConcurrency`가 없고 `spring.kafka.listener.concurrency`도 어디에도 없어 기본값 1이 적용된다.
+- Redisson `RLock`은 `(clientUUID:threadId)` 기준 **재진입** 락이다. 같은 스레드가 1,000건을 순차 처리하면 `tryLock`은 실패하지 않고 **재진입으로 성공**한다. 카운터는 `tryLock == false` 경로에서만 오르므로(`SeatLockUseCase`) 구조적으로 0이다.
+
+**따라서 동시성 방어선은 락이 아니다.** 실제로 중복 선점을 막는 것은 둘이다.
+
+1. `SeatHoldUseCase`의 `isAvailable()` 체크 → `ticketrush_seat_hold_total{result="unavailable"}`
+2. `Seat.version` 낙관적 락(#427) → 커밋 시점 충돌 → 롤백 → Kafka 재시도로 수렴
+
+**"차단율"은 §8.3의 `unavailable` 비율로 산출한다.** 락 경합률로 산출하면 항상 0%가 나와 방어선이 없다는 뜻으로 오독된다. 락은 정합성 장치가 아니라 경쟁을 앞단에서 걸러내는 **성능 최적화**이며, 정합성의 최종 방어선은 DB다 — 이 구분의 SSOT는 [ADR 0008](adr/0008-redis-spof-acceptance.md)과 `Seat.version` javadoc이다.
+
+> 컨슈머 동시성을 올리면(`setConcurrency > 1`) 이 수치는 달라진다. 그때 락 경합이 실제로 설계대로 작동하는지는 `SeatHoldConcurrencyTest`(seat-service)가 스레드를 갈라 검증해 둔 상태다. oversell 0 자체의 증명도 같은 테스트가 실 MySQL로 수행한다(Redis 락을 제거한 두 번째 케이스).
+>
+> 참고로 `BookingCreatedEvent.key()`는 `bookingId`다. 파티션을 늘리는 순간 같은 좌석 이벤트가 여러 파티션에 흩어지므로, "파티션 순차 처리 덕분에 안전하다"는 서사는 성립하지 않는다. 지금 안전한 이유는 순전히 컨슈머 스레드가 1개이기 때문이다.
+
+### 8.2 실행
+
+**토폴로지는 §7을 따른다 — k6는 로컬, 대상 앱은 AWS 배포본이다([ADR 0004](adr/0004-load-test-execution-topology.md)).** 앱까지 로컬로 돌리는 "전부 로컬"은 ADR 0004가 **대안 1로 검토한 뒤 기각한 방식**이다(생성기와 대상이 CPU를 경쟁해 latency·throughput을 신뢰할 수 없다). 로컬 기동은 시나리오가 도는지 보는 기능 확인용으로만 쓰고, **거기서 나온 RPS·p99는 §8.4에 적지 않는다.**
+
+`local` 프로파일 전용 DevToken(`/api/v1/dev/auth/token`)으로 인증을 우회하지 않는다 — AWS 배포본은 `prod` 단독이라 그 엔드포인트가 없고, ADR 0004가 부하 테스트에 쓰지 않기로 결정했다. write 시나리오에는 `LOAD_USER_PASSWORD` 평문이 필요하다.
+
+사전 조건은 §7.1과 같다(EC2 기동, SSH 터널, AWS 부하테스트용 DB 시딩).
+
+```bash
+GUARD='SET @i_confirm_loadtest_db=1'
+SEAT=1   # TARGET_SEAT_ID
+
+# (1) 리셋 — 매 실행 전 필수. AWS 쪽 DB와 Redis 락을 함께 되돌린다.
+#     좌석은 한 번 HOLD 되면 스스로 AVAILABLE 로 돌아오지 않고, Redisson 락 키는 성공 경로에
+#     unlock 이 없어 TTL 5분간 살아남는다. DB만 되돌리면 2회차 홀드가 락 획득에 실패해
+#     전부 보상 처리되어 측정이 무의미해진다.
+mysql -h <AWS_DB_HOST> -u "$MYSQL_USERNAME" -p"$MYSQL_PASSWORD" \
+  --init-command="$GUARD" ticket_rush -e "
+    DELETE FROM booking WHERE seat_id = $SEAT;
+    UPDATE seat SET seat_status='AVAILABLE', booking_number=NULL, hold_expired_at=NULL
+     WHERE seat_id = $SEAT;"
+
+# Redis 는 배포본 compose 안에 있으므로 EC2 에서 지운다(로컬 redis 가 아니다).
+ssh -i <key>.pem <user>@<EC2_IP> \
+  'cd <배포경로> && docker compose exec -T redis redis-cli DEL "seat:lock:1"'
+
+# (2) 부하 — 짧고 날카로운 버스트. 전용 파라미터 없이 기존 VUS/RAMP/STEADY 로 프로파일을 만든다.
+#     -e 위치 규칙과 --no-deps 는 §7.2 와 동일하다.
+docker compose run --rm --no-deps \
+  -e K6_PROMETHEUS_RW_SERVER_URL=http://<PROM_HOST>:9090/api/v1/write \
+  k6 run \
+  -e BASE_URL=https://<aws-gateway> \
+  -e PERF_ID=1 -e LOAD_USER_PASSWORD='<평문>' \
+  -e TARGET_SEAT_ID=$SEAT -e VUS=200 -e RAMP=5s -e STEADY=30s \
+  /scripts/scenarios/seat-contention.js
+
+# (3) oversell 검증 — 반드시 1
+mysql -h <AWS_DB_HOST> -u "$MYSQL_USERNAME" -p"$MYSQL_PASSWORD" \
+  --init-command="$GUARD" ticket_rush \
+  -e "SELECT COUNT(*) FROM seat WHERE seat_id=$SEAT AND seat_status='HOLD';"
+```
+
+> Windows Git Bash 에서는 `/scripts/...` 가 `C:/Program Files/Git/scripts/...` 로 치환된다. 경로 앞에 `//` 를 붙이거나(`//scripts/scenarios/seat-contention.js`) `MSYS_NO_PATHCONV=1` 을 준다. PowerShell 은 그대로 쓴다.
+
+### 8.3 PromQL
+
+부하 종료 후 Grafana Explore(§5)에서 실행한다. 측정 창 `[5m]`은 실제 실행 길이에 맞춘다.
+
+| 지표 | 쿼리 |
+|------|------|
+| **oversell** (좌석 1개 부하에서 정확히 1) | `sum(increase(ticketrush_seat_hold_total{result="success"}[5m]))` |
+| **차단율** (실측 방어선) | `sum(increase(ticketrush_seat_hold_total{result="unavailable"}[5m])) / sum(increase(ticketrush_seat_hold_total[5m]))` |
+| **홀드 성공률** | `sum(increase(ticketrush_seat_hold_total{result="success"}[5m])) / sum(increase(ticketrush_seat_hold_total[5m]))` |
+| **락 경합** (0 예상 — §8.1) | `sum(increase(ticketrush_seat_lock_contention_total[5m]))` |
+| **처리량 (RPS)** | `sum(rate(k6_http_reqs_total[1m]))` |
+| **p99 latency (생성기)** | `k6_http_req_duration_p99` |
+| **p99 latency (앱)** | `histogram_quantile(0.99, sum(rate(http_server_requests_seconds_bucket{uri="/api/v1/booking"}[1m])) by (le))` |
+| **컨슈머 소화율** | `sum(rate(ticketrush_kafka_inbox_total{result="processed"}[1m]))` |
+| **파이프라인 적체** | `ticketrush_outbox_backlog` |
+| **현재 HOLD 총수** | `ticketrush_seat_held` |
+
+HTTP 사전 차단율(409)은 k6 요약의 `seat_conflict` Rate를 그대로 읽는다(전체 요청이 분모인 비율이다). `seat_accepted`도 같은 분모라 둘을 나누지 않는다 — 201 비율은 `seat_accepted`를 따로 읽는다.
+
+> 차단율 분모에 `seat_lock_contention`을 넣지 않는 이유는 §8.1이다. 두 카운터는 분모가 다르다 — `seat_hold_total`은 DB 체크에 **도달한** 시도만, contention은 도달조차 못 한 시도만 센다.
+
+### 8.4 측정 결과
+
+| 항목 | 값 |
+|------|-----|
+| 실행 일시 / 커밋 | |
+| 프로파일 (VUS/RAMP/STEADY) | |
+| 총 요청 / 201 / 409 | |
+| **oversell** | |
+| 차단율 (unavailable / total) | |
+| 홀드 성공률 | |
+| 락 경합 | |
+| RPS / p99(k6) / p99(앱) | |
+| Grafana 캡처 | |
