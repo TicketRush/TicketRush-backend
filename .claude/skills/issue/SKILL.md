@@ -1,0 +1,131 @@
+---
+name: issue
+description: 팀 템플릿으로 GitHub 이슈를 생성한다. 사용자가 "이슈 만들어줘", "이슈 올려줘", "이번 작업 이슈로", "요구사항 이슈로 미리 만들어줘" 등 이슈 생성을 요청할 때 사용한다. 작업 기반(사후)·요구사항 기반(사전) 2가지 모드를 지원한다.
+argument-hint: '[요구사항 설명 또는 비움]'
+---
+
+# /issue — 팀 템플릿으로 GitHub 이슈 생성
+
+두 가지 모드로 동작한다. **메인 컨텍스트에서 실행되므로 대화 맥락을 살린다.**
+
+- **A. 작업 기반 (사후)** — 지금까지 한 작업(git 기록)을 바탕으로 이슈를 만든다.
+- **B. 요구사항 기반 (사전)** — 아직 시작 전인 요구사항/하고 싶은 작업 설명을 바탕으로 이슈를 미리 만든다.
+
+## 모드 판별 (0단계)
+- `$ARGUMENTS`에 **만들 작업/요구사항 설명**이 있으면 → **B (요구사항 기반)**. 예: `/issue 좌석 선점 만료 스케줄러 추가`
+- `$ARGUMENTS`가 없거나 **"지금까지/방금 한 작업"** 류를 가리키면 → **A (작업 기반)**.
+- 어느 쪽인지 애매하면 **사용자에게 한 번 확인**한다 (예: "방금 작업 기준인가요, 앞으로 할 작업 기준인가요?").
+
+## 절대 규칙
+- **코드를 수정하지 않는다.** 이슈 생성만 한다. (본문 임시 파일은 Bash 힙독으로)
+- 반드시 **`.github/ISSUE_TEMPLATE/`의 템플릿 양식**을 따른다.
+- **A 모드**는 git 기록 + 대화 맥락에서 확인한 것만 적는다. **B 모드**는 요구사항·대화에서 확인된 것만 적고, 추측으로 범위를 과장하지 않는다(불명확하면 질문).
+- **과도한 분할 금지** — 이슈 1건은 응집된 작업을 묶어 대략 **10~20개 파일 규모**로 만든다. 한두 파일짜리 자잘한 수정을 매번 별도 이슈로 쪼개지 않는다. 단, **하네스(에이전트·커맨드·훅·스킬·문서·설정) 점진 보완**처럼 본질적으로 잘게 발생하는 작업은 별도 **트래킹 이슈 1건**에 누적해 관리한다(체크리스트 갱신, 자식 이슈 X).
+  - **예외: 담당자가 다르면 쪼갠다.** 묶으면 파일 규모 기준을 만족하더라도 **작업 주체(assignee)가 서로 다르면 별도 이슈로 분리**한다. 한 이슈에 담당자를 여러 명 붙여 진행 상황이 뒤섞이는 것보다, 10개 미만 파일 규모라도 담당자별로 나누는 편이 낫다.
+
+## 작업 순서
+
+### A. 작업 기반 — 1단계: 작업 내역 수집
+```
+git log --oneline develop..HEAD        # 이 브랜치에서 한 커밋
+git diff --stat develop...HEAD         # 변경 파일 요약
+git status --short                      # 아직 커밋 안 한 변경
+```
+필요하면 `git diff`로 의도를 파악한다. "방금 한 작업"처럼 미커밋 변경을 가리키면 `git status`/`git diff` 기준으로 정리한다.
+
+### B. 요구사항 기반 — 1단계: 요구사항 정리
+- `$ARGUMENTS` + 대화 내용으로 **무엇을 / 왜** 하려는지 정리한다.
+- 필요하면 코드베이스를 **읽기만** 가볍게 참고(Grep/Read)해 영향 범위·완료 조건을 구체화한다. (코드 수정 금지)
+- 완료 조건·범위 판단에 꼭 필요한 핵심이 불명확하면 사용자에게 한 줄로 질문한다.
+
+### 2단계: 템플릿 선택 (공통)
+`ls .github/ISSUE_TEMPLATE/` 로 목록 확인 후 작업 성격에 맞는 템플릿을 고른다.
+- `feature` 새 기능 / `fix` 버그 수정 / `refactor` 리팩토링 / `test` 테스트 / `docs` 문서 / `design` 디자인
+- `infra` 서버·CI/CD·개발 환경 구성 / `chore` 설정·빌드·의존성·기타 정리
+애매하면 가장 가까운 것을 고르고 이유를 한 줄로 보고한다.
+선택한 템플릿(`cat .github/ISSUE_TEMPLATE/<type>.yml`)의 **모든 `label`(질문) 항목을 본문 섹션 헤더로** 사용하고, `required: true`는 반드시 채운다.
+
+선택한 템플릿의 작업 타입(label)에 따라 **GitHub Issue Type**도 함께 정한다(`gh issue create --type`에 사용). org에 정의된 Issue Type은 `Task`/`Bug`/`Feature` 3종이며(`gh api orgs/TicketRush/issue-types`로 확인), label → Issue Type 매핑은 다음과 같다.
+
+  | label | Issue Type |
+  |---|---|
+  | `feature` | `Feature` |
+  | `fix` | `Bug` |
+  | `refactor`·`test`·`infra`·`docs`·`chore`·`design` | `Task` |
+
+  - 값은 org 정의명과 **동일 표기**(`Task`/`Bug`/`Feature`, 첫 글자 대문자)로 적는다.
+  - 한 이슈에 작업 타입 label이 여러 개라면 우선순위 **`Bug` > `Feature` > `Task`**로 단일 Issue Type을 정한다.
+  - 참고: 각 `.github/ISSUE_TEMPLATE/*.yml`에도 동일 매핑의 top-level `type:`이 지정돼 있어 GitHub UI 폼 생성 시엔 자동 적용된다. `/issue` 커맨드(CLI 생성)는 폼을 거치지 않으므로 아래 `--type`으로 직접 지정한다.
+
+### 3단계: 본문 작성 & 생성 (공통)
+- 제목: 팀 규칙 `[공간] {내용}` 형식. **`[ ]` 안에는 "어디를 건드리나"(공간)**를 아래 순서로 정한다(SSOT: `docs/backend-convention.md` 이슈 규칙).
+  1. 모듈이 특정되면 **모듈 태그**(아래 표). 여러 모듈에 걸치면 `[공연/결제]`처럼 슬래시로 병기한다.
+  2. 모듈은 아니지만 특정 공간이면 **공간 태그**(아래 표의 `[CI]`·`[CD]`·`[모니터링]`).
+  3. 공간이 특정되지 않으면 `[공통]`.
+
+  | 공간 | 제목 표기 |
+  |---|---|
+  | `performance-service` | `[공연]` |
+  | `seat-service` | `[좌석]` |
+  | `booking-service` | `[예매]` |
+  | `payment-service` | `[결제]` |
+  | `ticket-service` | `[티켓]` |
+  | `user-service` | `[User]` |
+  | `auth-service` | `[Auth]` |
+  | `gateway-service` | `[Gateway]` |
+  | 모니터링·관측성(메트릭·분산추적·알림·로그수집) | `[모니터링]` |
+  | CI(Actions 워크플로우·빌드·테스트·린트) | `[CI]` |
+  | 배포(EC2·ECR·Docker Compose 등) | `[CD]` |
+  | `common`·환경·문서·협업 설정 등 | `[공통]` |
+
+  - 위 세 개(`[모니터링]`·`[CI]`·`[CD]`)가 모듈 아닌 **공간 태그의 전부**다. 화이트리스트는 **닫혀 있고**, 새 공간 태그는 팀 합의로만 추가한다.
+  - 🚫 **행위를 제목에 적지 않는다:** 부하 테스트·성능 개선 등은 **행위**이므로 `[부하테스트]`·`[성능]`·`[테스트]` 같은 제목 태그를 만들지 않는다. 공간(모듈)을 제목에, 행위는 `--label`에 적는다. 부하/성능은 실제로 하나의 label에 묶이지도 않는다(하네스 구축 `infra`, 측정 `test`, 스크립트 수정 `fix`, 문서 정정 `docs`). `[공통]`에 이슈가 몰리는 것은 정상이며, 그 안의 구분은 label이 한다.
+  - ⚠️ **주의 (3축 구분):** ① 이슈 제목 `[ ]`에는 **공간**(`[예매]` 같은 모듈명, 또는 `[모니터링]`·`[CI]`·`[CD]`, 아니면 `[공통]`), ② PR 제목 `[ ]`에는 **작업 타입**(`[Refactor]`·`[Feat]`·`[Fix]` 등)을 적는다. ③ 이슈에서 작업 타입은 **`--label`**(repo 라벨), GitHub Issue Type은 **`--type`**(org 정의 `Task`/`Bug`/`Feature`)으로 각각 지정한다. 셋을 혼동하지 말 것. **제목 = 공간, label = 행위**가 대원칙이다.
+- **Assignees:** 이슈는 현재 작업 중인 사용자를 담당자로 지정한다. `gh issue create`에 `--assignee @me`를 붙이면 현재 gh 인증 계정(`gh api user --jq .login`로 확인 가능)이 자동 지정된다.
+- 본문은 템플릿 섹션(📝 요약 / 📌 상세 / 👀 참고 / ✅ 완료 조건)을 채운다. 완료 조건은 `- [ ]` 미체크 체크박스로(앞으로 만족해야 할 조건).
+- 팀 컨벤션(`docs/backend-convention.md` 단일 출처, `CLAUDE.md` 아키텍처) 용어를 쓴다.
+- 본문을 임시 파일에 쓴 뒤 생성한다:
+```
+cat > /tmp/issue_body.md << 'EOF'
+... 본문 ...
+EOF
+gh issue create --title "[공간] 제목" --label <템플릿라벨> --type <IssueType> --assignee @me --body-file /tmp/issue_body.md
+```
+  - `--title`의 `[ ]`에는 **공간**(위 표), `--label`에는 템플릿의 `labels:` 값(작업 타입)을 넣는다(`gh label list`로 존재 확인 가능).
+  - `--type`에는 위 매핑표의 **GitHub Issue Type**(`Task`/`Bug`/`Feature`)을 넣는다. `--label`(작업 타입)과 `--type`(Issue Type)은 별개 축이라 이름이 달라도 된다(예: label `fix` ↔ Issue Type `Bug`).
+  - `--assignee @me`로 현재 사용자를 담당자로 지정한다.
+
+### 4단계: 선행 이슈가 있으면 blocked-by 설정 (공통)
+**먼저 끝나야 하는 이슈가 있으면 반드시 `blocked-by` 관계를 건다.** 본문에 "선행: #N"이라고 적기만 하면 아무도 안 본다. GitHub 의존성으로 걸어야 담당자가 이슈를 열었을 때 상단에 "Blocked by N issues"로 보인다.
+
+- **판단 기준:** 이 이슈를 먼저 진행하면 **선행 이슈의 작업·결과가 무효가 되거나 방해받는가?** 그렇다면 blocked-by다.
+  - 예: rate limit(#423)을 부하 측정(#344·#348·#403)보다 먼저 머지하면 429로 포화점 측정이 불가능해진다 → #423 blocked by #344·#348·#403
+  - 단순 "관련 있음"은 blocked-by가 아니다. 본문 링크로 충분하다.
+- **담당자가 다르면 특히 중요하다.** 순서를 코드가 아니라 커뮤니케이션으로 지키려 하면 반드시 샌다.
+- **parent(sub-issue) 관계는 설정하지 않는다.** 위 "과도한 분할 금지"의 자식 이슈 X 원칙과 충돌한다. 계층이 아니라 **순서**만 표현한다.
+
+`gh` CLI에 전용 명령이 없으므로 GraphQL `addBlockedBy` mutation을 쓴다:
+```
+# 1. 이슈 node ID 조회 (차단당하는 이슈 + 선행 이슈 각각)
+gh api graphql -f query='{ repository(owner:"TicketRush", name:"TicketRush-backend") {
+  issue(number: 423) { id } } }' --jq '.data.repository.issue.id'
+
+# 2. blocked-by 설정 (issueId = 차단당하는 쪽, blockingIssueId = 선행 이슈)
+gh api graphql -f query='mutation($issueId: ID!, $blockingIssueId: ID!) {
+  addBlockedBy(input: {issueId: $issueId, blockingIssueId: $blockingIssueId}) {
+    issue { number } blockingIssue { number } } }' \
+  -f issueId="<차단당하는 이슈 ID>" -f blockingIssueId="<선행 이슈 ID>"
+
+# 3. 검증
+gh api graphql -f query='{ repository(owner:"TicketRush", name:"TicketRush-backend") {
+  issue(number: 423) { blockedBy(first: 10) { nodes { number title state } } } } }'
+```
+왜 blocked-by를 걸었는지는 **차단당하는 이슈에 코멘트로 근거를 남긴다**(어떤 측정/작업이 왜 무효가 되는지, 파일·라인 근거 포함). 관계만 걸어두면 담당자가 이유를 몰라 그냥 풀어버린다.
+
+## 보고 형식
+1. 사용한 모드(A/B) + 선택한 템플릿과 그 이유 (1줄)
+2. 생성한 이슈 제목 + 지정한 **label · Issue Type**
+3. **생성된 이슈 URL/번호** (`gh issue create` 출력)
+4. 설정한 **blocked-by 관계**(있으면) — `#N blocked by #A, #B` 형식
+
+B 모드로 만든 이슈는 곧바로 `{이슈 label}/{번호}` 브랜치를 따 작업을 시작하거나 `/dev-cycle {번호}`로 이어갈 수 있음을 안내한다.

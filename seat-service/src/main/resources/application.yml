@@ -1,0 +1,83 @@
+server:
+  port: 8086
+  forward-headers-strategy: framework
+
+spring:
+  profiles:
+    active: ${SPRING_PROFILES_ACTIVE:local}
+  application:
+    name: seat-service
+  jpa:
+    open-in-view: false
+  data:
+    redis:
+      # Lettuce 기본 커맨드 타임아웃(60s)은 hang형 Redis 장애 시 좌석 락 경로를 60초 물린다.
+      # fail-closed는 '거절'이지 '무한 대기'가 아니다(ADR 0008) — 이 경로는 Kafka 리스너 스레드를
+      # 잡으므로, 물려 있는 동안 poll이 밀려 컨슈머 리밸런싱으로 장애가 번진다. 짧게 자른다.
+      # performance-service(application.yml:16-20)가 같은 이유로 먼저 적용한 값이다.
+      #
+      # 주의 — 이 값이 곧 실패까지의 벽시계 시간은 아니다. Redisson 스타터는 이 timeout을 응답
+      # 타임아웃으로 매핑하지만 자체 retryAttempts(기본 3)·retryInterval(기본 1.5s)을 별도로 갖는다.
+      # 즉 최악은 1초가 아니라 수 초다. 60초보다 훨씬 낫지만 "1초 차단"으로 읽으면 안 된다.
+      #
+      # 트레이드오프: 응답 타임아웃이 짧으면 부하·GC 스파이크에 unlock이 타임아웃날 수 있고,
+      # 그러면 좌석 락이 SeatLockUseCase.LOCK_TTL_MINUTES(5분)까지 잔존해 그 좌석이 5분간 잠긴다.
+      # performance-service가 ShedLock(1분) 기준으로 수용한 것과 같은 성질이되 잔존 시간이 5배다.
+      # 정합성은 깨지지 않고(#427의 DB @Version) 가용성만 손해라 수용한다.
+      timeout: 1s
+      connect-timeout: 1s
+
+custom:
+  global:
+    internalBackUrl: ${INTERNAL_BACK_URL:http://localhost:${server.port:8086}}
+  swagger:
+    serverUrl: ${SWAGGER_SERVER_URL:http://localhost:8080}
+  security:
+    # 서비스 간 내부 API 호출에 사용하는 전용 토큰
+    # (게이트웨이↔서비스 공유 시크릿 재사용, performance/user/auth 서비스와 동일).
+    internal-token: ${INTERNAL_API_TOKEN:test-internal-token}
+    permit-all: false
+    permit-urls:
+      # ========== 개발 도구 ==========
+      - /h2-console/**
+      - /swagger-ui/**
+      - /v3/api-docs/**
+      - /
+      - /favicon.ico
+      - /error
+
+springdoc:
+  api-docs:
+    enabled: true
+  swagger-ui:
+    enabled: false
+
+gateway:
+  internal-token: ${GATEWAY_INTERNAL_TOKEN:test-token}
+
+app:
+  seat:
+    release:
+      # 청크의 첫 좌석에 걸린 행 잠금은 나머지 좌석의 UPDATE를 모두 지나 청크 커밋까지 유지된다.
+      # 그 사이 같은 좌석의 결제 확정(confirmSoldById)이 블로킹되므로, 러시 중 경합을 줄이려 청크를 짧게 끊는다.
+      # 대신 max-chunks를 함께 올려 tick당 처리 상한(2000건)은 유지한다. 이 경로는 Redis 만료 리스너가
+      # 못 살린 좌석을 쓸어담는 fallback이라, 정작 일해야 하는 순간이 곧 대량 만료가 밀린 순간이다.
+      chunk-size: 25
+      max-chunks: 80
+  event-publisher:
+    type: outbox
+  outbox:
+    aggregate-types:
+      - Seat
+    batch-size: 100
+    max-retries: 3
+    retention-hours: 72
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health, info, prometheus
+  endpoint:
+    health:
+      show-details: never

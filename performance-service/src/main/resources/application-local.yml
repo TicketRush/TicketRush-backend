@@ -1,0 +1,29 @@
+springdoc:
+  swagger-ui:
+    enabled: true
+  servers:
+    - url: http://localhost:8083
+      description: 로컬 서버
+
+spring:
+  datasource:
+    url: jdbc:mysql://localhost:3306/ticket_rush
+    username: ${MYSQL_USERNAME}
+    password: ${MYSQL_PASSWORD}
+    driver-class-name: com.mysql.cj.jdbc.Driver
+  jpa:
+    hibernate:
+      ddl-auto: ${SPRING_JPA_HIBERNATE_DDL_AUTO:update}
+  kafka:
+    bootstrap-servers: localhost:29092
+  data:
+    redis:
+      host: ${REDIS_HOST:localhost}
+      port: ${REDIS_PORT:6379}
+  cloud:
+    aws:
+      credentials:
+        access-key: local-dummy-key
+        secret-key: local-dummy-secret
+      s3:
+        bucket: ticket-rush-local-bucket

@@ -4,15 +4,25 @@ plugins {
     id "com.diffplug.spotless" version "8.1.0"
 }
 
-// 루트 checkstyle(Java 21) 제외할 서브프로젝트. 여기서 먼저 설정해야 평가 순서와 무관하게 동작함
-def checkstyleExcludeProjects = ['kafka-connector'] as Set
+// 1. 모든 프로젝트에서 라이브러리를 다운로드할 수 있도록 설정
+allprojects {
+    repositories {
+        mavenCentral()
+    }
+}
+
+// 2. (선택) 루트 checkstyle 제외할 서브프로젝트 지정
+//def checkstyleExcludeProjects = ['kafka-connector'] as Set
 
 subprojects { subproject ->
     apply plugin: 'java'
     apply plugin: 'com.diffplug.spotless'
-    if (checkstyleExcludeProjects.contains(subproject.name)) {
-        subproject.ext.skipCheckstyle = true
-    }
+
+    // 특정 모듈 checkstyle 제외 로직 (사용 시 활성화)
+//    if (checkstyleExcludeProjects.contains(subproject.name)) {
+//        subproject.ext.skipCheckstyle = true
+//    }
+
     if (!subproject.findProperty('skipCheckstyle')) {
         apply plugin: 'checkstyle'
         checkstyle {
@@ -22,6 +32,7 @@ subprojects { subproject ->
             ignoreFailures = false
             configProperties = ['charset': 'UTF-8']
         }
+
         tasks.withType(Checkstyle).configureEach {
             reports {
                 xml.required = false
@@ -33,16 +44,8 @@ subprojects { subproject ->
     spotless {
         java {
             googleJavaFormat("1.33.0")
-            // Spotless와 Checkstyle 충돌나는 파일 제외
-            targetExclude(
-                    "**/OAuthUserInfo.java",
-                    "**/MemberSellerController.java",
-                    "**/generated/querydsl/**",
-            )
-            // diff 안정화를 위해 하기 옵션 추가
             trimTrailingWhitespace() // 줄 끝 공백 제거
             endWithNewline() // 파일 끝에 newline 강제
         }
     }
-
 }

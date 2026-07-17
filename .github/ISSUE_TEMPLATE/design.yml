@@ -1,0 +1,59 @@
+name: Design Template
+description: 피그마 디자인 작업 시 사용하는 이슈 템플릿
+title: "[Design/유형] {작업 내용 요약} "
+labels: ["design"]
+type: "Task"
+
+body:
+  - type: input
+    id: summary
+    attributes:
+      label: "📝 어떤 디자인을 진행하나요?"
+      description: "작업할 디자인 내용을 한 줄로 설명해주세요."
+      placeholder: "ex. 마이페이지 사용자 정보 수정 화면 UI 디자인"
+    validations:
+      required: true
+
+  - type: textarea
+    id: details
+    attributes:
+      label: "📌 작업할 내용"
+      description: "구체적인 작업 내용을 작성해주세요."
+      placeholder: |
+        ex.
+        - 마이페이지 정보 수정 폼 와이어프레임 작성
+        - 버튼 Hover, Disabled 등 상태(State) 디자인 추가
+        - 모바일 해상도 대응 반응형 디자인
+    validations:
+      required: true
+
+  - type: input
+    id: figma_link
+    attributes:
+      label: "🎨 Figma 링크"
+      description: "작업 중이거나 완료된 피그마 파일/페이지 링크를 입력해주세요."
+      placeholder: "ex. https://www.figma.com/file/..."
+    validations:
+      required: false
+
+  - type: textarea
+    id: additional
+    attributes:
+      label: "👀 추가 설명 및 참고 자료"
+      description: "디자인 배경, 벤치마킹 자료, 기획서(Notion 등) 링크를 적어주세요."
+      placeholder: "ex. 타 서비스의 마이페이지 UI 참고 구조 적용"
+    validations:
+      required: false
+
+  - type: textarea
+    id: acceptance
+    attributes:
+      label: "✅ 완료 조건"
+      description: "어떤 상태가 되면 이 이슈가 완료인지 작성해주세요."
+      placeholder: |
+        ex.
+        - [ ] 피그마 컴포넌트화 완료
+        - [ ] 개발자를 위한 여백, 색상 등 Handoff 메모 작성
+        - [ ] SVG 아이콘 등 에셋 추출 준비 완료
+    validations:
+      required: false

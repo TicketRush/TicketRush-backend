@@ -1,0 +1,28 @@
+global:
+  scrape_interval: 15s
+
+# 앱은 docker-compose 밖 호스트에서 직접 실행되므로 host.docker.internal로 스크랩한다.
+# 컨테이너화(#245, ECR 배포) 이후에는 타겟을 서비스명 기반(예: user-service:8081)으로 전환한다.
+# 스택별 대시보드 분리(#45)를 위해 gateway(WebFlux/리액티브)와 나머지(MVC)를 별도 job으로 나눈다.
+scrape_configs:
+  - job_name: 'gateway'
+    metrics_path: /actuator/prometheus
+    static_configs:
+      - targets:
+          - 'host.docker.internal:8080'  # gateway-service (WebFlux)
+        labels:
+          stack: reactive
+
+  - job_name: 'ticketrush-services'
+    metrics_path: /actuator/prometheus
+    static_configs:
+      - targets:
+          - 'host.docker.internal:8081'  # user-service
+          - 'host.docker.internal:8082'  # auth-service
+          - 'host.docker.internal:8083'  # performance-service
+          - 'host.docker.internal:8084'  # booking-service
+          - 'host.docker.internal:8085'  # payment-service
+          - 'host.docker.internal:8086'  # seat-service
+          - 'host.docker.internal:8087'  # ticket-service
+        labels:
+          stack: mvc

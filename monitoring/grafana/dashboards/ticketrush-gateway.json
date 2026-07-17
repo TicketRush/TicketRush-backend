@@ -1,0 +1,97 @@
+{
+  "annotations": { "list": [] },
+  "editable": true,
+  "graphTooltip": 1,
+  "schemaVersion": 39,
+  "tags": ["ticketrush", "gateway", "webflux"],
+  "title": "TicketRush - Gateway (WebFlux)",
+  "uid": "ticketrush-gateway",
+  "time": { "from": "now-1h", "to": "now" },
+  "refresh": "30s",
+  "templating": {
+    "list": [
+      {
+        "name": "instance",
+        "label": "Instance",
+        "type": "query",
+        "datasource": { "type": "prometheus", "uid": "prometheus" },
+        "query": { "query": "label_values(jvm_memory_used_bytes{job=\"gateway\"}, instance)", "refId": "vars" },
+        "refresh": 2,
+        "includeAll": true,
+        "multi": true,
+        "sort": 1,
+        "current": { "text": "All", "value": "$__all" }
+      }
+    ]
+  },
+  "panels": [
+    {
+      "id": 1,
+      "title": "JVM Heap Used",
+      "type": "timeseries",
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 0 },
+      "fieldConfig": { "defaults": { "unit": "bytes" }, "overrides": [] },
+      "targets": [
+        { "refId": "A", "expr": "sum by (instance) (jvm_memory_used_bytes{job=\"gateway\", area=\"heap\", instance=~\"$instance\"})", "legendFormat": "{{instance}}" }
+      ]
+    },
+    {
+      "id": 2,
+      "title": "GC Pause (rate)",
+      "type": "timeseries",
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 0 },
+      "fieldConfig": { "defaults": { "unit": "s" }, "overrides": [] },
+      "targets": [
+        { "refId": "A", "expr": "sum by (instance) (rate(jvm_gc_pause_seconds_sum{job=\"gateway\", instance=~\"$instance\"}[5m]))", "legendFormat": "{{instance}}" }
+      ]
+    },
+    {
+      "id": 3,
+      "title": "HTTP Request Rate (WebFlux)",
+      "type": "timeseries",
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 8 },
+      "fieldConfig": { "defaults": { "unit": "reqps" }, "overrides": [] },
+      "targets": [
+        { "refId": "A", "expr": "sum by (instance) (rate(http_server_requests_seconds_count{job=\"gateway\", instance=~\"$instance\"}[5m]))", "legendFormat": "{{instance}}" }
+      ]
+    },
+    {
+      "id": 4,
+      "title": "HTTP Avg Latency (WebFlux)",
+      "type": "timeseries",
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 8 },
+      "fieldConfig": { "defaults": { "unit": "s" }, "overrides": [] },
+      "targets": [
+        { "refId": "A", "expr": "sum by (instance) (rate(http_server_requests_seconds_sum{job=\"gateway\", instance=~\"$instance\"}[5m])) / sum by (instance) (rate(http_server_requests_seconds_count{job=\"gateway\", instance=~\"$instance\"}[5m]))", "legendFormat": "{{instance}}" }
+      ]
+    },
+    {
+      "id": 5,
+      "title": "HTTP Responses by Status",
+      "type": "timeseries",
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 16 },
+      "fieldConfig": { "defaults": { "unit": "reqps" }, "overrides": [] },
+      "targets": [
+        { "refId": "A", "expr": "sum by (status) (rate(http_server_requests_seconds_count{job=\"gateway\", instance=~\"$instance\"}[5m]))", "legendFormat": "{{status}}" }
+      ]
+    },
+    {
+      "id": 6,
+      "title": "Reactive Executor Threads",
+      "type": "timeseries",
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 16 },
+      "fieldConfig": { "defaults": { "unit": "short" }, "overrides": [] },
+      "targets": [
+        { "refId": "A", "expr": "sum by (instance) (executor_active_threads{job=\"gateway\", instance=~\"$instance\"})", "legendFormat": "active {{instance}}" },
+        { "refId": "B", "expr": "sum by (instance) (executor_pool_size_threads{job=\"gateway\", instance=~\"$instance\"})", "legendFormat": "pool size {{instance}}" },
+        { "refId": "C", "expr": "sum by (instance) (executor_queued_tasks{job=\"gateway\", instance=~\"$instance\"})", "legendFormat": "queued {{instance}}" }
+      ]
+    }
+  ]
+}

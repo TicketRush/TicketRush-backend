@@ -1,0 +1,28 @@
+custom:
+  swagger:
+    serverUrl: ${SWAGGER_SERVER_URL:http://localhost:8080}
+    description: "Local Server"
+
+  cors:
+    enabled: true
+    allowed-origins:
+      - http://localhost:3000
+      - http://127.0.0.1:3000
+      - http://localhost:8080
+      - http://127.0.0.1:8080
+
+services:
+  user:
+    host: localhost
+  auth:
+    host: localhost
+  performance:
+    host: localhost
+  booking:
+    host: localhost
+  payment:
+    host: localhost
+  seat:
+    host: localhost
+  ticket:
+    host: localhost

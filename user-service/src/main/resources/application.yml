@@ -1,0 +1,61 @@
+server:
+  port: 8081
+  forward-headers-strategy: framework
+
+spring:
+  profiles:
+    active: ${SPRING_PROFILES_ACTIVE:local}
+  application:
+    name: user-service
+  # user-service는 Redis를 쓰지 않는다. common의 redis 스타터가 전이돼 오토컨피그가 뜨는 것을 막는다(#425).
+  autoconfigure:
+    exclude:
+      - org.springframework.boot.autoconfigure.data.redis.RedisAutoConfiguration
+  jpa:
+    open-in-view: false
+
+service:
+  auth:
+    url: ${AUTH_SERVICE_URL:http://localhost:8082}
+  http:
+    connect-timeout-ms: ${SERVICE_HTTP_CONNECT_TIMEOUT_MS:3000}
+    read-timeout-ms: ${SERVICE_HTTP_READ_TIMEOUT_MS:10000}
+
+app:
+  event-publisher:
+    type: kafka
+
+custom:
+  global:
+    internalBackUrl: ${INTERNAL_BACK_URL:http://localhost:${server.port:8081}}
+  swagger:
+    serverUrl: ${SWAGGER_SERVER_URL:http://localhost:8080}
+  security:
+    internal-token: ${INTERNAL_API_TOKEN}
+    permit-all: false
+    permit-urls:
+      # ========== 개발 도구 ==========
+      - /h2-console/**
+      - /swagger-ui/**
+      - /v3/api-docs/**
+      - /
+      - /favicon.ico
+      - /error
+
+springdoc:
+  api-docs:
+    enabled: true
+  swagger-ui:
+    enabled: false
+
+gateway:
+  internal-token: ${GATEWAY_INTERNAL_TOKEN}
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health, info, prometheus
+  endpoint:
+    health:
+      show-details: never

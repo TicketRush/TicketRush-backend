@@ -1,0 +1,169 @@
+package com.ticketrush.boundedcontext.seat.app.usecase;
+
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.mockito.BDDMockito.given;
+import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.verifyNoInteractions;
+
+import com.ticketrush.boundedcontext.seat.app.support.SeatStatusEventPublisher;
+import com.ticketrush.boundedcontext.seat.domain.entity.Seat;
+import com.ticketrush.boundedcontext.seat.out.repository.SeatRepository;
+import com.ticketrush.global.constants.MetricNames;
+import com.ticketrush.global.exception.BusinessException;
+import com.ticketrush.global.status.ErrorStatus;
+import com.ticketrush.global.types.SeatStatus;
+import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
+import java.time.LocalDateTime;
+import java.util.Optional;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.DisplayName;
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.Mock;
+import org.mockito.junit.jupiter.MockitoExtension;
+
+@ExtendWith(MockitoExtension.class)
+class SeatHoldUseCaseTest {
+
+  private SeatHoldUseCase seatHoldUseCase;
+
+  @Mock private SeatRepository seatRepository;
+  @Mock private SeatStatusEventPublisher seatStatusEventPublisher;
+
+  private SimpleMeterRegistry meterRegistry;
+
+  @BeforeEach
+  void setUp() {
+    meterRegistry = new SimpleMeterRegistry();
+    seatHoldUseCase = new SeatHoldUseCase(seatRepository, seatStatusEventPublisher, meterRegistry);
+  }
+
+  @Test
+  @DisplayName("성공: 좌석이 존재하고 만료 시간이 유효하면 HOLD 상태로 변경된다")
+  void execute_success() {
+    // given
+    Long seatId = 1L;
+    String bookingNumber = "BOOK-1234";
+    LocalDateTime expiredAt = LocalDateTime.now().plusMinutes(5);
+
+    // mock() 대신 실제 Seat 객체 생성 (초기 상태: AVAILABLE)
+    Seat seat =
+        Seat.builder()
+            .seatLayoutId(10L)
+            .performanceId(100L)
+            .seatNumber("A-01")
+            .seatStatus(SeatStatus.AVAILABLE)
+            .build();
+
+    given(seatRepository.findById(seatId)).willReturn(Optional.of(seat));
+
+    // when
+    boolean held = seatHoldUseCase.execute(seatId, expiredAt, bookingNumber);
+
+    // then
+    // verify(mock) 대신 실제 객체의 상태가 변했는지 직접 확인
+    assertThat(held).isTrue();
+    assertThat(seat.getSeatStatus()).isEqualTo(SeatStatus.HOLD);
+    assertThat(seat.getHoldExpiredAt()).isEqualTo(expiredAt);
+    assertThat(seat.getBookingNumber()).isEqualTo(bookingNumber);
+    verify(seatStatusEventPublisher).publishAfterCommit(seat);
+    assertThat(
+            meterRegistry
+                .counter(MetricNames.SEAT_HOLD, MetricNames.TAG_RESULT, MetricNames.RESULT_SUCCESS)
+                .count())
+        .isEqualTo(1.0);
+  }
+
+  @Test
+  @DisplayName("미가용: 이미 선점/판매된 좌석은 예외 없이 false를 반환하고 상태를 바꾸지 않는다")
+  void execute_returns_false_when_not_available() {
+    // given: 이미 SOLD된 좌석(미가용)
+    Long seatId = 1L;
+    LocalDateTime expiredAt = LocalDateTime.now().plusMinutes(5);
+    Seat seat =
+        Seat.builder()
+            .seatLayoutId(10L)
+            .performanceId(100L)
+            .seatNumber("A-01")
+            .seatStatus(SeatStatus.SOLD)
+            .build();
+
+    given(seatRepository.findById(seatId)).willReturn(Optional.of(seat));
+
+    // when
+    boolean held = seatHoldUseCase.execute(seatId, expiredAt, "BOOK-1234");
+
+    // then: 예외를 던지지 않고 false를 반환한다(호출부가 보상 이벤트를 발행하도록). 상태·발행 없음.
+    assertThat(held).isFalse();
+    assertThat(seat.getSeatStatus()).isEqualTo(SeatStatus.SOLD);
+    verifyNoInteractions(seatStatusEventPublisher);
+    assertThat(
+            meterRegistry
+                .counter(
+                    MetricNames.SEAT_HOLD, MetricNames.TAG_RESULT, MetricNames.RESULT_UNAVAILABLE)
+                .count())
+        .isEqualTo(1.0);
+  }
+
+  @Test
+  @DisplayName("실패: 예매 번호가 없으면 BusinessException(SEAT_BOOKING_NUMBER_REQUIRED)이 발생한다")
+  void execute_fail_booking_number_required() {
+    // given
+    Long seatId = 1L;
+    LocalDateTime expiredAt = LocalDateTime.now().plusMinutes(5);
+
+    Seat seat =
+        Seat.builder()
+            .seatLayoutId(10L)
+            .performanceId(100L)
+            .seatNumber("A-01")
+            .seatStatus(SeatStatus.AVAILABLE)
+            .build();
+
+    given(seatRepository.findById(seatId)).willReturn(Optional.of(seat));
+
+    // when & then
+    assertThatThrownBy(() -> seatHoldUseCase.execute(seatId, expiredAt, " "))
+        .isInstanceOf(BusinessException.class)
+        .extracting("errorStatus")
+        .isEqualTo(ErrorStatus.SEAT_BOOKING_NUMBER_REQUIRED);
+
+    assertThat(seat.getSeatStatus()).isEqualTo(SeatStatus.AVAILABLE);
+    verifyNoInteractions(seatStatusEventPublisher);
+  }
+
+  @Test
+  @DisplayName("실패: 만료 시간이 과거일 경우 BusinessException(SEAT_HOLD_TIME_INVALID)이 발생한다")
+  void execute_fail_invalid_expired_at() {
+    // given
+    Long seatId = 1L;
+    LocalDateTime pastTime = LocalDateTime.now().minusMinutes(5); // 과거 시간 세팅
+
+    Seat seat = Seat.builder().seatStatus(SeatStatus.AVAILABLE).build();
+
+    given(seatRepository.findById(seatId)).willReturn(Optional.of(seat));
+
+    // when & then
+    assertThatThrownBy(() -> seatHoldUseCase.execute(seatId, pastTime, "BOOK-1234"))
+        .isInstanceOf(BusinessException.class)
+        .extracting("errorStatus")
+        .isEqualTo(ErrorStatus.SEAT_HOLD_TIME_INVALID);
+  }
+
+  @Test
+  @DisplayName("실패: 좌석이 존재하지 않으면 BusinessException(SEAT_NOT_FOUND)이 발생한다")
+  void execute_fail_seat_not_found() {
+    // given
+    Long seatId = 1L;
+    LocalDateTime expiredAt = LocalDateTime.now().plusMinutes(5);
+
+    given(seatRepository.findById(seatId)).willReturn(Optional.empty());
+
+    // when & then
+    assertThatThrownBy(() -> seatHoldUseCase.execute(seatId, expiredAt, "BOOK-1234"))
+        .isInstanceOf(BusinessException.class)
+        .extracting("errorStatus")
+        .isEqualTo(ErrorStatus.SEAT_NOT_FOUND);
+  }
+}

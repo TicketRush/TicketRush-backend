@@ -1,0 +1,31 @@
+{
+  "version": "2.0.0",
+  "tasks": [
+    {
+      "label": "Claude Mascot: Start",
+      "type": "shell",
+      "command": "python3 ~/.claude/mascot/server.py",
+      "isBackground": true,
+      "problemMatcher": [],
+      "runOptions": {
+        "runOn": "folderOpen"
+      },
+      "presentation": {
+        "group": "mascot",
+        "reveal": "never",
+        "panel": "dedicated",
+        "showReuseMessage": false
+      }
+    },
+    {
+      "label": "Claude Mascot: Open Browser",
+      "type": "shell",
+      "command": "open http://localhost:7823",
+      "dependsOn": "Claude Mascot: Start",
+      "problemMatcher": [],
+      "presentation": {
+        "reveal": "never"
+      }
+    }
+  ]
+}

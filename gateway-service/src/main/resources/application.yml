@@ -1,0 +1,114 @@
+server:
+  port: 8080
+
+spring:
+  application:
+    name: gateway-service
+  profiles:
+    active: ${SPRING_PROFILES_ACTIVE:local}
+
+  cloud:
+    gateway:
+      server:
+        webflux:
+          routes:
+            - id: user-service
+              uri: http://${services.user.host}:8081
+              predicates:
+                - Path=/api/v1/user/**,/v3/api-docs/user
+              filters:
+                - RewritePath=/v3/api-docs/user,/v3/api-docs
+
+            - id: auth-service
+              uri: http://${services.auth.host}:8082
+              predicates:
+                - Path=/api/v1/auth/**,/api/v1/dev/auth/**,/v3/api-docs/auth
+              filters:
+                - RewritePath=/v3/api-docs/auth,/v3/api-docs
+
+            - id: performance-service
+              uri: http://${services.performance.host}:8083
+              predicates:
+                - Path=/api/v1/performance/**,/v3/api-docs/performance
+              filters:
+                - RewritePath=/v3/api-docs/performance,/v3/api-docs
+
+            - id: booking-service
+              uri: http://${services.booking.host}:8084
+              predicates:
+                - Path=/api/v1/booking/**,/v3/api-docs/booking
+              filters:
+                - RewritePath=/v3/api-docs/booking,/v3/api-docs
+
+            - id: payment-service
+              uri: http://${services.payment.host}:8085
+              predicates:
+                - Path=/api/v1/payment/**,/v3/api-docs/payment
+              filters:
+                - RewritePath=/v3/api-docs/payment,/v3/api-docs
+
+            - id: seat-sse-service
+              uri: http://${services.seat.host}:8086
+              predicates:
+                - Path=/api/v1/seat/*/seat-status/stream
+              metadata:
+                response-timeout: -1
+                connect-timeout: 5000
+
+            - id: seat-service
+              uri: http://${services.seat.host}:8086
+              predicates:
+                - Path=/api/v1/seat/**,/v3/api-docs/seat
+              filters:
+                - RewritePath=/v3/api-docs/seat,/v3/api-docs
+
+            - id: ticket-service
+              uri: http://${services.ticket.host}:8087
+              predicates:
+                - Path=/api/v1/ticket/**,/v3/api-docs/ticket
+              filters:
+                - RewritePath=/v3/api-docs/ticket,/v3/api-docs
+
+# 각 서비스의 API docs를 Gateway에서 통합
+springdoc:
+  swagger-ui:
+    disable-swagger-default-url: true
+    urls:
+      - name: user-service
+        url: /v3/api-docs/user
+      - name: auth-service
+        url: /v3/api-docs/auth
+      - name: performance-service
+        url: /v3/api-docs/performance
+      - name: booking-service
+        url: /v3/api-docs/booking
+      - name: payment-service
+        url: /v3/api-docs/payment
+      - name: seat-service
+        url: /v3/api-docs/seat
+      - name: ticket-service
+        url: /v3/api-docs/ticket
+
+jwt:
+  secret: ${JWT_SECRET}
+  access-token-expiration: 3600000      # 1시간(ms)
+  refresh-token-expiration: 1209600000  # 14일(ms)
+
+gateway:
+  internal-token: ${GATEWAY_INTERNAL_TOKEN:test-token}
+
+custom:
+  security:
+    permit-all: false
+    permit-urls:
+      - /swagger-ui/**
+      - /v3/api-docs/**
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health, info, prometheus
+  endpoint:
+    health:
+      show-details: never

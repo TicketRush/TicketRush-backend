@@ -16,13 +16,13 @@ jobs:
           echo "PR Title: $TITLE"
 
           # 다중 이슈 번호를 허용하는 정규표현식 (예: #1, 2, 4 또는 #1, #2, #3)
-          REGEX='^\[(Feat|Fix|Refactor|Docs|Test|Chore)\] #[0-9]+([, ]+#?[0-9]+)* .+$'
+          REGEX='^\[(Feat|Fix|Refactor|Docs|Test|Chore|Infra)\] #[0-9]+([, ]+#?[0-9]+)* .+$'
 
           if [[ ! "$TITLE" =~ $REGEX ]]; then
             echo "PR 제목 형식이 올바르지 않습니다."
             echo "허용 형식(단일): [Feat] #23 로그인 API 구현"
             echo "허용 형식(다중): [Chore] #1, 2, 4 설정 파일 업데이트"
-            echo "허용 TYPE: Feat, Fix, Refactor, Docs, Test, Chore"
+            echo "허용 TYPE: Feat, Fix, Refactor, Docs, Test, Chore, Infra"
             exit 1
           fi
 

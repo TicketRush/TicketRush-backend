@@ -1,0 +1,41 @@
+spring:
+  datasource:
+    url: jdbc:mysql://${DB_HOST}:${DB_PORT}/${DB_NAME}
+    username: ${MYSQL_USERNAME}
+    password: ${MYSQL_PASSWORD}
+    driver-class-name: com.mysql.cj.jdbc.Driver
+  jpa:
+    hibernate:
+      ddl-auto: validate
+  kafka:
+    bootstrap-servers: ${KAFKA_BOOTSTRAP_SERVERS}
+
+gateway:
+  # 운영은 게이트웨이 내부 토큰을 반드시 주입(base의 test-token 기본값 오버라이드, 미주입 시 fail-fast).
+  internal-token: ${GATEWAY_INTERNAL_TOKEN}
+
+service:
+  ticket:
+    # 결제 취소 경로의 입장권 판정 대상 (#416). 운영은 기본값 없이 반드시 주입(미주입 시 fail-fast).
+    # 반드시 ticket-service '직접' 주소를 주입한다 — 내부 API는 게이트웨이 미라우팅(#367)이라
+    # 게이트웨이 주소로 오설정하면 404가 나 취소가 조용히 전건 503 거부된다.
+    url: ${TICKET_SERVICE_URL}
+
+custom:
+  security:
+    # 서비스 간 내부 API 호출 토큰. 운영은 base의 test 기본값을 오버라이드해 반드시 주입(미주입 시 ticket 조회 401 → 취소 전건 거부).
+    internal-token: ${INTERNAL_API_TOKEN}
+    permit-urls:
+      - /swagger-ui/**
+      - /v3/api-docs/**
+      - /
+      - /favicon.ico
+      - /error
+
+# actuator를 앱 포트에서 분리한다. gateway의 8080은 인터넷에 열려 있고 SecurityConfig가
+# permitAll이라, 분리하지 않으면 /actuator/prometheus 가 인증 없이 공개된다(ADR 0007).
+# 8090은 compose에서 publish 하지 않으므로 같은 네트워크의 Prometheus만 접근할 수 있다.
+# prod 에만 둔다. application.yml 에 두면 로컬에서 앱 8개가 8090을 다퉈 기동이 실패한다.
+management:
+  server:
+    port: 8090

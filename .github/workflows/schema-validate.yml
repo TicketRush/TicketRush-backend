@@ -1,0 +1,139 @@
+name: Schema Validate
+
+# 엔티티와 초기 스키마 스냅샷(deploy/mysql/init/001-ticket-rush-schema.sql)의 drift를 PR 단계에서 잡는다 (#408).
+# local 프로파일은 ddl-auto=update라 로컬에선 증상이 없고, ./gradlew test는 H2를 쓴다.
+# prod(validate)에서만 부팅 실패로 터지므로, 여기서 prod와 동일한 validate 부팅을 재현해 미리 떨어뜨린다.
+#
+# 동작: 빈 MySQL에 스냅샷을 로드한 뒤, 엔티티(테이블 매핑)를 가진 서비스를 ddl-auto=validate 로 부팅한다.
+#   - 스키마가 엔티티와 정합하면 "Started ...Application" 도달 → 통과
+#   - 어긋나면 Hibernate가 SchemaManagementException("missing column [x] in table [y]")으로 조기 실패 → 잡힘
+# gateway(DB 미사용)와 auth(@Entity 0개, 테이블은 user-service 소유)는 검증 대상이 아니라 제외한다.
+# 아래 env 는 부팅에 필요한 더미 시크릿일 뿐 실제 값이 아니다(검증은 스키마 정합성뿐, 외부 연동 없음).
+# 한계: validate 는 컬럼 존재/타입은 잡지만 컬럼 길이·인덱스·유니크/FK·nullable 차이는 검출하지 않는다.
+
+on:
+  pull_request:
+    branches: [ "develop" ]
+    types: [opened, synchronize, reopened]
+
+concurrency:
+  group: schema-validate-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  schema-validate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    services:
+      mysql:
+        image: mysql:8.0
+        env:
+          MYSQL_ROOT_PASSWORD: ci-root-pw
+          MYSQL_DATABASE: ticket_rush
+        ports:
+          - 3306:3306
+        options: >-
+          --health-cmd="mysqladmin ping -h 127.0.0.1 -uroot -pci-root-pw"
+          --health-interval=5s
+          --health-timeout=5s
+          --health-retries=20
+      redis:
+        image: redis:7-alpine
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd="redis-cli ping"
+          --health-interval=5s
+          --health-timeout=5s
+          --health-retries=20
+
+    # 부팅에 필요한 더미 시크릿(실제 값 아님). local 프로파일이 localhost:3306 MySQL / localhost:6379 Redis 를 가리키므로
+    # 그대로 재사용하고, ddl-auto 만 validate 로 덮어쓴다. Kafka 는 validate(EMF 초기화)가 리스너 기동보다 앞서 도달하므로 불필요.
+    env:
+      SPRING_PROFILES_ACTIVE: local
+      SPRING_JPA_HIBERNATE_DDL_AUTO: validate
+      MYSQL_USERNAME: root
+      MYSQL_PASSWORD: ci-root-pw
+      INTERNAL_API_TOKEN: ci-dummy-internal-token
+      GATEWAY_INTERNAL_TOKEN: ci-dummy-gateway-token
+      TICKET_QR_SECRET: ci-dummy-ticket-qr-secret-value-0123456789
+
+    steps:
+      - name: 코드 가져오기
+        uses: actions/checkout@v4
+
+      - name: JDK 21 설치
+        uses: actions/setup-java@v4
+        with:
+          distribution: 'temurin'
+          java-version: '21'
+          cache: 'gradle'
+
+      - name: Gradle 권한 부여
+        run: chmod +x gradlew
+
+      - name: MySQL 클라이언트 설치
+        # 러너 이미지 버전에 따라 mysql CLI 사전설치 여부가 흔들리므로 명시 설치한다.
+        run: sudo apt-get update && sudo apt-get install -y default-mysql-client
+
+      - name: 스키마 스냅샷 로드
+        # GitHub Actions service 컨테이너는 initdb 볼륨 마운트가 제약이 크므로, mysql 클라이언트로 직접 적재한다.
+        run: |
+          mysql -h 127.0.0.1 -P 3306 -uroot -pci-root-pw ticket_rush \
+            < deploy/mysql/init/001-ticket-rush-schema.sql
+          echo "로드된 테이블 수:"
+          mysql -h 127.0.0.1 -P 3306 -uroot -pci-root-pw -N \
+            -e "SELECT COUNT(*) FROM information_schema.tables WHERE table_schema='ticket_rush';"
+
+      - name: bootJar 빌드
+        run: ./gradlew bootJar
+
+      - name: validate 부팅 검증 (엔티티 보유 서비스)
+        run: |
+          set -u
+          # "서비스:포트" 목록. 엔티티(테이블 매핑)를 가진 서비스만. 새 DB 서비스 추가 시 여기에 함께 추가해야 한다.
+          SERVICES="user:18081 performance:18083 seat:18086 booking:18084 payment:18085 ticket:18087"
+          mkdir -p schema-validate-logs
+          FAIL=0
+          for pair in $SERVICES; do
+            svc="${pair%%:*}"
+            port="${pair##*:}"
+            log="schema-validate-logs/${svc}.log"
+            java -jar "${svc}-service/build/libs/${svc}-service-0.0.1-SNAPSHOT.jar" \
+              --server.port="${port}" > "$log" 2>&1 &
+            pid=$!
+            for _ in $(seq 1 120); do
+              if grep -qE "Started .*Application|SchemaManagementException|APPLICATION FAILED TO START" "$log"; then break; fi
+              if ! kill -0 "$pid" 2>/dev/null; then break; fi
+              sleep 1
+            done
+            kill "$pid" 2>/dev/null || true
+            wait "$pid" 2>/dev/null || true
+
+            if grep -qE "Started .*Application" "$log"; then
+              echo "✅ ${svc}: 스키마 검증 통과"
+            elif grep -qE "SchemaManagementException|Schema validation|missing (column|table)|wrong column type" "$log"; then
+              echo "❌ ${svc}: 스키마 drift — 엔티티와 스냅샷(deploy/mysql/init/001-ticket-rush-schema.sql)이 어긋났습니다."
+              grep -nE "SchemaManagementException|Schema validation|missing (column|table)|wrong column type" "$log" | head -20 || true
+              FAIL=1
+            else
+              echo "❌ ${svc}: 부팅 실패(스키마 무관 원인일 수 있음) — 아래 로그 확인."
+              grep -nE "Could not resolve placeholder|APPLICATION FAILED TO START|Caused by:" "$log" | head -20 || true
+              echo "---- ${svc} 로그 tail ----"
+              tail -20 "$log" || true
+              FAIL=1
+            fi
+          done
+          if [ "$FAIL" -ne 0 ]; then
+            echo "스키마 스냅샷이 엔티티를 따라가지 못했거나 검증 부팅이 실패했습니다. 엔티티 변경 시 스냅샷 재생성이 필요합니다(deploy/mysql/README.md 절차)."
+            exit 1
+          fi
+          echo "모든 대상 서비스가 스냅샷 스키마로 validate 부팅에 성공했습니다."
+
+      - name: 검증 로그 업로드
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: schema-validate-logs
+          path: schema-validate-logs/

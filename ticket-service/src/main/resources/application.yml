@@ -1,0 +1,69 @@
+server:
+  port: 8087
+  forward-headers-strategy: framework
+
+spring:
+  profiles:
+    active: ${SPRING_PROFILES_ACTIVE:local}
+  application:
+    name: ticket-service
+  # ticket-service는 Redis를 쓰지 않는다. common의 redis 스타터가 전이돼 오토컨피그가 뜨는 것을 막는다(#425).
+  autoconfigure:
+    exclude:
+      - org.springframework.boot.autoconfigure.data.redis.RedisAutoConfiguration
+  jpa:
+    open-in-view: false
+
+service:
+  booking:
+    url: ${BOOKING_SERVICE_URL:http://localhost:8084}
+  http:
+    connect-timeout-ms: ${SERVICE_HTTP_CONNECT_TIMEOUT_MS:3000}
+    read-timeout-ms: ${SERVICE_HTTP_READ_TIMEOUT_MS:10000}
+
+app:
+  event-publisher:
+    type: kafka
+
+custom:
+  global:
+    internalBackUrl: ${INTERNAL_BACK_URL:http://localhost:${server.port:8087}}
+  swagger:
+    serverUrl: ${SWAGGER_SERVER_URL:http://localhost:8080}
+  security:
+    # 서비스 간 내부 API 호출에 사용하는 전용 토큰
+    # (게이트웨이↔서비스 공유 시크릿 재사용, booking/seat/performance/user/auth 서비스와 동일).
+    internal-token: ${INTERNAL_API_TOKEN:test-internal-token}
+    permit-all: false
+    permit-urls:
+      # ========== 개발 도구 ==========
+      - /h2-console/**
+      - /swagger-ui/**
+      - /v3/api-docs/**
+      - /
+      - /favicon.ico
+      - /error
+
+springdoc:
+  api-docs:
+    enabled: true
+  swagger-ui:
+    enabled: false
+
+gateway:
+  internal-token: ${GATEWAY_INTERNAL_TOKEN:test-token}
+
+ticket:
+  qr:
+    # QR 토큰 서명 시크릿. 기본값을 두지 않아 미주입 시 기동을 실패시킨다(공개 시크릿으로 서명되는 사고 방지).
+    secret: ${TICKET_QR_SECRET}
+    ttl-millis: ${TICKET_QR_TTL_MILLIS:300000}
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health, info, prometheus
+  endpoint:
+    health:
+      show-details: never

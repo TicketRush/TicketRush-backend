@@ -1,0 +1,79 @@
+server:
+  port: 8085
+  forward-headers-strategy: framework
+
+spring:
+  profiles:
+    active: ${SPRING_PROFILES_ACTIVE:local}
+  application:
+    name: payment-service
+  # payment-service는 Redis를 쓰지 않는다. common의 redis 스타터가 전이돼 오토컨피그가 뜨는 것을 막는다(#425).
+  autoconfigure:
+    exclude:
+      - org.springframework.boot.autoconfigure.data.redis.RedisAutoConfiguration
+  jpa:
+    open-in-view: false
+
+app:
+  event-publisher:
+    type: kafka
+
+service:
+  ticket:
+    # 결제 취소 경로의 입장권 사용 여부 판정 전용 (#416).
+    # 내부 API(/api/v1/internal/ticket/**)는 게이트웨이가 라우팅하지 않으므로(#367),
+    # ticket-service '직접' 주소여야 한다. 게이트웨이 주소로 넣으면 라우트 없음 404가 나
+    # 미발급(TICKET_404_001)이 아닌 404로 취소가 전건 503 거부된다.
+    url: ${TICKET_SERVICE_URL:http://localhost:8087}
+    # 단일 행 조회이므로 공용 예산(3s/10s)을 쓰지 않는다 —
+    # ticket-service가 느려질 때 취소 요청이 톰캣 스레드를 오래 붙잡아 결제 경로까지 마르는 것을 막는다.
+    connect-timeout-ms: ${TICKET_HTTP_CONNECT_TIMEOUT_MS:1000}
+    read-timeout-ms: ${TICKET_HTTP_READ_TIMEOUT_MS:2000}
+
+custom:
+  global:
+    internalBackUrl: ${INTERNAL_BACK_URL:http://localhost:${server.port:8085}}
+  swagger:
+    serverUrl: ${SWAGGER_SERVER_URL:http://localhost:8080}
+  security:
+    # 서비스 간 내부 API 호출에 사용하는 전용 토큰
+    # (게이트웨이↔서비스 공유 시크릿 재사용, booking/performance/user/auth 서비스와 동일).
+    internal-token: ${INTERNAL_API_TOKEN:test-internal-token}
+    permit-all: false
+    permit-urls:
+      # ========== 개발 도구 ==========
+      - /h2-console/**
+      - /swagger-ui/**
+      - /v3/api-docs/**
+      - /
+      - /favicon.ico
+      - /error
+
+springdoc:
+  api-docs:
+    enabled: true
+  swagger-ui:
+    enabled: false
+
+gateway:
+  internal-token: ${GATEWAY_INTERNAL_TOKEN:test-token}
+
+payment:
+  pg:
+    stub:
+      enabled: ${PAYMENT_PG_STUB_ENABLED:false}
+    toss:
+      enabled: ${TOSS_PAYMENTS_ENABLED:false}
+      base-url: ${TOSS_PAYMENTS_BASE_URL:https://api.tosspayments.com}
+      secret-key: ${TOSS_PAYMENTS_SECRET_KEY:}
+      connect-timeout-ms: ${TOSS_PAYMENTS_CONNECT_TIMEOUT_MS:3000}
+      read-timeout-ms: ${TOSS_PAYMENTS_READ_TIMEOUT_MS:10000}
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health, info, prometheus
+  endpoint:
+    health:
+      show-details: never

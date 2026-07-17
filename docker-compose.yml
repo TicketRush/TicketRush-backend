@@ -1,0 +1,127 @@
+version: "3.8"
+
+services:
+  redis:
+    image: redis:7-alpine
+    container_name: redis
+    # prod(deploy/docker-compose.prod.yml)와 동일하게 keyspace 만료 이벤트(Ex) 활성화.
+    # 없으면 SeatLockExpirationListener가 안 뜨고 1분 주기 스케줄러 fallback에만 의존한다.
+    command: ["redis-server", "--notify-keyspace-events", "Ex"]
+    ports:
+      - "127.0.0.1:6379:6379"
+    networks:
+      - ticketrush-net
+    volumes:
+      - redis_data:/data
+
+  kafka:
+    image: apache/kafka:3.7.0
+    container_name: kafka
+    ports:
+      - "127.0.0.1:29092:29092"
+    environment:
+      KAFKA_NODE_ID: 1
+      KAFKA_PROCESS_ROLES: broker,controller
+      KAFKA_CLUSTER_ID: MkU3OEVBNTcwNTJENDM2Qk
+
+      KAFKA_CONTROLLER_QUORUM_VOTERS: 1@kafka:9093
+
+      KAFKA_LISTENERS: INTERNAL://0.0.0.0:9092,EXTERNAL://0.0.0.0:29092,CONTROLLER://0.0.0.0:9093
+      KAFKA_ADVERTISED_LISTENERS: INTERNAL://kafka:9092,EXTERNAL://localhost:29092
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: INTERNAL:PLAINTEXT,EXTERNAL:PLAINTEXT,CONTROLLER:PLAINTEXT
+      KAFKA_CONTROLLER_LISTENER_NAMES: CONTROLLER
+      KAFKA_INTER_BROKER_LISTENER_NAME: INTERNAL
+
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
+      KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR: 1
+      KAFKA_TRANSACTION_STATE_LOG_MIN_ISR: 1
+
+      KAFKA_LOG_DIRS: /var/lib/kafka/data
+
+    volumes:
+      - kafka-data:/var/lib/kafka/data
+
+    networks:
+      - ticketrush-net
+
+    healthcheck:
+      test: [ "CMD-SHELL", "/opt/kafka/bin/kafka-topics.sh --bootstrap-server localhost:9092 --list >/dev/null 2>&1 || exit 1" ]
+      interval: 10s
+      timeout: 10s
+      retries: 5
+      start_period: 30s
+
+  prometheus:
+    image: prom/prometheus:v2.53.0
+    container_name: prometheus
+    # command는 이미지 기본 CMD를 통째로 덮으므로 기본 플래그를 재명시해야 한다.
+    # 마지막 줄만 실질 변경: k6 remote-write(-o experimental-prometheus-rw) 수신용 receiver 활성화.
+    command:
+      - "--config.file=/etc/prometheus/prometheus.yml"
+      - "--storage.tsdb.path=/prometheus"
+      - "--web.console.libraries=/usr/share/prometheus/console_libraries"
+      - "--web.console.templates=/usr/share/prometheus/consoles"
+      - "--web.enable-remote-write-receiver"
+    ports:
+      - "127.0.0.1:9090:9090"
+    volumes:
+      - ./monitoring/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - prometheus_data:/prometheus
+    extra_hosts:
+      # Linux에서 host.docker.internal을 호스트 게이트웨이로 매핑(macOS/Windows는 기본 지원).
+      - "host.docker.internal:host-gateway"
+    networks:
+      - ticketrush-net
+
+  grafana:
+    # 11.1.0은 CVE-2024-9264(인증 후 명령 주입) 영향 범위다. 11.1.7이 그 라인의 수정 버전이다.
+    image: grafana/grafana:11.1.7
+    container_name: grafana
+    ports:
+      - "127.0.0.1:3000:3000"
+    environment:
+      GF_SECURITY_ADMIN_USER: ${GRAFANA_ADMIN_USER:-admin}
+      GF_SECURITY_ADMIN_PASSWORD: ${GRAFANA_ADMIN_PASSWORD:-admin}
+      GF_USERS_ALLOW_SIGN_UP: "false"
+    volumes:
+      # 데이터소스·대시보드 프로비저닝(자동 연결/임포트)과 대시보드 JSON 번들
+      - ./monitoring/grafana/provisioning:/etc/grafana/provisioning:ro
+      - ./monitoring/grafana/dashboards:/var/lib/grafana/dashboards:ro
+      - grafana_data:/var/lib/grafana
+    depends_on:
+      - prometheus
+    networks:
+      - ticketrush-net
+
+  # 부하 생성기. run-to-completion이라 상시 기동 대상이 아니므로 profile로 분리한다.
+  #   실행: docker compose run --rm k6 run /scripts/scenarios/seat-layouts.js
+  #   K6_OUT로 remote-write가 기본 적용되어 -o 플래그 없이도 Prometheus로 push된다.
+  #   같은 네트워크라 prometheus엔 서비스명으로, 호스트에서 도는 앱엔 host.docker.internal로 접근.
+  # ponytail: 부하 생성기와 대상이 같은 머신이라 리소스는 공유된다. 큰 부하는 별도 머신에서.
+  k6:
+    image: grafana/k6:latest
+    container_name: k6
+    profiles: ["loadtest"]
+    depends_on:
+      - prometheus
+    environment:
+      K6_OUT: experimental-prometheus-rw
+      K6_PROMETHEUS_RW_SERVER_URL: http://prometheus:9090/api/v1/write
+      K6_PROMETHEUS_RW_TREND_STATS: "p(95),p(99),avg"
+      BASE_URL: http://host.docker.internal:8080
+    volumes:
+      - ./load-test:/scripts:ro
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    networks:
+      - ticketrush-net
+
+volumes:
+  redis_data:
+  kafka-data:
+  prometheus_data:
+  grafana_data:
+
+networks:
+  ticketrush-net:
+    driver: bridge

@@ -1,0 +1,98 @@
+server:
+  port: 8084
+  forward-headers-strategy: framework
+
+spring:
+  profiles:
+    active: ${SPRING_PROFILES_ACTIVE:local}
+  application:
+    name: booking-service
+  jpa:
+    open-in-view: false
+
+service:
+  seat:
+    url: ${SEAT_SERVICE_URL:http://localhost:8086}
+  ticket:
+    url: ${TICKET_SERVICE_URL:http://localhost:8087}
+    # 취소 경로의 입장권 판정 전용. 단일 행 조회이므로 공용 예산(3s/10s)을 쓰지 않는다 —
+    # ticket-service가 느려질 때 취소 요청이 톰캣 스레드를 오래 붙잡아 예매 경로까지 마르는 것을 막는다.
+    connect-timeout-ms: ${TICKET_HTTP_CONNECT_TIMEOUT_MS:1000}
+    read-timeout-ms: ${TICKET_HTTP_READ_TIMEOUT_MS:2000}
+  http:
+    connect-timeout-ms: ${SERVICE_HTTP_CONNECT_TIMEOUT_MS:3000}
+    read-timeout-ms: ${SERVICE_HTTP_READ_TIMEOUT_MS:10000}
+
+custom:
+  global:
+    internalBackUrl: ${INTERNAL_BACK_URL:http://localhost:${server.port:8084}}
+  swagger:
+    serverUrl: ${SWAGGER_SERVER_URL:http://localhost:8080}
+  security:
+    # 서비스 간 내부 API 호출에 사용하는 전용 토큰
+    # (게이트웨이↔서비스 공유 시크릿 재사용, performance/user/auth 서비스와 동일).
+    internal-token: ${INTERNAL_API_TOKEN:test-internal-token}
+    permit-all: false
+    permit-urls:
+      # ========== 개발 도구 ==========
+      - /h2-console/**
+      - /swagger-ui/**
+      - /v3/api-docs/**
+      - /
+      - /favicon.ico
+      - /error
+
+springdoc:
+  api-docs:
+    enabled: true
+  swagger-ui:
+    enabled: false
+
+gateway:
+  internal-token: ${GATEWAY_INTERNAL_TOKEN:test-token}
+
+# DLT 모니터링/운영 알림(#50). 모든 .DLT를 이 서비스 한 곳에서 소비·저장한다.
+# 기본은 비활성이며, 운영 환경에서 환경변수로 켠다(DLT_MONITOR_ENABLED=true, SLACK_ENABLED=true, SLACK_WEBHOOK_URL=...).
+# local/test는 미설정(기본 false)으로 비활성.
+app:
+  booking:
+    # REFUNDING에서 이 시간(분) 이상 멈춘 예매를 고착으로 판정한다 (#397).
+    # Kafka 재시도 소진(약 31초)보다 훨씬 길게 잡아 컨슈머 랙·재배포 중 일시 지연의 오탐을 막는다.
+    refunding-stuck-threshold-minutes: 30
+  event-publisher:
+    type: kafka
+  outbox:
+    aggregate-types:
+      - Booking
+    batch-size: 100
+    max-retries: 3
+    retention-hours: 72
+  dlt:
+    monitor:
+      enabled: ${DLT_MONITOR_ENABLED:false}
+      # dead_letter_record 보존 기간(일). 이 기간이 지난 레코드는 retention 배치가 자동 삭제한다(#307).
+      retention-days: ${DLT_RETENTION_DAYS:30}
+  slack:
+    enabled: ${SLACK_ENABLED:false}
+    webhook-url: ${SLACK_WEBHOOK_URL:}
+  # inbox(멱등 기록) retention(#314). inbox는 전 서비스가 공유하는 전역 테이블이라 이 서비스 한 곳에서만 정리한다.
+  # 기본은 비활성이며, 운영 환경에서 INBOX_RETENTION_ENABLED=true로 켠다. local/test는 미설정(기본 false)으로 비활성.
+  inbox:
+    retention:
+      enabled: ${INBOX_RETENTION_ENABLED:false}
+      # inbox 보존 기간(일). Kafka 재전송/replay 윈도우보다 길게 둬 윈도우 내 재전달도 계속 중복 제거되게 한다.
+      retention-days: ${INBOX_RETENTION_DAYS:30}
+      # 보존 하한(일) = Kafka replay 윈도우. retention-days가 이보다 짧으면 중복 재처리 위험이 있어 purge를 건너뛴다.
+      min-retention-days: ${INBOX_MIN_RETENTION_DAYS:7}
+      # 청크 삭제 배치 크기와 1회 실행당 배치 수 상한. 대용량 단일 트랜잭션 삭제를 피하고 최초 활성화 시 완만히 정리한다.
+      batch-size: ${INBOX_RETENTION_BATCH_SIZE:1000}
+      max-batches-per-run: ${INBOX_RETENTION_MAX_BATCHES_PER_RUN:100}
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health, info, prometheus
+  endpoint:
+    health:
+      show-details: never

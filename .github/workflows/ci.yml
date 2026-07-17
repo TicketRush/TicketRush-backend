@@ -1,0 +1,115 @@
+name: CI
+
+on:
+  pull_request:
+    branches: [ "develop" ]
+    types: [opened, synchronize, reopened]
+
+# 같은 PR에 연속 push 시 진행 중이던 이전 run을 취소해 러너를 절약한다.
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: 코드 가져오기
+        uses: actions/checkout@v4
+
+      - name: JDK 21 설치
+        uses: actions/setup-java@v4
+        with:
+          distribution: 'temurin'
+          java-version: '21'
+          cache: 'gradle'
+
+      - name: Gradle 권한 부여
+        run: chmod +x gradlew
+
+      - name: Spotless Check
+        run: ./gradlew spotlessCheck
+
+      - name: Checkstyle
+        run: ./gradlew checkstyleMain checkstyleTest
+
+      - name: Checkstyle 리포트 업로드
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: checkstyle-report
+          path: build/reports/checkstyle/
+
+      - name: 테스트 실행 (Test)
+        run: ./gradlew test
+
+      - name: 테스트 결과 업로드
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: test-report
+          path: build/reports/tests/test/
+
+      - name: 빌드 실행 (Build)
+        run: ./gradlew build -x test
+
+      # CD는 main 에서만 돌기 때문에, scrape 타깃이 틀렸다는 사실을 실배포 전에는 알 수 없다.
+      # 여기서 정적으로 대조해 PR 단계에서 잡는다(이슈 #380: up=0 인 타깃이 없어야 한다).
+      - name: Prometheus scrape 타깃 검증
+        run: |
+          python3 - <<'PY'
+          import sys, yaml, pathlib
+
+          prom = yaml.safe_load(open("monitoring/prometheus.aws.yml", encoding="utf-8"))
+          comp = yaml.safe_load(open("deploy/docker-compose.prod.yml", encoding="utf-8"))
+
+          MGMT_PORT = "8090"   # prod 프로파일의 management.server.port
+
+          # 배포되는 앱 = compose 에서 SERVER_PORT 를 가진 서비스
+          deployed = {
+              name for name, svc in comp["services"].items()
+              if isinstance(svc.get("environment"), dict)
+              and "SERVER_PORT" in svc["environment"]
+          }
+
+          # 앱 타깃(자기 자신 스크랩은 제외)
+          scraped = {
+              t for job in prom["scrape_configs"] if job["job_name"] != "prometheus"
+              for sc in job["static_configs"] for t in sc["targets"]
+          }
+
+          errors = []
+
+          expected = {f"{name}:{MGMT_PORT}" for name in deployed}
+          for miss in sorted(expected - scraped):
+              errors.append(f"배포되는데 스크랩하지 않는다: {miss}")
+
+          # 앱이 아닌 타깃(redis-exporter 등)도 스크랩한다. 이 검증의 목적은 up=0 인 타깃을 막는 것이므로,
+          # 앱처럼 :8090 을 강제하는 대신 compose 에 그 서비스가 실제로 있는지만 본다.
+          # (exporter 는 SERVER_PORT 가 없어 deployed 에 잡히지 않고, 포트도 앱과 다르다.)
+          services = set(comp["services"])
+          for extra in sorted(scraped - expected):
+              if extra.split(":")[0] not in services:
+                  errors.append(f"스크랩하는데 배포되지 않는다 (up=0 이 된다): {extra}")
+
+          # 타깃 포트가 각 서비스의 실제 management.server.port 와 같은가
+          for name in sorted(deployed):
+              p = pathlib.Path(f"{name.removesuffix('-service')}-service"
+                               "/src/main/resources/application-prod.yml")
+              cfg = yaml.safe_load(p.read_text(encoding="utf-8")) or {}
+              actual = str(cfg.get("management", {}).get("server", {}).get("port", ""))
+              if actual != MGMT_PORT:
+                  errors.append(
+                      f"{p}: management.server.port={actual or '없음'} "
+                      f"인데 scrape 타깃은 {MGMT_PORT} 이다"
+                  )
+
+          if errors:
+              print("Prometheus scrape 설정이 배포 구성과 어긋난다:\n")
+              for e in errors:
+                  print(f"  - {e}")
+              sys.exit(1)
+
+          print(f"OK: 앱 {len(deployed)}개가 모두 :{MGMT_PORT} 로 스크랩된다.")
+          PY

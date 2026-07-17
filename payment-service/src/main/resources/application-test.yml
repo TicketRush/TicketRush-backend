@@ -1,0 +1,8 @@
+app:
+  event-publisher:
+    type: kafka
+
+payment:
+  pg:
+    stub:
+      enabled: true

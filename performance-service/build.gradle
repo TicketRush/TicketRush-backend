@@ -1,0 +1,107 @@
+plugins {
+    id 'java'
+    id 'org.springframework.boot' version '4.0.3'
+    id 'io.spring.dependency-management' version '1.1.7'
+}
+
+group = 'com.ticketrush'
+version = '0.0.1-SNAPSHOT'
+description = 'Demo project for Spring Boot'
+
+java {
+    toolchain {
+        languageVersion = JavaLanguageVersion.of(21)
+    }
+}
+
+configurations {
+    compileOnly {
+        extendsFrom annotationProcessor
+    }
+}
+
+repositories {
+    mavenCentral()
+}
+
+ext {
+    set('springCloudVersion', "2025.1.0")
+    set('queryDslVersion', "6.10.1")
+}
+
+dependencies {
+    implementation project(":common")
+
+    implementation 'org.springframework.kafka:spring-kafka'
+
+    implementation 'org.springframework.data:spring-data-commons'
+    implementation 'org.springframework.boot:spring-boot-starter-actuator'
+    // 공연 목록 캐싱 (#177) — data-redis는 shedlock 전이 의존에 기대지 않도록 명시 선언
+    implementation 'org.springframework.boot:spring-boot-starter-cache'
+    implementation 'org.springframework.boot:spring-boot-starter-data-redis'
+    runtimeOnly 'io.micrometer:micrometer-registry-prometheus'
+    implementation 'org.springframework.boot:spring-boot-starter-data-jpa'
+    implementation 'org.springframework.boot:spring-boot-starter-security'
+    implementation 'org.springframework.boot:spring-boot-starter-webmvc'
+    implementation 'org.springframework.boot:spring-boot-starter-validation'
+
+    /* * [TODO] 스웨거 도입 관련 PR 머지 후 활성화 예정
+     * 현재 활성화 시 Spring Doc - Spring Data Commons 버전 충돌로 인한
+     * BeanCreationException(NoClassDefFoundError) 발생하여 임시 주석 처리함
+     */
+    // implementation 'org.springdoc:springdoc-openapi-starter-webmvc-ui:2.3.0'
+
+    // QueryDSL
+    implementation "io.github.openfeign.querydsl:querydsl-jpa:${queryDslVersion}"
+
+    // MapStruct
+    implementation 'org.mapstruct:mapstruct:1.5.5.Final'
+
+    // ShedLock (스케줄러 분산 락)
+    implementation 'net.javacrumbs.shedlock:shedlock-spring:5.13.0'
+    implementation 'net.javacrumbs.shedlock:shedlock-provider-redis-spring:5.13.0'
+
+    // AWS S3
+    implementation 'io.awspring.cloud:spring-cloud-aws-starter-s3:4.0.0'
+
+    compileOnly 'org.projectlombok:lombok'
+    developmentOnly 'org.springframework.boot:spring-boot-devtools'
+    runtimeOnly 'com.mysql:mysql-connector-j'
+
+    annotationProcessor 'org.springframework.boot:spring-boot-configuration-processor'
+    annotationProcessor "io.github.openfeign.querydsl:querydsl-apt:${queryDslVersion}:jpa"
+    annotationProcessor 'org.projectlombok:lombok'
+    annotationProcessor 'org.projectlombok:lombok-mapstruct-binding:0.2.0'
+    // Lombok과 MapStruct의 순서 및 바인딩을 위한 필수 설정
+    annotationProcessor 'org.mapstruct:mapstruct-processor:1.5.5.Final'
+
+    testImplementation 'com.h2database:h2'
+    // Testcontainers — 공연 목록 캐싱 실 Redis 검증 (#177). 버전은 Boot BOM(testcontainers-bom 2.x) 관리 (payment #422 선례)
+    testImplementation 'org.testcontainers:testcontainers-junit-jupiter'
+    testImplementation 'org.springframework.boot:spring-boot-starter-actuator-test'
+    testImplementation 'org.springframework.boot:spring-boot-starter-data-jpa-test'
+    testImplementation 'org.springframework.boot:spring-boot-starter-security-test'
+    testImplementation 'org.springframework.boot:spring-boot-starter-webmvc-test'
+    testImplementation testFixtures(project(":common"))
+    testRuntimeOnly 'org.junit.platform:junit-platform-launcher'
+
+    // swagger
+    implementation 'org.springdoc:springdoc-openapi-starter-webmvc-ui:3.0.1'
+
+    testAnnotationProcessor "io.github.openfeign.querydsl:querydsl-apt:${queryDslVersion}:jpa"
+    testAnnotationProcessor 'org.projectlombok:lombok'
+    testAnnotationProcessor 'org.projectlombok:lombok-mapstruct-binding:0.2.0'
+    testAnnotationProcessor 'org.mapstruct:mapstruct-processor:1.5.5.Final'
+
+    runtimeOnly 'com.h2database:h2'
+}
+
+dependencyManagement {
+    imports {
+        mavenBom "org.springframework.cloud:spring-cloud-dependencies:${springCloudVersion}"
+    }
+}
+
+tasks.named('test') {
+    useJUnitPlatform()
+}

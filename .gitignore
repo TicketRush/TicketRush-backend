@@ -34,9 +34,6 @@ bower_components
 # node-waf configuration
 .lock-wscript
 
-# Compiled binary addons (https://nodejs.org/api/addons.html)
-build/Release
-
 # Dependency directories
 node_modules/
 jspm_packages/
@@ -69,6 +66,11 @@ web_modules/
 .env
 .env.*
 !.env.example
+!deploy/.env.prod.example
+
+# 배포 번들이 EC2에 풀어놓는 관측 설정. 로컬에서 배포본 compose를 띄울 때도 여기 생긴다.
+# SSOT는 루트의 monitoring/ 이며, 여기로 복사되면 대시보드 JSON이 중복돼 SSOT가 깨진다.
+deploy/monitoring/
 
 # parcel-bundler cache (https://parceljs.org/)
 .cache
@@ -76,24 +78,14 @@ web_modules/
 
 # Next.js build output
 .next
-out
-
-# Nuxt.js build / generate output
 .nuxt
 dist
-
-# Gatsby files
-.cache/
-# Comment in the public line in if your project uses Gatsby and not Next.js
-# https://nextjs.org/blog/next-9-1#public-directory-support
-# public
 
 # vuepress build output
 .vuepress/dist
 
 # vuepress v2.x temp and cache directory
 .temp
-.cache
 
 # Sveltekit cache directory
 .svelte-kit/
@@ -152,3 +144,17 @@ build/
 
 # Ignore Kotlin plugin data
 .kotlin
+
+# Claude Code
+# 로컬 임시 worktree만 무시 (레포 전체 사본 + git 메타데이터 포함)
+.claude/worktrees/
+# 로컬 전용 설정 (개인 권한/환경값) — 공유하지 않음
+.claude/settings.local.json
+# AI 세션 작업 메모 — 실데이터는 개인 런타임(기기 로컬), .example 템플릿만 공유
+.claude/claude-progress.txt
+.claude/feature_list.json
+!.claude/claude-progress.txt.example
+!.claude/feature_list.json.example
+
+# oh-my-claudecode
+.omc/

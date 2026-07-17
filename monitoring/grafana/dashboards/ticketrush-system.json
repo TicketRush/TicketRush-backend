@@ -1,0 +1,97 @@
+{
+  "annotations": { "list": [] },
+  "editable": true,
+  "graphTooltip": 1,
+  "schemaVersion": 39,
+  "tags": ["ticketrush", "system"],
+  "title": "TicketRush - System (MVC)",
+  "uid": "ticketrush-system",
+  "time": { "from": "now-1h", "to": "now" },
+  "refresh": "30s",
+  "templating": {
+    "list": [
+      {
+        "name": "instance",
+        "label": "Instance",
+        "type": "query",
+        "datasource": { "type": "prometheus", "uid": "prometheus" },
+        "query": { "query": "label_values(jvm_memory_used_bytes{job=\"ticketrush-services\"}, instance)", "refId": "vars" },
+        "refresh": 2,
+        "includeAll": true,
+        "multi": true,
+        "sort": 1,
+        "current": { "text": "All", "value": "$__all" }
+      }
+    ]
+  },
+  "panels": [
+    {
+      "id": 1,
+      "title": "JVM Heap Used",
+      "type": "timeseries",
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 0 },
+      "fieldConfig": { "defaults": { "unit": "bytes" }, "overrides": [] },
+      "targets": [
+        { "refId": "A", "expr": "sum by (instance) (jvm_memory_used_bytes{job=\"ticketrush-services\", area=\"heap\", instance=~\"$instance\"})", "legendFormat": "{{instance}}" }
+      ]
+    },
+    {
+      "id": 2,
+      "title": "JVM Non-Heap Used",
+      "type": "timeseries",
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 0 },
+      "fieldConfig": { "defaults": { "unit": "bytes" }, "overrides": [] },
+      "targets": [
+        { "refId": "A", "expr": "sum by (instance) (jvm_memory_used_bytes{job=\"ticketrush-services\", area=\"nonheap\", instance=~\"$instance\"})", "legendFormat": "{{instance}}" }
+      ]
+    },
+    {
+      "id": 3,
+      "title": "GC Pause (rate)",
+      "type": "timeseries",
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 8 },
+      "fieldConfig": { "defaults": { "unit": "s" }, "overrides": [] },
+      "targets": [
+        { "refId": "A", "expr": "sum by (instance) (rate(jvm_gc_pause_seconds_sum{job=\"ticketrush-services\", instance=~\"$instance\"}[5m]))", "legendFormat": "{{instance}}" }
+      ]
+    },
+    {
+      "id": 4,
+      "title": "HTTP Request Rate",
+      "type": "timeseries",
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 8 },
+      "fieldConfig": { "defaults": { "unit": "reqps" }, "overrides": [] },
+      "targets": [
+        { "refId": "A", "expr": "sum by (instance) (rate(http_server_requests_seconds_count{job=\"ticketrush-services\", instance=~\"$instance\"}[5m]))", "legendFormat": "{{instance}}" }
+      ]
+    },
+    {
+      "id": 5,
+      "title": "HTTP Avg Latency",
+      "type": "timeseries",
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 16 },
+      "fieldConfig": { "defaults": { "unit": "s" }, "overrides": [] },
+      "targets": [
+        { "refId": "A", "expr": "sum by (instance) (rate(http_server_requests_seconds_sum{job=\"ticketrush-services\", instance=~\"$instance\"}[5m])) / sum by (instance) (rate(http_server_requests_seconds_count{job=\"ticketrush-services\", instance=~\"$instance\"}[5m]))", "legendFormat": "{{instance}}" }
+      ]
+    },
+    {
+      "id": 6,
+      "title": "HikariCP Connections",
+      "type": "timeseries",
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 16 },
+      "fieldConfig": { "defaults": { "unit": "short" }, "overrides": [] },
+      "targets": [
+        { "refId": "A", "expr": "hikaricp_connections_active{job=\"ticketrush-services\", instance=~\"$instance\"}", "legendFormat": "active {{instance}}" },
+        { "refId": "B", "expr": "hikaricp_connections_idle{job=\"ticketrush-services\", instance=~\"$instance\"}", "legendFormat": "idle {{instance}}" },
+        { "refId": "C", "expr": "hikaricp_connections_pending{job=\"ticketrush-services\", instance=~\"$instance\"}", "legendFormat": "pending {{instance}}" }
+      ]
+    }
+  ]
+}

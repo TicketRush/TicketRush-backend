@@ -1,0 +1,522 @@
+name: CD - Deploy to EC2
+
+on:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+
+concurrency:
+  group: ticketrush-production-deploy
+  cancel-in-progress: false
+
+env:
+  AWS_REGION: ${{ vars.AWS_REGION }}
+  ECR_REGISTRY: ${{ vars.ECR_REGISTRY }}
+  EC2_HOST: ${{ secrets.EC2_HOST }}
+  EC2_USER: ${{ vars.EC2_USER }}
+  IMAGE_TAG: ${{ github.sha }}
+
+jobs:
+  deploy:
+    name: Build, Push, Deploy
+    runs-on: ubuntu-latest
+    environment: production
+
+    permissions:
+      contents: read
+      id-token: write
+
+    steps:
+      - name: Checkout source code
+        uses: actions/checkout@v7
+
+      - name: Set up Java 21
+        uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: "21"
+          cache: gradle
+
+      - name: Validate deployment files
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+
+          test -f Dockerfile
+          test -f deploy/docker-compose.prod.yml
+          test -f deploy/.env.prod.example
+
+          if [[ -f deploy/.env ]]; then
+            echo "::error::deploy/.env must not be committed."
+            exit 1
+          fi
+
+          cp deploy/.env.prod.example deploy/.env
+          trap 'rm -f deploy/.env' EXIT
+
+          docker compose \
+            -f deploy/docker-compose.prod.yml \
+            config -q
+
+      - name: Run tests
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+
+          chmod +x gradlew
+          ./gradlew test
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v6
+        with:
+          role-to-assume: ${{ vars.AWS_DEPLOY_ROLE_ARN }}
+          role-session-name: ticketrush-cd-${{ github.run_id }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Login to Amazon ECR
+        uses: aws-actions/amazon-ecr-login@v2
+
+      - name: Build and push Docker images
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+
+          SERVICES=(
+            gateway-service
+            auth-service
+            user-service
+            booking-service
+            payment-service
+            performance-service
+            ticket-service
+            seat-service
+          )
+
+          for SERVICE in "${SERVICES[@]}"; do
+            REPOSITORY="ticketrush/${SERVICE}"
+            IMAGE="${ECR_REGISTRY}/${REPOSITORY}:${IMAGE_TAG}"
+
+            echo "Checking ECR repository: ${REPOSITORY}"
+
+            aws ecr describe-repositories \
+              --region "${AWS_REGION}" \
+              --repository-names "${REPOSITORY}" \
+              > /dev/null
+
+            echo "Building ${IMAGE}"
+
+            docker build \
+              --build-arg SERVICE="${SERVICE}" \
+              --tag "${IMAGE}" \
+              .
+
+            echo "Pushing ${IMAGE}"
+            docker push "${IMAGE}"
+          done
+
+      - name: Prepare SSH
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+
+          install -m 700 -d ~/.ssh
+
+          printf '%s\n' "${{ secrets.EC2_SSH_KEY }}" \
+            > ~/.ssh/ticketrush-key.pem
+
+          chmod 600 ~/.ssh/ticketrush-key.pem
+
+          printf '%s\n' "${{ secrets.EC2_KNOWN_HOSTS }}" \
+            > ~/.ssh/known_hosts
+
+          chmod 600 ~/.ssh/known_hosts
+
+      - name: Package deployment files
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+
+          # monitoring/ 은 로컬 스택과 공유하는 SSOT다. deploy/ 밑으로 복사하면 대시보드 JSON이
+          # 중복되므로, 번들에만 함께 담아 EC2에서 deploy/monitoring/** 으로 풀리게 한다.
+          # compose의 상대경로(./monitoring/...)가 그대로 이 위치를 가리킨다.
+          tar \
+            --exclude='.env' \
+            --exclude='.env.local' \
+            -czf deploy-bundle.tar.gz \
+            -C deploy . \
+            -C .. monitoring
+
+      - name: Copy deployment files to EC2
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+
+          SSH_OPTIONS=(
+            -i ~/.ssh/ticketrush-key.pem
+            -o BatchMode=yes
+            -o StrictHostKeyChecking=yes
+          )
+
+          ssh "${SSH_OPTIONS[@]}" \
+            "${EC2_USER}@${EC2_HOST}" \
+            "mkdir -p ~/ticketrush/deploy"
+
+          scp "${SSH_OPTIONS[@]}" \
+            deploy-bundle.tar.gz \
+            "${EC2_USER}@${EC2_HOST}:~/ticketrush/deploy-bundle.tar.gz"
+
+      - name: Deploy on EC2
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+
+          SSH_OPTIONS=(
+            -i ~/.ssh/ticketrush-key.pem
+            -o BatchMode=yes
+            -o StrictHostKeyChecking=yes
+          )
+
+          # shellcheck disable=SC2029
+          ssh "${SSH_OPTIONS[@]}" \
+            "${EC2_USER}@${EC2_HOST}" \
+            "AWS_REGION='${AWS_REGION}' ECR_REGISTRY='${ECR_REGISTRY}' IMAGE_TAG='${IMAGE_TAG}' bash -s" \
+            <<'REMOTE_SCRIPT'
+          set -Eeuo pipefail
+
+          cd "${HOME}/ticketrush"
+
+          mkdir -p deploy
+
+          # monitoring/ 은 항상 번들 것으로 갈아끼운다.
+          # compose 를 EC2 에서 수동으로 up 하면 bind 소스가 없는 경로를 dockerd 가 '디렉터리'로
+          # 자동 생성한다. 그 상태에서 tar 가 같은 경로에 '파일'을 풀려다 충돌해, 수동 개입 전까지
+          # 배포가 영구히 실패한다. 지워두면 오염된 상태에서도 자동 복구된다.
+          rm -rf deploy/monitoring
+
+          tar \
+            -xzf deploy-bundle.tar.gz \
+            -C deploy
+
+          rm -f deploy-bundle.tar.gz
+
+          if [[ ! -f deploy/.env ]]; then
+            echo "deploy/.env does not exist on EC2."
+            exit 1
+          fi
+
+          chmod 600 deploy/.env
+
+          aws ecr get-login-password \
+            --region "${AWS_REGION}" \
+            | docker login \
+                --username AWS \
+                --password-stdin "${ECR_REGISTRY}"
+
+          export AWS_REGION
+          export ECR_REGISTRY
+          export IMAGE_TAG
+
+          COMPOSE=(
+            docker compose
+            --env-file deploy/.env
+            -f deploy/docker-compose.prod.yml
+          )
+
+          EXPECTED_SERVICES=(
+            mysql
+            redis
+            redis-exporter
+            kafka
+            gateway-service
+            auth-service
+            user-service
+            booking-service
+            payment-service
+            performance-service
+            ticket-service
+            seat-service
+            prometheus
+            grafana
+          )
+
+          APPLICATION_SERVICES=(
+            gateway-service
+            auth-service
+            user-service
+            booking-service
+            payment-service
+            performance-service
+            ticket-service
+            seat-service
+          )
+
+          declare -A APPLICATION_SERVICE_SET
+          declare -A PREVIOUS_CONTAINER_IDS
+          declare -A BASE_RESTART_COUNTS
+
+          for SERVICE in "${APPLICATION_SERVICES[@]}"; do
+            APPLICATION_SERVICE_SET["${SERVICE}"]=true
+          done
+
+          "${COMPOSE[@]}" config -q
+
+          echo "Snapshotting container restart counts before deployment."
+
+          for SERVICE in "${EXPECTED_SERVICES[@]}"; do
+            CONTAINER_ID="$(
+              "${COMPOSE[@]}" ps --all -q "${SERVICE}" 2>/dev/null || true
+            )"
+
+            if [[ -n "${CONTAINER_ID}" ]] \
+              && docker inspect "${CONTAINER_ID}" > /dev/null 2>&1; then
+              PREVIOUS_CONTAINER_IDS["${SERVICE}"]="${CONTAINER_ID}"
+              BASE_RESTART_COUNTS["${SERVICE}"]="$(
+                docker inspect \
+                  --format '{{.RestartCount}}' \
+                  "${CONTAINER_ID}"
+              )"
+
+              echo \
+                "${SERVICE}: previous container=${CONTAINER_ID}, baseline RestartCount=${BASE_RESTART_COUNTS[$SERVICE]}"
+            else
+              PREVIOUS_CONTAINER_IDS["${SERVICE}"]=""
+              BASE_RESTART_COUNTS["${SERVICE}"]=0
+
+              echo "${SERVICE}: no previous container, baseline RestartCount=0"
+            fi
+          done
+
+          "${COMPOSE[@]}" pull
+          "${COMPOSE[@]}" up -d --remove-orphans
+
+          READY=false
+          STABLE_PASSES=0
+          REQUIRED_STABLE_PASSES=6
+          MAX_ATTEMPTS=60
+
+          for ATTEMPT in $(seq 1 "${MAX_ATTEMPTS}"); do
+            ALL_READY=true
+            RESTART_DETECTED=false
+
+            echo "Container readiness check ${ATTEMPT}/${MAX_ATTEMPTS}"
+
+            for SERVICE in "${EXPECTED_SERVICES[@]}"; do
+              CONTAINER_ID="$("${COMPOSE[@]}" ps -q "${SERVICE}")"
+
+              if [[ -z "${CONTAINER_ID}" ]]; then
+                echo "${SERVICE}: container not created"
+                ALL_READY=false
+                continue
+              fi
+
+              STATUS="$(
+                docker inspect \
+                  --format '{{.State.Status}}' \
+                  "${CONTAINER_ID}"
+              )"
+
+              HEALTH="$(
+                docker inspect \
+                  --format '{{if .State.Health}}{{.State.Health.Status}}{{else}}none{{end}}' \
+                  "${CONTAINER_ID}"
+              )"
+
+              OOM_KILLED="$(
+                docker inspect \
+                  --format '{{.State.OOMKilled}}' \
+                  "${CONTAINER_ID}"
+              )"
+
+              RESTART_COUNT="$(
+                docker inspect \
+                  --format '{{.RestartCount}}' \
+                  "${CONTAINER_ID}"
+              )"
+
+              PREVIOUS_CONTAINER_ID="${PREVIOUS_CONTAINER_IDS[$SERVICE]:-}"
+
+              if [[ -n "${PREVIOUS_CONTAINER_ID}" ]] \
+                && [[ "${CONTAINER_ID}" == "${PREVIOUS_CONTAINER_ID}" ]]; then
+                BASE_RESTART_COUNT="${BASE_RESTART_COUNTS[$SERVICE]:-0}"
+              else
+                BASE_RESTART_COUNT=0
+              fi
+
+              if [[ "${STATUS}" != "running" ]]; then
+                echo "${SERVICE}: status=${STATUS}"
+                ALL_READY=false
+              fi
+
+              if [[ "${HEALTH}" == "starting" || "${HEALTH}" == "unhealthy" ]]; then
+                echo "${SERVICE}: health=${HEALTH}"
+                ALL_READY=false
+              fi
+
+              if [[ "${OOM_KILLED}" == "true" ]]; then
+                echo "${SERVICE}: OOMKilled=true"
+                ALL_READY=false
+              fi
+
+              if (( RESTART_COUNT > BASE_RESTART_COUNT )); then
+                RESTART_DELTA=$((RESTART_COUNT - BASE_RESTART_COUNT))
+
+                echo \
+                  "::error::${SERVICE}: RestartCount=${RESTART_COUNT}, baseline=${BASE_RESTART_COUNT}, increased=${RESTART_DELTA} during deployment"
+
+                ALL_READY=false
+                RESTART_DETECTED=true
+              fi
+
+              if [[ -n "${APPLICATION_SERVICE_SET[$SERVICE]:-}" ]]; then
+                if ! docker logs "${CONTAINER_ID}" 2>&1 \
+                  | grep -Eq 'Started .*Application in .* seconds'; then
+                  echo "${SERVICE}: Spring Boot startup not confirmed"
+                  ALL_READY=false
+                fi
+              fi
+            done
+
+            if [[ "${RESTART_DETECTED}" == "true" ]]; then
+              echo "A container restarted during deployment."
+              break
+            fi
+
+            if [[ "${ALL_READY}" == "true" ]]; then
+              STABLE_PASSES=$((STABLE_PASSES + 1))
+              echo "Stable readiness pass ${STABLE_PASSES}/${REQUIRED_STABLE_PASSES}"
+
+              if (( STABLE_PASSES >= REQUIRED_STABLE_PASSES )); then
+                READY=true
+                break
+              fi
+            else
+              STABLE_PASSES=0
+            fi
+
+            sleep 5
+          done
+
+          if [[ "${READY}" != "true" ]]; then
+            echo "Containers did not become ready and remain stable."
+
+            "${COMPOSE[@]}" ps --all
+            "${COMPOSE[@]}" logs --tail=100
+
+            exit 1
+          fi
+
+          # actuator는 prod 에서 8090(management.server.port)로 분리된다. 8080에는 없다.
+          HEALTH_RESPONSE="$(
+            curl \
+              --fail \
+              --silent \
+              --show-error \
+              --retry 12 \
+              --retry-delay 5 \
+              --retry-all-errors \
+              http://127.0.0.1:8090/actuator/health
+          )"
+
+          echo "${HEALTH_RESPONSE}"
+
+          if ! grep -Eq '"status"[[:space:]]*:[[:space:]]*"UP"' \
+            <<< "${HEALTH_RESPONSE}"; then
+            echo "Gateway health status is not UP."
+            exit 1
+          fi
+
+          # 컨테이너가 떴다고 지표가 수집되는 것은 아니다. 타깃 주소가 틀리면 up=0인 채로
+          # 배포가 초록불로 끝난다. 실제로 스크랩되는지 확인한다(이슈 #380 완료 조건).
+          EXPECTED_TARGETS=9   # 앱 8 + prometheus 자기 자신 1
+
+          for ATTEMPT in $(seq 1 12); do
+            UP_COUNT="$(
+              curl --fail --silent \
+                'http://127.0.0.1:9090/api/v1/query?query=up' \
+                | jq '[.data.result[] | select(.value[1] == "1")] | length'
+            )" || UP_COUNT=0
+
+            if [[ "${UP_COUNT}" == "${EXPECTED_TARGETS}" ]]; then
+              echo "Prometheus targets UP: ${UP_COUNT}/${EXPECTED_TARGETS}"
+              break
+            fi
+
+            echo "Prometheus targets UP: ${UP_COUNT}/${EXPECTED_TARGETS} (retrying)"
+            sleep 10
+          done
+
+          if [[ "${UP_COUNT}" != "${EXPECTED_TARGETS}" ]]; then
+            echo "Prometheus is not scraping all targets."
+
+            curl --silent 'http://127.0.0.1:9090/api/v1/targets' \
+              | jq -r '.data.activeTargets[]
+                  | "\(.scrapeUrl) health=\(.health) \(.lastError)"'
+
+            exit 1
+          fi
+
+          echo "Checking external HTTPS health..."
+
+          if ! EXTERNAL_HEALTH_RESPONSE="$(
+            curl \
+              --fail \
+              --silent \
+              --show-error \
+              --connect-timeout 10 \
+              --max-time 30 \
+              --retry 6 \
+              --retry-delay 5 \
+              --retry-all-errors \
+              https://api.ticketrush.store/actuator/health \
+              2>&1
+          )"; then
+            echo "${EXTERNAL_HEALTH_RESPONSE}"
+            echo "External HTTPS health request failed."
+            echo "Check DNS, TLS certificate, Nginx, and public network reachability."
+            exit 1
+          fi
+
+          echo "${EXTERNAL_HEALTH_RESPONSE}"
+
+          if ! grep -Eq '"status"[[:space:]]*:[[:space:]]*"UP"' \
+            <<< "${EXTERNAL_HEALTH_RESPONSE}"; then
+            echo "External HTTPS health status is not UP."
+            exit 1
+          fi
+
+          echo "External HTTPS health check passed."
+
+
+          PREVIOUS_RELEASE=""
+
+          if [[ -f deploy/CURRENT_RELEASE ]]; then
+            PREVIOUS_RELEASE="$(cat deploy/CURRENT_RELEASE)"
+          fi
+
+          if [[ -n "${PREVIOUS_RELEASE}" && "${PREVIOUS_RELEASE}" != "${IMAGE_TAG}" ]]; then
+            printf '%s\n' "${PREVIOUS_RELEASE}" \
+              > deploy/PREVIOUS_RELEASE
+          fi
+
+          printf '%s\n' "${IMAGE_TAG}" \
+            > deploy/CURRENT_RELEASE
+
+          echo "Deployment completed."
+          echo "Current release: ${IMAGE_TAG}"
+
+          "${COMPOSE[@]}" ps --all
+          REMOTE_SCRIPT
+
+      - name: Write deployment summary
+        shell: bash
+        run: |
+          {
+            echo "## TicketRush deployment"
+            echo
+            echo "- Branch: \`${GITHUB_REF_NAME}\`"
+            echo "- Commit: \`${IMAGE_TAG}\`"
+            echo "- Region: \`${AWS_REGION}\`"
+            echo "- Registry: \`${ECR_REGISTRY}\`"
+            echo "- Result: success"
+          } >> "${GITHUB_STEP_SUMMARY}"

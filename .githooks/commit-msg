@@ -14,7 +14,7 @@ esac
 # [Feat] #134 message
 # [Fix] #12 message
 
-pattern='^\[(Feat|Fix|Docs|Refactor|Test|Chore)\][[:space:]]+#([0-9]+)[[:space:]]+.+'
+pattern='^\[(Feat|Fix|Docs|Refactor|Test|Chore|Infra)\][[:space:]]+#([0-9]+)[[:space:]]+.+'
 
 if ! printf "%s" "$first_line" | grep -Eq "$pattern"; then
   echo "❌ 커밋 메시지 형식이 올바르지 않습니다."
