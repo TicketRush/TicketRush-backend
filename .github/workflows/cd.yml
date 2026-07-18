@@ -456,36 +456,32 @@ jobs:
             exit 1
           fi
 
-          echo "Checking external HTTPS health..."
+          echo "Checking local Nginx HTTPS route..."
 
-          if ! EXTERNAL_HEALTH_RESPONSE="$(
+          NGINX_HEALTH_RESPONSE="$(
             curl \
               --fail \
               --silent \
               --show-error \
-              --connect-timeout 10 \
-              --max-time 30 \
+              --location \
+              --resolve api.ticketrush.store:443:127.0.0.1 \
+              --connect-timeout 5 \
+              --max-time 15 \
               --retry 6 \
               --retry-delay 5 \
               --retry-all-errors \
-              https://api.ticketrush.store/actuator/health \
-              2>&1
-          )"; then
-            echo "${EXTERNAL_HEALTH_RESPONSE}"
-            echo "External HTTPS health request failed."
-            echo "Check DNS, TLS certificate, Nginx, and public network reachability."
-            exit 1
-          fi
+              https://api.ticketrush.store/actuator/health
+          )"
 
-          echo "${EXTERNAL_HEALTH_RESPONSE}"
+          echo "${NGINX_HEALTH_RESPONSE}"
 
           if ! grep -Eq '"status"[[:space:]]*:[[:space:]]*"UP"' \
-            <<< "${EXTERNAL_HEALTH_RESPONSE}"; then
-            echo "External HTTPS health status is not UP."
+            <<< "${NGINX_HEALTH_RESPONSE}"; then
+            echo "Local Nginx HTTPS health status is not UP."
             exit 1
           fi
 
-          echo "External HTTPS health check passed."
+          echo "Local Nginx HTTPS health check passed."
 
 
           PREVIOUS_RELEASE=""
@@ -520,3 +516,58 @@ jobs:
             echo "- Registry: \`${ECR_REGISTRY}\`"
             echo "- Result: success"
           } >> "${GITHUB_STEP_SUMMARY}"
+
+  external-health:
+    name: External HTTPS health
+    needs: deploy
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+
+    steps:
+      - name: Check public HTTPS health
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+
+          EXTERNAL_URL="https://api.ticketrush.store/actuator/health"
+          MAX_ATTEMPTS=12
+          SLEEP_SECONDS=10
+
+          for ATTEMPT in $(seq 1 "${MAX_ATTEMPTS}"); do
+            echo "External health check ${ATTEMPT}/${MAX_ATTEMPTS}"
+
+            RESPONSE_FILE="$(mktemp)"
+
+            HTTP_CODE="$(
+              curl \
+                --silent \
+                --show-error \
+                --location \
+                --connect-timeout 5 \
+                --max-time 15 \
+                --output "${RESPONSE_FILE}" \
+                --write-out '%{http_code}' \
+                "${EXTERNAL_URL}"
+            )" && CURL_EXIT=0 || CURL_EXIT=$?
+
+            RESPONSE="$(cat "${RESPONSE_FILE}")"
+            rm -f "${RESPONSE_FILE}"
+
+            echo "curl_exit=${CURL_EXIT}, http_code=${HTTP_CODE:-none}"
+            echo "${RESPONSE}"
+
+            if [[ "${CURL_EXIT}" -eq 0 ]] \
+              && [[ "${HTTP_CODE}" == "200" ]] \
+              && grep -Eq '"status"[[:space:]]*:[[:space:]]*"UP"' \
+                <<< "${RESPONSE}"; then
+              echo "External HTTPS health check passed."
+              exit 0
+            fi
+
+            if (( ATTEMPT < MAX_ATTEMPTS )); then
+              sleep "${SLEEP_SECONDS}"
+            fi
+          done
+
+          echo "::error::External HTTPS health did not become UP."
+          exit 1
