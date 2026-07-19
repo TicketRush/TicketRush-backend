@@ -80,4 +80,36 @@ class PerformanceAdminControllerTest {
                 .header("X-User-Role", "ADMIN"))
         .andExpect(status().isForbidden());
   }
+
+  @Test
+  @DisplayName("관리자 권한으로 예매 오픈 시각 해제 요청 시 200을 반환한다")
+  void clearBookingOpenAt_admin_success() throws Exception {
+    doNothing().when(performanceFacade).clearBookingOpenAt(1L);
+
+    mockMvc
+        .perform(
+            delete(BASE_URL + "/1/booking-open-at")
+                .header("X-Gateway-Token", INTERNAL_TOKEN)
+                .header("X-User-Id", "1")
+                .header("X-User-Role", "ADMIN"))
+        .andExpect(status().isOk());
+  }
+
+  @Test
+  @DisplayName("일반 사용자 권한으로 예매 오픈 시각 해제 요청 시 403을 반환한다")
+  void clearBookingOpenAt_userRole_forbidden() throws Exception {
+    mockMvc
+        .perform(
+            delete(BASE_URL + "/1/booking-open-at")
+                .header("X-Gateway-Token", INTERNAL_TOKEN)
+                .header("X-User-Id", "1")
+                .header("X-User-Role", "USER"))
+        .andExpect(status().isForbidden());
+  }
+
+  @Test
+  @DisplayName("인증 없이 예매 오픈 시각 해제 요청 시 403을 반환한다")
+  void clearBookingOpenAt_noAuth_forbidden() throws Exception {
+    mockMvc.perform(delete(BASE_URL + "/1/booking-open-at")).andExpect(status().isForbidden());
+  }
 }

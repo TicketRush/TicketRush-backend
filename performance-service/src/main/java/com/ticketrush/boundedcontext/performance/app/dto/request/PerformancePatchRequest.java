@@ -42,7 +42,9 @@ public record PerformancePatchRequest(
         @Size(max = 255, message = "주소는 255자를 초과할 수 없습니다.")
         String address,
     @Schema(
-            description = "예매 오픈 시각 (yyyy-MM-dd HH:mm:ss, null=수정 안 함 — 한 번 설정하면 해제 불가, 변경만 가능)",
+            description =
+                "예매 오픈 시각 (yyyy-MM-dd HH:mm:ss, null=수정 안 함 — 해제하려면 "
+                    + "DELETE /api/v1/performance/admin/{id}/booking-open-at 사용)",
             example = "2027-08-01 20:00:00")
         @JsonFormat(shape = JsonFormat.Shape.STRING, pattern = "yyyy-MM-dd HH:mm:ss")
         LocalDateTime bookingOpenAt) {}
