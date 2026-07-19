@@ -36,4 +36,28 @@ public interface PerformanceRepository
       @Param("from") PerformanceStatus from,
       @Param("to") PerformanceStatus to,
       @Param("now") LocalDateTime now);
+
+  /**
+   * 예매 오픈 시각만 해제해 스케줄러 자동 전환 대상에서 제외한다.
+   *
+   * <p>엔티티 더티체킹 대신 타깃 UPDATE를 쓰는 이유는 {@code @Version} 부재 때문이다. 엔티티를 로드해 해제하면 전체 컬럼 UPDATE가 나가면서, 로드
+   * 이후 스케줄러가 커밋한 ON_SALE 전환을 stale한 UPCOMING으로 덮어쓴다. 게다가 같은 UPDATE로 bookingOpenAt이 NULL이 되어 벌크 전환
+   * 쿼리의 {@code IS NOT NULL} 조건에서 영구 이탈하므로, 다른 경로와 달리 다음 주기 self-heal조차 불가능해진다.
+   *
+   * <p>벌크 JPQL은 {@code @SQLRestriction}과 Auditing이 적용되지 않으므로 deletedAt 조건과 updatedAt을 명시한다. 영향 행 수가
+   * 0이면 대상 공연이 없거나 이미 소프트 삭제된 경우다.
+   *
+   * <p><b>역방향 경합 창이 남아 있다.</b> 이 쿼리는 stale write를 하지 않지만, 해제 결과가 다른 경로로부터 보호되지는 않는다. 엔티티를 로드하는
+   * PATCH·상태 변경 UseCase는 {@code @Version}/{@code @DynamicUpdate} 부재로 여전히 전체 컬럼 UPDATE를 내보내므로, 그들이
+   * bookingOpenAt을 로드한 뒤 이 해제가 커밋되면 마지막 커밋이 해제된 값을 되살린다. 이 경우 공연이 어드민 모르게 자동 전환 대상으로 복귀하며 판단 근거가
+   * DB에 남지 않아 self-heal도 불가능하다. 근본 해결({@code @DynamicUpdate} 도입)은 엔티티 전역 영향이라 별도 이슈로 분리했다.
+   *
+   * <p>{@code clearAutomatically = true}가 호출 트랜잭션의 영속성 컨텍스트 전체를 비우고 {@code flushAutomatically}는 기본값
+   * false이므로, 같은 트랜잭션에 flush되지 않은 더티 엔티티가 있으면 조용히 유실된다. 엔티티를 함께 다루는 트랜잭션에서 호출하지 말아야 한다.
+   */
+  @Modifying(clearAutomatically = true)
+  @Query(
+      "UPDATE Performance p SET p.bookingOpenAt = null, p.updatedAt = :now "
+          + "WHERE p.id = :id AND p.deletedAt IS NULL")
+  int clearBookingOpenAt(@Param("id") Long id, @Param("now") LocalDateTime now);
 }
