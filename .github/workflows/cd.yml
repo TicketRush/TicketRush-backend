@@ -465,7 +465,8 @@ jobs:
 
               if [[ -n "${APPLICATION_SERVICE_SET[$SERVICE]:-}" ]]; then
                 if ! docker logs "${CONTAINER_ID}" 2>&1 \
-                  | grep -Eq 'Started .*Application in .* seconds'; then
+                  | grep -E 'Started .*Application in .* seconds' \
+                  > /dev/null; then
                   echo "${SERVICE}: Spring Boot startup not confirmed"
                   ALL_READY=false
                 fi
