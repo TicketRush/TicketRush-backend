@@ -428,30 +428,82 @@ jobs:
 
           # 컨테이너가 떴다고 지표가 수집되는 것은 아니다. 타깃 주소가 틀리면 up=0인 채로
           # 배포가 초록불로 끝난다. 실제로 스크랩되는지 확인한다(이슈 #380 완료 조건).
-          EXPECTED_TARGETS=9   # 앱 8 + prometheus 자기 자신 1
+          EXPECTED_TARGETS=10
+          PROMETHEUS_READY=false
 
           for ATTEMPT in $(seq 1 12); do
-            UP_COUNT="$(
-              curl --fail --silent \
-                'http://127.0.0.1:9090/api/v1/query?query=up' \
-                | jq '[.data.result[] | select(.value[1] == "1")] | length'
-            )" || UP_COUNT=0
+            TARGETS_RESPONSE="$(
+              curl \
+                --fail \
+                --silent \
+                --show-error \
+                http://127.0.0.1:9090/api/v1/targets
+            )" || TARGETS_RESPONSE=""
 
-            if [[ "${UP_COUNT}" == "${EXPECTED_TARGETS}" ]]; then
-              echo "Prometheus targets UP: ${UP_COUNT}/${EXPECTED_TARGETS}"
+            if [[ -z "${TARGETS_RESPONSE}" ]]; then
+              echo \
+                "Prometheus targets request failed " \
+                "(${ATTEMPT}/12, retrying)"
+
+              sleep 10
+              continue
+            fi
+
+            TOTAL_COUNT="$(
+              jq '.data.activeTargets | length' \
+                <<< "${TARGETS_RESPONSE}"
+            )"
+
+            UP_COUNT="$(
+              jq '
+                [
+                  .data.activeTargets[]
+                  | select(.health == "up")
+                ]
+                | length
+              ' <<< "${TARGETS_RESPONSE}"
+            )"
+
+            DOWN_COUNT="$(
+              jq '
+                [
+                  .data.activeTargets[]
+                  | select(.health != "up")
+                ]
+                | length
+              ' <<< "${TARGETS_RESPONSE}"
+            )"
+
+            echo \
+              "Prometheus targets: " \
+              "total=${TOTAL_COUNT}/${EXPECTED_TARGETS} " \
+              "up=${UP_COUNT} down=${DOWN_COUNT}"
+
+            if (( TOTAL_COUNT == EXPECTED_TARGETS )) \
+              && (( UP_COUNT == EXPECTED_TARGETS )) \
+              && (( DOWN_COUNT == 0 )); then
+              PROMETHEUS_READY=true
               break
             fi
 
-            echo "Prometheus targets UP: ${UP_COUNT}/${EXPECTED_TARGETS} (retrying)"
+            jq -r '
+              .data.activeTargets[]
+              | select(.health != "up")
+              | "\(.scrapeUrl) health=\(.health) error=\(.lastError)"
+            ' <<< "${TARGETS_RESPONSE}"
+
             sleep 10
           done
 
-          if [[ "${UP_COUNT}" != "${EXPECTED_TARGETS}" ]]; then
-            echo "Prometheus is not scraping all targets."
+          if [[ "${PROMETHEUS_READY}" != "true" ]]; then
+            echo "Prometheus targets did not become fully healthy."
 
-            curl --silent 'http://127.0.0.1:9090/api/v1/targets' \
-              | jq -r '.data.activeTargets[]
-                  | "\(.scrapeUrl) health=\(.health) \(.lastError)"'
+            if [[ -n "${TARGETS_RESPONSE:-}" ]]; then
+              jq -r '
+                .data.activeTargets[]
+                | "\(.scrapeUrl) health=\(.health) error=\(.lastError)"
+              ' <<< "${TARGETS_RESPONSE}"
+            fi
 
             exit 1
           fi
