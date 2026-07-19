@@ -198,6 +198,43 @@ jobs:
             -xzf deploy-bundle.tar.gz \
             -C deploy
 
+          # 배포 번들에 monitoring 필수 파일이 정상적으로 포함됐는지 확인한다.
+          REQUIRED_MONITORING_FILES=(
+            deploy/monitoring/prometheus.aws.yml
+            deploy/monitoring/grafana/provisioning/dashboards/dashboards.yml
+          )
+
+          for REQUIRED_FILE in "${REQUIRED_MONITORING_FILES[@]}"; do
+            if [[ ! -f "${REQUIRED_FILE}" ]]; then
+              echo "::error::Required monitoring file is missing: ${REQUIRED_FILE}"
+              exit 1
+            fi
+          done
+
+          if [[ ! -d deploy/monitoring/grafana/dashboards ]]; then
+            echo "::error::Grafana dashboards directory is missing."
+            exit 1
+          fi
+
+          if ! find deploy/monitoring/grafana/dashboards \
+            -maxdepth 1 \
+            -type f \
+            -name '*.json' \
+            -print \
+            -quit \
+            | grep -q .; then
+            echo "::error::Grafana dashboard JSON files are missing."
+            exit 1
+          fi
+
+          echo "Monitoring deployment files validated successfully."
+
+          find deploy/monitoring/grafana/dashboards \
+            -maxdepth 1 \
+            -type f \
+            -name '*.json' \
+            -print
+
           rm -f deploy-bundle.tar.gz
 
           if [[ ! -f deploy/.env ]]; then
@@ -288,7 +325,65 @@ jobs:
           done
 
           "${COMPOSE[@]}" pull
+
+          # 전체 서비스에 변경된 이미지·Compose 설정 반영
           "${COMPOSE[@]}" up -d --remove-orphans
+
+          # 배포 과정에서 monitoring bind source를 교체했으므로
+          # 기존 마운트를 버리고 새 경로를 다시 마운트한다.
+          "${COMPOSE[@]}" up \
+            -d \
+            --force-recreate \
+            --no-deps \
+            prometheus \
+            grafana
+
+          # 호스트의 새 dashboards 디렉터리가 Grafana 컨테이너 안에 실제로
+          # 다시 마운트됐는지 확인한다.
+          GRAFANA_DASHBOARDS_MOUNTED=false
+
+          for ATTEMPT in $(seq 1 12); do
+            GRAFANA_CONTAINER_ID="$(
+              "${COMPOSE[@]}" ps -q grafana 2>/dev/null || true
+            )"
+
+            if [[ -n "${GRAFANA_CONTAINER_ID}" ]] \
+              && docker exec "${GRAFANA_CONTAINER_ID}" sh -c '
+                find /var/lib/grafana/dashboards \
+                  -maxdepth 1 \
+                  -type f \
+                  -name "*.json" \
+                  -print \
+                  -quit \
+                  | grep -q .
+              '; then
+              GRAFANA_DASHBOARDS_MOUNTED=true
+              break
+            fi
+
+            echo "Waiting for Grafana dashboard mount (${ATTEMPT}/12)"
+            sleep 5
+          done
+
+          if [[ "${GRAFANA_DASHBOARDS_MOUNTED}" != "true" ]]; then
+            echo "::error::Grafana dashboard JSON files are not visible inside the container."
+
+            GRAFANA_CONTAINER_ID="$(
+              "${COMPOSE[@]}" ps -q grafana 2>/dev/null || true
+            )"
+
+            if [[ -n "${GRAFANA_CONTAINER_ID}" ]]; then
+              docker inspect "${GRAFANA_CONTAINER_ID}" \
+                --format '{{range .Mounts}}{{println .Source "->" .Destination}}{{end}}'
+
+              docker exec "${GRAFANA_CONTAINER_ID}" \
+                sh -c 'ls -la /var/lib/grafana/dashboards || true'
+            fi
+
+            exit 1
+          fi
+
+          echo "Grafana dashboard mount validated successfully."
 
           READY=false
           STABLE_PASSES=0
