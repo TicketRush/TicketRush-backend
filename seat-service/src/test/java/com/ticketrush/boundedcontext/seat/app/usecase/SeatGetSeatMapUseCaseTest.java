@@ -30,8 +30,7 @@ class SeatGetSeatMapUseCaseTest {
         List.of(
             new SeatMapItemResponse(1L, 101L, "A-1", SeatStatus.AVAILABLE, null),
             new SeatMapItemResponse(2L, 101L, "A-2", SeatStatus.HOLD, null));
-    given(seatRepository.findSeatMapByPerformanceId(performanceId))
-        .willReturn(expectedResponses);
+    given(seatRepository.findSeatMapByPerformanceId(performanceId)).willReturn(expectedResponses);
 
     // when
     List<SeatMapItemResponse> actualResponses = useCase.execute(performanceId);
