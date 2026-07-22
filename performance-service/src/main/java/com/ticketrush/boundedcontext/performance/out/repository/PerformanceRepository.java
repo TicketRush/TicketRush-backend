@@ -24,6 +24,10 @@ public interface PerformanceRepository
    * — 은 {@code Performance}의 {@code @DynamicUpdate}(#459)가 막는다. PATCH가 바꾸지 않은 performanceStatus는
    * SET 절에 실리지 않으므로 stale 값이 전환을 덮지 않는다. 그전에는 다음 주기 self-heal에 기대고 있었다.
    *
+   * <p>어드민 상태 변경은 이 벌크와 같은 performanceStatus를 쓰므로 동적 UPDATE로 갈리지 않는 같은 컬럼 경합이다. 그럼에도 전환이 되돌려지지 않는
+   * 이유는 {@code PerformanceStatus.canTransitionTo}상 <b>UPCOMING을 목적지로 갖는 전이가 없어</b> 생성 외에는 UPCOMING을
+   * 쓸 경로가 없기 때문이다. 전이표에 →UPCOMING이 추가되면 이 전제가 깨진다.
+   *
    * <p>{@code clearAutomatically = true}가 호출 트랜잭션의 영속성 컨텍스트 전체를 비우므로, 엔티티를 로드하는 다른 트랜잭션에서 재사용하지 말고
    * 스케줄러 전용으로만 호출해야 한다.
    */
@@ -43,8 +47,9 @@ public interface PerformanceRepository
    *
    * <p>엔티티 더티체킹 대신 타깃 UPDATE를 쓴다. 도입 당시 이유는 전체 컬럼 UPDATE였다 — 엔티티를 로드해 해제하면 로드 이후 스케줄러가 커밋한 ON_SALE
    * 전환을 stale한 UPCOMING으로 덮어쓰고, 같은 UPDATE로 bookingOpenAt이 NULL이 되어 벌크 전환 쿼리의 {@code IS NOT NULL}
-   * 조건에서 영구 이탈하므로 다음 주기 self-heal조차 불가능해졌다. {@code @DynamicUpdate}(#459) 이후로는 더티체킹으로도 안전해졌지만,
-   * {@code Performance.update()}가 null을 "수정 안 함"으로 해석해 해제를 표현할 수 없으므로 타깃 UPDATE를 유지한다.
+   * 조건에서 영구 이탈하므로 다음 주기 self-heal조차 불가능해졌다. {@code @DynamicUpdate}(#459) 이후로는 더티체킹으로도 안전하지만 그대로
+   * 유지한다 — SELECT 없이 deletedAt 가드까지 한 문장으로 처리하고, 영향 행 수 0을 그대로 PERFORMANCE_NOT_FOUND 판정에 쓰기
+   * 때문이다({@code PerformanceClearBookingOpenAtUseCase}).
    *
    * <p>벌크 JPQL은 {@code @SQLRestriction}과 Auditing이 적용되지 않으므로 deletedAt 조건과 updatedAt을 명시한다. 영향 행 수가
    * 0이면 대상 공연이 없거나 이미 소프트 삭제된 경우다.
