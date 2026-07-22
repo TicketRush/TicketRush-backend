@@ -20,6 +20,7 @@ import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.LocalTime;
 import java.time.temporal.ChronoUnit;
+import java.util.Map;
 import java.util.Optional;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
@@ -48,9 +49,10 @@ import org.springframework.transaction.support.TransactionTemplate;
  * {@code @DynamicUpdate}를 떼면 stale 방지 4건이 모두 깨진다.
  *
  * <p>커밋이 실제로 남으므로 {@code @AfterEach}에서 물리 삭제한다. {@code @SQLRestriction} 때문에 소프트 삭제된 행은 JPA로는 지울 수
- * 없어 네이티브로 지운다. 조건 없이 전량 삭제해도 되는 이유는 이 testdb를 공유하는 다른 클래스가 전부 클래스 레벨 {@code @Transactional}로 롤백되어
- * 커밋된 행을 남기지 않기 때문이다(비트랜잭셔널한 PerformanceListCacheTest는 {@code @DynamicPropertySource}로 DB 자체가 분리돼
- * 있다). 컨텍스트 캐시를 재사용하려고 일부러 DB를 분리하지 않았으므로, 앞으로 커밋을 남기는 클래스가 testdb에 추가되면 이 정리를 자기 id 기준으로 좁혀야 한다.
+ * 없어 네이티브로 지운다. 조건 없이 전량 삭제해도 되는 이유는 이 testdb에 <b>커밋을 남기는 클래스가 현재 이 클래스뿐</b>이기 때문이다(다른 통합 테스트는 클래스
+ * 레벨 {@code @Transactional}로 롤백되고, 비트랜잭셔널한 PerformanceListCacheTest는
+ * {@code @DynamicPropertySource}로 DB 자체가 분리돼 있다). 컨텍스트 캐시를 재사용하려고 일부러 DB를 분리하지 않았으므로, 앞으로 커밋을 남기는
+ * 클래스가 testdb에 추가되면 이 정리를 자기 id 기준으로 좁혀야 한다.
  */
 @SpringBootTest
 @ActiveProfiles("test")
@@ -195,6 +197,9 @@ class PerformanceConcurrentWriteTest {
    * 소프트 삭제 부활. 회귀 시 <b>삭제한 공연이 목록에 다시 나타나므로</b> 이 클래스가 막는 것 중 사용자에게 가장 먼저 드러나는 사고다.
    * {@code @SQLRestriction} 때문에 PATCH는 언제나 deleted_at이 NULL인 상태로 로드하고, 전체 컬럼 UPDATE는 그 NULL을 그대로 다시
    * 쓴다.
+   *
+   * <p>삭제 유지만 단언하면 PATCH가 아무것도 하지 않아도 통과하므로, 삭제된 행을 네이티브로 읽어 <b>제목 갱신이 실제로 커밋됐는지</b>까지 함께 본다. 다른
+   * 케이스가 title·status 생존으로 경합 성립을 자기검증하는 것과 같은 이유다.
    */
   @Test
   @DisplayName("PATCH가 로드한 뒤 공연이 삭제되면, PATCH 커밋이 삭제를 되살리지 않는다")
@@ -209,6 +214,12 @@ class PerformanceConcurrentWriteTest {
         });
 
     assertThat(findCommitted(performanceId)).isEmpty();
+
+    Map<String, Object> deletedRow =
+        jdbcTemplate.queryForMap(
+            "SELECT deleted_at, title FROM performance WHERE performance_id = ?", performanceId);
+    assertThat(deletedRow.get("deleted_at")).isNotNull();
+    assertThat(deletedRow.get("title")).isEqualTo(PATCHED_TITLE);
   }
 
   /**
@@ -220,7 +231,8 @@ class PerformanceConcurrentWriteTest {
   @DisplayName("PATCH가 예매 오픈 시각을 명시 전송하면 나중에 커밋한 PATCH가 해제를 이긴다")
   void explicitBookingOpenAtInPatchOverwritesClear() {
     Long performanceId = saveCommitted(LocalDateTime.now().plusDays(1));
-    LocalDateTime rescheduled = LocalDateTime.now().plusDays(7).truncatedTo(ChronoUnit.MILLIS);
+    // API는 @JsonFormat("yyyy-MM-dd HH:mm:ss")로 초 단위까지만 바인딩되므로 계약에 맞춰 자른다.
+    LocalDateTime rescheduled = LocalDateTime.now().plusDays(7).truncatedTo(ChronoUnit.SECONDS);
 
     outerTx.executeWithoutResult(
         status -> {
