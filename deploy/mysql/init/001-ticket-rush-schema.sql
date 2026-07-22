@@ -19,13 +19,14 @@ CREATE TABLE `booking` (
   `booking_number` varchar(50) COLLATE utf8mb4_unicode_ci NOT NULL,
   `booking_status` enum('CANCELED','CONFIRMED','EXPIRED','PENDING','REFUNDED','REFUNDING') COLLATE utf8mb4_unicode_ci NOT NULL,
   `confirmed_at` datetime(6) DEFAULT NULL,
-  `refund_failed_at` datetime(6) DEFAULT NULL,
   `performance_id` bigint NOT NULL,
+  `refund_failed_at` datetime(6) DEFAULT NULL,
   `seat_id` bigint NOT NULL,
   `user_id` bigint NOT NULL,
   `version` bigint NOT NULL DEFAULT '0',
   PRIMARY KEY (`booking_id`),
   UNIQUE KEY `UK6j74n7w8mp19sixr5272028mk` (`booking_number`),
+  KEY `idx_booking_user_id_status` (`user_id`,`booking_status`),
   KEY `idx_booking_status_updated_at` (`booking_status`,`updated_at`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 /*!40101 SET character_set_client = @saved_cs_client */;
@@ -255,10 +256,10 @@ CREATE TABLE `ticket` (
   `created_at` datetime(6) DEFAULT NULL,
   `updated_at` datetime(6) DEFAULT NULL,
   `booking_id` bigint NOT NULL,
-  `user_id` bigint DEFAULT NULL,
   `ticket_status` enum('CANCELED','UNUSED','USED') COLLATE utf8mb4_unicode_ci NOT NULL,
   `ticket_token_hash` varchar(64) COLLATE utf8mb4_unicode_ci NOT NULL,
   `used_at` datetime(6) DEFAULT NULL,
+  `user_id` bigint DEFAULT NULL,
   PRIMARY KEY (`ticket_id`),
   UNIQUE KEY `UKgco27k8cbs8j67db3oadbna6o` (`booking_id`),
   UNIQUE KEY `UKgbou3cclxytcn7k5xlag9s0n8` (`ticket_token_hash`)
