@@ -9,6 +9,7 @@ import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.EnumType;
 import jakarta.persistence.Enumerated;
+import jakarta.persistence.Index;
 import jakarta.persistence.Table;
 import jakarta.persistence.Version;
 import java.time.LocalDateTime;
@@ -17,8 +18,41 @@ import lombok.Builder;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
 
+/**
+ * 예매. 인덱스 두 개를 두는 근거는 아래와 같다.
+ *
+ * <p><b>idx_booking_user_id_status</b> — 내 예매 목록 조회(#464). {@code BookingGetMyBookingsUseCase}가
+ * 호출하는 {@code findByUserIdAndBookingStatus}는 이 인덱스가 없으면 옵티마이저가 idx_booking_status_updated_at의 선두
+ * 컬럼(booking_status)만 써서 <b>CONFIRMED 전체를 훑은 뒤 user_id로 필터한다</b>. 반환이 {@code Page}라 count 쿼리까지 같은
+ * 스캔을 반복한다(18,000행/CONFIRMED 12,600행 기준 요청당 15.6ms → 0.2ms, count는 커버링 인덱스가 되어 원본 테이블 접근이 사라짐). 컬럼
+ * 순서는 둘 다 equality지만 선택도가 높은 {@code user_id}가 선두다. {@code created_at}을 붙인 3컬럼은 측정으로 기각했다 —
+ * CONFIRMED 경로의 정렬 키가 {@code confirmed_at DESC, created_at DESC}라 filesort가 그대로 남고, 후보가 이미 사용자당 수십
+ * 행으로 줄어든 뒤의 정렬이라 실익이 없다. 대가로 예매 쓰기마다 인덱스 유지 비용이 늘어난다 — 전수 스캔 2회를 없애는 값으로 수용한다.
+ *
+ * <p><b>idx_booking_status_updated_at</b> — 환불 복구 폴링용(ADR 0005). 스키마 스냅샷과 ADR에는 있는데 엔티티 선언이 누락돼
+ * 로컬(ddl-auto=update)·H2 테스트 DB에는 생성되지 않던 drift를 #464에서 보정했다.
+ *
+ * <p><b>기존 가동 DB에는 수동 DDL이 필요하다.</b> {@code @Table}의 {@code @Index}는 ddl-auto=update인 로컬/신규 초기화
+ * DB(init SQL)에서만 생성되고, prod(validate)는 인덱스 부재를 검출하지 못한다(#296 수동 DDL 관행과 동일). 아래는 인덱스가 없는 기존 DB에만
+ * 실행한다(신규 초기화 DB는 init SQL이 이미 만들어 Duplicate key name 실패):
+ *
+ * <pre>
+ *   ALTER TABLE booking
+ *     ADD INDEX idx_booking_user_id_status (user_id, booking_status),
+ *     ALGORITHM=INPLACE, LOCK=NONE;
+ * </pre>
+ *
+ * <p>실행 전 {@code SHOW INDEX FROM booking}으로 두 인덱스의 실존 여부를 먼저 확인한다. idx_booking_status_updated_at은
+ * ADR 0005에서 이미 적용된 전제라 위 DDL에 포함하지 않았지만(중복 실행 시 Duplicate key name), 이 전제 역시 검증된 적 없는 가정이므로 — 이
+ * 클래스가 보정한 drift가 그랬듯 — 확인 결과 없으면 그때 같은 방식으로 함께 추가한다.
+ */
 @Entity
-@Table(name = "booking")
+@Table(
+    name = "booking",
+    indexes = {
+      @Index(name = "idx_booking_user_id_status", columnList = "user_id, booking_status"),
+      @Index(name = "idx_booking_status_updated_at", columnList = "booking_status, updated_at")
+    })
 @Getter
 @NoArgsConstructor(access = AccessLevel.PROTECTED)
 @AttributeOverride(name = "id", column = @Column(name = "booking_id"))
