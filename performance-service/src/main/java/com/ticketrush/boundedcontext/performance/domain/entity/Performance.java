@@ -27,29 +27,42 @@ import lombok.NoArgsConstructor;
 import org.hibernate.annotations.DynamicUpdate;
 import org.hibernate.annotations.SQLRestriction;
 
-/*
- * 동적 UPDATE (#459). Performance를 로드해 더티 체킹으로 쓰는 경로(PATCH·상태 변경·소프트 삭제)는 변경하지 않은
- * 컬럼까지 포함한 전체 행 UPDATE를 내보낸다. 그러면 로드 이후 다른 트랜잭션이 커밋한 값이 stale 값으로 조용히
- * 덮어써진다. 특히 예매 오픈 시각 해제(#438)가 커밋된 뒤 PATCH가 커밋되면 해제된 bookingOpenAt이 부활해 공연이
- * 어드민 모르게 자동 전환 대상으로 복귀하고, bookingOpenAt이 다시 채워지므로 스케줄러의 self-heal조차 불가능하다.
+/**
+ * 공연.
  *
- * @Version(낙관적 락)이 아니라 @DynamicUpdate를 쓰는 이유는 stale write의 상대편이 둘 다 벌크 JPQL이기 때문이다.
- * PerformanceRepository의 clearBookingOpenAt과 bulkTransitionStatusByBookingOpenAtDue는 version을
- * 증가시키지도 검사하지도 않으므로(seat·booking도 같은 한계 — ADR 0005), @Version을 달아도 PATCH의 버전 검사는
- * 그대로 통과하고 전체 컬럼 UPDATE가 나간다. 즉 낙관적 락으로는 이 경합이 잡히지 않는다.
+ * <p><b>동적 UPDATE (#459).</b> 이 엔티티를 로드해 더티 체킹으로 쓰는 경로(PATCH·상태 변경·소프트 삭제)는 변경하지 않은 컬럼까지 포함한 전체 행
+ * UPDATE를 내보낸다. 그러면 로드 이후 다른 트랜잭션이 커밋한 값이 stale 값으로 조용히 덮어써진다. 특히 예매 오픈 시각 해제(#438)가 커밋된 뒤 PATCH가
+ * 커밋되면 해제된 bookingOpenAt이 부활해 공연이 어드민 모르게 자동 전환 대상으로 복귀하고, bookingOpenAt이 다시 채워지므로 스케줄러의
+ * self-heal조차 불가능하다.
  *
- * 동적 UPDATE만으로 안전한 이유는 경합하는 경로들이 <b>서로소 컬럼을 쓰기 때문이다.</b> PATCH는 update()가 받은
- * non-null 필드만, 상태 변경은 performance_status만, 소프트 삭제는 deleted_at만, 두 벌크는 각각
- * performance_status와 booking_open_at만 건드린다. 변경 컬럼만 SET에 실리면 서로의 쓰기를 덮을 일이 없다.
+ * <p>{@code @Version}(낙관적 락)이 아니라 {@code @DynamicUpdate}를 쓰는 이유는 <b>이 경합의 상대편이 둘 다 벌크 JPQL이기
+ * 때문이다.</b> PerformanceRepository의 clearBookingOpenAt과 bulkTransitionStatusByBookingOpenAtDue는
+ * version을 증가시키지도 검사하지도 않으므로(seat·booking도 같은 한계 — ADR 0005), {@code @Version}을 달아도 PATCH의 버전 검사는
+ * 그대로 통과하고 전체 컬럼 UPDATE가 나간다.
  *
- * 이 불변식이 깨지는 경우는 둘이다. (1) 두 경로가 같은 컬럼을 다투게 되거나, (2) read-modify-write 계산(예: 잔여
- * 좌석 수 증감)이 엔티티에 추가되면 변경 컬럼만 써도 lost update가 난다. 지금 update()·changeStatus()·
- * softDelete()는 전부 대입형이라 (2)에 해당하지 않는다. 그때는 @Version 도입을 검토한다.
+ * <p>동적 UPDATE로 충분한 이유는 경합하는 경로들이 <b>서로소 컬럼을 쓰기 때문이다.</b> PATCH는 update()가 받은 non-null 필드만, 상태 변경은
+ * performance_status만, 소프트 삭제는 deleted_at만, 두 벌크는 각각 performance_status와 booking_open_at만 건드린다. 변경
+ * 컬럼만 SET에 실리면 서로의 쓰기를 덮을 일이 없다.
  *
- * 남는 한계로, PATCH가 bookingOpenAt을 명시로 실어 보내면 해제와 같은 컬럼을 다투므로 커밋 순서대로
- * last-write-wins다. 이건 어드민의 의도적 쓰기라 stale 부활과 구분되며 이번 범위에서 제외했다.
+ * <p>이 불변식이 깨지는 경우는 셋이다.
  *
- * @DynamicInsert는 도입하지 않는다. INSERT는 생성 경로 하나뿐이라 경합이 없다.
+ * <ol>
+ *   <li>두 경로가 같은 컬럼을 다투게 되는 경우.
+ *   <li>stale read에 의존하는 가드나 계산이 추가되는 경우. 변경 컬럼만 써도 lost update가 난다.
+ *   <li>{@code @ElementCollection}(imageGalleryUrls·facilities)을 <b>로드된</b> 엔티티에서 바꾸는 경우.
+ *       updateUrls()가 컬렉션 인스턴스를 통째로 교체하므로 Hibernate는 컬렉션 테이블을 전량 DELETE 후 재INSERT하는데, 동적 UPDATE는
+ *       basic 컬럼의 SET 절만 좁힐 뿐 컬렉션 DML에는 관여하지 않는다. 지금은 생성 직후에만 호출돼 문제가 없지만 이미지 수정 기능이 붙으면 달라진다.
+ * </ol>
+ *
+ * <p><b>이미 (2)에 해당하는 경로가 하나 있다 — changeStatus().</b> canTransitionTo()가 로드된(=stale일 수 있는) 상태를 읽어
+ * 전이를 검증하므로, 어드민 둘이 같은 상태를 로드한 뒤 각각 CANCELED와 CLOSED를 커밋하면 늦은 쪽이 종단 상태를 덮는다. 두 경로 모두
+ * performance_status를 쓰는 같은 컬럼 경합이라 동적 UPDATE로는 막을 수 없고, {@code @Version}이었다면 잡혔을 유일한 경합이다. 어드민 동시
+ * 상태 변경이 실제 문제로 드러나면 그때 낙관적 락을 검토한다.
+ *
+ * <p>남는 한계로, PATCH가 bookingOpenAt을 명시로 실어 보내면 해제와 같은 컬럼을 다투므로 커밋 순서대로 last-write-wins다. 이건 어드민의 의도적
+ * 쓰기라 stale 부활과 구분되며 이번 범위에서 제외했다.
+ *
+ * <p>{@code @DynamicInsert}는 도입하지 않는다. INSERT는 생성 경로 하나뿐이라 경합이 없다.
  */
 @Entity
 @Table(name = "performance")
