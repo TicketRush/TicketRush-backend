@@ -21,7 +21,7 @@ import lombok.NoArgsConstructor;
 /**
  * 좌석. 인덱스 두 개를 두는 근거는 아래와 같다.
  *
- * <p><b>idx_seat_performance_id</b> — {@code SeatRepository.findSeatLayoutsByPerformanceId}가
+ * <p><b>idx_seat_performance_id</b> — {@code SeatRepository.findSeatMapByPerformanceId}가
  * performanceId로만 필터한다. 인덱스가 없으면 공연당 수천 행을 매 요청 풀스캔해 부하 테스트 수치가 앱이 아닌 인덱스 부재를 반영한다.
  *
  * <p><b>idx_seat_status_hold_expired_at</b> — 만료 HOLD 조회가 주기 스케줄러의 핫패스다(#343). {@code
