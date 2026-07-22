@@ -4,7 +4,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.assertj.core.api.Assertions.tuple;
 
-import com.ticketrush.boundedcontext.seat.app.dto.response.SeatLayoutResponse;
+import com.ticketrush.boundedcontext.seat.app.dto.response.SeatMapItemResponse;
 import com.ticketrush.boundedcontext.seat.domain.entity.Seat;
 import com.ticketrush.boundedcontext.seat.domain.entity.SeatLayout;
 import com.ticketrush.global.types.SeatStatus;
@@ -27,7 +27,7 @@ class SeatRepositoryTest {
 
   @Test
   @DisplayName("공연 ID로 해당 공연의 좌석 정보(DTO)만 조회한다")
-  void findSeatLayoutsByPerformanceId() {
+  void findSeatMapByPerformanceId() {
     // given
     Long targetPerformanceId = 1L;
     Long otherPerformanceId = 99L;
@@ -73,17 +73,17 @@ class SeatRepositoryTest {
     entityManager.clear();
 
     // when
-    List<SeatLayoutResponse> result =
-        seatRepository.findSeatLayoutsByPerformanceId(targetPerformanceId);
+    List<SeatMapItemResponse> result =
+        seatRepository.findSeatMapByPerformanceId(targetPerformanceId);
 
     // then
     assertThat(result)
         .hasSize(2)
         .extracting(
-            SeatLayoutResponse::seatId,
-            SeatLayoutResponse::seatLayoutId,
-            SeatLayoutResponse::seatNumber,
-            SeatLayoutResponse::seatStatus)
+            SeatMapItemResponse::seatId,
+            SeatMapItemResponse::seatLayoutId,
+            SeatMapItemResponse::seatNumber,
+            SeatMapItemResponse::seatStatus)
         .containsExactlyInAnyOrder(
             tuple(seat1.getId(), targetLayout.getId(), "A-1", SeatStatus.AVAILABLE),
             tuple(seat2.getId(), targetLayout.getId(), "A-2", SeatStatus.AVAILABLE));

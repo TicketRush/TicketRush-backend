@@ -6,7 +6,7 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
-import com.ticketrush.boundedcontext.seat.app.dto.response.SeatLayoutResponse;
+import com.ticketrush.boundedcontext.seat.app.dto.response.SeatMapItemResponse;
 import com.ticketrush.boundedcontext.seat.app.dto.response.SeatNumberResponse;
 import com.ticketrush.boundedcontext.seat.app.dto.response.SeatStatusCountsResponse;
 import com.ticketrush.boundedcontext.seat.app.facade.SeatFacade;
@@ -35,14 +35,14 @@ class SeatControllerTest {
   @Test
   @WithMockUser
   @DisplayName("공연 ID로 전체 좌석 맵 조회를 성공하고 200 OK를 반환한다")
-  void getSeatLayouts() throws Exception {
+  void getSeatMap() throws Exception {
     // given
     Long performanceId = 1L;
-    List<SeatLayoutResponse> mockResponse =
+    List<SeatMapItemResponse> mockResponse =
         List.of(
-            new SeatLayoutResponse(1L, 101L, "A-1", SeatStatus.AVAILABLE, null),
-            new SeatLayoutResponse(2L, 101L, "A-2", SeatStatus.HOLD, null));
-    given(seatFacade.getPerformanceSeatLayouts(performanceId)).willReturn(mockResponse);
+            new SeatMapItemResponse(1L, 101L, "A-1", SeatStatus.AVAILABLE, null),
+            new SeatMapItemResponse(2L, 101L, "A-2", SeatStatus.HOLD, null));
+    given(seatFacade.getPerformanceSeatMap(performanceId)).willReturn(mockResponse);
 
     // when & then
     mockMvc

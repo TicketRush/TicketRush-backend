@@ -3,7 +3,7 @@ package com.ticketrush.boundedcontext.seat.app.usecase;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
-import com.ticketrush.boundedcontext.seat.app.dto.response.SeatLayoutResponse;
+import com.ticketrush.boundedcontext.seat.app.dto.response.SeatMapItemResponse;
 import com.ticketrush.boundedcontext.seat.domain.entity.SeatLayout;
 import com.ticketrush.boundedcontext.seat.out.repository.SeatLayoutRepository;
 import com.ticketrush.boundedcontext.seat.out.repository.SeatRepository;
@@ -42,10 +42,12 @@ class SeatCreateDefaultLayoutUseCaseTest {
     assertThat(layouts.getFirst().getTotalRows()).isEqualTo(10);
     assertThat(layouts.getFirst().getMaxCols()).isEqualTo(12);
 
-    List<SeatLayoutResponse> seats = seatRepository.findSeatLayoutsByPerformanceId(performanceId);
+    List<SeatMapItemResponse> seats = seatRepository.findSeatMapByPerformanceId(performanceId);
     assertThat(seats).hasSize(120);
-    assertThat(seats).extracting(SeatLayoutResponse::seatStatus).containsOnly(SeatStatus.AVAILABLE);
-    assertThat(seats).extracting(SeatLayoutResponse::seatNumber).contains("A-1", "J-12");
+    assertThat(seats)
+        .extracting(SeatMapItemResponse::seatStatus)
+        .containsOnly(SeatStatus.AVAILABLE);
+    assertThat(seats).extracting(SeatMapItemResponse::seatNumber).contains("A-1", "J-12");
   }
 
   @Test
@@ -60,7 +62,7 @@ class SeatCreateDefaultLayoutUseCaseTest {
 
     // then
     assertThat(seatLayoutRepository.findAll()).hasSize(1);
-    assertThat(seatRepository.findSeatLayoutsByPerformanceId(performanceId)).hasSize(120);
+    assertThat(seatRepository.findSeatMapByPerformanceId(performanceId)).hasSize(120);
   }
 
   @Test

@@ -1,6 +1,6 @@
 package com.ticketrush.boundedcontext.seat.out.repository;
 
-import com.ticketrush.boundedcontext.seat.app.dto.response.SeatLayoutResponse;
+import com.ticketrush.boundedcontext.seat.app.dto.response.SeatMapItemResponse;
 import com.ticketrush.boundedcontext.seat.app.dto.response.SeatNumberResponse;
 import com.ticketrush.boundedcontext.seat.app.dto.response.SeatStatusCountsResponse;
 import com.ticketrush.boundedcontext.seat.domain.entity.Seat;
@@ -38,12 +38,11 @@ public interface SeatRepository extends JpaRepository<Seat, Long> {
   }
 
   @Query(
-      "SELECT new com.ticketrush.boundedcontext.seat.app.dto.response.SeatLayoutResponse("
+      "SELECT new com.ticketrush.boundedcontext.seat.app.dto.response.SeatMapItemResponse("
           + "s.id, s.seatLayoutId, s.seatNumber, s.seatStatus, s.holdExpiredAt) "
           + "FROM Seat s "
           + "WHERE s.performanceId = :performanceId")
-  List<SeatLayoutResponse> findSeatLayoutsByPerformanceId(
-      @Param("performanceId") Long performanceId);
+  List<SeatMapItemResponse> findSeatMapByPerformanceId(@Param("performanceId") Long performanceId);
 
   @Query(
       "SELECT new com.ticketrush.boundedcontext.seat.app.dto.response.SeatNumberResponse("
