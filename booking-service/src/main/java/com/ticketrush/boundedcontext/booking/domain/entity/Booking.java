@@ -42,8 +42,9 @@ import lombok.NoArgsConstructor;
  *     ALGORITHM=INPLACE, LOCK=NONE;
  * </pre>
  *
- * <p>idx_booking_status_updated_at은 ADR 0005에서 이미 적용된 전제라 위 DDL에 포함하지 않는다(중복 실행 시 Duplicate key
- * name).
+ * <p>실행 전 {@code SHOW INDEX FROM booking}으로 두 인덱스의 실존 여부를 먼저 확인한다. idx_booking_status_updated_at은
+ * ADR 0005에서 이미 적용된 전제라 위 DDL에 포함하지 않았지만(중복 실행 시 Duplicate key name), 이 전제 역시 검증된 적 없는 가정이므로 — 이
+ * 클래스가 보정한 drift가 그랬듯 — 확인 결과 없으면 그때 같은 방식으로 함께 추가한다.
  */
 @Entity
 @Table(
