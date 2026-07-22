@@ -42,13 +42,9 @@ class SeatCreateDefaultLayoutUseCaseTest {
     assertThat(layouts.getFirst().getTotalRows()).isEqualTo(10);
     assertThat(layouts.getFirst().getMaxCols()).isEqualTo(12);
 
-    assertThat(seatRepository.countByPerformanceId(performanceId)).isEqualTo(120L);
-    assertThat(
-            seatRepository.countByPerformanceIdAndSeatStatus(performanceId, SeatStatus.AVAILABLE))
-        .isEqualTo(120L);
-
     List<SeatLayoutResponse> seats = seatRepository.findSeatLayoutsByPerformanceId(performanceId);
     assertThat(seats).hasSize(120);
+    assertThat(seats).extracting(SeatLayoutResponse::seatStatus).containsOnly(SeatStatus.AVAILABLE);
     assertThat(seats).extracting(SeatLayoutResponse::seatNumber).contains("A-1", "J-12");
   }
 
@@ -64,7 +60,7 @@ class SeatCreateDefaultLayoutUseCaseTest {
 
     // then
     assertThat(seatLayoutRepository.findAll()).hasSize(1);
-    assertThat(seatRepository.countByPerformanceId(performanceId)).isEqualTo(120L);
+    assertThat(seatRepository.findSeatLayoutsByPerformanceId(performanceId)).hasSize(120);
   }
 
   @Test

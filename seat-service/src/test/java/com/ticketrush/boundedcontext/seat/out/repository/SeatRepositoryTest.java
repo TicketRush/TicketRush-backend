@@ -26,7 +26,7 @@ class SeatRepositoryTest {
   @Autowired private TestEntityManager entityManager;
 
   @Test
-  @DisplayName("Seat과 마스터 SeatLayout을 조인하여 해당하는 공연의 좌석 정보(DTO)만 조회한다")
+  @DisplayName("공연 ID로 해당 공연의 좌석 정보(DTO)만 조회한다")
   void findSeatLayoutsByPerformanceId() {
     // given
     Long targetPerformanceId = 1L;
