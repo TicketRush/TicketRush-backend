@@ -2,8 +2,13 @@ package com.ticketrush.boundedcontext.performance.in.api.v1;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+import com.ticketrush.boundedcontext.performance.app.dto.request.PerformanceChangeStatusRequest;
+import com.ticketrush.boundedcontext.performance.app.dto.request.PerformancePatchRequest;
+import com.ticketrush.boundedcontext.performance.app.usecase.PerformanceChangeStatusUseCase;
 import com.ticketrush.boundedcontext.performance.app.usecase.PerformanceClearBookingOpenAtUseCase;
+import com.ticketrush.boundedcontext.performance.app.usecase.PerformanceDeleteUseCase;
 import com.ticketrush.boundedcontext.performance.app.usecase.PerformanceOpenBookingUseCase;
+import com.ticketrush.boundedcontext.performance.app.usecase.PerformancePatchUseCase;
 import com.ticketrush.boundedcontext.performance.domain.entity.Performance;
 import com.ticketrush.boundedcontext.performance.domain.types.Genre;
 import com.ticketrush.boundedcontext.performance.domain.types.PerformanceStatus;
@@ -14,6 +19,8 @@ import java.sql.Timestamp;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.LocalTime;
+import java.time.temporal.ChronoUnit;
+import java.util.Optional;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
@@ -38,10 +45,12 @@ import org.springframework.transaction.support.TransactionTemplate;
  *
  * <p>검증은 "UPDATE의 SET 절에 어떤 컬럼이 실렸는가"를 직접 보지 않고 <b>다른 트랜잭션이 커밋한 값이 살아남는가</b>로 한다. 레포에 SQL 문장을 단언할
  * 인프라가 없기도 하지만, SQL 문자열 비교는 취약한 반면 이 단언은 회귀가 실제로 사용자에게 드러나는 형태 그대로다. {@code Performance}에서
- * {@code @DynamicUpdate}를 떼면 아래 세 건이 모두 깨진다.
+ * {@code @DynamicUpdate}를 떼면 stale 방지 4건이 모두 깨진다.
  *
- * <p>커밋이 실제로 남으므로 {@code @AfterEach}에서 물리 삭제한다. H2가 {@code DB_CLOSE_DELAY=-1}이라 컨텍스트를 공유하는 다른 테스트를
- * 오염시키고, {@code @SQLRestriction} 때문에 소프트 삭제된 행은 JPA로는 지울 수 없다.
+ * <p>커밋이 실제로 남으므로 {@code @AfterEach}에서 물리 삭제한다. {@code @SQLRestriction} 때문에 소프트 삭제된 행은 JPA로는 지울 수
+ * 없어 네이티브로 지운다. 조건 없이 전량 삭제해도 되는 이유는 이 testdb를 공유하는 다른 클래스가 전부 클래스 레벨 {@code @Transactional}로 롤백되어
+ * 커밋된 행을 남기지 않기 때문이다(비트랜잭셔널한 PerformanceListCacheTest는 {@code @DynamicPropertySource}로 DB 자체가 분리돼
+ * 있다). 컨텍스트 캐시를 재사용하려고 일부러 DB를 분리하지 않았으므로, 앞으로 커밋을 남기는 클래스가 testdb에 추가되면 이 정리를 자기 id 기준으로 좁혀야 한다.
  */
 @SpringBootTest
 @ActiveProfiles("test")
@@ -58,8 +67,11 @@ class PerformanceConcurrentWriteTest {
   @MockitoBean private EventPublisher eventPublisher;
 
   @Autowired private PerformanceRepository performanceRepository;
+  @Autowired private PerformancePatchUseCase performancePatchUseCase;
+  @Autowired private PerformanceChangeStatusUseCase performanceChangeStatusUseCase;
   @Autowired private PerformanceClearBookingOpenAtUseCase performanceClearBookingOpenAtUseCase;
   @Autowired private PerformanceOpenBookingUseCase performanceOpenBookingUseCase;
+  @Autowired private PerformanceDeleteUseCase performanceDeleteUseCase;
   @Autowired private PlatformTransactionManager transactionManager;
   @Autowired private JdbcTemplate jdbcTemplate;
 
@@ -101,14 +113,24 @@ class PerformanceConcurrentWriteTest {
                 .getId());
   }
 
-  private Performance findCommitted(Long performanceId) {
-    return separateTx.execute(
-        status -> performanceRepository.findById(performanceId).orElseThrow());
+  private Optional<Performance> findCommitted(Long performanceId) {
+    return separateTx.execute(status -> performanceRepository.findById(performanceId));
   }
 
-  /** PATCH가 공연명만 바꾸는 상황. bookingOpenAt은 전송되지 않았으므로(null) 엔티티에서 건드리지 않는다. */
-  private void patchTitleOnly(Performance performance) {
-    performance.update(PATCHED_TITLE, null, null, null, null, null, null, null, null, null, null);
+  private PerformancePatchRequest patchRequest(String title, LocalDateTime bookingOpenAt) {
+    return new PerformancePatchRequest(
+        title, null, null, null, null, null, null, null, null, null, bookingOpenAt);
+  }
+
+  /**
+   * 공연명만 바꾸는 PATCH. bookingOpenAt은 전송되지 않았으므로(null) {@code Performance.update()}가 건드리지 않는다.
+   *
+   * <p>엔티티 메서드를 직접 부르지 않고 UseCase를 태우는 이유는 경합의 반대편(해제·스케줄러)도 UseCase로 돌리기 때문이다. 실제 진입점이 로드하는 방식이
+   * 바뀌면 이 테스트도 함께 깨져야 한다. {@code PerformancePatchUseCase}는 {@code @Transactional}(REQUIRED)이라
+   * outerTx에 참여하므로 커밋 순서 시나리오는 그대로 유지된다.
+   */
+  private void patchTitleOnly(Long performanceId) {
+    performancePatchUseCase.execute(performanceId, patchRequest(PATCHED_TITLE, null));
   }
 
   @Test
@@ -118,14 +140,13 @@ class PerformanceConcurrentWriteTest {
 
     outerTx.executeWithoutResult(
         status -> {
-          Performance loaded = performanceRepository.findById(performanceId).orElseThrow();
-          patchTitleOnly(loaded);
+          patchTitleOnly(performanceId);
 
           separateTx.executeWithoutResult(
               inner -> performanceClearBookingOpenAtUseCase.execute(performanceId));
         });
 
-    Performance result = findCommitted(performanceId);
+    Performance result = findCommitted(performanceId).orElseThrow();
     assertThat(result.getBookingOpenAt()).isNull();
     assertThat(result.getTitle()).isEqualTo(PATCHED_TITLE);
   }
@@ -137,14 +158,14 @@ class PerformanceConcurrentWriteTest {
 
     outerTx.executeWithoutResult(
         status -> {
-          Performance loaded = performanceRepository.findById(performanceId).orElseThrow();
-          loaded.changeStatus(PerformanceStatus.ON_SALE);
+          performanceChangeStatusUseCase.execute(
+              performanceId, new PerformanceChangeStatusRequest(PerformanceStatus.ON_SALE));
 
           separateTx.executeWithoutResult(
               inner -> performanceClearBookingOpenAtUseCase.execute(performanceId));
         });
 
-    Performance result = findCommitted(performanceId);
+    Performance result = findCommitted(performanceId).orElseThrow();
     assertThat(result.getBookingOpenAt()).isNull();
     assertThat(result.getPerformanceStatus()).isEqualTo(PerformanceStatus.ON_SALE);
   }
@@ -160,15 +181,57 @@ class PerformanceConcurrentWriteTest {
 
     outerTx.executeWithoutResult(
         status -> {
-          Performance loaded = performanceRepository.findById(performanceId).orElseThrow();
-          patchTitleOnly(loaded);
+          patchTitleOnly(performanceId);
 
           separateTx.executeWithoutResult(inner -> performanceOpenBookingUseCase.execute());
         });
 
-    Performance result = findCommitted(performanceId);
+    Performance result = findCommitted(performanceId).orElseThrow();
     assertThat(result.getPerformanceStatus()).isEqualTo(PerformanceStatus.ON_SALE);
     assertThat(result.getTitle()).isEqualTo(PATCHED_TITLE);
+  }
+
+  /**
+   * 소프트 삭제 부활. 회귀 시 <b>삭제한 공연이 목록에 다시 나타나므로</b> 이 클래스가 막는 것 중 사용자에게 가장 먼저 드러나는 사고다.
+   * {@code @SQLRestriction} 때문에 PATCH는 언제나 deleted_at이 NULL인 상태로 로드하고, 전체 컬럼 UPDATE는 그 NULL을 그대로 다시
+   * 쓴다.
+   */
+  @Test
+  @DisplayName("PATCH가 로드한 뒤 공연이 삭제되면, PATCH 커밋이 삭제를 되살리지 않는다")
+  void patchDoesNotResurrectSoftDeletedPerformance() {
+    Long performanceId = saveCommitted(null);
+
+    outerTx.executeWithoutResult(
+        status -> {
+          patchTitleOnly(performanceId);
+
+          separateTx.executeWithoutResult(inner -> performanceDeleteUseCase.execute(performanceId));
+        });
+
+    assertThat(findCommitted(performanceId)).isEmpty();
+  }
+
+  /**
+   * 이건 방어 대상이 아니라 <b>이번에 결정한 의미론</b>을 고정하는 특성화 테스트다(#459). PATCH가 bookingOpenAt을 명시로 실어 보내면 해제와 같은
+   * 컬럼을 다투므로 동적 UPDATE로 갈리지 않고 나중에 커밋한 쪽이 이긴다. 어드민의 의도적 쓰기라 stale 부활과 구분해 방어하지 않기로 했다. 나중에 누가 이걸
+   * 버그로 보고 되돌리려 할 때 이 테스트가 판단 근거가 된다.
+   */
+  @Test
+  @DisplayName("PATCH가 예매 오픈 시각을 명시 전송하면 나중에 커밋한 PATCH가 해제를 이긴다")
+  void explicitBookingOpenAtInPatchOverwritesClear() {
+    Long performanceId = saveCommitted(LocalDateTime.now().plusDays(1));
+    LocalDateTime rescheduled = LocalDateTime.now().plusDays(7).truncatedTo(ChronoUnit.MILLIS);
+
+    outerTx.executeWithoutResult(
+        status -> {
+          performancePatchUseCase.execute(performanceId, patchRequest(null, rescheduled));
+
+          separateTx.executeWithoutResult(
+              inner -> performanceClearBookingOpenAtUseCase.execute(performanceId));
+        });
+
+    assertThat(findCommitted(performanceId).orElseThrow().getBookingOpenAt())
+        .isEqualTo(rescheduled);
   }
 
   /**
@@ -186,9 +249,8 @@ class PerformanceConcurrentWriteTest {
         Timestamp.valueOf(past),
         performanceId);
 
-    outerTx.executeWithoutResult(
-        status -> patchTitleOnly(performanceRepository.findById(performanceId).orElseThrow()));
+    outerTx.executeWithoutResult(status -> patchTitleOnly(performanceId));
 
-    assertThat(findCommitted(performanceId).getUpdatedAt()).isAfter(past);
+    assertThat(findCommitted(performanceId).orElseThrow().getUpdatedAt()).isAfter(past);
   }
 }
