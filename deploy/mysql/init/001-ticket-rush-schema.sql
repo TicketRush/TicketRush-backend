@@ -130,7 +130,8 @@ CREATE TABLE `payment` (
   PRIMARY KEY (`payment_id`),
   UNIQUE KEY `UK6vew52c3hm7vwaiwfvt498x3` (`payment_key`),
   UNIQUE KEY `uk_payment_completed_booking` (`completed_booking_id`),
-  KEY `idx_payment_booking_id` (`booking_id`)
+  KEY `idx_payment_booking_id` (`booking_id`),
+  KEY `idx_payment_user_id_status` (`user_id`,`status`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 /*!40101 SET character_set_client = @saved_cs_client */;
 DROP TABLE IF EXISTS `performance`;
