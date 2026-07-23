@@ -168,6 +168,9 @@ public class KafkaConfig {
     errorHandler.addNotRetryableExceptions(
         DeserializationException.class, ClassCastException.class, IllegalArgumentException.class);
     errorHandler.addRetryableExceptions(RetriableException.class);
+    // MANUAL 계열 ack 모드에서는 복구(DLT 발행)된 레코드의 오프셋이 기본적으로 커밋되지 않아,
+    // 리밸런스·재시작 시 poison 메시지가 재처리되어 DLT에 중복 적재된다. 복구 시점에 커밋한다.
+    errorHandler.setCommitRecovered(true);
 
     factory.setCommonErrorHandler(errorHandler);
     return factory;
