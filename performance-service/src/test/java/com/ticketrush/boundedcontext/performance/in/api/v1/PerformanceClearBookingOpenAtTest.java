@@ -1,14 +1,17 @@
 package com.ticketrush.boundedcontext.performance.in.api.v1;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatCode;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import com.ticketrush.boundedcontext.performance.app.usecase.PerformanceClearBookingOpenAtUseCase;
-import com.ticketrush.boundedcontext.performance.app.usecase.PerformanceOpenBookingUseCase;
 import com.ticketrush.boundedcontext.performance.domain.entity.Performance;
 import com.ticketrush.boundedcontext.performance.domain.types.Genre;
 import com.ticketrush.boundedcontext.performance.domain.types.PerformanceStatus;
 import com.ticketrush.boundedcontext.performance.out.repository.PerformanceRepository;
 import com.ticketrush.global.eventpublisher.EventPublisher;
+import com.ticketrush.global.exception.BusinessException;
+import com.ticketrush.global.status.ErrorStatus;
 import com.ticketrush.global.util.S3UploadUtils;
 import jakarta.persistence.EntityManager;
 import java.time.LocalDate;
@@ -31,12 +34,11 @@ import org.springframework.transaction.annotation.Transactional;
       io.awspring.cloud.autoconfigure.core.AwsAutoConfiguration.class
     })
 @Transactional
-class PerformanceOpenBookingTest {
+class PerformanceClearBookingOpenAtTest {
 
   @MockitoBean private S3UploadUtils s3UploadUtils;
   @MockitoBean private EventPublisher eventPublisher;
 
-  @Autowired private PerformanceOpenBookingUseCase performanceOpenBookingUseCase;
   @Autowired private PerformanceClearBookingOpenAtUseCase performanceClearBookingOpenAtUseCase;
   @Autowired private PerformanceRepository performanceRepository;
   @Autowired private EntityManager em;
@@ -65,79 +67,64 @@ class PerformanceOpenBookingTest {
   }
 
   @Test
-  @DisplayName("오픈 시각이 도래한 UPCOMING 공연은 ON_SALE로 전환된다")
-  void openBooking_dueUpcoming_transitionsToOnSale() {
-    Performance performance = savePerformance(LocalDateTime.now().minusMinutes(1));
+  @DisplayName("설정된 예매 오픈 시각을 해제하면 null이 된다")
+  void clearBookingOpenAt_success() {
+    Performance performance = savePerformance(LocalDateTime.now().plusDays(1));
 
-    int openedCount = performanceOpenBookingUseCase.execute();
+    performanceClearBookingOpenAtUseCase.execute(performance.getId());
 
-    assertThat(openedCount).isEqualTo(1);
-    assertThat(refetch(performance.getId()).getPerformanceStatus())
-        .isEqualTo(PerformanceStatus.ON_SALE);
+    assertThat(refetch(performance.getId()).getBookingOpenAt()).isNull();
   }
 
+  /**
+   * 이 테스트는 H2에서 돌아 affected rows 의미론까지 검증하지는 못한다. 프로덕션(MySQL)에서 멱등성이 성립하는 근거는 updatedAt이 항상 갱신되는 것과
+   * Connector/J가 기본적으로 matched rows를 반환하는 것 두 가지다. updatedAt 갱신을 빼는 리팩토링은 H2에서 초록불인 채 MySQL에서만 깨질 수
+   * 있다.
+   */
   @Test
-  @DisplayName("오픈 시각이 아직 도래하지 않은 공연은 전환되지 않는다")
-  void openBooking_futureOpenAt_notTransitioned() {
-    Performance performance = savePerformance(LocalDateTime.now().plusHours(1));
-
-    int openedCount = performanceOpenBookingUseCase.execute();
-
-    assertThat(openedCount).isZero();
-    assertThat(refetch(performance.getId()).getPerformanceStatus())
-        .isEqualTo(PerformanceStatus.UPCOMING);
-  }
-
-  @Test
-  @DisplayName("오픈 시각이 설정되지 않은 공연은 전환 대상이 아니다")
-  void openBooking_nullOpenAt_notTransitioned() {
+  @DisplayName("이미 해제된 공연에 다시 해제를 요청해도 예외 없이 통과한다")
+  void clearBookingOpenAt_alreadyNull_idempotent() {
     Performance performance = savePerformance(null);
+    Long id = performance.getId();
 
-    int openedCount = performanceOpenBookingUseCase.execute();
+    assertThatCode(() -> performanceClearBookingOpenAtUseCase.execute(id))
+        .doesNotThrowAnyException();
 
-    assertThat(openedCount).isZero();
-    assertThat(refetch(performance.getId()).getPerformanceStatus())
-        .isEqualTo(PerformanceStatus.UPCOMING);
+    assertThat(refetch(id).getBookingOpenAt()).isNull();
   }
 
   @Test
-  @DisplayName("해제 API로 오픈 시각을 지운 공연은 시각이 도래했더라도 전환되지 않는다")
-  void openBooking_clearedOpenAt_notTransitioned() {
+  @DisplayName("이미 판매 중인 공연을 해제해도 상태는 ON_SALE로 유지된다")
+  void clearBookingOpenAt_onSale_statusNotRolledBack() {
     Performance performance = savePerformance(LocalDateTime.now().minusMinutes(1));
+    performance.changeStatus(PerformanceStatus.ON_SALE);
     em.flush();
 
     performanceClearBookingOpenAtUseCase.execute(performance.getId());
 
-    int openedCount = performanceOpenBookingUseCase.execute();
-
-    assertThat(openedCount).isZero();
-    assertThat(refetch(performance.getId()).getPerformanceStatus())
-        .isEqualTo(PerformanceStatus.UPCOMING);
+    Performance cleared = refetch(performance.getId());
+    assertThat(cleared.getBookingOpenAt()).isNull();
+    assertThat(cleared.getPerformanceStatus()).isEqualTo(PerformanceStatus.ON_SALE);
   }
 
   @Test
-  @DisplayName("어드민이 취소한(CANCELED) 공연은 오픈 시각이 도래해도 전환되지 않는다")
-  void openBooking_canceled_notTransitioned() {
-    Performance performance = savePerformance(LocalDateTime.now().minusMinutes(1));
-    performance.changeStatus(PerformanceStatus.CANCELED);
-    em.flush();
-
-    int openedCount = performanceOpenBookingUseCase.execute();
-
-    assertThat(openedCount).isZero();
-    assertThat(refetch(performance.getId()).getPerformanceStatus())
-        .isEqualTo(PerformanceStatus.CANCELED);
+  @DisplayName("존재하지 않는 공연 ID로 해제 요청 시 예외 발생")
+  void clearBookingOpenAt_notFound() {
+    assertThatThrownBy(() -> performanceClearBookingOpenAtUseCase.execute(Long.MAX_VALUE))
+        .isInstanceOf(BusinessException.class)
+        .hasMessage(ErrorStatus.PERFORMANCE_NOT_FOUND.getMessage());
   }
 
   @Test
-  @DisplayName("소프트 삭제된 공연은 오픈 시각이 도래해도 전환되지 않는다")
-  void openBooking_softDeleted_notTransitioned() {
-    Performance performance = savePerformance(LocalDateTime.now().minusMinutes(1));
+  @DisplayName("소프트 삭제된 공연에 해제 요청 시 예외 발생")
+  void clearBookingOpenAt_softDeleted_notFound() {
+    Performance performance = savePerformance(LocalDateTime.now().plusDays(1));
+    Long id = performance.getId();
     performance.softDelete();
     em.flush();
 
-    int openedCount = performanceOpenBookingUseCase.execute();
-
-    assertThat(openedCount).isZero();
+    assertThatThrownBy(() -> performanceClearBookingOpenAtUseCase.execute(id))
+        .isInstanceOf(BusinessException.class)
+        .hasMessage(ErrorStatus.PERFORMANCE_NOT_FOUND.getMessage());
   }
 }

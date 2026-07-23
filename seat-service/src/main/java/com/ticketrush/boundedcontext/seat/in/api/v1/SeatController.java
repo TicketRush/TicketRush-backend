@@ -1,6 +1,6 @@
 package com.ticketrush.boundedcontext.seat.in.api.v1;
 
-import com.ticketrush.boundedcontext.seat.app.dto.response.SeatLayoutResponse;
+import com.ticketrush.boundedcontext.seat.app.dto.response.SeatMapItemResponse;
 import com.ticketrush.boundedcontext.seat.app.dto.response.SeatNumberResponse;
 import com.ticketrush.boundedcontext.seat.app.dto.response.SeatStatusCountsResponse;
 import com.ticketrush.boundedcontext.seat.app.facade.SeatFacade;
@@ -31,9 +31,9 @@ public class SeatController {
 
   @GetMapping("/{performanceId}/seat-layouts")
   @Operation(summary = "공연별 좌석 배치 조회", description = "공연 ID에 해당하는 좌석 ID, 좌석 배치 ID, 좌석 번호를 조회합니다.")
-  public ResponseEntity<ApiResponse<List<SeatLayoutResponse>>> getSeatLayouts(
+  public ResponseEntity<ApiResponse<List<SeatMapItemResponse>>> getSeatMap(
       @PathVariable Long performanceId) {
-    List<SeatLayoutResponse> response = seatFacade.getPerformanceSeatLayouts(performanceId);
+    List<SeatMapItemResponse> response = seatFacade.getPerformanceSeatMap(performanceId);
     return ApiResponse.onSuccess(SuccessStatus.OK, response);
   }
 

@@ -107,6 +107,21 @@ public class PerformanceAdminController {
     return ApiResponse.onSuccess(SuccessStatus.OK);
   }
 
+  @Operation(
+      summary = "예매 오픈 시각 해제",
+      description =
+          "공연의 예매 오픈 시각을 해제해 스케줄러 자동 전환 대상에서 제외합니다. "
+              + "이미 해제된 공연에 요청해도 성공합니다. "
+              + "공연 상태는 변경되지 않으므로, 이미 판매 중인 공연을 중단하려면 상태 변경 API를 사용해야 합니다.")
+  @DeleteMapping("/{id}/booking-open-at")
+  public ResponseEntity<ApiResponse<Void>> clearBookingOpenAt(
+      @Parameter(description = "공연 ID") @Positive @PathVariable Long id) {
+
+    performanceFacade.clearBookingOpenAt(id);
+
+    return ApiResponse.onSuccess(SuccessStatus.OK);
+  }
+
   @Operation(summary = "공연 삭제", description = "공연을 논리 삭제합니다. 삭제된 공연은 모든 조회에서 제외됩니다.")
   @DeleteMapping("/{id}")
   public ResponseEntity<ApiResponse<Void>> deletePerformance(

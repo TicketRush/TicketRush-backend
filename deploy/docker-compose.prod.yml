@@ -100,6 +100,30 @@ services:
     networks:
       - ticketrush-network
 
+  # 단일 EC2에 앱 8개 + 인프라가 전부 올라가 CPU 경합이 1차 병목 후보인데, 호스트 자원 지표를
+  # 수집하는 주체가 없었다(#465). 부하 테스트(#348)의 병목 판정 근거가 여기서 나온다.
+  node-exporter:
+    image: prom/node-exporter:v1.8.2
+    container_name: ticketrush-node-exporter
+    mem_limit: 32m
+    restart: unless-stopped
+    # 컨테이너 안에서 돌지만 재는 대상은 '호스트'다. /proc·/sys를 마운트하고
+    # --path.rootfs로 가리켜야 컨테이너 네임스페이스가 아닌 EC2 실제 자원을 읽는다.
+    # 이 마운트를 빠뜨리면 지표가 나오긴 하는데 전부 컨테이너 것이라 병목 판단에 못 쓴다.
+    # 적용 확인: node_memory_MemTotal_bytes ≈ 7.6 GiB(ADR 0007 인스턴스 실측치)면 정상.
+    pid: host
+    volumes:
+      - /proc:/host/proc:ro
+      - /sys:/host/sys:ro
+      - /:/rootfs:ro
+    command:
+      - "--path.procfs=/host/proc"
+      - "--path.sysfs=/host/sys"
+      - "--path.rootfs=/rootfs"
+    # 관측 포트는 인터넷에 열지 않는다(ADR 0007). Prometheus가 같은 네트워크에서 서비스명으로 스크랩한다.
+    networks:
+      - ticketrush-network
+
   kafka-volume-init:
     image: apache/kafka:3.7.0
     container_name: ticketrush-kafka-volume-init
