@@ -1,8 +1,10 @@
 package com.ticketrush.global.config;
 
 import com.ticketrush.global.event.DomainEventEnvelope;
+import io.micrometer.core.instrument.MeterRegistry;
 import java.util.HashMap;
 import java.util.Map;
+import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.clients.producer.ProducerConfig;
@@ -20,6 +22,8 @@ import org.springframework.kafka.core.ConsumerFactory;
 import org.springframework.kafka.core.DefaultKafkaConsumerFactory;
 import org.springframework.kafka.core.DefaultKafkaProducerFactory;
 import org.springframework.kafka.core.KafkaTemplate;
+import org.springframework.kafka.core.MicrometerConsumerListener;
+import org.springframework.kafka.core.MicrometerProducerListener;
 import org.springframework.kafka.core.ProducerFactory;
 import org.springframework.kafka.listener.ContainerProperties.AckMode;
 import org.springframework.kafka.listener.DeadLetterPublishingRecoverer;
@@ -33,9 +37,12 @@ import org.springframework.kafka.support.serializer.JacksonJsonSerializer;
 @Slf4j
 @Configuration
 @EnableKafka
+@RequiredArgsConstructor
 @ConditionalOnExpression(
     "'${app.event-publisher.type}' == 'kafka' or '${app.event-publisher.type}' == 'outbox'")
 public class KafkaConfig {
+
+  private final MeterRegistry meterRegistry;
 
   private static final String DLT_SUFFIX = ".DLT";
   private static final String TRUSTED_EVENT_PACKAGE = "com.ticketrush.*";
@@ -78,7 +85,10 @@ public class KafkaConfig {
     configProps.put(ProducerConfig.LINGER_MS_CONFIG, LINGER_MS);
     configProps.put(JacksonJsonSerializer.ADD_TYPE_INFO_HEADERS, USE_TYPE_INFO_HEADERS);
 
-    return new DefaultKafkaProducerFactory<>(configProps);
+    DefaultKafkaProducerFactory<String, DomainEventEnvelope> factory =
+        new DefaultKafkaProducerFactory<>(configProps);
+    factory.addListener(new MicrometerProducerListener<>(meterRegistry));
+    return factory;
   }
 
   @Bean
@@ -108,7 +118,10 @@ public class KafkaConfig {
     configProps.put(ConsumerConfig.FETCH_MAX_WAIT_MS_CONFIG, FETCH_MAX_WAIT_MS);
     configProps.put(ConsumerConfig.MAX_POLL_INTERVAL_MS_CONFIG, MAX_POLL_INTERVAL_MS);
 
-    return new DefaultKafkaConsumerFactory<>(configProps);
+    DefaultKafkaConsumerFactory<String, DomainEventEnvelope> factory =
+        new DefaultKafkaConsumerFactory<>(configProps);
+    factory.addListener(new MicrometerConsumerListener<>(meterRegistry));
+    return factory;
   }
 
   @Bean
