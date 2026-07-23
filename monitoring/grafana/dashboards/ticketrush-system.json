@@ -92,6 +92,17 @@
         { "refId": "B", "expr": "hikaricp_connections_idle{job=\"ticketrush-services\", instance=~\"$instance\"}", "legendFormat": "idle {{instance}}" },
         { "refId": "C", "expr": "hikaricp_connections_pending{job=\"ticketrush-services\", instance=~\"$instance\"}", "legendFormat": "pending {{instance}}" }
       ]
+    },
+    {
+      "id": 7,
+      "title": "Kafka Consumer Lag",
+      "type": "timeseries",
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "gridPos": { "h": 8, "w": 24, "x": 0, "y": 24 },
+      "fieldConfig": { "defaults": { "unit": "short" }, "overrides": [] },
+      "targets": [
+        { "refId": "A", "expr": "max by (instance, topic) (kafka_consumer_fetch_manager_records_lag{job=\"ticketrush-services\", instance=~\"$instance\"})", "legendFormat": "{{instance}} {{topic}}" }
+      ]
     }
   ]
 }
