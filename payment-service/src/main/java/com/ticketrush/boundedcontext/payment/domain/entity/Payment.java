@@ -16,25 +16,46 @@ import lombok.Builder;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
 
+/**
+ * 결제. 인덱스 두 개를 두는 근거는 아래와 같다.
+ *
+ * <p><b>idx_payment_booking_id</b> — bookingId 조건 조회(exists/findFirst/count By BookingId And
+ * Status)가 confirm hot path에서 매 요청 실행되므로 둔다(#412). 세 조회 모두 (booking_id, status) 복합 조건이지만, booking당
+ * payment row가 유계(COMPLETED 최대 1건 + FAILED 상한 #333)라 booking_id 단일 인덱스로 seek하면 status는 소수 잔여 row
+ * 필터라 복합 인덱스 실익이 없어 단일로 둔다.
+ *
+ * <p><b>idx_payment_user_id_status</b> — 내 결제 내역 조회(#463). {@code PaymentGetListUseCase}가 호출하는
+ * {@code findByUserIdAndStatus(userId, COMPLETED, pageable)}는 이 인덱스가 없으면 쓸 수 있는 인덱스가 없어 payment 전체를
+ * 훑는다(possible_keys=NULL). 반환이 {@code Page}라 count 쿼리까지 같은 전수 스캔을 반복하고, 스캔량이 테이블 크기에 비례해 계속 늘어난다.
+ * 컬럼 순서는 둘 다 equality지만 선택도가 높은 {@code user_id}가 선두다 — {@code status}는 카디널리티 4에 이 조회에선 항상 COMPLETED
+ * 단일값이라 단독 선택도가 없다. 역순 (status, user_id)은 status만으로 후보를 거의 못 줄인다. 정렬 키 {@code paid_at}을 세 번째로 붙인
+ * 커버링 인덱스는 이 이슈 범위(2컬럼 측정)에서 다루지 않아 채택하지 않았다. 대가로 결제 쓰기마다 인덱스 유지 비용이 늘지만, 쓰기가 결제 건수에 한정돼 트레이드오프가
+ * 유리하다.
+ *
+ * <p><b>기존 가동 DB에는 수동 DDL이 필요하다.</b> {@code @Table}의 {@code @Index}는 ddl-auto=update인 로컬/신규 초기화
+ * DB(init SQL)에서만 생성되고, prod(validate)는 인덱스 부재를 검출하지 못한다(#296 수동 DDL 관행과 동일). schema-validate CI도
+ * 인덱스 부재는 통과시키므로 스냅샷·validate만으로는 prod 반영이 보증되지 않는다. 실행 전 {@code SHOW INDEX FROM payment}로 두 인덱스의
+ * 실존 여부를 먼저 확인하고, 없는 것만 골라 실행한다(신규 초기화 DB는 init SQL이 이미 만들어 Duplicate key name으로 실패한다):
+ *
+ * <pre>
+ *   ALTER TABLE payment
+ *     ADD INDEX idx_payment_booking_id (booking_id), ALGORITHM=INPLACE, LOCK=NONE;
+ *   ALTER TABLE payment
+ *     ADD INDEX idx_payment_user_id_status (user_id, status), ALGORITHM=INPLACE, LOCK=NONE;
+ * </pre>
+ */
 @Entity
 @Table(
     name = "payment",
-    indexes = @Index(name = "idx_payment_booking_id", columnList = "booking_id"))
+    indexes = {
+      @Index(name = "idx_payment_booking_id", columnList = "booking_id"),
+      @Index(name = "idx_payment_user_id_status", columnList = "user_id, status")
+    })
 @Getter
 @NoArgsConstructor(access = AccessLevel.PROTECTED)
 @AttributeOverride(name = "id", column = @Column(name = "payment_id"))
 public class Payment extends AutoIdBaseEntity {
 
-  /* bookingId 조건 조회(exists/findFirst/count By BookingId And Status)가 confirm hot path에서 매 요청
-   * 실행되므로 idx_payment_booking_id 인덱스를 둔다(#412). 세 조회 모두 (booking_id, status) 복합 조건이지만,
-   * booking당 payment row가 유계(COMPLETED 최대 1건 + FAILED 상한 #333)라 booking_id 단일 인덱스로 seek하면
-   * status는 소수 잔여 row 필터라 복합 인덱스 실익이 없어 단일로 둔다.
-   *
-   * @Table의 @Index는 ddl-auto=update인 로컬/신규 초기화 DB(init SQL)에서만 생성되고, prod(validate)는 인덱스
-   * 부재를 검출하지 못한다. 따라서 이미 가동 중인 기존 DB에는 배포 전 수동 DDL이 필요하다(#296 수동 DDL 관행과 동일).
-   * 아래 ALTER는 인덱스가 없는 기존 DB에만 실행한다(신규 초기화 DB는 init SQL이 이미 만들어 Duplicate key name 실패):
-   *   ALTER TABLE payment
-   *     ADD INDEX idx_payment_booking_id (booking_id), ALGORITHM=INPLACE, LOCK=NONE; */
   @Column(nullable = false)
   private Long bookingId;
 
