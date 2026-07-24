@@ -305,8 +305,21 @@ sum(rate(ticketrush_kafka_inbox_total{result="duplicate",consumer_group="seat-gr
 
 이슈 #344의 제목은 "락 경합 차단율"이지만, **실측에서 `ticketrush_seat_lock_contention_total`은 0이다. 버그가 아니라 구조다.**
 
+홀드까지의 경로는 이렇다. `POST /api/v1/booking`과 좌석 HOLD 사이에 **비동기 구간이 두 개** 있다.
+
+```
+[유입 축]  POST /api/v1/booking
+             → booking INSERT + outbox INSERT (한 트랜잭션, #471)
+[처리 축]  → OutboxRelayScheduler   @Scheduled(fixedDelay=5000), app.outbox.batch-size=100
+             → Kafka booking-created-topic (key = bookingId)
+               → seat-service BookingCreatedEventListener  @KafkaListener(groupId=SEAT), concurrency 1
+                 → InboxService.runIfFirst
+                   → SeatFacade.tryLockSeat → SeatLockUseCase (tryLock 대기 0, lease 5분)
+```
+
 - 좌석 홀드는 HTTP API가 아니다. `SeatController`는 GET만 있고, 홀드 진입점은 `BookingCreatedEventListener`의 Kafka 리스너뿐이다. k6는 `POST /api/v1/booking`으로 **간접 유발만** 할 수 있고, 그 201 응답은 "예매 생성됨"이지 "좌석 선점됨"이 아니다.
-- 그 리스너의 컨슈머 스레드는 **1개**다. `common/.../config/KafkaConfig.java`의 컨테이너 팩토리에 `setConcurrency`가 없고 `spring.kafka.listener.concurrency`도 어디에도 없어 기본값 1이 적용된다.
+- **릴레이가 유입을 5초 단위로 정형화한다**(#471). booking-service는 이벤트를 즉시 발행하지 않고 outbox 행으로 커밋한 뒤, `OutboxRelayScheduler`가 5초마다 최대 100건씩 꺼내 발행한다. 따라서 k6가 초당 수백 건을 밀어넣어도 Kafka로 나가는 속도는 **≈20 events/s로 상한**이 걸리고, 초과분은 `ticketrush_outbox_backlog`에 쌓인다. 이슈가 세운 "1차 병목은 락이 아니라 소비 병렬도"라는 가설은 이제 **릴레이 배치 주기까지 포함해** 확인해야 한다 — 릴레이가 컨슈머보다 앞에서 조이면 컨슈머 랙은 애초에 크게 자라지 않는다.
+- 그 리스너의 컨슈머 스레드는 **1개**다. `common/.../config/KafkaConfig.java`의 컨테이너 팩토리에 `setConcurrency`가 없고 `spring.kafka.listener.concurrency`도 어디에도 없어 기본값 1이 적용된다(#466이 추가한 것은 Micrometer 리스너뿐이고 동시성은 건드리지 않았다).
 - Redisson `RLock`은 `(clientUUID:threadId)` 기준 **재진입** 락이다. 같은 스레드가 1,000건을 순차 처리하면 `tryLock`은 실패하지 않고 **재진입으로 성공**한다. 카운터는 `tryLock == false` 경로에서만 오르므로(`SeatLockUseCase`) 구조적으로 0이다.
 
 **따라서 동시성 방어선은 락이 아니다.** 실제로 중복 선점을 막는 것은 둘이다.
@@ -322,7 +335,7 @@ sum(rate(ticketrush_kafka_inbox_total{result="duplicate",consumer_group="seat-gr
 
 ### 10.2 실행
 
-**토폴로지는 §7을 따른다 — k6는 로컬, 대상 앱은 AWS 배포본이다([ADR 0004](adr/0004-load-test-execution-topology.md)).** 앱까지 로컬로 돌리는 "전부 로컬"은 ADR 0004가 **대안 1로 검토한 뒤 기각한 방식**이다(생성기와 대상이 CPU를 경쟁해 latency·throughput을 신뢰할 수 없다). 로컬 기동은 시나리오가 도는지 보는 기능 확인용으로만 쓰고, **거기서 나온 RPS·p99는 §10.4에 적지 않는다.**
+**토폴로지는 §7을 따른다 — k6는 로컬, 대상 앱은 AWS 배포본이다([ADR 0004](adr/0004-load-test-execution-topology.md)).** 앱까지 로컬로 돌리는 "전부 로컬"은 ADR 0004가 **대안 1로 검토한 뒤 기각한 방식**이다(생성기와 대상이 CPU를 경쟁해 latency·throughput을 신뢰할 수 없다). 로컬 기동은 시나리오가 도는지 보는 기능 확인용으로만 쓰고, **거기서 나온 RPS·p99는 §10.5에 적지 않는다.**
 
 `local` 프로파일 전용 DevToken(`/api/v1/dev/auth/token`)으로 인증을 우회하지 않는다 — AWS 배포본은 `prod` 단독이라 그 엔드포인트가 없고, ADR 0004가 부하 테스트에 쓰지 않기로 결정했다. write 시나리오에는 `LOAD_USER_PASSWORD` 평문이 필요하다.
 
@@ -336,8 +349,16 @@ SEAT=1   # TARGET_SEAT_ID
 #     좌석은 한 번 HOLD 되면 스스로 AVAILABLE 로 돌아오지 않고, Redisson 락 키는 성공 경로에
 #     unlock 이 없어 TTL 5분간 살아남는다. DB만 되돌리면 2회차 홀드가 락 획득에 실패해
 #     전부 보상 처리되어 측정이 무의미해진다.
+#     outbox 를 먼저 지우는 이유는 #471(발행 outbox 모드) 때문이다. 부하 종료 시점에 아직
+#     발행되지 않은 PENDING 행이 남아 있으면, booking 행만 지워도 릴레이가 다음 회차에 그걸
+#     그대로 뱉어 전 회차 이벤트가 새 측정 창에 섞인다. booking 삭제보다 먼저 지운다
+#     (aggregate_id 로 대상을 찾아야 하므로 순서가 뒤바뀌면 대상을 잃는다).
 mysql -h <AWS_DB_HOST> -u "$MYSQL_USERNAME" -p"$MYSQL_PASSWORD" \
   --init-command="$GUARD" ticket_rush -e "
+    DELETE FROM outbox
+     WHERE event_type = 'BookingCreatedEvent'
+       AND aggregate_id IN (
+             SELECT CAST(booking_id AS CHAR) FROM booking WHERE seat_id = $SEAT);
     DELETE FROM booking WHERE seat_id = $SEAT;
     UPDATE seat SET seat_status='AVAILABLE', booking_number=NULL, hold_expired_at=NULL
      WHERE seat_id = $SEAT;"
@@ -346,17 +367,26 @@ mysql -h <AWS_DB_HOST> -u "$MYSQL_USERNAME" -p"$MYSQL_PASSWORD" \
 ssh -i <key>.pem <user>@<EC2_IP> \
   'cd <배포경로> && docker compose exec -T redis redis-cli DEL "seat:lock:1"'
 
-# (2) 부하 — 짧고 날카로운 버스트. 전용 파라미터 없이 기존 VUS/RAMP/STEADY 로 프로파일을 만든다.
+# (2) 부하 — STEADY 는 5분 이상. Prometheus 스크랩 간격보다 짧으면 일관된 RPS·p99 를 얻을 수 없고,
+#     이슈 #344 의 완료조건("각 부하 단계가 최소 5분 유지")도 충족하지 못한다.
 #     -e 위치 규칙과 --no-deps 는 §7.2 와 동일하다.
 docker compose run --rm --no-deps \
   -e K6_PROMETHEUS_RW_SERVER_URL=http://<PROM_HOST>:9090/api/v1/write \
   k6 run \
   -e BASE_URL=https://<aws-gateway> \
   -e PERF_ID=1 -e LOAD_USER_PASSWORD='<평문>' \
-  -e TARGET_SEAT_ID=$SEAT -e VUS=200 -e RAMP=5s -e STEADY=30s \
+  -e TARGET_SEAT_ID=$SEAT -e VUS=200 -e RAMP=30s -e STEADY=6m \
   /scripts/scenarios/seat-contention.js
 
-# (3) oversell 검증 — 반드시 1
+# (3) 릴레이 소진 대기 — k6 종료 시점엔 outbox 에 미발행분이 남아 있다(5s/100건 상한).
+#     backlog 가 0 으로 떨어진 뒤에 검증해야 "처리가 끝난 상태"의 수치를 본다.
+#     이 시각이 측정 창의 종점이므로 UTC 로 기록한다(§10.5 / metadata 의 WINDOW_END_SOURCE).
+mysql -h <AWS_DB_HOST> -u "$MYSQL_USERNAME" -p"$MYSQL_PASSWORD" \
+  --init-command="$GUARD" ticket_rush \
+  -e "SELECT status, COUNT(*) FROM outbox
+       WHERE event_type='BookingCreatedEvent' GROUP BY status;"
+
+# (4) oversell 검증 — 반드시 1
 mysql -h <AWS_DB_HOST> -u "$MYSQL_USERNAME" -p"$MYSQL_PASSWORD" \
   --init-command="$GUARD" ticket_rush \
   -e "SELECT COUNT(*) FROM seat WHERE seat_id=$SEAT AND seat_status='HOLD';"
@@ -368,33 +398,75 @@ mysql -h <AWS_DB_HOST> -u "$MYSQL_USERNAME" -p"$MYSQL_PASSWORD" \
 
 부하 종료 후 Grafana Explore(§5)에서 실행한다. 측정 창 `[5m]`은 실제 실행 길이에 맞춘다.
 
+**유입 축과 처리 축을 분리해 읽는다**(이슈 #344 완료조건). HTTP 지표에는 락 경합도 홀드 지연도 나타나지 않는다 — §10.1의 경로에서 보듯 그 둘은 릴레이·컨슈머 뒤에서 일어나고, `POST /api/v1/booking`은 outbox 행을 커밋한 순간 응답을 끝내기 때문이다.
+
+**정합성 (좌석 결과)**
+
 | 지표 | 쿼리 |
 |------|------|
 | **oversell** (좌석 1개 부하에서 정확히 1) | `sum(increase(ticketrush_seat_hold_total{result="success"}[5m]))` |
 | **차단율** (실측 방어선) | `sum(increase(ticketrush_seat_hold_total{result="unavailable"}[5m])) / sum(increase(ticketrush_seat_hold_total[5m]))` |
 | **홀드 성공률** | `sum(increase(ticketrush_seat_hold_total{result="success"}[5m])) / sum(increase(ticketrush_seat_hold_total[5m]))` |
 | **락 경합** (0 예상 — §10.1) | `sum(increase(ticketrush_seat_lock_contention_total[5m]))` |
+| **현재 HOLD 총수** | `ticketrush_seat_held` |
+
+**유입 축 (HTTP — booking 생성 API)**
+
+| 지표 | 쿼리 |
+|------|------|
 | **처리량 (RPS)** | `sum(rate(k6_http_reqs_total[1m]))` |
 | **p99 latency (생성기)** | `k6_http_req_duration_p99` |
 | **p99 latency (앱)** | `histogram_quantile(0.99, sum(rate(http_server_requests_seconds_bucket{uri="/api/v1/booking"}[1m])) by (le))` |
-| **컨슈머 소화율** | `sum(rate(ticketrush_kafka_inbox_total{result="processed"}[1m]))` |
-| **파이프라인 적체** | `ticketrush_outbox_backlog` |
-| **현재 HOLD 총수** | `ticketrush_seat_held` |
+
+**처리 축 (릴레이 → Kafka → 컨슈머)**
+
+| 지표 | 쿼리 |
+|------|------|
+| **릴레이 적체** (유입 대비 발행 지연) | `ticketrush_outbox_backlog` |
+| **릴레이 발행률** | `sum(rate(ticketrush_outbox_relay_total{result="success"}[1m]))` |
+| **컨슈머 랙** (#466 신규) | `max by (client_id, topic) (kafka_consumer_fetch_manager_records_lag{job="ticketrush-services", topic="booking-created-topic"})` |
+| **컨슈머 소화율** | `sum(rate(ticketrush_kafka_inbox_total{result="processed", consumer_group="seat-group"}[1m]))` |
+
+컨슈머 랙은 Grafana System 대시보드의 **Kafka Consumer Lag** 패널(`monitoring/grafana/dashboards/ticketrush-system.json`)에 이미 있으므로 캡처는 그 패널을 쓴다.
+
+> **어느 축이 조이는지 판별한다.** 릴레이가 5초/100건이라 발행 상한이 ≈20 events/s다(§10.1). `outbox_backlog`가 계속 자라는데 컨슈머 랙이 낮게 유지되면 **1차 제약은 릴레이**이고, 랙이 backlog와 함께 자라면 **컨슈머 병렬도(1)**가 제약이다. 이슈가 세운 가설("병목은 락이 아니라 소비 병렬도")은 이 두 곡선의 대비로 확인/반증한다.
 
 HTTP 사전 차단율(409)은 k6 요약의 `seat_conflict` Rate를 그대로 읽는다(전체 요청이 분모인 비율이다). `seat_accepted`도 같은 분모라 둘을 나누지 않는다 — 201 비율은 `seat_accepted`를 따로 읽는다.
 
 > 차단율 분모에 `seat_lock_contention`을 넣지 않는 이유는 §10.1이다. 두 카운터는 분모가 다르다 — `seat_hold_total`은 DB 체크에 **도달한** 시도만, contention은 도달조차 못 한 시도만 센다.
 
-### 10.4 측정 결과
+### 10.4 에러율 집계 기준 — 정상 경합은 실패가 아니다
+
+동일 좌석에 N건을 밀어넣으면 1건만 성공하고 나머지는 전부 차단된다. **이건 설계된 동작이므로 실패로 세면 안 된다** — 그대로 두면 실패율이 99.9%로 집계돼 "HTTP Request Failed" 지표의 해석이 무의미해지고, 진짜 장애(5xx·타임아웃)가 그 안에 묻힌다. #348의 "정상경합 제외 에러율 < 1%" 기준과 같은 선을 쓴다.
+
+구현은 `seat-contention.js` 상단 한 줄이다.
+
+```js
+http.setResponseCallback(http.expectedStatuses(200, 201, 409));
+```
+
+- **409를 기대 응답에 넣는다.** k6는 기본적으로 2xx/3xx 외를 `http_req_failed`로 센다. 임계값(`rate<0.01`)을 푸는 대신 409만 기대 응답으로 옮기면, **5xx·401·타임아웃은 계속 실패로 잡힌다.** 임계값을 완화하는 방식과 결정적으로 다른 점이다.
+- **200을 함께 넣는 이유**는 이 콜백이 파일 스코프가 아니라 해당 run의 http 모듈 **전역**이기 때문이다. `lib/auth.js`의 로그인(200)까지 덮으므로, 200을 빼면 `setup()`의 로그인이 실패로 오집계된다.
+- 따라서 리포트의 에러율은 **"정상 경합(409) 제외 에러율"**이며, 분모는 전체 요청이다. 409 자체의 비율은 별도 커스텀 메트릭 `seat_conflict`로 따로 읽는다(§10.3).
+
+앱 쪽 차단은 실패가 아니라 **결과 라벨**로 남는다 — `ticketrush_seat_hold_total{result="unavailable"}`. 이쪽이 §10.3의 차단율 분자다.
+
+### 10.5 측정 결과
 
 | 항목 | 값 |
 |------|-----|
-| 실행 일시 / 커밋 | |
+| 실행 일시 / 배포 이미지 태그 | |
+| 측정 창 (UTC) / 창 종점 출처 | |
 | 프로파일 (VUS/RAMP/STEADY) | |
 | 총 요청 / 201 / 409 | |
+| 정상경합 제외 에러율 (§10.4) | |
 | **oversell** | |
 | 차단율 (unavailable / total) | |
 | 홀드 성공률 | |
-| 락 경합 | |
-| RPS / p99(k6) / p99(앱) | |
+| 락 경합 (0 예상) | |
+| **유입 축** — RPS / p99(k6) / p99(앱) | |
+| **처리 축** — outbox backlog 피크 / 릴레이 발행률 / 컨슈머 랙 피크 / 소화율 | |
+| 1차 제약 판정 (릴레이 vs 컨슈머 — §10.3) | |
 | Grafana 캡처 | |
+
+증적은 `load-tests/k6/results/<YYMMDD>-344-seat-contention/`에 남긴다(#346·#347 디렉토리 구성 답습 — `report.md`·`metadata.txt`·`graph-*.png`·`timeseries-*.json`).

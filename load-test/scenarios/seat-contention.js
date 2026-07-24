@@ -2,7 +2,14 @@
 //
 // 이 시나리오는 Redisson 락 경합을 측정하지 못한다. 좌석 홀드는 Kafka 컨슈머 스레드 하나가
 // 순차 처리하므로(KafkaConfig에 setConcurrency 없음 → 기본 1) 락은 경합하지 않고
-// ticketrush_seat_lock_contention_total 은 0으로 남는다. 실제로 관측되는 차단은 두 군데다.
+// ticketrush_seat_lock_contention_total 은 0으로 남는다.
+//
+// 이 POST 와 좌석 HOLD 사이에는 비동기 구간이 둘이다. #471 로 booking 발행이 outbox 모드가 되어
+// 요청은 outbox 행만 커밋하고 끝나고, OutboxRelayScheduler(fixedDelay 5s, batch 100)가 그걸
+// 5초마다 꺼내 발행한다 → 발행 상한 ≈20 events/s. 즉 여기서 재는 RPS·p99 는 유입 축이고,
+// 홀드까지의 지연은 outbox backlog·컨슈머 랙(처리 축)으로 봐야 한다.
+//
+// 실제로 관측되는 차단은 두 군데다.
 //   1. booking-service 의 사전 체크(JdbcBookingSeatStatusReader → seat 테이블 직접 SELECT).
 //      좌석이 HOLD 로 커밋된 뒤부터 409 를 던진다. → 아래 seat_conflict.
 //   2. seat-service 의 isAvailable() → ticketrush_seat_hold_total{result="unavailable"}.
