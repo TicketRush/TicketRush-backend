@@ -42,7 +42,10 @@ SEAT_LOCK_CONTENTION=0 (시리즈 자체가 생성되지 않음 — tryLock==fal
 OVERSELL=0 (max_over_time(ticketrush_seat_held[8m]) = 1 — 동시 보유 최대 1건)
 BLOCK_RATE=99.77% (1321/1324, unavailable/total)
 HOLD_SUCCESS_RATE=0.23% (3/1324)
-HOLD_CYCLES=3 (HOLD 획득 → hold_expired_at 5분 만료로 해제 → 재획득을 3회 반복. 동시 2건 보유가 아니라 시간차다)
+HOLD_CYCLES=3 (획득 → 해제 → 재획득 3회. 동시 2건 보유가 아니라 시간차다)
+HOLD_RELEASE_MECHANISM=SeatReleaseSingleUseCase "Redis 만료 이벤트 수신: 좌석 121 상태를 AVAILABLE로 즉시 롤백" — seat-service 로그 12:35:40 / 12:37:16 / 12:38:03 (UTC). 각 해제가 SeatHoldExpiredEvent로 이어져 booking-service가 예매 22887/23294/23994를 EXPIRED 전이(ExpireBookingByNumberUseCase 로그).
+HOLD_RELEASE_UNEXPLAINED=세 해제 모두 락 lease(LOCK_TTL_MINUTES=5)보다 이른 약 4분 시점. 재진입 tryLock/unlock의 TTL 갱신 동작까지는 특정하지 못함 — 시각·주체는 로그 확인 사실이고 간격의 원인은 미규명.
+BOOKING_CREATE_DISTRIBUTION=12:31분 408건 / 12:32~12:34분 0건(전부 409) / 12:35분 702건 / 12:37분 214건 — 해제 시점마다 사전 체크가 다시 통과해 버스트가 재발생한 증거
 DB_FINAL=booking 1324행 = CANCELED 1321(보상) + EXPIRED 3(HOLD 획득분의 TTL 만료). seat 121 최종 AVAILABLE(3번째 HOLD도 TTL 만료), version=3
 VERSION_NOTE=만료 해제(SeatRepository.releaseExpiredHoldById)는 JPQL 벌크 @Modifying UPDATE라 @Version을 올리지 않는다. 따라서 version은 엔티티 관리 HOLD 쓰기만 센다. 다만 리셋 전 version 값을 기록해 두지 않아 "version 3 = HOLD 3회"는 정황이며, oversell 0의 근거는 아래 OVERSELL_EVIDENCE다.
 OVERSELL_EVIDENCE=(1) max_over_time(ticketrush_seat_held[8m])=1 — 동시 보유 최대 1건. (2) DB 정합: 1324 = CANCELED 1321 + EXPIRED 3 으로 잔여 없음. (3) 구조: Seat.hold()가 seatStatus=AVAILABLE을 요구하고 @Version(#427)이 커밋 시점 충돌을 막아 AVAILABLE에서 두 커밋이 성립할 수 없다.
