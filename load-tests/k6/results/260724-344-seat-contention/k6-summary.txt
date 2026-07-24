@@ -1,0 +1,41 @@
+ Container ticketrush-backend-k6-run-f0093e432b3c Creating 
+ Container ticketrush-backend-k6-run-f0093e432b3c Created 
+         /\      Grafana   /‾‾/  
+    /\  /  \     |\  __   /  /   
+   /  \/    \    | |/ /  /   ‾‾\ 
+  /          \   |   (  |  (‾)  |
+ / __________ \  |_|\_\  \_____/ 
+     execution: local
+        script: /scripts/scenarios/seat-contention.js
+        output: Prometheus remote write (http://host.docker.internal:9090/api/v1/write)
+     scenarios: (100.00%) 1 scenario, 100 max VUs, 6m40s max duration (incl. graceful stop):
+              * default: Up to 100 looping VUs for 6m10s over 3 stages (gracefulRampDown: 30s, gracefulStop: 30s)
+  █ THRESHOLDS 
+    http_req_duration
+    ✗ 'p(95)<800' p(95)=911.79ms
+    http_req_failed
+    ✓ 'rate<0.01' rate=0.00%
+  █ TOTAL RESULTS 
+    checks_total.......: 95684   258.28702/s
+    checks_succeeded...: 100.00% 95684 out of 95684
+    checks_failed......: 0.00%   0 out of 95684
+    ✓ login 200
+    ✓ created(201) or conflict(409)
+    CUSTOM
+    seat_accepted..................: 1.38%  1324 out of 95683
+    seat_conflict..................: 98.61% 94359 out of 95683
+    HTTP
+    http_req_duration..............: avg=381.37ms min=13.23ms med=306.15ms max=6.48s p(90)=726.94ms p(95)=911.79ms
+      { expected_response:true }...: avg=381.37ms min=13.23ms med=306.15ms max=6.48s p(90)=726.94ms p(95)=911.79ms
+    http_req_failed................: 0.00%  0 out of 95684
+    http_reqs......................: 95684  258.28702/s
+    EXECUTION
+    iteration_duration.............: avg=381.55ms min=13.34ms med=306.3ms  max=6.48s p(90)=727.1ms  p(95)=912.22ms
+    iterations.....................: 95683  258.28432/s
+    vus............................: 10     min=10             max=100
+    vus_max........................: 100    min=100            max=100
+    NETWORK
+    data_received..................: 76 MB  205 kB/s
+    data_sent......................: 41 MB  112 kB/s
+default ✓ [ 100% ] 000/100 VUs  6m10s
+time="2026-07-24T12:37:53Z" level=error msg="thresholds on metrics 'http_req_duration' have been crossed"

@@ -1,0 +1,84 @@
+SERIES_ID=260724-344-seat-contention
+ISSUE=#344
+DATE=2026-07-24 (KST)
+TARGET_HOST=EC2 54.116.243.250 (탄력 IP) — https://api.ticketrush.store
+TOPOLOGY=k6 local (docker compose, ADR 0004) --SSH tunnel(9090)--> EC2 deploy stack (Prometheus/Grafana EC2 로컬, ADR 0007)
+IMAGE_TAG=6398a9d653b0e2a9f7895ab020a012154a8faf24 (전 서비스 동일 — #471 outbox 전환 포함 배포본)
+RUNBOOK=docs/load-test-guide.md §10
+SCENARIO=load-test/scenarios/seat-contention.js
+PROM_SCRAPE_INTERVAL=15s
+
+# 측정 대상
+PERF_ID=3 (LOADTEST-000001, booking_open_at NULL)
+TARGET_SEAT_ID=121 (Z-1, 측정 시작 시 AVAILABLE)
+SEED=#346 측정 시 시딩분 재사용 (performance 3 = 26 rows x 1000 cols = 26,000 seats, seat_id 121..26120)
+LOAD_USER=loadtest@ticketrush.local (user id 1) — 평문은 저장소·증적에 남기지 않음
+
+# 발행 모드 (측정 당시 실제 값)
+booking-service=outbox (#471로 application.yml 기본값 전환, 컨테이너 env 오버라이드 없음)
+seat-service=outbox
+OUTBOX_RELAY=OutboxRelayScheduler @Scheduled(fixedDelay=5000), app.outbox.batch-size=100
+KAFKA_CONSUMER_CONCURRENCY=1 (KafkaConfig에 setConcurrency 없음, spring.kafka.listener.concurrency 미설정)
+ENV_OVERRIDE_CHECK=배포 컨테이너에서 `docker exec {booking,seat}-service env | grep -E '^(APP_EVENT_PUBLISHER_TYPE|APP_OUTBOX_BATCH_SIZE|SPRING_KAFKA_LISTENER_CONCURRENCY)='` 실행 결과 세 키 모두 부재 → deploy/.env 오버라이드 없이 application.yml 기본값(outbox / 100 / 1)이 적용됐음을 실행 시점에 확증. (actuator/env는 노출 대상이 아니라 사용 불가 — health/prometheus/info 3개만 노출)
+
+# 부하 프로파일
+VUS=100 / RAMP=5s / STEADY=6m (options.js: ramp-up → steady → ramp-down)
+RAMP_RATIONALE=램프를 길게 잡으면 좌석이 램프업 도중 HOLD로 확정돼 경합 창에 소수 VU만 참여한다. 짧은 램프로 실제 버스트를 만든다.
+
+# 측정 창
+START_UTC=2026-07-24T12:31:17Z (리셋·baseline 직후 k6 기동)
+K6_END_UTC=2026-07-24T12:37:53Z (k6 프로세스 종료, 실행 6분 36초)
+WINDOW_END_UTC=2026-07-24T12:38:22Z (outbox PENDING/FAILED = 0 도달)
+WINDOW_END_SOURCE=k6 종료 후 20초 간격 SQL 폴링(SELECT COUNT(*) FROM outbox WHERE status IN ('PENDING','FAILED'))에서 0 첫 관측 시각. 릴레이 소진 전 수치는 "처리가 끝나지 않은 상태"라 종점으로 쓰지 않는다.
+WINDOW_TOTAL=7분 05초 (STEADY 6분 — 완료조건 "각 부하 단계 최소 5분 유지" 충족)
+BASELINE=전 카운터 시리즈 미생성 (CD 재배포 직후 기동이라 0 출발 — 증분 차감 불필요)
+
+# 정합성 결과
+BOOKINGS_CREATED=1324 (k6 201 = seat_accepted)
+SEAT_HOLD_SUCCESS=3
+SEAT_HOLD_UNAVAILABLE=1321
+SEAT_HOLD_TOTAL=1324 (= 생성 예매 수와 정확히 일치 — 전 이벤트가 DB 체크에 도달)
+SEAT_LOCK_CONTENTION=0 (시리즈 자체가 생성되지 않음 — tryLock==false 경로 미도달)
+OVERSELL=0 (max_over_time(ticketrush_seat_held[8m]) = 1 — 동시 보유 최대 1건)
+BLOCK_RATE=99.77% (1321/1324, unavailable/total)
+HOLD_SUCCESS_RATE=0.23% (3/1324)
+HOLD_CYCLES=3 (획득 → 해제 → 재획득 3회. 동시 2건 보유가 아니라 시간차다)
+HOLD_RELEASE_MECHANISM=SeatReleaseSingleUseCase "Redis 만료 이벤트 수신: 좌석 121 상태를 AVAILABLE로 즉시 롤백" — seat-service 로그 12:35:40 / 12:37:16 / 12:38:03 (UTC). 각 해제가 SeatHoldExpiredEvent로 이어져 booking-service가 예매 22887/23294/23994를 EXPIRED 전이(ExpireBookingByNumberUseCase 로그).
+HOLD_RELEASE_UNEXPLAINED=세 해제 모두 락 lease(LOCK_TTL_MINUTES=5)보다 이른 약 4분 시점. 재진입 tryLock/unlock의 TTL 갱신 동작까지는 특정하지 못함 — 시각·주체는 로그 확인 사실이고 간격의 원인은 미규명.
+BOOKING_CREATE_DISTRIBUTION=12:31분 408건 / 12:32~12:34분 0건(전부 409) / 12:35분 702건 / 12:37분 214건 — 해제 시점마다 사전 체크가 다시 통과해 버스트가 재발생한 증거
+DB_FINAL=booking 1324행 = CANCELED 1321(보상) + EXPIRED 3(HOLD 획득분의 TTL 만료). seat 121 최종 AVAILABLE(3번째 HOLD도 TTL 만료), version=3
+VERSION_NOTE=만료 해제(SeatRepository.releaseExpiredHoldById)는 JPQL 벌크 @Modifying UPDATE라 @Version을 올리지 않는다. 따라서 version은 엔티티 관리 HOLD 쓰기만 센다. 다만 리셋 전 version 값을 기록해 두지 않아 "version 3 = HOLD 3회"는 정황이며, oversell 0의 근거는 아래 OVERSELL_EVIDENCE다.
+OVERSELL_EVIDENCE=(1) max_over_time(ticketrush_seat_held[8m])=1 — 동시 보유 최대 1건. (2) DB 정합: 1324 = CANCELED 1321 + EXPIRED 3 으로 잔여 없음. (3) 구조: Seat.hold()가 seatStatus=AVAILABLE을 요구하고 @Version(#427)이 커밋 시점 충돌을 막아 AVAILABLE에서 두 커밋이 성립할 수 없다.
+OVERSELL_LIMIT=seat_held는 15초 스크랩 게이지라 15초보다 짧은 동시 보유는 원리상 포착하지 못한다. 그 구간의 보증은 (3)의 구조적 근거와 SeatHoldConcurrencyTest(seat-service, 실 MySQL 20스레드)가 담당한다.
+
+# 유입 축 (HTTP, k6 요약이 SSOT)
+HTTP_REQS=95684 / 258.29 rps (peak 353.05 rps @ 15s step)
+STATUS_201=1324 (1.38%) / STATUS_409=94359 (98.61%)
+HTTP_REQ_FAILED=0.00% (0/95684) — 정상경합(409) 제외 에러율. expectedStatuses(200,201,409)로 409를 기대응답에 넣되 5xx·타임아웃은 실패로 남긴 결과가 0건.
+LATENCY=avg 381.37ms / med 306.15ms / p90 726.94ms / p95 911.79ms / max 6.48s
+THRESHOLD_RESULT=http_req_failed rate<0.01 PASS / http_req_duration p(95)<800 FAIL (911.79ms)
+LATENCY_CAVEAT=피크 구간 호스트 CPU 99.87%. p95 초과는 앱 단독 특성이 아니라 단일 EC2 포화가 섞인 값이다.
+
+# 처리 축 (릴레이 → Kafka → 컨슈머)
+OUTBOX_BACKLOG_PEAK=634 (booking-service)
+RELAY_PUBLISH_RATE_PEAK=20.98/s (booking-service 단독 — 이론 상한 100건/5초=20/s와 일치)
+RELAY_PUBLISH_TOTAL=4090 (booking-service) vs outbox 행 1324 → 발행 증폭 3.09배
+RELAY_PUBLISH_TOTAL_SEAT=1324 (seat-service, 보상 이벤트 — 증폭 없음)
+INBOX_SEAT_GROUP_PROCESSED=1324 (고유 eventId 전량)
+INBOX_SEAT_GROUP_DUPLICATE=2763 (= 4090 - 1324 + 오차, 릴레이 재발행분을 Inbox가 전량 차단)
+INBOX_BOOKING_GROUP_PROCESSED=1324 (보상 이벤트 전량 수신 → booking CANCELED 1321 + EXPIRED 3)
+CONSUMER_LAG_PEAK=14 (파티션별 8/0/14, booking-created-topic)
+CONSUMER_CONSUME_RATE_PEAK=20.54/s (processed + duplicate 합)
+BOTTLENECK=릴레이 발행 상한(20/s)이 1차 제약. 컨슈머 랙이 최대 14로 거의 자라지 않아 소비가 발행을 앞선다. 단 컨슈머 유효 처리량의 68%(2763/4087)를 릴레이 증폭 중복 차단에 쓴다.
+
+# 호스트 자원 (#465 node-exporter)
+CPU_PEAK=99.87% / CPU_AVG=77.55% (측정 창 8분, 15s step)
+MEM_AVAILABLE_MIN=2.85 GiB
+
+# 릴레이 발행 증폭 (3.09배) 원인
+OutboxRelayService.relayBatch()가 PENDING/FAILED 행을 batch-size만큼 조회해 비동기 발행하고,
+SENT 전이는 프로듀서 콜백의 OutboxStatusUpdater.markSuccess(REQUIRES_NEW)에서만 일어난다.
+in-flight 표시가 없어 콜백 커밋이 다음 5초 폴링보다 늦으면 같은 행이 재선택돼 다시 발행된다.
+outbox 행의 retry_count는 전부 0 — 발행 실패가 아니라 정상 발행의 중복이다.
+클래스 javadoc이 명시한 at-least-once 설계 그대로이며(중복은 컨슈머가 eventId로 멱등 처리),
+이번 측정이 더하는 것은 경합 부하에서의 증폭 배율과 그 소비 비용이다.
