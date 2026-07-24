@@ -198,6 +198,43 @@ jobs:
             -xzf deploy-bundle.tar.gz \
             -C deploy
 
+          # 배포 번들에 monitoring 필수 파일이 정상적으로 포함됐는지 확인한다.
+          REQUIRED_MONITORING_FILES=(
+            deploy/monitoring/prometheus.aws.yml
+            deploy/monitoring/grafana/provisioning/dashboards/dashboards.yml
+          )
+
+          for REQUIRED_FILE in "${REQUIRED_MONITORING_FILES[@]}"; do
+            if [[ ! -f "${REQUIRED_FILE}" ]]; then
+              echo "::error::Required monitoring file is missing: ${REQUIRED_FILE}"
+              exit 1
+            fi
+          done
+
+          if [[ ! -d deploy/monitoring/grafana/dashboards ]]; then
+            echo "::error::Grafana dashboards directory is missing."
+            exit 1
+          fi
+
+          if ! find deploy/monitoring/grafana/dashboards \
+            -maxdepth 1 \
+            -type f \
+            -name '*.json' \
+            -print \
+            -quit \
+            | grep -q .; then
+            echo "::error::Grafana dashboard JSON files are missing."
+            exit 1
+          fi
+
+          echo "Monitoring deployment files validated successfully."
+
+          find deploy/monitoring/grafana/dashboards \
+            -maxdepth 1 \
+            -type f \
+            -name '*.json' \
+            -print
+
           rm -f deploy-bundle.tar.gz
 
           if [[ ! -f deploy/.env ]]; then
@@ -227,6 +264,7 @@ jobs:
             mysql
             redis
             redis-exporter
+            node-exporter
             kafka
             gateway-service
             auth-service
@@ -288,7 +326,65 @@ jobs:
           done
 
           "${COMPOSE[@]}" pull
+
+          # 전체 서비스에 변경된 이미지·Compose 설정 반영
           "${COMPOSE[@]}" up -d --remove-orphans
+
+          # 배포 과정에서 monitoring bind source를 교체했으므로
+          # 기존 마운트를 버리고 새 경로를 다시 마운트한다.
+          "${COMPOSE[@]}" up \
+            -d \
+            --force-recreate \
+            --no-deps \
+            prometheus \
+            grafana
+
+          # 호스트의 새 dashboards 디렉터리가 Grafana 컨테이너 안에 실제로
+          # 다시 마운트됐는지 확인한다.
+          GRAFANA_DASHBOARDS_MOUNTED=false
+
+          for ATTEMPT in $(seq 1 12); do
+            GRAFANA_CONTAINER_ID="$(
+              "${COMPOSE[@]}" ps -q grafana 2>/dev/null || true
+            )"
+
+            if [[ -n "${GRAFANA_CONTAINER_ID}" ]] \
+              && docker exec "${GRAFANA_CONTAINER_ID}" sh -c '
+                find /var/lib/grafana/dashboards \
+                  -maxdepth 1 \
+                  -type f \
+                  -name "*.json" \
+                  -print \
+                  -quit \
+                  | grep -q .
+              '; then
+              GRAFANA_DASHBOARDS_MOUNTED=true
+              break
+            fi
+
+            echo "Waiting for Grafana dashboard mount (${ATTEMPT}/12)"
+            sleep 5
+          done
+
+          if [[ "${GRAFANA_DASHBOARDS_MOUNTED}" != "true" ]]; then
+            echo "::error::Grafana dashboard JSON files are not visible inside the container."
+
+            GRAFANA_CONTAINER_ID="$(
+              "${COMPOSE[@]}" ps -q grafana 2>/dev/null || true
+            )"
+
+            if [[ -n "${GRAFANA_CONTAINER_ID}" ]]; then
+              docker inspect "${GRAFANA_CONTAINER_ID}" \
+                --format '{{range .Mounts}}{{println .Source "->" .Destination}}{{end}}'
+
+              docker exec "${GRAFANA_CONTAINER_ID}" \
+                sh -c 'ls -la /var/lib/grafana/dashboards || true'
+            fi
+
+            exit 1
+          fi
+
+          echo "Grafana dashboard mount validated successfully."
 
           READY=false
           STABLE_PASSES=0
@@ -370,7 +466,8 @@ jobs:
 
               if [[ -n "${APPLICATION_SERVICE_SET[$SERVICE]:-}" ]]; then
                 if ! docker logs "${CONTAINER_ID}" 2>&1 \
-                  | grep -Eq 'Started .*Application in .* seconds'; then
+                  | grep -E 'Started .*Application in .* seconds' \
+                  > /dev/null; then
                   echo "${SERVICE}: Spring Boot startup not confirmed"
                   ALL_READY=false
                 fi
@@ -428,64 +525,113 @@ jobs:
 
           # 컨테이너가 떴다고 지표가 수집되는 것은 아니다. 타깃 주소가 틀리면 up=0인 채로
           # 배포가 초록불로 끝난다. 실제로 스크랩되는지 확인한다(이슈 #380 완료 조건).
-          EXPECTED_TARGETS=9   # 앱 8 + prometheus 자기 자신 1
+          # 앱 8 + redis + node + prometheus. node job(#465) 추가로 10→11.
+          EXPECTED_TARGETS=11
+          PROMETHEUS_READY=false
 
           for ATTEMPT in $(seq 1 12); do
-            UP_COUNT="$(
-              curl --fail --silent \
-                'http://127.0.0.1:9090/api/v1/query?query=up' \
-                | jq '[.data.result[] | select(.value[1] == "1")] | length'
-            )" || UP_COUNT=0
+            TARGETS_RESPONSE="$(
+              curl \
+                --fail \
+                --silent \
+                --show-error \
+                http://127.0.0.1:9090/api/v1/targets
+            )" || TARGETS_RESPONSE=""
 
-            if [[ "${UP_COUNT}" == "${EXPECTED_TARGETS}" ]]; then
-              echo "Prometheus targets UP: ${UP_COUNT}/${EXPECTED_TARGETS}"
+            if [[ -z "${TARGETS_RESPONSE}" ]]; then
+              echo \
+                "Prometheus targets request failed " \
+                "(${ATTEMPT}/12, retrying)"
+
+              sleep 10
+              continue
+            fi
+
+            TOTAL_COUNT="$(
+              jq '.data.activeTargets | length' \
+                <<< "${TARGETS_RESPONSE}"
+            )"
+
+            UP_COUNT="$(
+              jq '
+                [
+                  .data.activeTargets[]
+                  | select(.health == "up")
+                ]
+                | length
+              ' <<< "${TARGETS_RESPONSE}"
+            )"
+
+            DOWN_COUNT="$(
+              jq '
+                [
+                  .data.activeTargets[]
+                  | select(.health != "up")
+                ]
+                | length
+              ' <<< "${TARGETS_RESPONSE}"
+            )"
+
+            echo \
+              "Prometheus targets: " \
+              "total=${TOTAL_COUNT}/${EXPECTED_TARGETS} " \
+              "up=${UP_COUNT} down=${DOWN_COUNT}"
+
+            if (( TOTAL_COUNT == EXPECTED_TARGETS )) \
+              && (( UP_COUNT == EXPECTED_TARGETS )) \
+              && (( DOWN_COUNT == 0 )); then
+              PROMETHEUS_READY=true
               break
             fi
 
-            echo "Prometheus targets UP: ${UP_COUNT}/${EXPECTED_TARGETS} (retrying)"
+            jq -r '
+              .data.activeTargets[]
+              | select(.health != "up")
+              | "\(.scrapeUrl) health=\(.health) error=\(.lastError)"
+            ' <<< "${TARGETS_RESPONSE}"
+
             sleep 10
           done
 
-          if [[ "${UP_COUNT}" != "${EXPECTED_TARGETS}" ]]; then
-            echo "Prometheus is not scraping all targets."
+          if [[ "${PROMETHEUS_READY}" != "true" ]]; then
+            echo "Prometheus targets did not become fully healthy."
 
-            curl --silent 'http://127.0.0.1:9090/api/v1/targets' \
-              | jq -r '.data.activeTargets[]
-                  | "\(.scrapeUrl) health=\(.health) \(.lastError)"'
+            if [[ -n "${TARGETS_RESPONSE:-}" ]]; then
+              jq -r '
+                .data.activeTargets[]
+                | "\(.scrapeUrl) health=\(.health) error=\(.lastError)"
+              ' <<< "${TARGETS_RESPONSE}"
+            fi
 
             exit 1
           fi
 
-          echo "Checking external HTTPS health..."
+          echo "Checking local Nginx HTTPS route..."
 
-          if ! EXTERNAL_HEALTH_RESPONSE="$(
+          NGINX_HEALTH_RESPONSE="$(
             curl \
               --fail \
               --silent \
               --show-error \
-              --connect-timeout 10 \
-              --max-time 30 \
+              --location \
+              --resolve api.ticketrush.store:443:127.0.0.1 \
+              --connect-timeout 5 \
+              --max-time 15 \
               --retry 6 \
               --retry-delay 5 \
               --retry-all-errors \
-              https://api.ticketrush.store/actuator/health \
-              2>&1
-          )"; then
-            echo "${EXTERNAL_HEALTH_RESPONSE}"
-            echo "External HTTPS health request failed."
-            echo "Check DNS, TLS certificate, Nginx, and public network reachability."
-            exit 1
-          fi
+              https://api.ticketrush.store/actuator/health
+          )"
 
-          echo "${EXTERNAL_HEALTH_RESPONSE}"
+          echo "${NGINX_HEALTH_RESPONSE}"
 
           if ! grep -Eq '"status"[[:space:]]*:[[:space:]]*"UP"' \
-            <<< "${EXTERNAL_HEALTH_RESPONSE}"; then
-            echo "External HTTPS health status is not UP."
+            <<< "${NGINX_HEALTH_RESPONSE}"; then
+            echo "Local Nginx HTTPS health status is not UP."
             exit 1
           fi
 
-          echo "External HTTPS health check passed."
+          echo "Local Nginx HTTPS health check passed."
 
 
           PREVIOUS_RELEASE=""
@@ -520,3 +666,58 @@ jobs:
             echo "- Registry: \`${ECR_REGISTRY}\`"
             echo "- Result: success"
           } >> "${GITHUB_STEP_SUMMARY}"
+
+  external-health:
+    name: External HTTPS health
+    needs: deploy
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+
+    steps:
+      - name: Check public HTTPS health
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+
+          EXTERNAL_URL="https://api.ticketrush.store/actuator/health"
+          MAX_ATTEMPTS=12
+          SLEEP_SECONDS=10
+
+          for ATTEMPT in $(seq 1 "${MAX_ATTEMPTS}"); do
+            echo "External health check ${ATTEMPT}/${MAX_ATTEMPTS}"
+
+            RESPONSE_FILE="$(mktemp)"
+
+            HTTP_CODE="$(
+              curl \
+                --silent \
+                --show-error \
+                --location \
+                --connect-timeout 5 \
+                --max-time 15 \
+                --output "${RESPONSE_FILE}" \
+                --write-out '%{http_code}' \
+                "${EXTERNAL_URL}"
+            )" && CURL_EXIT=0 || CURL_EXIT=$?
+
+            RESPONSE="$(cat "${RESPONSE_FILE}")"
+            rm -f "${RESPONSE_FILE}"
+
+            echo "curl_exit=${CURL_EXIT}, http_code=${HTTP_CODE:-none}"
+            echo "${RESPONSE}"
+
+            if [[ "${CURL_EXIT}" -eq 0 ]] \
+              && [[ "${HTTP_CODE}" == "200" ]] \
+              && grep -Eq '"status"[[:space:]]*:[[:space:]]*"UP"' \
+                <<< "${RESPONSE}"; then
+              echo "External HTTPS health check passed."
+              exit 0
+            fi
+
+            if (( ATTEMPT < MAX_ATTEMPTS )); then
+              sleep "${SLEEP_SECONDS}"
+            fi
+          done
+
+          echo "::error::External HTTPS health did not become UP."
+          exit 1

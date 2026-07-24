@@ -1,13 +1,13 @@
 package com.ticketrush.boundedcontext.seat.app.facade;
 
-import com.ticketrush.boundedcontext.seat.app.dto.response.SeatLayoutResponse;
+import com.ticketrush.boundedcontext.seat.app.dto.response.SeatMapItemResponse;
 import com.ticketrush.boundedcontext.seat.app.dto.response.SeatNumberResponse;
 import com.ticketrush.boundedcontext.seat.app.dto.response.SeatStatusCountsResponse;
 import com.ticketrush.boundedcontext.seat.app.support.SeatStatusStreamSubscriber;
 import com.ticketrush.boundedcontext.seat.app.usecase.SeatConfirmSoldUseCase;
 import com.ticketrush.boundedcontext.seat.app.usecase.SeatCreateDefaultLayoutUseCase;
 import com.ticketrush.boundedcontext.seat.app.usecase.SeatGetNumbersUseCase;
-import com.ticketrush.boundedcontext.seat.app.usecase.SeatGetSeatLayoutsUseCase;
+import com.ticketrush.boundedcontext.seat.app.usecase.SeatGetSeatMapUseCase;
 import com.ticketrush.boundedcontext.seat.app.usecase.SeatGetStatusCountsUseCase;
 import com.ticketrush.boundedcontext.seat.app.usecase.SeatHoldUseCase;
 import com.ticketrush.boundedcontext.seat.app.usecase.SeatLockUseCase;
@@ -30,7 +30,7 @@ import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
 public class SeatFacade {
 
   private final SeatGetStatusCountsUseCase seatGetStatusCountsUseCase;
-  private final SeatGetSeatLayoutsUseCase seatGetSeatLayoutsUseCase;
+  private final SeatGetSeatMapUseCase seatGetSeatMapUseCase;
   private final SeatGetNumbersUseCase seatGetNumbersUseCase;
   private final SeatCreateDefaultLayoutUseCase seatCreateDefaultLayoutUseCase;
   private final SeatConfirmSoldUseCase seatConfirmSoldUseCase;
@@ -41,8 +41,8 @@ public class SeatFacade {
   private final SeatLayoutRepository seatLayoutRepository;
   private final EventPublisher eventPublisher;
 
-  public List<SeatLayoutResponse> getPerformanceSeatLayouts(Long performanceId) {
-    return seatGetSeatLayoutsUseCase.execute(performanceId);
+  public List<SeatMapItemResponse> getPerformanceSeatMap(Long performanceId) {
+    return seatGetSeatMapUseCase.execute(performanceId);
   }
 
   public List<SeatNumberResponse> getSeatNumbers(List<Long> seatIds) {

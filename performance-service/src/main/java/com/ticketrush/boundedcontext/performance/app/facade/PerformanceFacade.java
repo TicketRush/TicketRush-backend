@@ -7,6 +7,7 @@ import com.ticketrush.boundedcontext.performance.app.dto.response.PerformanceCre
 import com.ticketrush.boundedcontext.performance.app.dto.response.PerformanceDetailResponse;
 import com.ticketrush.boundedcontext.performance.app.dto.response.PerformanceListResponse;
 import com.ticketrush.boundedcontext.performance.app.usecase.PerformanceChangeStatusUseCase;
+import com.ticketrush.boundedcontext.performance.app.usecase.PerformanceClearBookingOpenAtUseCase;
 import com.ticketrush.boundedcontext.performance.app.usecase.PerformanceCreateUseCase;
 import com.ticketrush.boundedcontext.performance.app.usecase.PerformanceDeleteUseCase;
 import com.ticketrush.boundedcontext.performance.app.usecase.PerformanceGetDetailUseCase;
@@ -33,6 +34,7 @@ public class PerformanceFacade {
   private final PerformancePatchUseCase performancePatchUseCase;
   private final PerformanceDeleteUseCase performanceDeleteUseCase;
   private final PerformanceValidateUseCase performanceValidateUseCase;
+  private final PerformanceClearBookingOpenAtUseCase performanceClearBookingOpenAtUseCase;
 
   public PerformanceCreateResponse createPerformance(
       PerformanceCreateRequest request,
@@ -64,6 +66,10 @@ public class PerformanceFacade {
 
   public void patchPerformance(Long performanceId, PerformancePatchRequest request) {
     performancePatchUseCase.execute(performanceId, request);
+  }
+
+  public void clearBookingOpenAt(Long performanceId) {
+    performanceClearBookingOpenAtUseCase.execute(performanceId);
   }
 
   public void deletePerformance(Long performanceId) {

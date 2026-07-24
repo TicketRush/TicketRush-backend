@@ -51,7 +51,7 @@ import org.testcontainers.mysql.MySQLContainer;
  * KafkaConfig}의 컨테이너 팩토리에 {@code setConcurrency}가 없고 {@code spring.kafka.listener.concurrency}도 없어
  * 기본 1) Redisson 락은 경합하지 않는다. {@code RLock}은 (clientUUID:threadId) 기준 재진입 락이라 같은 스레드의 {@code
  * tryLock}은 실패 대신 재진입 성공한다. 즉 {@code SEAT_LOCK_CONTENTION}은 운영에서 구조적으로 0이며, 부하 테스트로는 이 카운터를 올릴 수
- * 없다(측정 결과와 근거는 docs/load-test-guide.md §8).
+ * 없다(측정 결과와 근거는 docs/load-test-guide.md §10).
  *
  * <p>그래서 두 테스트가 서로 다른 것을 검증한다.
  *

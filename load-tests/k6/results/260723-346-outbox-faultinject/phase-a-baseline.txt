@@ -1,0 +1,11 @@
+=== Phase A baseline (2026-07-23 21:04:46 local) ===
+--- DB now / booking / inbox baseline ---
+db_now_kst
+2026-07-23 21:04:47
+bookings_perf3
+0
+inbox_seatgroup_bookingcreated
+0
+--- Prometheus baseline ---
+{"status":"success","data":{"resultType":"vector","result":[]}}
+{"status":"success","data":{"resultType":"vector","result":[]}}

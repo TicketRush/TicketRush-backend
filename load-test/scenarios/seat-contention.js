@@ -7,7 +7,7 @@
 //      좌석이 HOLD 로 커밋된 뒤부터 409 를 던진다. → 아래 seat_conflict.
 //   2. seat-service 의 isAvailable() → ticketrush_seat_hold_total{result="unavailable"}.
 // HOLD 커밋 전 윈도우에 들어온 요청은 전부 201 을 받고 컨슈머로 흘러가 2번에서 걸린다.
-// 근거·PromQL·측정 결과는 docs/load-test-guide.md §8. 락 경합 자체는 스레드를 가른
+// 근거·PromQL·측정 결과는 docs/load-test-guide.md §10. 락 경합 자체는 스레드를 가른
 // SeatHoldConcurrencyTest(seat-service)가 검증한다.
 import http from 'k6/http';
 import { check } from 'k6';

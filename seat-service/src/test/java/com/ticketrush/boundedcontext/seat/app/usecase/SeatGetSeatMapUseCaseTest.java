@@ -3,7 +3,7 @@ package com.ticketrush.boundedcontext.seat.app.usecase;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.BDDMockito.given;
 
-import com.ticketrush.boundedcontext.seat.app.dto.response.SeatLayoutResponse;
+import com.ticketrush.boundedcontext.seat.app.dto.response.SeatMapItemResponse;
 import com.ticketrush.boundedcontext.seat.out.repository.SeatRepository;
 import com.ticketrush.global.types.SeatStatus;
 import java.util.List;
@@ -15,9 +15,9 @@ import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
 @ExtendWith(MockitoExtension.class)
-class SeatGetSeatLayoutsUseCaseTest {
+class SeatGetSeatMapUseCaseTest {
 
-  @InjectMocks private SeatGetSeatLayoutsUseCase useCase;
+  @InjectMocks private SeatGetSeatMapUseCase useCase;
 
   @Mock private SeatRepository seatRepository;
 
@@ -26,15 +26,14 @@ class SeatGetSeatLayoutsUseCaseTest {
   void executeReturnsSeatLayouts() {
     // given
     Long performanceId = 1L;
-    List<SeatLayoutResponse> expectedResponses =
+    List<SeatMapItemResponse> expectedResponses =
         List.of(
-            new SeatLayoutResponse(1L, 101L, "A-1", SeatStatus.AVAILABLE, null),
-            new SeatLayoutResponse(2L, 101L, "A-2", SeatStatus.HOLD, null));
-    given(seatRepository.findSeatLayoutsByPerformanceId(performanceId))
-        .willReturn(expectedResponses);
+            new SeatMapItemResponse(1L, 101L, "A-1", SeatStatus.AVAILABLE, null),
+            new SeatMapItemResponse(2L, 101L, "A-2", SeatStatus.HOLD, null));
+    given(seatRepository.findSeatMapByPerformanceId(performanceId)).willReturn(expectedResponses);
 
     // when
-    List<SeatLayoutResponse> actualResponses = useCase.execute(performanceId);
+    List<SeatMapItemResponse> actualResponses = useCase.execute(performanceId);
 
     // then
     assertThat(actualResponses).hasSize(2);

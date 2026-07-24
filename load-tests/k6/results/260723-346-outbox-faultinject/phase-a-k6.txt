@@ -1,0 +1,40 @@
+    ✓ 'p(95)<800' p(95)=86.08ms
+
+    http_req_failed
+    ✓ 'rate<0.01' rate=0.42%
+
+
+  █ TOTAL RESULTS 
+
+    checks_total.......: 10321  12.284343/s
+    checks_succeeded...: 99.57% 10277 out of 10321
+    checks_failed......: 0.42%  44 out of 10321
+
+    ✓ login 200
+    ✗ booking created(201) or conflict
+      ↳  99% — ✓ 10276 / ✗ 44
+
+    CUSTOM
+    seat_conflict..................: 0.00%  0 out of 10320
+
+    HTTP
+    http_req_duration..............: avg=285.02ms min=17.4ms  med=68.08ms  max=59.99s p(90)=79.42ms p(95)=86.08ms
+      { expected_response:true }...: avg=70.17ms  min=17.4ms  med=68.01ms  max=33.89s p(90)=79.15ms p(95)=85.12ms
+    http_req_failed................: 0.42%  44 out of 10321
+    http_reqs......................: 10321  12.284343/s
+
+    EXECUTION
+    iteration_duration.............: avg=1.17s    min=25.44ms med=998.61ms max=1m0s   p(90)=1.04s   p(95)=1.05s  
+    iterations.....................: 10320  12.283153/s
+    vus............................: 1      min=1           max=15
+    vus_max........................: 15     min=15          max=15
+
+    NETWORK
+    data_received..................: 7.2 MB 8.6 kB/s
+    data_sent......................: 4.3 MB 5.1 kB/s
+
+
+
+
+running (14m00.2s), 00/15 VUs, 10320 complete and 0 interrupted iterations
+default ✓ [ 100% ] 00/15 VUs  14m0s

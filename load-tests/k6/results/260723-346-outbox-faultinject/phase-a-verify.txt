@@ -1,0 +1,2 @@
+window_from	window_to	expected_events	received_events	lost_events
+2026-07-23 12:04:47	2026-07-23 12:19:11	10304	9790	514
