@@ -1,5 +1,7 @@
 app:
   event-publisher:
+    # outbox 전환(#471)으로 relay·retention 스케줄러가 함께 활성화된다. 별도 비활성 스위치는 없으므로
+    # (seat-service 선례와 동일), 풀컨텍스트 통합 테스트를 추가할 때는 스케줄러가 Kafka/Redis를 요구함에 유의.
     type: outbox
   # 테스트 환경에서는 DLT 모니터/Slack 알림, inbox retention을 명시적으로 비활성화한다.
   dlt:
