@@ -9,6 +9,8 @@ import java.time.Instant;
 import java.time.LocalDateTime;
 import java.time.ZoneId;
 import java.util.List;
+import java.util.Set;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicLong;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -28,6 +30,9 @@ import org.springframework.stereotype.Service;
  *
  * <p>발행은 비동기(`whenComplete`)로 수행하고, 결과에 따른 상태 전이는 {@link OutboxStatusUpdater}가 별도 트랜잭션에서 처리한다(콜백이
  * relay 트랜잭션 밖 프로듀서 IO 스레드에서 실행되기 때문). 발행은 at-least-once이며, 중복은 컨슈머가 {@code eventId}로 멱등 처리한다.
+ *
+ * <p>다만 at-least-once가 "폴링마다 같은 행을 다시 보내도 된다"는 뜻은 아니다. 상태 전이가 콜백에서만 일어나므로 in-flight 표시가 없으면 콜백이 늦는
+ * 만큼 중복이 배로 늘어난다({@code inFlight} 참고). 남는 중복은 재시작·페일오버로 표시가 사라지는 경우뿐이다.
  */
 @Slf4j
 @Service
@@ -45,6 +50,19 @@ public class OutboxRelayService {
   private final MeterRegistry meterRegistry;
 
   private final AtomicLong backlog = new AtomicLong();
+
+  /**
+   * 발행을 띄웠지만 아직 완료 콜백이 상태를 전이하지 못한 행의 id.
+   *
+   * <p>없으면 같은 행이 반복 발행된다. 조회는 PENDING/FAILED를 보는데 SENT 전이는 프로듀서 콜백에서만 일어나므로, 콜백 커밋이 다음 폴링보다 늦으면
+   * {@code findBy...OrderByIdAsc}가 같은 행을 다시 집는다. #344 측정에서 outbox 1,324행에 발행 4,090건(3.09배)이 나왔고 그
+   * 중복은 전부 컨슈머 Inbox가 걸러내느라 단일 컨슈머 스레드 처리량의 68%를 썼다.
+   *
+   * <p>인스턴스 로컬로 충분하다. relay는 ShedLock으로 한 번에 한 노드만 돌고, 페일오버로 다른 노드가 이어받아 재발행하는 경우는 이 클래스가 보장하는
+   * at-least-once의 정상 범위다(중복은 컨슈머가 eventId로 멱등 처리한다). 콜백은 성공·실패 어느 쪽이든 반드시 도달하므로(프로듀서
+   * delivery.timeout.ms) 항목이 영구히 남지 않는다.
+   */
+  private final Set<Long> inFlight = ConcurrentHashMap.newKeySet();
 
   /** 이 서비스가 소유한 aggregateTypes의 적체(PENDING/FAILED) 건수를 노출하는 Gauge를 등록한다(#335). */
   @PostConstruct
@@ -72,7 +90,10 @@ public class OutboxRelayService {
             aggregateTypes, RELAY_TARGET_STATUSES, PageRequest.of(0, batchSize));
 
     for (OutboxEntity row : rows) {
-      dispatch(row);
+      // add()가 false면 직전 배치가 띄운 발행이 아직 콜백을 못 받은 것이다. 다시 보내지 않는다.
+      if (inFlight.add(row.getId())) {
+        dispatch(row);
+      }
     }
   }
 
@@ -82,17 +103,29 @@ public class OutboxRelayService {
     String topic = row.getTopic();
     // 비동기 발행 후 완료 콜백에서 상태를 전이한다. 콜백은 프로듀서 IO 스레드(relay tx 밖)에서 실행되므로
     // OutboxStatusUpdater가 REQUIRES_NEW 트랜잭션으로 처리한다.
-    kafkaTemplate
-        .send(toMessage(row))
-        .whenComplete(
-            (result, ex) -> {
-              if (ex == null) {
-                outboxStatusUpdater.markSuccess(id);
-              } else {
-                outboxStatusUpdater.markFail(id, errorMessage(ex));
-                log.error("Outbox relay failed. eventId={}, topic={}", eventId, topic, ex);
-              }
-            });
+    try {
+      kafkaTemplate
+          .send(toMessage(row))
+          .whenComplete(
+              (result, ex) -> {
+                try {
+                  if (ex == null) {
+                    outboxStatusUpdater.markSuccess(id);
+                  } else {
+                    outboxStatusUpdater.markFail(id, errorMessage(ex));
+                    log.error("Outbox relay failed. eventId={}, topic={}", eventId, topic, ex);
+                  }
+                } finally {
+                  // 상태 전이 성패와 무관하게 푼다. 전이가 실패했다면 행이 PENDING/FAILED로 남아
+                  // 다음 폴링이 정상적으로 다시 집어야 하므로, 여기서 잠가두면 영영 발행되지 않는다.
+                  inFlight.remove(id);
+                }
+              });
+    } catch (RuntimeException e) {
+      // send() 자체가 콜백 없이 즉시 터지는 경우(직렬화 실패 등) 콜백이 오지 않아 잠금이 남는다.
+      inFlight.remove(id);
+      throw e;
+    }
   }
 
   private Message<DomainEventEnvelope> toMessage(OutboxEntity row) {

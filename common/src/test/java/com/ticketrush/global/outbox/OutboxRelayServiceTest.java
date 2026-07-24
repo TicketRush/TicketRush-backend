@@ -6,6 +6,7 @@ import static org.mockito.ArgumentMatchers.argThat;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.BDDMockito.given;
 import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 
 import com.ticketrush.global.event.DomainEventEnvelope;
@@ -103,6 +104,39 @@ class OutboxRelayServiceTest {
     // then
     verify(outboxStatusUpdater).markFail(eq(2L), argThat(msg -> msg.contains("kaboom")));
     verify(outboxStatusUpdater, never()).markSuccess(any());
+  }
+
+  @Test
+  @DisplayName("발행 콜백이 아직 안 온 행은 다음 폴링에서 다시 발행하지 않는다")
+  @SuppressWarnings("unchecked")
+  void relayBatch_does_not_republish_row_whose_callback_has_not_completed() {
+    // given: 콜백이 아직 완료되지 않은 발행 = 조회에는 여전히 PENDING 으로 잡히는 상태
+    OutboxEntity row = pendingRow(3L, "evt-3");
+    CompletableFuture<SendResult<String, DomainEventEnvelope>> pending = new CompletableFuture<>();
+    given(outboxProperties.getAggregateTypes()).willReturn(List.of("Booking"));
+    given(outboxProperties.getBatchSize()).willReturn(100);
+    given(
+            outboxRepository.findByAggregateTypeInAndStatusInOrderByIdAsc(
+                any(), any(), any(Pageable.class)))
+        .willReturn(List.of(row));
+    given(kafkaTemplate.send(any(Message.class))).willReturn(pending);
+
+    // when: 콜백이 오기 전에 폴링이 세 번 더 돈다 (#344 실측의 3.09배 증폭이 나온 상황)
+    outboxRelayService.relayBatch();
+    outboxRelayService.relayBatch();
+    outboxRelayService.relayBatch();
+    outboxRelayService.relayBatch();
+
+    // then: 발행은 첫 폴링의 1회뿐
+    verify(kafkaTemplate, times(1)).send(any(Message.class));
+
+    // 콜백이 도착해 잠금이 풀리면 다시 집을 수 있어야 한다.
+    // 전이가 실패해 행이 PENDING 으로 남는 경우까지 영영 막아버리면 안 되기 때문이다.
+    pending.complete(null);
+    verify(outboxStatusUpdater).markSuccess(3L);
+
+    outboxRelayService.relayBatch();
+    verify(kafkaTemplate, times(2)).send(any(Message.class));
   }
 
   @Test
