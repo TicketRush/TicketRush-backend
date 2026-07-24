@@ -60,7 +60,7 @@ app:
     # Kafka 재시도 소진(약 31초)보다 훨씬 길게 잡아 컨슈머 랙·재배포 중 일시 지연의 오탐을 막는다.
     refunding-stuck-threshold-minutes: 30
   event-publisher:
-    type: kafka
+    type: outbox
   outbox:
     aggregate-types:
       - Booking
