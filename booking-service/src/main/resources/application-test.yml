@@ -1,6 +1,6 @@
 app:
   event-publisher:
-    type: kafka
+    type: outbox
   # 테스트 환경에서는 DLT 모니터/Slack 알림, inbox retention을 명시적으로 비활성화한다.
   dlt:
     monitor:

@@ -230,7 +230,7 @@ public class OrderEventListener {
 
 > ⚠️ `OutboxEventPublisher.publish()`는 **활성 트랜잭션이 필수**다. 트랜잭션 밖에서 호출하면 `IllegalStateException`을 던진다(*"…비즈니스 변경과 Outbox 저장의 원자성을 보장하려면 호출부를 @Transactional 등으로 감싸세요."*). outbox 모드 서비스는 발행부를 반드시 `@Transactional` 안에서 호출한다.
 
-**현재 배선:** outbox 모드는 **seat-service**만 사용한다. 나머지 서비스(booking·user·performance·payment·ticket·auth)는 `kafka` 모드다. booking-service는 outbox 인프라(relay·retention 스케줄러·`app.outbox` 설정)를 갖추고 있으나 프로파일이 `kafka`라 휴면 상태다.
+**현재 배선:** outbox 모드는 **seat-service·booking-service**가 사용한다(#471에서 booking 전환 — #346 장애 주입 측정으로 유실 0건 검증). 나머지 서비스(user·performance·payment·ticket·auth)는 `kafka` 모드다.
 
 ### 4.2. Outbox 모드 배선
 
