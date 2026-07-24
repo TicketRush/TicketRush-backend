@@ -1,0 +1,35 @@
+SERIES_ID=260724-347-inbox-idempotency
+ISSUE=#347
+DATE=2026-07-24 (KST)
+TARGET_HOST=EC2 54.116.243.250 (탄력 IP)
+TOPOLOGY=SSH 원격 실행(inbox-redeliver.sh @ EC2 호스트) + Prometheus/Grafana(EC2 로컬, ADR 0007)
+IMAGE_TAG=a5eb970 (전 서비스 동일 — #346 측정본과 동일 이미지)
+METHOD=kafka-consumer-groups --reset-offsets --to-earliest 루프 (docs/load-test-guide.md §9)
+WORKLOAD_SOURCE=booking-created-topic 누적 22,366건 (#346 측정 시 k6 booking-create가 적재, 파티션 0/1/2 = 7512/7476/7378)
+INBOX_BASELINE=seat-group BookingCreatedEvent 22,366행 (토픽과 1:1 정합 — 측정 전 verify-inbox.sql ②)
+PROM_BASELINE=ticketrush_kafka_inbox_total 시리즈 없음 (스택 재기동 직후 카운터 0 출발)
+PROM_SCRAPE_INTERVAL=15s
+
+# 주 측정 — seat-group × booking-created-topic
+GROUP=seat-group
+TOPIC=booking-created-topic
+SERVICE=seat-service
+DURATION=360
+WINDOW_UTC=2026-07-24 07:37:50 ~ 07:44:17 (스크립트 종료 07:43:52 + cycle 6 잔여 lag 소진 07:44:17 — 6분 27초)
+CYCLES=6 (reset: 07:37:52 / 07:39:00 / 07:39:55 / 07:40:50 / 07:42:02 / 07:43:26 — redeliver-log.txt)
+REDELIVERED_GROUND_TRUTH=134196 (= 6 cycles x 22,366, 전 사이클 lag 0 소진 확인)
+DUPLICATE_PROMQL=123244 (sum(increase(...{result="duplicate",consumer_group="seat-group"}[400s])) @ 07:44:30)
+DUPLICATE_PROMQL_NOTE=사이클마다 seat-service 재시작으로 카운터가 0 리셋 — 마지막 스크랩(15s 간격)~정지 사이 증분이 리셋 보정에서 누락돼 ground truth 대비 ~8% 과소집계. 차단율 산출에는 영향 없음(분자·분모 동일 창).
+PROCESSED_TOTAL=0 (result="processed" 시리즈 미생성 — 측정 창 내 신규 이벤트 0)
+BLOCK_RATE=100% (duplicate/(duplicate+processed) = 123244/123244; ground truth 134196/134196)
+REPROCESSED=0 (inbox seat-group 22,366행 전/후 불변 — 재전달 전량이 fast-path 차단, 비즈니스 미실행)
+TICKET_DOUBLE_ISSUE=0행 (verify-inbox.sql ①. 단 EC2에는 결제 흐름이 없어 ticket 테이블 자체가 0행 — 티켓 경로의 이중 발급 0건 검증은 TicketIssueConcurrencyTest가 실 MySQL로 담당)
+INBOX_AFTER=seat-group BookingCreatedEvent 22,366 / booking-group SeatHoldExpiredEvent 20,016 / payment-group BookingExpiredEvent 22,880 (전부 측정 전과 동일)
+
+# 보조 측정 — ticket-group × payment-confirmed-topic
+TICKET_GROUP_NOTE=payment-confirmed-topic 잔존 이벤트 0건(파티션 전부 offset 0) → 재전달 볼륨이 없어 부하 측정 불가.
+TICKET_GROUP_COVERAGE=티켓 경로(결제확정 재전달·이중 발급 0건)는 TicketIssueConcurrencyTest(실 MySQL 10스레드 동시 재주입)와 verify-inbox.sql ①이 검증.
+
+# 증적 파일
+FILES=report.md / redeliver-log.txt(사이클·lag 타임라인) / timeseries-inbox-duplicate-rate.json(1m rate 곡선, 15s step) / timeseries-inbox-duplicate-counter.json(원시 카운터)
+CAPTURE_NOTE=Grafana 캡처는 renderer 미설치+로그인 제약으로 미수행 — 재현 PromQL은 report.md §4. 원시 시계열 JSON이 동일 데이터의 증적.

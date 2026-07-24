@@ -1,0 +1,34 @@
+[redeliver] begin group=seat-group topic=booking-created-topic duration=360s  2026-07-24 07:37:50 UTC
+[redeliver] cycle 1 reset done  2026-07-24 07:37:52 UTC
+[redeliver] cycle 1 lag=22366
+[redeliver] cycle 1 lag=20464
+[redeliver] cycle 1 lag=13456
+[redeliver] cycle 1 lag=3093
+[redeliver] cycle 1 lag=0
+[redeliver] cycle 2 reset done  2026-07-24 07:39:00 UTC
+[redeliver] cycle 2 lag=22366
+[redeliver] cycle 2 lag=19977
+[redeliver] cycle 2 lag=11178
+[redeliver] cycle 2 lag=0
+[redeliver] cycle 3 reset done  2026-07-24 07:39:55 UTC
+[redeliver] cycle 3 lag=22366
+[redeliver] cycle 3 lag=19890
+[redeliver] cycle 3 lag=11455
+[redeliver] cycle 3 lag=0
+[redeliver] cycle 4 reset done  2026-07-24 07:40:50 UTC
+[redeliver] cycle 4 lag=22366
+[redeliver] cycle 4 lag=19871
+[redeliver] cycle 4 lag=13942
+[redeliver] cycle 4 lag=6084
+[redeliver] cycle 4 lag=0
+[redeliver] cycle 5 reset done  2026-07-24 07:42:02 UTC
+[redeliver] cycle 5 lag=22366
+[redeliver] cycle 5 lag=22366
+[redeliver] cycle 5 lag=20847
+[redeliver] cycle 5 lag=15647
+[redeliver] cycle 5 lag=7356
+[redeliver] cycle 5 lag=0
+[redeliver] cycle 6 reset done  2026-07-24 07:43:26 UTC
+[redeliver] cycle 6 lag=22366
+[redeliver] cycle 6 lag=19803
+[redeliver] end   cycles=6  2026-07-24 07:43:52 UTC
