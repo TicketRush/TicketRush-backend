@@ -96,7 +96,11 @@ booking-service 릴레이가 **4,090건**을 발행했는데 outbox 행은 **1,3
 
 원인은 `OutboxRelayService.relayBatch()`다. `RELAY_TARGET_STATUSES`(= `PENDING`, `FAILED`) 행을 batch-size만큼 조회해 **비동기** 발행하고, SENT 전이는 프로듀서 콜백의 `OutboxStatusUpdater.markSuccess`(REQUIRES_NEW)에서만 일어난다. **in-flight 표시가 없어** 콜백 커밋이 다음 5초 폴링보다 늦으면 `findByAggregateTypeInAndStatusInOrderByIdAsc(..., PageRequest.of(0, batchSize))`가 **같은 행을 다시 집어** 재발행한다. outbox 행의 `retry_count`는 전부 0 — 발행 실패의 재시도가 아니라 **정상 발행의 중복**이다.
 
-이건 버그가 아니라 클래스 javadoc이 명시한 at-least-once 설계 그대로다("중복은 컨슈머가 eventId로 멱등 처리한다"). #346이 증명한 유실 0(중복 허용)과 #347이 증명한 Inbox 중복 차단이 **경합 부하에서 실제로 맞물려 도는 것을 이번에 관측**했다. 이번 측정이 더하는 것은 그 배율과 비용이다 — 단일 컨슈머 스레드가 유효 처리량의 **68%**(2,763 / 4,087)를 중복 차단에 쓴다.
+정합성 문제는 없다 — 클래스 javadoc이 명시한 at-least-once 설계이고, #346이 증명한 유실 0(중복 허용)과 #347이 증명한 Inbox 중복 차단이 **경합 부하에서 맞물려 도는 것을 이번에 관측**했다. 다만 at-least-once가 "폴링마다 같은 행을 다시 보내도 된다"는 뜻은 아니다. 단일 컨슈머 스레드가 유효 처리량의 **68%**(2,763 / 4,087)를 중복 차단에만 쓰고 있었다.
+
+> **후속 조치 (이 PR에 포함)**: `OutboxRelayService`에 발행을 띄운 행 id를 담는 in-flight 가드를 넣어 콜백이 오기 전 재선택을 막았다. 스키마·DB 왕복을 늘리지 않고, relay가 ShedLock으로 한 노드만 도는 성질을 이용해 인스턴스 로컬 집합으로 처리했다. 해제는 `finally`에 둬서 상태 전이가 실패해 행이 PENDING으로 남는 경우까지 잠가 유실로 만들지 않는다. 회귀 테스트는 콜백 미완료 상태로 폴링을 네 번 돌려 발행 1회를 고정한다(가드 제거 시 이 테스트만 실패함을 확인).
+>
+> **위 실측 수치는 수정 전 배포본(`6398a9d`) 기준이다.** 수정 효과의 재측정은 이 PR 머지 후 배포본에서 별도로 확인한다.
 
 ## 7. 해석·한계
 
