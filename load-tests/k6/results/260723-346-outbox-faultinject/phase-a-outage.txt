@@ -1,0 +1,2 @@
+[outage] stop  ticketrush-kafka  2026-07-23 12:11:05 UTC
+[outage] start ticketrush-kafka  2026-07-23 12:14:06 UTC (outage 180s)
