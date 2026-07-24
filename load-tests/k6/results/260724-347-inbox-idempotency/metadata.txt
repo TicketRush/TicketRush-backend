@@ -32,5 +32,5 @@ TICKET_GROUP_NOTE=payment-confirmed-topic 잔존 이벤트 0건(파티션 전부
 TICKET_GROUP_COVERAGE=티켓 경로(결제확정 재전달·이중 발급 0건)는 TicketIssueConcurrencyTest(실 MySQL 10스레드 동시 재주입)와 verify-inbox.sql ①이 검증.
 
 # 증적 파일
-FILES=report.md / redeliver-log.txt(사이클·lag 타임라인) / timeseries-inbox-duplicate-rate.json(1m rate 곡선, 15s step) / timeseries-inbox-duplicate-counter.json(원시 카운터)
-CAPTURE_NOTE=Grafana 캡처는 renderer 미설치+로그인 제약으로 미수행 — 재현 PromQL은 report.md §4. 원시 시계열 JSON이 동일 데이터의 증적.
+FILES=report.md / redeliver-log.txt(사이클·lag 타임라인) / timeseries-inbox-duplicate-rate.json(1m rate 곡선, 15s step) / timeseries-inbox-duplicate-counter.json(원시 카운터) / graph-inbox-duplicate-{rate,counter}.png(Grafana Explore 캡처)
+CAPTURE_NOTE=Grafana Explore 수동 캡처(renderer 미설치), 구간 16:35~16:46 KST(=07:35~07:46 UTC). rate 피크 ~481/s, 카운터 톱니 6개(사이클당 0→22,366) — 원시 시계열 JSON과 동일 데이터.

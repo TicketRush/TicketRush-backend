@@ -72,5 +72,7 @@ EC2에는 결제 흐름이 없어 ticket 테이블이 0행이므로, 티켓 경�
 | `redeliver-log.txt` | 사이클·lag 타임라인 (inbox-redeliver.sh 출력) |
 | `timeseries-inbox-duplicate-rate.json` | duplicate 1m rate 곡선 (query_range, 15s step) |
 | `timeseries-inbox-duplicate-counter.json` | duplicate 원시 카운터 (리셋 포함) |
+| `graph-inbox-duplicate-rate.png` | Grafana Explore 캡처 — duplicate 1m rate 곡선 (피크 ~481/s, 구간 내 연속) |
+| `graph-inbox-duplicate-counter.png` | Grafana Explore 캡처 — 원시 카운터 톱니 6개 (사이클당 0→22,366) |
 
-> Grafana 패널 캡처는 renderer 미설치·로그인 제약으로 이번 증적에서 제외 — §4의 PromQL을 Grafana Explore에 넣으면 동일 곡선을 재현할 수 있다(구간 07:35~07:46 UTC).
+> Grafana 캡처 구간은 16:35~16:46 KST(= 07:35~07:46 UTC). 카운터 캡처의 중간 톱니 일부가 ~21K/~11.7K에서 잘려 보이는 것은 재시작 직전 스크랩이 피크를 놓친 것으로, §6의 PromQL ~8% 과소집계를 시각적으로 보여준다.
