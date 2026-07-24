@@ -252,3 +252,49 @@ increase(ticketrush_kafka_dlt_total[<구간>])                    # DLT 유입(�
 - **타임존**: `verify-loss.sql`의 `@from/@to`는 **앱이 기록하는 `created_at` 기준(프로드 컨테이너는 UTC)**으로 준다. DB 세션 `NOW()`는 KST라 그대로 쓰면 구간이 안 맞아 조용히 0이 나온다.
 - **IMAGE_TAG 명시**: EC2 `deploy/.env`의 `IMAGE_TAG`는 CD가 배포 시점에만 주입하고 갱신하지 않아 실행 중 컨테이너보다 **뒤처져 있을 수 있다**. override 적용/원복의 `docker compose up`은 booking의 의존 서비스(seat·performance)까지 재생성하므로, 스테일 태그면 그 서비스들이 조용히 구버전으로 다운그레이드된다(실측 중 actuator 8090 분리 이전 이미지로 내려간 사례 있음). 반드시 현재 컨테이너 태그를 확인(`docker inspect gateway-service --format '{{.Config.Image}}'`)하고 `IMAGE_TAG=<그 태그> docker compose ... up -d booking-service`로 명시한다.
 - Grafana 대시보드는 측정 중 열어두지 않는다(§7.2와 동일).
+
+## 9. Inbox 멱등성 측정 — 중복 차단율·이중 발급 0건 (#347)
+
+consumer group offset을 earliest로 되돌려 토픽 누적 이벤트 전체를 **원본 eventId 그대로** 재전달시키고, Inbox(`uk_inbox_group_event`)가 전량 차단하는지 `kafka.inbox` 메트릭 델타로 정량화한다. #346의 Outbox(유실 0, 중복 허용)와 짝 — 그 중복을 걸러 실질 effectively-once를 완성하는 것이 Inbox다. 자산은 `load-test/chaos/`:
+
+| 파일 | 용도 | 실행 위치 |
+|---|---|---|
+| `inbox-redeliver.sh` | 컨슈머 정지 → offset reset → 기동 → lag 소진 사이클을 DURATION 동안 반복 | EC2 (배포본 호스트) |
+| `verify-inbox.sql` | 티켓 이중 발급 검사 + inbox 건수 sanity (재전달 전후 불변 확인) | DB 접근 가능한 곳 |
+
+### 9.1 원리
+
+- **재전달 유발**: `kafka-consumer-groups --reset-offsets --to-earliest`는 그룹의 커밋 오프셋만 되돌린다. 토픽의 기존 레코드가 원본 `eventId`로 다시 소비되므로, at-least-once 재전달을 브로커 장애 없이 대량·결정적으로 재현한다(#346의 브로커 정지 방식은 실측에서 중복 1건뿐이라 "대량" 조건에 부적합).
+- **차단 경로**: 재전달 이벤트는 `InboxService.runIfFirst`의 exists fast-path에서 걸러진다 → 비즈니스 미실행, `kafka.inbox{result="duplicate"}` 증가. 테이블에는 첫 1건만 남으므로 **차단 건수는 SQL이 아니라 Prometheus 델타로 센다**.
+- **측정 대상 그룹**: 주 대상은 `seat-group`×`booking-created-topic` — k6 `booking-create.js`가 이벤트 볼륨을 확보해 주는 유일한 경로다(결제확정 이벤트는 대량 생성 수단이 없다). 차단 로직·계측은 `runIfFirst` 한 곳이라 어느 그룹이든 동일 코드의 측정이다. `ticket-group`×`payment-confirmed-topic`은 잔존 이벤트로 reset 1회를 보조 증적으로 남기고, 티켓 이중 발급 0건 자체는 `verify-inbox.sql` ①과 동시성 테스트(`TicketIssueConcurrencyTest`)가 검증한다.
+- **5분 유지**: reset 1회분은 fast-path(exists 1쿼리)라 수 분 내 소진될 수 있다. `inbox-redeliver.sh`가 lag 0 수렴을 폴링해 즉시 다음 사이클을 돌므로 DURATION(기본 360초) 동안 duplicate 트래픽이 끊기지 않는다 — 스크랩 간격(1분 가정) 대비 안정적 증분 조건.
+
+### 9.2 절차 (EC2 배포본, §7 토폴로지)
+
+1. 시딩(§3) 후 `booking-create.js` 부하(§7)로 `booking-created-topic`에 이벤트를 누적한다(예: 10분 ≈ 9,000건). **시딩·측정은 같은 세션에서** — inbox retention(30일) 이전 이벤트는 row가 purge돼 duplicate가 아니라 재처리가 된다.
+2. 측정 전 `verify-inbox.sql` ②를 떠서 inbox 건수를 기록한다(사후 불변 대조용).
+3. `DURATION=360 ./inbox-redeliver.sh` 실행(기본 seat-group). 출력의 UTC 타임스탬프가 측정 구간이다. k6 부하를 병행하면 신규(processed) 이벤트도 흘러 차단율이 100% 고정이 아닌 실측값이 된다(권장).
+4. Grafana Explore에서 9.3의 duplicate 곡선이 구간 내내 끊기지 않는지 확인 후 캡처.
+5. (보조) `GROUP=ticket-group TOPIC=payment-confirmed-topic SERVICE=ticket-service DURATION=60 ./inbox-redeliver.sh`로 reset 1회 수행, 같은 방식으로 기록.
+6. `verify-inbox.sql` 실행 → ① 0행(이중 발급 없음), ② 사전 기록과 불변(재처리 없음) 확인.
+7. 증적을 `load-tests/k6/results/<YYMMDD>-347-inbox-idempotency/`에 기록(report.md·metadata.txt·캡처 — #346 디렉토리 구성 답습).
+
+### 9.3 관측 PromQL
+
+```promql
+# 중복 차단 건수 (측정 구간)
+sum(increase(ticketrush_kafka_inbox_total{result="duplicate",consumer_group="seat-group"}[<구간>]))
+# 중복 차단율 = duplicate/(duplicate+processed) — 라벨이 2종뿐이라 분모는 전체 합과 동치
+sum(increase(ticketrush_kafka_inbox_total{result="duplicate",consumer_group="seat-group"}[<구간>]))
+/ sum(increase(ticketrush_kafka_inbox_total{consumer_group="seat-group"}[<구간>]))
+# 연속성 확인(캡처용) — 사이클 간 공백이 크면 유지 시간 미충족
+sum(rate(ticketrush_kafka_inbox_total{result="duplicate",consumer_group="seat-group"}[1m]))
+```
+
+### 9.4 주의
+
+- **컨슈머 재시작 부수효과**: `SERVICE` 재시작 동안 같은 서비스의 **다른 토픽 리스너도 함께 멈춘다**(예: seat-service의 결제 이벤트 처리 지연). 측정 전용 스택에서만 실행하고, 운영 트래픽과 겹치지 않게 한다.
+- **reset은 그룹 비활성 필요**: 컨슈머가 살아 있으면 reset이 거부된다(`Error: Assignments can only be reset if the group ... is inactive`). 스크립트가 정지→reset→기동 순서를 보장하지만, 수동 실행 시 주의.
+- **재처리 검출**: inbox 건수가 재전달 후 늘었다면 duplicate 차단이 아니라 재처리가 일어난 것이다(retention purge·컨슈머 그룹명 오타 등). 차단율 계산 전에 ② 불변부터 확인한다.
+- **IMAGE_TAG 명시**: §8.4와 동일 — 컨슈머 서비스를 compose로 재생성할 일이 생기면 반드시 현재 태그를 명시한다(스크립트의 `docker stop/start`는 재생성이 아니라 무관).
+- Grafana 대시보드는 측정 중 열어두지 않는다(§7.2와 동일).
