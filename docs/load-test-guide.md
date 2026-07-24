@@ -454,18 +454,22 @@ http.setResponseCallback(http.expectedStatuses(200, 201, 409));
 
 | 항목 | 값 |
 |------|-----|
-| 실행 일시 / 배포 이미지 태그 | |
-| 측정 창 (UTC) / 창 종점 출처 | |
-| 프로파일 (VUS/RAMP/STEADY) | |
-| 총 요청 / 201 / 409 | |
-| 정상경합 제외 에러율 (§10.4) | |
-| **oversell** | |
-| 차단율 (unavailable / total) | |
-| 홀드 성공률 | |
-| 락 경합 (0 예상) | |
-| **유입 축** — RPS / p99(k6) / p99(앱) | |
-| **처리 축** — outbox backlog 피크 / 릴레이 발행률 / 컨슈머 랙 피크 / 소화율 | |
-| 1차 제약 판정 (릴레이 vs 컨슈머 — §10.3) | |
-| Grafana 캡처 | |
+| 실행 일시 / 배포 이미지 태그 | 2026-07-24 (KST) / `6398a9d` (전 서비스 동일, #471 outbox 포함) |
+| 측정 창 (UTC) / 창 종점 출처 | 12:31:17 ~ 12:38:22 (7분 05초) / k6 종료(12:37:53) 후 outbox `PENDING/FAILED=0` 첫 관측 |
+| 프로파일 (VUS/RAMP/STEADY) | 100 / 5s / **6m** |
+| 총 요청 / 201 / 409 | 95,684 / 1,324 (1.38%) / 94,359 (98.61%) |
+| 정상경합 제외 에러율 (§10.4) | **0.00%** (0 / 95,684) |
+| **oversell** | **0** (동시 보유 좌석 최대 1건) |
+| 차단율 (unavailable / total) | **99.77%** (1,321 / 1,324) |
+| 홀드 성공률 | 0.23% (3 / 1,324 — HOLD 3회는 TTL 만료 후 재획득이지 동시 선점이 아니다) |
+| 락 경합 (0 예상) | **0** — 시리즈 자체가 생성되지 않음 |
+| **유입 축** — RPS / p95 / p90 | 258.29/s (peak 353.05) / 911.79ms / 726.94ms |
+| **처리 축** — backlog 피크 / 릴레이 발행률 / 컨슈머 랙 피크 / 소비율 | 634 / 20.98·s⁻¹ / **14** / 20.54·s⁻¹ |
+| 1차 제약 판정 (릴레이 vs 컨슈머 — §10.3) | **릴레이**. 컨슈머 랙이 최대 14로 자라지 않는데 backlog는 634까지 쌓였다 — 이슈의 "병목은 소비 병렬도" 가설은 반증됐다 |
+| Grafana 캡처 | `load-tests/k6/results/260724-344-seat-contention/graph-*.png` |
 
-증적은 `load-tests/k6/results/<YYMMDD>-344-seat-contention/`에 남긴다(#346·#347 디렉토리 구성 답습 — `report.md`·`metadata.txt`·`graph-*.png`·`timeseries-*.json`).
+> **임계값 `p(95)<800`은 초과했다(911.79ms, FAIL).** 다만 피크 구간 호스트 CPU가 99.87%였다(#465 node-exporter). 단일 EC2에 앱 9개 + Kafka·MySQL·Redis·관측 스택이 함께 뜬 구성의 포화가 섞인 값이라, 앱 단독 지연으로 읽으면 오독이다.
+>
+> 부수 관측으로 **릴레이 발행 증폭 3.09배**(발행 4,090 vs outbox 행 1,324)를 확인했다. `relayBatch()`에 in-flight 표시가 없어 콜백의 SENT 전이가 5초 폴링보다 늦으면 같은 행이 재발행된다(`retry_count`는 전부 0 — 실패 재시도가 아니다). javadoc이 명시한 at-least-once 설계 그대로이며 Inbox가 전량 차단했지만, 단일 컨슈머 스레드가 유효 처리량의 68%를 중복 차단에 쓴다.
+
+증적은 `load-tests/k6/results/260724-344-seat-contention/`에 있다(#346·#347 디렉토리 구성 답습 — `report.md`·`metadata.txt`·`k6-summary.txt`·`graph-*.png`·`timeseries-*.json`).
