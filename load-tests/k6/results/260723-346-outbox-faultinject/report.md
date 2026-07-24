@@ -81,15 +81,14 @@
 
 ## 5. 그래프 (완료 조건 ⑤)
 
-Grafana image renderer 미설치로 패널 이미지는 수동 캡처가 필요하다. SSH 터널(`-L 3000`) 후
-http://localhost:3000 Explore에서 아래 쿼리를 측정 시간 범위로 캡처해 이 디렉토리에 저장:
+Grafana Explore에서 캡처(2026-07-24). Grafana image renderer 미설치라 수동 캡처했다.
 
-| 파일명(제안) | PromQL | 봐야 할 것 |
+| 파일 | PromQL | 그래프가 보여주는 것 |
 |---|---|---|
-| `graph-outbox-backlog.png` | `ticketrush_outbox_backlog` | Phase B 장애 구간 적체 상승 → 복구 후 0 소진 |
-| `graph-inbox-rate.png` | `rate(ticketrush_kafka_inbox_total{consumer_group="seat-group"}[1m])` | Phase A 장애 구간 수신 단절 vs Phase B 복구 후 따라잡기 |
-| `graph-dlt.png` | `increase(ticketrush_kafka_dlt_total[5m])` | DLT 유입 여부(소비 실패) |
-| `graph-k6-rps.png` | `rate(k6_http_reqs_total[1m])` | 부하 형상(장애 중에도 201 지속 = 유실 창의 증거) |
+| `graph-outbox-backlog.png` | `ticketrush_outbox_backlog` | Phase B 장애 주입(21:52 KST)부터 booking backlog 급상승 → 피크 ~9K → relay 소진으로 22:11 KST 0 도달 |
+| `graph-inbox-rate.png` | `rate(ticketrush_kafka_inbox_total{consumer_group="seat-group"}[1m])` | Phase A 장애 구간(21:11~21:15)에 수신이 0으로 단절(=유실 창) vs Phase B는 복구 후 relay 배치 단위 톱니 형태로 전량 따라잡기. duplicate 시리즈는 전 구간 0 부근 |
+| `graph-dlt.png` | `increase(ticketrush_kafka_dlt_total[5m])` | **"No data" = DLT 유입 0건** — 카운터가 한 번도 증가하지 않아 시리즈 자체가 미생성 |
+| `graph-k6-rps.png` | `rate(k6_http_reqs_total[1m])` | Phase A 장애 중 처리량 급락 + request timeout 시리즈 발생 vs Phase B는 장애 구간 포함 15rps 일직선 유지 |
 
 원시 시계열(json)은 같은 디렉토리 `timeseries-*.json`으로 저장했다.
 
