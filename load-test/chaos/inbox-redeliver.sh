@@ -25,10 +25,12 @@ KCG="/opt/kafka/bin/kafka-consumer-groups.sh --bootstrap-server localhost:29092"
 # 스크립트가 중간에 끊겨도 컨슈머는 반드시 되살린다 (정상 종료 시엔 no-op)
 trap 'docker start "$SERVICE" >/dev/null 2>&1 || true' EXIT
 
-# 해당 토픽 파티션 LAG 합 (컨슈머 재기동 직후 등 미조회 상태는 0으로)
+# 해당 토픽 파티션 LAG 합. lag 0은 "사이클 소진 완료"의 근거이므로 describe 실패·리밸런스 중
+# LAG "-" 표시(매칭 0행)를 진짜 0과 구분해 -1로 반환한다(폴링 루프가 소진으로 오인하지 않도록).
+# stderr는 숨기지 않아 실패 원인이 로그에 남는다.
 lag() {
-  docker exec "$CONTAINER" $KCG --describe --group "$GROUP" 2>/dev/null \
-    | awk -v t="$TOPIC" '$2 == t && $6 ~ /^[0-9]+$/ { sum += $6 } END { print sum + 0 }'
+  docker exec "$CONTAINER" $KCG --describe --group "$GROUP" \
+    | awk -v t="$TOPIC" '$2 == t && $6 ~ /^[0-9]+$/ { sum += $6; n++ } END { if (n == 0) print -1; else print sum }'
 }
 
 START=$(date +%s)
