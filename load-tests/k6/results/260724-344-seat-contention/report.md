@@ -38,7 +38,8 @@
 | 측정 창 (UTC) | 12:31:17 ~ **12:38:22** (7분 05초, STEADY 6분) |
 | 창 종점 출처 | k6 종료(12:37:53) 후 outbox `PENDING/FAILED = 0` 첫 관측 시각 |
 | 프로파일 | VUS 100 / RAMP 5s / STEADY 6m |
-| 총 요청 / 201 / 409 | 95,684 / 1,324 (1.38%) / 94,359 (98.61%) |
+| 총 요청 (http_reqs) | 95,684 |
+| 201 / 409 (분모 = iterations 95,683) | 1,324 (1.38%) / 94,359 (98.61%) |
 | 정상경합 제외 에러율 (§4) | **0.00%** (0 / 95,684) |
 | **oversell** | **0** — 동시 보유 좌석 최대 1건 |
 | **차단율** (unavailable / total) | **99.77%** (1,321 / 1,324) |
@@ -48,6 +49,8 @@
 | 처리 축 — backlog 피크 / 릴레이 발행률 / 컨슈머 랙 피크 / 소비율 | 634 / 20.98·s⁻¹ / **14** / 20.54·s⁻¹ |
 | 1차 제약 판정 | **릴레이 발행 상한(20/s)** — 컨슈머 랙이 최대 14로 거의 자라지 않는다 (§6) |
 | 호스트 (#465) | CPU peak 99.87% / avg 77.55%, MemAvailable min 2.85 GiB |
+
+> **분모가 둘이다.** `http_reqs`(95,684)에는 `setup()`의 로그인 1건이 포함되고, `seat_accepted`·`seat_conflict`의 분모는 `iterations`(95,683)다. 그래서 1,324 + 94,359 = 95,683으로 총 요청보다 1 적다. `http_req_failed`의 분모는 95,684다.
 
 **핵심 정합**: `seat_hold{success} 3 + unavailable 1,321 = 1,324` = **생성된 예매 수와 정확히 일치**한다. 발행된 이벤트가 하나도 유실되지 않고 전부 DB 체크에 도달했다는 뜻이다.
 
@@ -87,9 +90,11 @@ oversell 0의 근거는 셋이다.
 
 ### 6.1 릴레이 발행 증폭 3.09배
 
-booking-service 릴레이가 **4,090건**을 발행했는데 outbox 행은 **1,324건**뿐이다. seat-group Inbox가 그 차이를 그대로 받아냈다 — `processed 1,324` / `duplicate 2,763`.
+booking-service 릴레이가 **4,090건**을 발행했는데 outbox 행은 **1,324건**뿐이다. seat-group Inbox가 그 차이를 그대로 받아냈다 — `processed 1,324` / `duplicate 2,763`. 원본 수치는 `counters-snapshot.txt`(측정 창 종점의 카운터 총량)에 있다.
 
-원인은 `OutboxRelayService.relayBatch()`다. PENDING 행을 batch-size만큼 조회해 **비동기** 발행하고, SENT 전이는 프로듀서 콜백의 `OutboxStatusUpdater.markSuccess`(REQUIRES_NEW)에서만 일어난다. **in-flight 표시가 없어** 콜백 커밋이 다음 5초 폴링보다 늦으면 같은 행이 재선택돼 다시 발행된다. outbox 행의 `retry_count`는 전부 0 — 발행 실패의 재시도가 아니라 **정상 발행의 중복**이다.
+> 1,324 + 2,763 = 4,087로 발행 4,090과 **3건 차이**가 난다. 스크랩(15초)과 창 종점이 정확히 겹치지 않아 마지막 발행분이 컨슈머 카운터에 아직 반영되지 않은 것으로 본다. 증폭 배율은 이 오차에 영향받지 않는다(4,090/1,324 = 3.09, 4,087/1,324 = 3.09).
+
+원인은 `OutboxRelayService.relayBatch()`다. `RELAY_TARGET_STATUSES`(= `PENDING`, `FAILED`) 행을 batch-size만큼 조회해 **비동기** 발행하고, SENT 전이는 프로듀서 콜백의 `OutboxStatusUpdater.markSuccess`(REQUIRES_NEW)에서만 일어난다. **in-flight 표시가 없어** 콜백 커밋이 다음 5초 폴링보다 늦으면 `findByAggregateTypeInAndStatusInOrderByIdAsc(..., PageRequest.of(0, batchSize))`가 **같은 행을 다시 집어** 재발행한다. outbox 행의 `retry_count`는 전부 0 — 발행 실패의 재시도가 아니라 **정상 발행의 중복**이다.
 
 이건 버그가 아니라 클래스 javadoc이 명시한 at-least-once 설계 그대로다("중복은 컨슈머가 eventId로 멱등 처리한다"). #346이 증명한 유실 0(중복 허용)과 #347이 증명한 Inbox 중복 차단이 **경합 부하에서 실제로 맞물려 도는 것을 이번에 관측**했다. 이번 측정이 더하는 것은 그 배율과 비용이다 — 단일 컨슈머 스레드가 유효 처리량의 **68%**(2,763 / 4,087)를 중복 차단에 쓴다.
 
@@ -104,12 +109,17 @@ booking-service 릴레이가 **4,090건**을 발행했는데 outbox 행은 **1,3
 
 | 파일 | 내용 |
 |---|---|
-| `k6-summary.txt` | k6 실행 요약 원문(임계값 판정 포함) |
+| `k6-summary.txt` | k6 실행 요약 원문(임계값 판정 포함) — 유입 축 수치의 SSOT |
 | `metadata.txt` | 실행 파라미터·창·전 수치 키=값 |
+| `counters-snapshot.txt` | 창 종점(12:38:22Z)의 카운터 총량 — §6.1 발행/중복 수치의 원본 |
 | `timeseries-seat-hold.json` | `sum(ticketrush_seat_hold_total) by (result)` |
 | `timeseries-outbox-backlog.json` | `ticketrush_outbox_backlog{instance="booking-service:8090"}` |
 | `timeseries-consumer-lag.json` | `kafka_consumer_fetch_manager_records_lag{topic="booking-created-topic"}` |
 | `timeseries-inbox-rate.json` | `sum(rate(ticketrush_kafka_inbox_total{consumer_group="seat-group"}[1m])) by (result)` |
 | `timeseries-relay-rate.json` | booking-service 릴레이 발행률 |
 | `timeseries-k6-rps.json` | `sum(rate(k6_http_reqs_total[1m]))` |
-| `graph-*.png` | Grafana 캡처 |
+| `graph-*.png` (아래 4종) | Grafana Explore 캡처. 시간 범위 2026-07-24 21:31~21:39 KST |
+| `graph-seat-hold.png` | `sum(ticketrush_seat_hold_total) by (result)` — success 계단 vs unavailable 상승 |
+| `graph-outbox-backlog.png` | backlog 피크 634 → 0 소진 |
+| `graph-consumer-lag.png` | 컨슈머 랙 피크 14 — 거의 평평 (§6의 반증 근거) |
+| `graph-inbox-rate.png` | duplicate가 processed를 압도 (§6.1의 증폭 근거) |

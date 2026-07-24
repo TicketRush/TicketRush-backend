@@ -19,6 +19,7 @@ booking-service=outbox (#471로 application.yml 기본값 전환, 컨테이너 e
 seat-service=outbox
 OUTBOX_RELAY=OutboxRelayScheduler @Scheduled(fixedDelay=5000), app.outbox.batch-size=100
 KAFKA_CONSUMER_CONCURRENCY=1 (KafkaConfig에 setConcurrency 없음, spring.kafka.listener.concurrency 미설정)
+ENV_OVERRIDE_CHECK=배포 컨테이너에서 `docker exec {booking,seat}-service env | grep -E '^(APP_EVENT_PUBLISHER_TYPE|APP_OUTBOX_BATCH_SIZE|SPRING_KAFKA_LISTENER_CONCURRENCY)='` 실행 결과 세 키 모두 부재 → deploy/.env 오버라이드 없이 application.yml 기본값(outbox / 100 / 1)이 적용됐음을 실행 시점에 확증. (actuator/env는 노출 대상이 아니라 사용 불가 — health/prometheus/info 3개만 노출)
 
 # 부하 프로파일
 VUS=100 / RAMP=5s / STEADY=6m (options.js: ramp-up → steady → ramp-down)
