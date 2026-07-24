@@ -1,0 +1,44 @@
+SERIES_ID=260723-346-outbox-faultinject
+ISSUE=#346
+DATE=2026-07-23 (KST)
+TARGET_HOST=EC2 54.116.243.250 (ip-172-31-9-145)
+TOPOLOGY=k6 local (docker compose, ADR 0004) --SSH tunnel(8080/9090)--> EC2 deploy stack
+WORKLOAD=load-test/scenarios/booking-create.js  POST /api/v1/booking
+SEED=1 performance (PERF_ID=3) x 26 rows x 1000 cols = 26,000 seats (seat_id 121..26120)
+DB_TIMEZONE=KST (NOW() 기준, verify-loss.sql @from/@to도 KST)
+FAULT=docker stop ticketrush-kafka, OUTAGE_SEC=180 (producer delivery.timeout.ms=120s 초과)
+
+# app.event-publisher.type (측정 당시 실제 값 — 컨테이너 env 오버라이드 없음 → application.yml 기본값)
+booking-service=kafka (Phase A) / outbox (Phase B, booking-outbox.override.yml env 오버라이드)
+seat-service=outbox
+payment-service=kafka
+ticket-service=kafka
+user/performance/auth/gateway=kafka (발행 경로 이번 측정과 무관)
+
+# Phase A — kafka(AFTER_COMMIT) 모드
+PHASE_A_WINDOW_KST=2026-07-23 21:04:47 ~ 21:19:10
+PHASE_A_OUTAGE_KST=21:11:05 ~ 21:14:06 (181s, docker stop ticketrush-kafka)
+PHASE_A_K6=10,320 iterations / 12.28 rps / http_req_failed 44 (0.42%, 장애 구간) / seat_conflict 0
+PHASE_A_MIDCHECK=21:06:30 bookings=1292 inbox=1292 (장애 전 정합 OK)
+PHASE_A_WINDOW_UTC=2026-07-23 12:04:47 ~ 12:19:11 (created_at은 UTC-naive — verify는 UTC 구간 사용)
+PHASE_A_EXPECTED=10304
+PHASE_A_RECEIVED=9790
+PHASE_A_LOST=514
+PHASE_A_DUPLICATES=0 (inbox_total{result="duplicate"} 시리즈 미생성)
+PHASE_A_NOTE=장애 중에도 booking 커밋 지속(201) — inbox만 5414에서 동결. 복구 후 delivery.timeout(120s) 이내 버퍼 send는 지연 전달, 초과분 514건은 영구 유실. k6 실패 44건(0.42%)은 장애 구간 send 블로킹 여파.
+
+# Phase B — outbox 모드
+PHASE_B_NOTE_IMAGES=Phase A/B 사이 override 적용 시 .env의 스테일 IMAGE_TAG(6b7301a)로 booking·seat·performance가 구버전으로 재생성되는 사고 → IMAGE_TAG=a5eb970(현행) 명시 재생성으로 복구, 전 서비스 동일 태그 확인. Phase B는 전부 a5eb970에서 측정.
+PHASE_B_START_UTC=2026-07-23 12:45:29
+PHASE_B_OUTAGE_UTC=12:51:47 ~ 12:54:48 (181s, docker stop ticketrush-kafka)
+PHASE_B_K6=12,576 iterations / 14.97 rps / http_req_failed 0 (0.00%) / seat_conflict 0
+PHASE_B_K6_NOTE=장애 중에도 실패·지연 없음 — outbox 모드는 요청 경로가 브로커와 분리(INSERT만). Phase A(실패 44건, 처리량 911→10/min 급락)와 대비.
+PHASE_B_WINDOW_UTC=2026-07-23 12:45:29 ~ 13:11:48 (backlog 0 소진 시점까지)
+PHASE_B_EXPECTED=12576
+PHASE_B_RECEIVED=12576
+PHASE_B_LOST=0
+PHASE_B_DUPLICATES=1 (ticketrush_kafka_inbox_total{result="duplicate",consumer_group="seat-group"}, seat 재기동으로 카운터 0에서 시작 → 절대값=델타. Inbox가 차단해 DB에는 1건만 존재)
+PHASE_B_OUTBOX_STATUS=SENT=12576 (BookingCreatedEvent 기준 전량), FAILED/DEAD 0
+PHASE_B_RELAY=ticketrush_outbox_relay_total{result="success"}=25152 (BookingCreated+BookingExpired), fail 시리즈 미생성
+PHASE_B_BACKLOG_PEAK=~8900 (부하 종료 직후), 13:11:48 UTC 0 소진
+ROLLBACK=측정 후 booking-service를 kafka 모드로 원복(override 제거, IMAGE_TAG=a5eb970 명시 재생성). seat/performance는 a5eb970 유지.

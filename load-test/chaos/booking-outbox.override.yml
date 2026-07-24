@@ -1,0 +1,16 @@
+# #346 측정 전용 — booking-service를 트랜잭셔널 Outbox 모드로 임시 전환하는 compose override.
+# 이미지·기본 설정은 건드리지 않는다(실제 전환은 #471 소관). EC2의 deploy 디렉토리에 두고 쓴다.
+#
+# ⚠ .env의 IMAGE_TAG가 실행 중 컨테이너보다 뒤처져 있을 수 있다(CD가 배포 시점에만 주입).
+#   up은 의존 서비스(seat·performance)까지 재생성하므로 현재 태그를 확인해 반드시 명시한다:
+#   TAG=$(docker inspect gateway-service --format '{{.Config.Image}}' | cut -d: -f2)
+# 적용:  IMAGE_TAG=$TAG docker compose -f docker-compose.prod.yml -f booking-outbox.override.yml up -d booking-service
+# 원복:  IMAGE_TAG=$TAG docker compose -f docker-compose.prod.yml up -d booking-service
+#
+# 확인: booking actuator(컨테이너 내 8090)의 /actuator/prometheus에 ticketrush_outbox_backlog가
+#       노출되면 outbox 모드 활성(Gauge는 OutboxRelayService가 outbox 모드에서만 등록).
+services:
+  booking-service:
+    environment:
+      # Spring이 app.event-publisher.type 조회 시 dot/dash를 '_'로 치환해 이 env를 찾는다
+      APP_EVENT_PUBLISHER_TYPE: outbox

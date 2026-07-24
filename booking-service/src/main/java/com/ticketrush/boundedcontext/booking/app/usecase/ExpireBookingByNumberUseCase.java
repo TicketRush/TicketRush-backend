@@ -8,6 +8,7 @@ import java.time.LocalDateTime;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
 /**
  * 좌석 hold 만료 이벤트를 받아 대상 예매를 EXPIRED로 전이한다.
@@ -17,11 +18,13 @@ import org.springframework.stereotype.Service;
  * BookingExpiredEvent}를 재발행해 payment 다운스트림(만료 예매 가드)과의 정합성을 유지한다.
  *
  * <p>멱등성: {@code WHERE bookingStatus = PENDING} 가드로 이미 EXPIRED/CONFIRMED/CANCELED인 예매는 no-op이 된다.
- * 리스너의 {@code InboxService.runIfFirst(...)} 트랜잭션 안에서 호출되므로 별도 {@code @Transactional}은 두지 않는다.
+ * 현재 유일한 호출부인 리스너의 {@code InboxService.runIfFirst(...)} 트랜잭션에 조인(REQUIRED)하며, outbox 발행이 활성 트랜잭션을
+ * 요구하므로 향후 트랜잭션 없는 호출부가 추가될 때를 대비해 방어적으로 {@code @Transactional}을 부착한다(#471).
  */
 @Slf4j
 @Service
 @RequiredArgsConstructor
+@Transactional
 public class ExpireBookingByNumberUseCase {
 
   private final BookingRepository bookingRepository;

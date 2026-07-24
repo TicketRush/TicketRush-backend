@@ -7,7 +7,8 @@ load-test/
 ├── config/   # env.js(환경변수), options.js(공통 stages·thresholds)
 ├── lib/      # auth.js(로그인 → access token)
 ├── scenarios/# booking-create.js(예매 생성, 인증), seat-layouts.js(좌석 조회, 비인증)
-└── seed/     # seed_load.sql(대량 시딩 + 부하테스트 계정), cleanup_load.sql(정리)
+├── seed/     # seed_load.sql(대량 시딩 + 부하테스트 계정), cleanup_load.sql(정리)
+└── chaos/    # 장애 주입(#346): broker-outage.sh, verify-loss.sql, booking-outbox.override.yml
 ```
 
 k6는 docker-compose의 `loadtest` profile로 분리된 컨테이너에서 실행한다(상시 기동 대상 아님).
