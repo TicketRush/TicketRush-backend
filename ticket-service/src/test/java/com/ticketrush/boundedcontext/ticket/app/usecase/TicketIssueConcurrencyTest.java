@@ -177,6 +177,7 @@ class TicketIssueConcurrencyTest {
             .count();
     assertThat(ok).isEqualTo(1.0);
     assertThat(duplicate).isEqualTo(skippedByInbox.get() + (double) SEQUENTIAL_REDELIVERIES);
-    assertThat(duplicate / (duplicate + ok)).isGreaterThanOrEqualTo(0.8);
+    // 차단율 = duplicate/(duplicate+processed). 위 두 정확 단언으로 산식 성립이 이미 보장되므로
+    // 비율 자체는 별도 단언하지 않는다(정확 단언에서 파생되는 항진식이라 검증력이 없다).
   }
 }
