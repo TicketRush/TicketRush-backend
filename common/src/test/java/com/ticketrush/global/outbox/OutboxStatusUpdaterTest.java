@@ -1,14 +1,19 @@
 package com.ticketrush.global.outbox;
 
+import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.BDDMockito.given;
+import static org.mockito.BDDMockito.willAnswer;
 import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.timeout;
 import static org.mockito.Mockito.verify;
 
 import com.ticketrush.global.notification.Notifier;
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import java.util.Map;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.TimeUnit;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -66,6 +71,39 @@ class OutboxStatusUpdaterTest {
     outboxStatusUpdater.markFail(1L, "boom");
 
     // 알림 본문에 자유서식 오류 메시지(lastError) 대신 안전한 식별자 참조 문자열이 전달된다(#6).
-    verify(notifier).send(eq("[Outbox DEAD] 이벤트 발행 재시도 상한 초과"), any(String.class), any(Map.class));
+    // 알림은 호출 스레드 밖에서 발송되므로(프로듀서 IO 스레드를 Slack 지연에 묶지 않기 위해) 대기 검증한다.
+    verify(notifier, timeout(2000))
+        .send(eq("[Outbox DEAD] 이벤트 발행 재시도 상한 초과"), any(String.class), any(Map.class));
+  }
+
+  @Test
+  @DisplayName("markFail: 알림이 느려도 호출 스레드를 붙잡지 않는다")
+  void markFail_does_not_block_caller_on_slow_notification() throws Exception {
+    // given: Slack은 connect 3초 + read 5초라 DEAD 1건당 최대 8초가 걸린다. 이 메서드는 Kafka 프로듀서
+    // 완료 콜백에서 불리고 그 IO 스레드는 모든 행의 콜백을 직렬 처리하므로, 여기서 기다리면 다른 행의
+    // 상태 전이와 relay의 in-flight 해제가 함께 밀린다.
+    CountDownLatch releaseNotifier = new CountDownLatch(1);
+    CountDownLatch notifierEntered = new CountDownLatch(1);
+    given(transition.markFail(1L, "boom"))
+        .willReturn(new OutboxStatusTransition.DeadInfo("evt-1", 1));
+    willAnswer(
+            invocation -> {
+              notifierEntered.countDown();
+              releaseNotifier.await(5, TimeUnit.SECONDS); // 느린 알림
+              return null;
+            })
+        .given(notifier)
+        .send(any(), any(), any());
+
+    try {
+      // when
+      outboxStatusUpdater.markFail(1L, "boom");
+
+      // then: 알림이 아직 안 끝났는데도 호출이 돌아와 있다
+      assertThat(notifierEntered.await(2, TimeUnit.SECONDS)).isTrue();
+      assertThat(releaseNotifier.getCount()).isEqualTo(1);
+    } finally {
+      releaseNotifier.countDown();
+    }
   }
 }

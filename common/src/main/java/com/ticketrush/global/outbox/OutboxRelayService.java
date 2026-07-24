@@ -9,7 +9,7 @@ import java.time.Instant;
 import java.time.LocalDateTime;
 import java.time.ZoneId;
 import java.util.List;
-import java.util.Set;
+import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicLong;
 import lombok.RequiredArgsConstructor;
@@ -32,7 +32,7 @@ import org.springframework.stereotype.Service;
  * relay 트랜잭션 밖 프로듀서 IO 스레드에서 실행되기 때문). 발행은 at-least-once이며, 중복은 컨슈머가 {@code eventId}로 멱등 처리한다.
  *
  * <p>다만 at-least-once가 "폴링마다 같은 행을 다시 보내도 된다"는 뜻은 아니다. 상태 전이가 콜백에서만 일어나므로 in-flight 표시가 없으면 콜백이 늦는
- * 만큼 중복이 배로 늘어난다({@code inFlight} 참고). 남는 중복은 재시작·페일오버로 표시가 사라지는 경우뿐이다.
+ * 만큼 중복이 배로 늘어난다({@code inFlight} 참고). 남는 중복은 재시작·상태 전이 실패·ShedLock 만료 중 동시 실행처럼 표시가 무력해지는 경우다.
  */
 @Slf4j
 @Service
@@ -43,6 +43,12 @@ public class OutboxRelayService {
   private static final List<OutboxStatus> RELAY_TARGET_STATUSES =
       List.of(OutboxStatus.PENDING, OutboxStatus.FAILED);
 
+  /**
+   * in-flight 표시의 유효기간. 프로듀서는 {@code delivery.timeout.ms}(KafkaConfig, 120초) 안에 성공이든 실패든 콜백을 돌려주므로
+   * 그 이상 남아 있는 항목은 콜백이 유실된 것이다. 여유를 얹어 잡는다 — 짧게 잡으면 정상 지연을 중복 발행으로 되돌린다.
+   */
+  private static final long IN_FLIGHT_TIMEOUT_MS = 180_000L;
+
   private final OutboxRepository outboxRepository;
   private final KafkaTemplate<String, DomainEventEnvelope> kafkaTemplate;
   private final OutboxProperties outboxProperties;
@@ -52,17 +58,21 @@ public class OutboxRelayService {
   private final AtomicLong backlog = new AtomicLong();
 
   /**
-   * 발행을 띄웠지만 아직 완료 콜백이 상태를 전이하지 못한 행의 id.
+   * 발행을 띄운 행의 id → 띄운 시각(epoch millis).
    *
    * <p>없으면 같은 행이 반복 발행된다. 조회는 PENDING/FAILED를 보는데 SENT 전이는 프로듀서 콜백에서만 일어나므로, 콜백 커밋이 다음 폴링보다 늦으면
    * {@code findBy...OrderByIdAsc}가 같은 행을 다시 집는다. #344 측정에서 outbox 1,324행에 발행 4,090건(3.09배)이 나왔고 그
    * 중복은 전부 컨슈머 Inbox가 걸러내느라 단일 컨슈머 스레드 처리량의 68%를 썼다.
    *
-   * <p>인스턴스 로컬로 충분하다. relay는 ShedLock으로 한 번에 한 노드만 돌고, 페일오버로 다른 노드가 이어받아 재발행하는 경우는 이 클래스가 보장하는
-   * at-least-once의 정상 범위다(중복은 컨슈머가 eventId로 멱등 처리한다). 콜백은 성공·실패 어느 쪽이든 반드시 도달하므로(프로듀서
-   * delivery.timeout.ms) 항목이 영구히 남지 않는다.
+   * <p><b>시각을 함께 들고 폴링마다 낡은 항목을 걷어내는 이유</b>는 이 표시가 새면 조회 윈도(id 오름차순 {@code LIMIT batchSize})의 슬롯을
+   * 영구 점유하기 때문이다. 슬롯이 batchSize만큼 잠기면 릴레이가 완전히 멈추고 재시작 외에 복구 수단이 없다. {@code catch}가 {@code Error}를
+   * 잡지 않는 것도 의도이므로(삼키면 안 된다) 그 경로의 누수는 이 청소가 받아낸다. 최악 지연이 {@link #IN_FLIGHT_TIMEOUT_MS}로 유한해진다.
+   *
+   * <p>인스턴스 로컬이라 보호 범위에 한계가 있다. relay는 ShedLock으로 한 번에 한 노드만 도는 것이 정상이지만, 락은 Redis TTL 기반이고 실행 중
+   * 연장하지 않으므로 {@code lockAtMostFor}(1분)를 넘겨 도는 폴링이 있으면 다른 노드가 동시에 들어올 수 있다. 그 구간에서는 두 노드의 표시가 서로를
+   * 몰라 중복이 다시 생긴다 — 막지 못하는 경우다. 중복 자체는 컨슈머가 {@code eventId}로 걸러내므로 정합성 문제는 없다.
    */
-  private final Set<Long> inFlight = ConcurrentHashMap.newKeySet();
+  private final Map<Long, Long> inFlight = new ConcurrentHashMap<>();
 
   /** 이 서비스가 소유한 aggregateTypes의 적체(PENDING/FAILED) 건수를 노출하는 Gauge를 등록한다(#335). */
   @PostConstruct
@@ -89,9 +99,13 @@ public class OutboxRelayService {
         outboxRepository.findByAggregateTypeInAndStatusInOrderByIdAsc(
             aggregateTypes, RELAY_TARGET_STATUSES, PageRequest.of(0, batchSize));
 
+    long now = System.currentTimeMillis();
+    // 콜백이 유실된 항목을 걷어낸다. 없으면 조회 윈도의 슬롯이 영구히 잠긴다(inFlight javadoc).
+    inFlight.entrySet().removeIf(entry -> now - entry.getValue() > IN_FLIGHT_TIMEOUT_MS);
+
     for (OutboxEntity row : rows) {
-      // add()가 false면 직전 배치가 띄운 발행이 아직 콜백을 못 받은 것이다. 다시 보내지 않는다.
-      if (inFlight.add(row.getId())) {
+      // null이 아니면 직전 배치가 띄운 발행이 아직 콜백을 못 받은 것이다. 다시 보내지 않는다.
+      if (inFlight.putIfAbsent(row.getId(), now) == null) {
         dispatch(row);
       }
     }
@@ -115,6 +129,12 @@ public class OutboxRelayService {
                     outboxStatusUpdater.markFail(id, errorMessage(ex));
                     log.error("Outbox relay failed. eventId={}, topic={}", eventId, topic, ex);
                   }
+                } catch (RuntimeException transitionError) {
+                  // 전이 실패는 행을 PENDING/FAILED로 남겨 다음 폴링이 재발행하게 만든다. 즉 이 예외가
+                  // 남은 중복 발생원인데, whenComplete가 돌려주는 future를 버리므로 여기서 안 남기면
+                  // 어디에도 흔적이 없다.
+                  log.error(
+                      "Outbox 상태 전이 실패. eventId={}, topic={}", eventId, topic, transitionError);
                 } finally {
                   // 상태 전이 성패와 무관하게 푼다. 전이가 실패했다면 행이 PENDING/FAILED로 남아
                   // 다음 폴링이 정상적으로 다시 집어야 하므로, 여기서 잠가두면 영영 발행되지 않는다.
@@ -122,9 +142,18 @@ public class OutboxRelayService {
                 }
               });
     } catch (RuntimeException e) {
-      // send() 자체가 콜백 없이 즉시 터지는 경우(직렬화 실패 등) 콜백이 오지 않아 잠금이 남는다.
-      inFlight.remove(id);
-      throw e;
+      // send()가 콜백 없이 즉시 터지는 경로(직렬화 실패 등). 재던지면 relayBatch의 루프가 끊겨 이 폴링의
+      // 뒤쪽 행이 전부 취소되고, 조회가 id 오름차순이라 같은 행이 매 폴링마다 선두에 다시 서서 뒤쪽이
+      // 영영 발행되지 않는다(head-of-line 블록). 실패로 기록해 retryCount를 올리고 — 그래야
+      // maxRetries 초과 시 DEAD로 빠져 알림이 나간다 — 다음 행으로 넘어간다.
+      log.error("Outbox relay send 동기 실패. eventId={}, topic={}", eventId, topic, e);
+      try {
+        outboxStatusUpdater.markFail(id, errorMessage(e));
+      } catch (RuntimeException markError) {
+        log.error("Outbox 동기 실패 기록 실패. eventId={}", eventId, markError);
+      } finally {
+        inFlight.remove(id);
+      }
     }
   }
 
