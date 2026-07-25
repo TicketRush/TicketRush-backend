@@ -1,0 +1,124 @@
+SERIES_ID=260725-345-chunk-trx
+ISSUE=#345
+PR=#487
+DATE=2026-07-25 (KST)
+TARGET_HOST=EC2 54.116.243.250 (탄력 IP)
+TOPOLOGY=측정 대상·MySQL·Prometheus/Grafana 전부 EC2 (ADR 0007). k6 미사용 — HTTP 부하가 아니라 시딩 + 스케줄러 관측이다.
+IMAGE_TAG=6398a9d653b0e2a9f7895ab020a012154a8faf24 (전 서비스 동일)
+RUNBOOK=docs/load-test-guide.md §11
+SEED=load-test/seed/seed_expired_holds.sql (@expired_count=2000)
+OVERRIDE=load-test/chaos/seat-release-singletrx.override.yml (A2 arm 한정)
+PROM_SCRAPE_INTERVAL=15s
+
+# 측정 대상 설정 (독립변수)
+A1_CONFIG=chunk-size=25 / max-chunks=80 (application.yml 운영값, 컨테이너 env 오버라이드 없음)
+A2_CONFIG=chunk-size=2000 / max-chunks=1 (compose override, 측정 전용)
+CONFIG_PROOF=처리 상한 도달 경고 로그가 실제 값을 그대로 찍는다 — A1 "chunkSize=25 x maxChunks=80", A2 "chunkSize=2000 x maxChunks=1". actuator/env는 노출 대상이 아니라(health·info·prometheus 3개) 이 로그가 유일한 확증 수단이다.
+SCHEDULER=SeatStatusScheduler @Scheduled(fixedDelay=60000), ShedLock lockAtLeastFor=50s lockAtMostFor=2m
+SCHEDULER_POOL=spring.task.scheduling.pool.size=4 (#484로 명시됨 — 게이지 갱신이 tick에 굶지 않는다)
+HIKARI_POOL_SIZE=10
+
+# 사전 조치 (측정 전)
+INDEX_DDL_APPLIED=YES — 측정 직전 `SHOW INDEX FROM seat`에 idx_seat_status_hold_expired_at이 **없었다**.
+  prod는 ddl-auto=validate라 @Table의 @Index 부재를 검출하지 못한다(#296 관행, Seat javadoc).
+  04:24:05Z에 `ALTER TABLE seat ADD INDEX idx_seat_status_hold_expired_at (seat_status, hold_expired_at),
+  ALGORITHM=INPLACE, LOCK=NONE` 적용. 적용 후 EXPLAIN: type=range, key=idx_seat_status_hold_expired_at,
+  Extra="Using where; Using index; Using filesort" (커버링 인덱스, ORDER BY seat_id는 filesort).
+  ⚠ 이 DDL 이전 수치는 tick당 80회 풀스캔(26,000행)이 섞여 있어 비교에 쓰지 않는다.
+SEED_SCALE=LOADTEST 공연 1개 / 좌석 26,000 (seat_id 121..26120, #346 시딩분 재사용)
+
+# 코호트
+COHORT_SIZE=2000 (tick당 처리 상한 25 x 80 = 2000과 동일 — 같은 작업량의 A/B가 되도록 맞췄다)
+COHORT_PREFIX=LT-X (booking_number)
+HOLD_EXPIRED_AT=@app_now - INTERVAL 1 MINUTE, @app_now = UTC_TIMESTAMP()
+CLOCK_NOTE=MySQL 컨테이너 system_time_zone=KST라 세션 NOW()가 앱(UTC)보다 9시간 앞선다.
+  최초 시도에서 NOW()로 시딩해 3 tick을 헛돌렸다(스케줄러는 정상 동작·해제 0건·에러 없음).
+REDIS_LOCK=코호트에 Redis 락 키를 만들지 않으므로 SeatReleaseSingleUseCase(만료 리스너) 미개입 — fallback 단독 측정
+BOOKING_CREATED_AT=@app_now (과거로 당기면 BookingExpireUseCase cutoff=now-5분이 따로 물어 오염된다)
+
+# 계측
+DURATION_INSTRUMENT=performance_schema.events_transactions_summary_by_thread_by_event_name
+  (tick 직전 TRUNCATE → tick 직후 read, threads.PROCESSLIST_HOST로 seat-service 커넥션만 필터)
+  transaction instrument: enabled=YES timed=YES
+LOCK_INSTRUMENT=load-test/bench/trx-sampler.sh (innodb_trx 1초, rows_locked·LOCK WAIT·data_lock_waits)
+HIKARI_INSTRUMENT=actuator /actuator/prometheus 1초 폴링 (Prometheus 15초 스크랩은 2~6초 tick을 놓친다)
+
+# 결과 — 최장 트랜잭션 지속시간 (ms)
+A1_MAX_MS=58.8 / 60.5 / 76.0 / 77.1 / 379.0   (n=5, 중위 76.0)
+A1_AVG_MS=16.6 / 17.6 / 19.2 / 21.3 / 32.4
+A1_TRX_COUNT=182 / 189 / 191 / 195 / 206      (80 청크 + 릴레이·게이지 등 동일 커넥션의 타 트랜잭션 포함)
+A1_TICK_SEC=2.273 / 2.523 / 2.901 / 2.938 / 5.798
+A1_OUTLIER=379.0ms / 5.798s 회차는 구버전 시드(회차당 2분 30초 소요)가 직전까지 DB를 점유한 뒤였다. 제외 시 중위 68.3ms.
+
+A2_MAX_MS=2193.7 / 2547.5 / 3875.9 / 5513.1   (n=4, 중위 3211.7)
+A2_AVG_MS=26.0 / 28.5 / 41.0 / 47.8
+A2_TRX_COUNT=110 / 119 / 145 / 144
+A2_TICK_SEC=2.198 / 2.552 / 3.884 / 5.528
+A2_INTERNAL_CHECK=max_ms ≈ tick 전체 소요와 일치한다(단일 트랜잭션이 tick을 통째로 차지한다는 뜻) — 계측 정합 확인
+
+RATIO_MEDIAN=3211.7 / 76.0 = 42.3배 (97.6% 단축)
+TICK_TOTAL_COMPARISON=두 arm이 겹친다(A1 2.27~5.80s, A2 2.20~5.53s). 청크 분할은 총 처리시간을 늘리지 않고
+  같은 작업을 80개의 짧은 트랜잭션으로 쪼갠다.
+
+# 결과 — 커넥션 풀 / 락
+HIKARI_PENDING_PEAK=0 (두 arm, 1초 폴링 및 Prometheus 15초 모두)
+HIKARI_ACTIVE_PEAK=1 / IDLE=9
+POOL_VERDICT=만료 fallback은 스케줄러 스레드 하나가 도는 단일 스레드 경로라 커넥션을 1개만 쓴다.
+  풀 10에서 단일 트랜잭션이 5초를 물어도 대기가 생기지 않는다 — "청크 분할로 커넥션 풀 고갈 회피"는
+  이 경로·이 규모에서 실측으로 뒷받침되지 않는다. 이득은 락 보유 시간이다.
+LOCK_WAIT_OBSERVED=0 (data_lock_waits·trx_state='LOCK WAIT' 모두 0)
+CONFIRM_SOLD_BLOCKING=직접 측정 불가 — 결제 확정 이벤트를 대량 생성할 수단이 없다(가이드 §9.1 전례).
+  락 보유 상한은 위 max_ms가 곧 그 값이다.
+
+# 지표 정의 결함 (이 측정의 부수 확정)
+SEAT_HELD_MAX=0.00 (replicate 창 15분 전체) — ticketrush_seat_held는 hold_expired_at > now 조건이라
+  **미만료** HOLD만 센다. 만료 코호트 2,000건이 소진되는 내내 게이지는 0에 붙어 있었다.
+  이슈 #345가 1만 건 시나리오의 주 지표로 지정한 "seat_held의 tick별 잔량 감소 곡선"은 성립하지 않는다.
+  PR #487이 ticketrush_seat_hold_expired_backlog 게이지를 추가한 근거가 이 수치다.
+
+# 파이프라인 (부수 관측)
+OUTBOX_BACKLOG_PEAK=2000 (코호트 1건당 SeatHoldExpiredEvent 1건, 정확히 일치)
+RELAY_RATE_PEAK=20.00/s (이론 상한 batch-size 100 / fixedDelay 5s = 20/s와 일치, #344와 동일 관측)
+BOOKING_EXPIRE_PATH=SeatHoldExpiredEvent → booking-service SeatHoldExpiredEventListener →
+  ExpireBookingByNumberUseCase, 2,000건 EXPIRED 전이까지 약 100초 (릴레이 20/s가 律速)
+HOST_CPU=max 65.93% / avg 34.20% (#344의 99.87%와 달리 포화 아님 — 절대 수치가 상대적으로 깨끗하다)
+
+# 사고 기록 (측정 중 발생, 복구 완료)
+INCIDENT=04:45~04:58Z Redis 인증 붕괴. 리포 루트(~/ticketrush/)의 구버전 docker-compose.prod.yml 사본으로
+  `up -d seat-service`를 실행해 depends_on의 redis·mysql이 재생성됐고, 그 디렉토리 .env에 REDIS_PASSWORD
+  키가 없어(#426 이후 추가된 키) Redis가 --requirepass 없이 떴다. 비밀번호를 보내는 앱들이 전부
+  "ERR AUTH ... called without any password configured"로 끊겼고 seat-service는 22회 재시작, redis_up=0
+  알림 발화(04:47Z). 정상 디렉토리 ~/ticketrush/deploy/ 에서 `up -d redis mysql seat-service` 재실행으로
+  04:58Z 복구(redis_up=1, 전 서비스 AUTH 오류 0, restarts=0). 볼륨이 명시적 이름이라 데이터 손실 없음.
+  실제 배포 경로는 컨테이너 라벨 com.docker.compose.project.config_files 로 확인한다. 런북 §11.4에 고정.
+INCIDENT_IMPACT=이 사고 구간(04:45~04:58Z)의 수치는 리포트에 쓰지 않는다. A1 n=5·A2 n=4는 모두 복구 이후
+  또는 사고 이전의 정상 구간 회차다(A2 첫 회차 05:07Z는 복구 후).
+
+# 결과 — B1 (만료 10,000건 multi-tick drain, chunk 25x80 운영값)
+B1_SEED_UTC=2026-07-25T05:42:54Z (@expired_count=10000, 시딩 1초 미만)
+B1_TICKS=5 (정확히 5 tick, tick당 정확히 2000건 해제 — 매 tick 처리 상한 경고 발화)
+B1_TICK_1=start 05:43:54.436 end 05:43:59.478 (5.042s)
+B1_TICK_2=start 05:44:59.482 end 05:45:03.395 (3.913s)
+B1_TICK_3=start 05:46:03.399 end 05:46:06.605 (3.206s)
+B1_TICK_4=start 05:47:06.613 end 05:47:09.340 (2.727s)
+B1_TICK_5=start 05:48:09.345 end 05:48:12.088 (2.743s)
+B1_TICK_INTERVAL=60.00s (fixedDelay는 완료 시각 기준이라 tick 시작이 소요시간만큼 뒤로 밀린다)
+B1_TOTAL_DRAIN=5분 18초 (시딩 05:42:54 → 적체 0 도달 05:48:12/05:48:13 폴링 관측)
+B1_PS=6250 trx | max_ms=182.9 | avg_ms=11.9 (400 청크 + 릴레이·게이지 트랜잭션 포함, 창 5분)
+B1_HIKARI=pending 전구간 0 / active 피크 1 / idle 9
+B1_LOCK_SAMPLER=max_rows_locked=46, LOCK WAIT=0, data_lock_waits=0
+B1_SEAT_HELD_MAX=0.00 (B1 창 전체 — A1·A2와 동일하게 게이지가 사건을 담지 않음)
+B1_HOST_CPU=max 74.90% / avg 30.75%
+B1_OUTBOX_BACKLOG_PEAK=5200 (단조 증가)
+B1_RELAY_RATE_PEAK=20.00/s
+B1_PRODUCTION_RATE=2000건/60초 = 33.3/s (릴레이 상한 20/s 초과 → tick마다 약 800건 적체)
+B1_DOWNSTREAM=좌석 적체 0 시점(05:48:13Z)에도 outbox PENDING 5186. 최종적으로 booking 10000건 전량 EXPIRED
+  전이 확인(bk_expired=10000, bk_pending=0) — 유실 없음, 다만 좌석 해제와 예매 EXPIRED 가시화 사이에
+  최대 8분 이상 지연 창이 생긴다.
+
+# 미완
+GRAFANA_CAPTURE=graph-*.png 미첨부. Grafana(3000)는 127.0.0.1 바인딩(ADR 0007)이고 이미지 렌더러 플러그인이
+  설치돼 있지 않아(`grafana cli plugins ls` → no installed plugins) API로 PNG를 뽑을 수 없다.
+  SSH 터널로 사람이 캡처한다 — 쿼리·시간범위는 report.md §10에 표로 정리했다.
+EXPIRED_BACKLOG_GAUGE_GRAPH=ticketrush_seat_hold_expired_backlog 곡선은 게이지가 배포된 뒤(다음 릴리스)
+  캡처한다. CD는 main push 트리거라 develop 머지(#487)로는 배포되지 않았다. 그때까지 drain-b1.csv가 대신한다.
