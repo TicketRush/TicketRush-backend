@@ -23,19 +23,21 @@ public interface OutboxRepository extends JpaRepository<OutboxEntity, Long> {
    * {@link OutboxStatus#PENDING}(미발송)과 {@link OutboxStatus#FAILED}(재시도 대상)이고, {@code limit}으로 배치
    * 크기를 제한한다. 조합 병합은 {@link OutboxRelayService}가 한다.
    *
-   * <p><b>조합별 등치 조회 + {@code FORCE INDEX}인 이유</b>(#483). 등치로 쪼개야 {@code
+   * <p><b>조합별 등치 조회 + 인덱스 힌트인 이유</b>(#483). 등치로 쪼개야 {@code
    * idx_outbox_aggtype_status_id(aggregate_type, status, outbox_id)}의 정렬 순서가 그대로 ORDER BY가 된다 —
    * {@code IN} 한 방이면 범위가 조합 수만큼 갈라져 인덱스 순서를 못 쓴다. 다만 쪼개는 것만으로는 부족했다. {@code
    * idx_outbox_aggtype_status_published}가 {@code (aggregate_type, status)} prefix를 공유해서, 힌트가 없으면
-   * 옵티마이저가 정렬 회피 이득을 비용에 반영하지 않고 그쪽을 골라 filesort가 남는다(로컬 52,100행 실측: 1,000행 스캔 + filesort 1.5ms →
-   * FORCE INDEX 시 100행 0.2ms). 인덱스 열 순서를 바꿔도 같았다.
+   * 옵티마이저가 정렬 회피 이득을 비용에 반영하지 않고 그쪽을 골라 filesort가 남는다(로컬 52,100행 실측: 998행 스캔 + filesort 1.17ms → 힌트
+   * 적용 시 100행 0.14ms). 인덱스 열 순서를 바꿔도 같았다.
    *
-   * <p><b>배포 순서 주의.</b> {@code FORCE INDEX}는 인덱스가 없으면 무시가 아니라 에러다. prod는 {@code ddl-auto:
-   * validate}라 인덱스가 자동 생성되지 않으므로, 이 코드를 배포하기 <b>전에</b> 인덱스를 먼저 적용해야 한다. 순서를 어기면 릴레이 조회가 전면 실패한다.
+   * <p><b>{@code FORCE INDEX}가 아니라 {@code INDEX()} 옵티마이저 힌트를 쓰는 이유</b>는 인덱스가 없을 때의 거동이 다르기 때문이다.
+   * {@code FORCE INDEX}는 {@code ERROR 1176}으로 조회 자체를 실패시켜 이벤트 발행을 전면 정지시키지만, 옵티마이저 힌트는 경고(3128) 후
+   * 무시돼 힌트 없던 시절의 계획으로 되돌아갈 뿐이다. prod는 {@code ddl-auto: validate}라 인덱스가 자동 생성되지 않고 수동 적용이 필요한데(자세히는
+   * {@link OutboxEntity} javadoc), 그 적용이 늦어도 성능이 되돌아갈 뿐 장애가 되지 않아야 한다.
    */
   @Query(
       value =
-          "SELECT * FROM outbox FORCE INDEX (idx_outbox_aggtype_status_id) "
+          "SELECT /*+ INDEX(outbox idx_outbox_aggtype_status_id) */ * FROM outbox "
               + "WHERE aggregate_type = :aggregateType AND status = :status "
               + "ORDER BY outbox_id ASC LIMIT :limit",
       nativeQuery = true)

@@ -27,9 +27,9 @@ import lombok.NoArgsConstructor;
  * PK를 순회하며 retention이 남긴 SENT row까지 훑는다.
  *
  * <p><b>가동 중인 DB 수동 DDL(#483).</b> init 스냅샷은 빈 DB 최초 기동에만 실행되고 prod는 {@code ddl-auto: validate}라
- * 인덱스를 만들어주지 않는다(deploy/mysql/README.md). {@link OutboxRepository#findOldestRelayTargets}가 이 인덱스를
- * {@code FORCE INDEX}로 지정하는데 <b>인덱스가 없으면 무시가 아니라 에러</b>이므로, <b>코드 배포 전에</b> 아래를 실행해야 한다. 순서를 어기면
- * 릴레이 조회가 매 폴링 실패해 해당 서비스의 이벤트 발행이 전면 정지한다.
+ * 인덱스를 만들어주지 않으므로(deploy/mysql/README.md), 가동 중인 DB에는 아래를 수동으로 적용해야 한다. 적용 전까지 릴레이 조회는 인덱스 힌트가 무시된
+ * 계획(기존 인덱스 + filesort)으로 돌아간다 — 느려질 뿐 실패하지는 않으므로 배포 순서에 강제성은 없다({@link
+ * OutboxRepository#findOldestRelayTargets}가 {@code FORCE INDEX} 대신 옵티마이저 힌트를 쓰는 이유).
  *
  * <pre>{@code
  * -- 0) 사전 확인: 이미 있으면 아래 ALTER를 건너뛴다.
