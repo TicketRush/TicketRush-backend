@@ -9,6 +9,13 @@ spring:
     name: seat-service
   jpa:
     open-in-view: false
+  task:
+    scheduling:
+      pool:
+        # @Scheduled 4개(relay·좌석 만료 fallback·outbox retention·held 게이지)가 스레드 하나를
+        # 공유하면 하나가 블로킹될 때 나머지가 함께 밀린다. 특히 relay의 producer.send()가 브로커
+        # 메타데이터 대기로 잡히면(KafkaConfig max.block.ms) 만료 fallback까지 멈춘다. 스케줄러 수만큼 준다.
+        size: 4
   data:
     redis:
       # Lettuce 기본 커맨드 타임아웃(60s)은 hang형 Redis 장애 시 좌석 락 경로를 60초 물린다.

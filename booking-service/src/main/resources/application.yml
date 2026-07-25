@@ -9,6 +9,13 @@ spring:
     name: booking-service
   jpa:
     open-in-view: false
+  task:
+    scheduling:
+      pool:
+        # @Scheduled 5개(relay·booking 만료·outbox/inbox/dlt retention)가 스레드 하나를 공유하면
+        # 하나가 블로킹될 때 나머지가 함께 밀린다. 특히 relay의 producer.send()가 브로커 메타데이터
+        # 대기로 잡히면(KafkaConfig max.block.ms) 만료 fallback까지 멈춘다. 스케줄러 수만큼 준다.
+        size: 5
 
 service:
   seat:
