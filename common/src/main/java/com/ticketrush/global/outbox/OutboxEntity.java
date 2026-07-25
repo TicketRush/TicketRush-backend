@@ -25,6 +25,18 @@ import lombok.NoArgsConstructor;
  * <p>여기에 릴레이 조회 전용으로 {@code (aggregate_type, status, outbox_id)} 복합 인덱스를 하나 더 둔다(#483). 릴레이는 조합별 등치
  * 조건으로 걸러 {@code outbox_id} 오름차순으로 읽으므로, 이 인덱스의 정렬 순서가 그대로 ORDER BY가 되어 정렬이 사라진다. 이 인덱스가 없으면 옵티마이저가
  * PK를 순회하며 retention이 남긴 SENT row까지 훑는다.
+ *
+ * <p><b>가동 중인 DB 수동 DDL(#483).</b> init 스냅샷은 빈 DB 최초 기동에만 실행되고 prod는 {@code ddl-auto: validate}라
+ * 인덱스를 만들어주지 않는다(deploy/mysql/README.md). {@link OutboxRepository#findOldestRelayTargets}가 이 인덱스를
+ * {@code FORCE INDEX}로 지정하는데 <b>인덱스가 없으면 무시가 아니라 에러</b>이므로, <b>코드 배포 전에</b> 아래를 실행해야 한다. 순서를 어기면
+ * 릴레이 조회가 매 폴링 실패해 해당 서비스의 이벤트 발행이 전면 정지한다.
+ *
+ * <pre>{@code
+ * -- 0) 사전 확인: 이미 있으면 아래 ALTER를 건너뛴다.
+ * SHOW INDEX FROM outbox WHERE Key_name = 'idx_outbox_aggtype_status_id';
+ *
+ * ALTER TABLE outbox ADD INDEX idx_outbox_aggtype_status_id (aggregate_type, status, outbox_id);
+ * }</pre>
  */
 @Entity
 @Table(

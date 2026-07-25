@@ -46,9 +46,14 @@ class OutboxRelayServiceTest {
    * 시절처럼 두 상태에 같은 목록을 물리면 같은 행이 병합 목록에 중복으로 들어가 테스트가 실제 동작과 어긋난다.
    */
   private void givenRelayTargets(List<OutboxEntity> pending, List<OutboxEntity> failed) {
-    given(outboxRepository.findOldestRelayTargets(eq("Booking"), eq("PENDING"), anyInt()))
+    givenRelayTargets("Booking", pending, failed);
+  }
+
+  private void givenRelayTargets(
+      String aggregateType, List<OutboxEntity> pending, List<OutboxEntity> failed) {
+    given(outboxRepository.findOldestRelayTargets(eq(aggregateType), eq("PENDING"), anyInt()))
         .willReturn(pending);
-    given(outboxRepository.findOldestRelayTargets(eq("Booking"), eq("FAILED"), anyInt()))
+    given(outboxRepository.findOldestRelayTargets(eq(aggregateType), eq("FAILED"), anyInt()))
         .willReturn(failed);
   }
 
@@ -266,6 +271,31 @@ class OutboxRelayServiceTest {
     assertThat(captor.getAllValues())
         .extracting(message -> message.getPayload().eventId())
         .containsExactly("evt-1", "evt-3", "evt-4");
+  }
+
+  @Test
+  @DisplayName("aggregateType이 여럿이면 4개 조합을 모두 조회해 전체 기준 오래된 순으로 발행한다")
+  @SuppressWarnings("unchecked")
+  void relayBatch_merges_across_multiple_aggregate_types() {
+    // given: 조합이 늘어도 '전체 기준 오래된 순'이 유지돼야 한다. 조합별 조회라 여기가 깨지기 쉬운 지점이다.
+    given(outboxProperties.getAggregateTypes()).willReturn(List.of("Booking", "Seat"));
+    given(outboxProperties.getBatchSize()).willReturn(3);
+    givenRelayTargets(
+        "Booking", List.of(pendingRow(4L, "evt-4")), List.of(pendingRow(2L, "evt-2")));
+    givenRelayTargets("Seat", List.of(pendingRow(1L, "evt-1")), List.of(pendingRow(3L, "evt-3")));
+    given(kafkaTemplate.send(any(Message.class)))
+        .willReturn(
+            CompletableFuture.completedFuture((SendResult<String, DomainEventEnvelope>) null));
+
+    // when
+    outboxRelayService.relayBatch();
+
+    // then: 조합을 가로질러 1,2,3 순서로 나가고 4번은 다음 폴링으로 밀린다
+    ArgumentCaptor<Message<DomainEventEnvelope>> captor = ArgumentCaptor.forClass(Message.class);
+    verify(kafkaTemplate, times(3)).send(captor.capture());
+    assertThat(captor.getAllValues())
+        .extracting(message -> message.getPayload().eventId())
+        .containsExactly("evt-1", "evt-2", "evt-3");
   }
 
   @Test

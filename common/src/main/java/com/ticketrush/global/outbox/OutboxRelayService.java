@@ -80,7 +80,12 @@ public class OutboxRelayService {
    * 등록한다.
    *
    * <p>backlog는 in-flight 행도 PENDING으로 세므로 단독으로는 "콜백 대기(정상)"와 "릴레이 정지(장애)"를 구분하지 못한다. 두 곡선을 겹쳐 봐야
-   * 갈린다 — backlog가 높은데 in-flight가 0이면 릴레이가 멈춘 것이고, backlog≈in-flight면 발행은 나갔고 콜백만 늦는 것이다.
+   * 갈린다 — in-flight가 0과 batchSize 사이에서 출렁이면 정상이고, batchSize에 붙어 정체하면 콜백 유실로 조회 윈도가 잠긴 것이며(위 {@code
+   * inFlight} javadoc의 슬롯 고갈), 0에 고정이면 릴레이가 행을 아예 집지 못하고 있다. 판별표는 {@code docs/load-test-guide.md}
+   * §10.3에 있다.
+   *
+   * <p>단, {@code backlog}는 이 메서드가 아니라 {@link #relayBatch()} 안에서만 갱신되므로 릴레이가 멈추면 마지막 값이 그대로 노출된다. 두
+   * 게이지가 동시에 정지해 있으면 값이 낮아도 안전 신호가 아니라 관측이 멎은 것이다.
    */
   @PostConstruct
   public void registerGauges() {
@@ -123,6 +128,10 @@ public class OutboxRelayService {
    * <p>조회를 (aggregateType, status) 조합별로 쪼개 부르는 이유는 {@link OutboxRepository#findOldestRelayTargets}
    * javadoc 참고(#483). 각 조합에서 가장 오래된 {@code batchSize}건씩 가져오므로 전체 기준 오래된 {@code batchSize}건은 반드시 이
    * 합집합 안에 있다 — 오래된 순 발행 semantics는 그대로다. 병합 정렬 대상은 최대 {@code aggregateTypes × 2 × batchSize}건이다.
+   *
+   * <p><b>쪼개면서 잃은 것은 조회의 원자성이다.</b> 각 쿼리가 서로 다른 스냅샷을 보므로, PENDING 조회와 FAILED 조회 사이에 어떤 행이 {@code
+   * markFail}로 전이하면 같은 행이 양쪽에 잡혀 배치 슬롯을 두 칸 먹는다. 중복 발행은 {@code inFlight.putIfAbsent}가 막고 상태 전이가
+   * 단조(FAILED→PENDING 역행 없음)라 행 유실은 생기지 않는다 — 그 폴링의 유효 배치가 한 건 줄 뿐이라 감수한다.
    */
   private List<OutboxEntity> findOldestRelayTargets(List<String> aggregateTypes, int batchSize) {
     List<OutboxEntity> rows = new ArrayList<>();
@@ -132,7 +141,7 @@ public class OutboxRelayService {
             outboxRepository.findOldestRelayTargets(aggregateType, status.name(), batchSize));
       }
     }
-    rows.sort(Comparator.comparing(OutboxEntity::getId));
+    rows.sort(Comparator.comparingLong(OutboxEntity::getId));
     return rows.size() > batchSize ? rows.subList(0, batchSize) : rows;
   }
 

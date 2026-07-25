@@ -86,6 +86,21 @@ jobs:
           mysql -h 127.0.0.1 -P 3306 -uroot -pci-root-pw -N \
             -e "SELECT COUNT(*) FROM information_schema.tables WHERE table_schema='ticket_rush';"
 
+      - name: 릴레이 조회 스모크 (FORCE INDEX 실행 가능성)
+        # OutboxRepository.findOldestRelayTargets는 nativeQuery라 부트스트랩 검증을 받지 않고,
+        # H2는 FORCE INDEX를 파싱하지 못해 @DataJpaTest로도 덮을 수 없다. 즉 저장소 어디에서도
+        # 이 SQL이 실행되지 않는다 — 인덱스명·컬럼명 오타가 prod 첫 폴링에서야 드러난다.
+        # 여기서 스냅샷이 적재된 실제 MySQL로 한 번 실행해 두 가지를 함께 잡는다.
+        #   1) 스냅샷에 idx_outbox_aggtype_status_id가 빠지면 ERROR 1176으로 실패 (validate가 못 잡는 인덱스 drift)
+        #   2) SQL 자체가 잘못되면 문법 에러로 실패
+        # 쿼리 문자열이 바뀌면 여기도 함께 바꿔야 한다.
+        run: |
+          mysql -h 127.0.0.1 -P 3306 -uroot -pci-root-pw ticket_rush -e "
+            SELECT * FROM outbox FORCE INDEX (idx_outbox_aggtype_status_id)
+             WHERE aggregate_type = 'Booking' AND status = 'PENDING'
+             ORDER BY outbox_id ASC LIMIT 100;"
+          echo "✅ 릴레이 조회(FORCE INDEX)가 스냅샷 스키마에서 실행 가능합니다."
+
       - name: bootJar 빌드
         run: ./gradlew bootJar
 

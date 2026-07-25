@@ -104,7 +104,12 @@ init SQL은 **빈 DB의 최초 기동에만** 실행된다. 이미 데이터가 
    grep -E "idx_seat_performance_id|uk_seat_layout_performance_id" deploy/mysql/init/001-ticket-rush-schema.sql
    grep -c "NOT NULL DEFAULT '0'" deploy/mysql/init/001-ticket-rush-schema.sql   # @Version 엔티티 수와 일치해야 한다
    grep -E "uk_payment_completed_booking|GENERATED ALWAYS" deploy/mysql/init/001-ticket-rush-schema.sql  # #422 수동 DDL
+   grep -E "idx_outbox_aggtype_status_id" deploy/mysql/init/001-ticket-rush-schema.sql  # #483 — 빠지면 릴레이 전면 실패
    ```
+
+   > `idx_outbox_aggtype_status_id`는 빠지면 성능 저하가 아니라 **장애**다. 릴레이 조회가 이 인덱스를
+   > `FORCE INDEX`로 지정하는데, 인덱스가 없으면 MySQL이 무시하지 않고 `ERROR 1176`을 던진다(#483,
+   > `OutboxEntity` javadoc). `schema-validate` CI에도 이 쿼리를 직접 실행하는 스텝이 있다.
 
 7. 정리한다.
 
