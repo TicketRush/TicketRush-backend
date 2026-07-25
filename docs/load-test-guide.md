@@ -484,3 +484,100 @@ http.setResponseCallback(http.expectedStatuses(200, 201, 409));
 > 부수 관측으로 **릴레이 발행 증폭 3.09배**(발행 4,090 vs outbox 행 1,324)를 확인했다. `relayBatch()`에 in-flight 표시가 없어 콜백의 SENT 전이가 5초 폴링보다 늦으면 같은 행이 재발행된다(`retry_count`는 전부 0 — 실패 재시도가 아니다). javadoc이 명시한 at-least-once 설계 그대로이며 Inbox가 전량 차단했지만, 단일 컨슈머 스레드가 유효 처리량의 68%를 중복 차단에 쓴다.
 
 증적은 `load-tests/k6/results/260724-344-seat-contention/`에 있다(#346·#347 디렉토리 구성 답습 — `report.md`·`metadata.txt`·`k6-summary.txt`·`graph-*.png`·`timeseries-*.json`).
+
+## 11. 대량 만료 청크 트랜잭션 측정 (#345)
+
+만료 HOLD 좌석을 대량으로 시딩해, 좌석 만료 fallback이 그것을 소진하는 과정을 **청크 트랜잭션(25건) vs 단일 트랜잭션**으로 비교한다. **k6를 쓰지 않는다** — HTTP 부하가 아니라 시딩 + 스케줄러 관측이다.
+
+### 11.1 이슈 서사와 실측의 차이 — 먼저 읽을 것
+
+이슈 #345는 1만 건 시나리오의 주 지표를 "`seat_held` Gauge의 tick별 잔량 감소 곡선"으로 잡았다. **그 게이지로는 측정되지 않는다.**
+
+```java
+// SeatRepository.countHeldSeats — seat_held 게이지의 원천
+select count(s) from Seat s where s.seatStatus = :hold and s.holdExpiredAt > :now
+```
+
+`seat_held`는 **미만료** HOLD만 센다. 만료됐지만 아직 해제되지 않은 좌석 — 정확히 이 측정이 재려는 적체 — 은 처음부터 게이지 밖이다. 만료 코호트를 시딩하면 `seat_held`는 0에서 시작해 0으로 끝나고 곡선이 아예 그려지지 않는다. #484가 고친 스케줄러 스레드 굶주림과는 별개 문제이며, 지표 정의 자체의 공백이다.
+
+그래서 #345에서 **`ticketrush_seat_hold_expired_backlog` 게이지를 추가했다**(`SeatHeldGaugeMetrics`, 30초 갱신). `outbox_backlog`의 좌석 버전이고, 세는 집합의 비교 연산자(`hold_expired_at <= now`)를 스케줄러가 실제로 집어가는 `findExpiredHoldSeats`와 같게 맞춰 두 집합이 어긋나지 않게 했다. **적체 해소 곡선은 이 게이지로 읽는다.**
+
+### 11.2 단일 트랜잭션 비교군은 코드 변경이 아니다
+
+`chunkSize` × `maxChunks`가 곧 (트랜잭션 범위) × (tick당 청크 수)다. `chunk-size`를 코호트 전량으로, `max-chunks`를 1로 주면 `SeatReleaseExpiredUseCase`의 루프가 한 번만 돌아 전량이 단일 트랜잭션으로 커밋된다. 벤치용 브랜치도 토글 코드도 필요 없다 — compose override 하나뿐이다(`load-test/chaos/seat-release-singletrx.override.yml`).
+
+**바인딩은 로그가 증명한다.** 만료 2,000건에 `chunk-size=2000`·`max-chunks=1`이면 `fetched == chunkSize`이고 `processedChunks == maxChunks`라 처리 상한 도달 경고가 `chunkSize=2000 x maxChunks=1`을 그대로 찍는다. actuator/env는 노출 대상이 아니라(health·info·prometheus 3개) 쓸 수 없으므로 이 로그가 유일한 확증 수단이다.
+
+> **10,000건 단일 트랜잭션은 돌리지 않는다.** seat-service의 `mem_limit`이 640m이고, 단일 트랜잭션이 `SeatStatusScheduler`의 ShedLock `lockAtMostFor=2m`를 넘기면 락이 풀려 중복 실행 창이 열린다. 2,000건이 tick당 처리 상한과 같은 크기라 그 지점의 A/B가 정직한 대조다.
+
+### 11.3 측정 매트릭스
+
+| # | 만료 건수 | 설정 | 관측 | 주 지표 |
+|---|---|---|---|---|
+| A1 | 2,000 | 청크 25×80 (yml 기본값) | ≥5분 | 최장 trx 지속시간, `hikaricp_connections_pending` 피크 |
+| A2 | 2,000 | **단일 2000×1** (override) | ≥5분 | 같은 작업량의 대조군 |
+| B1 | 10,000 | 청크 25×80 | **≥10분** | `seat_hold_expired_backlog` tick별 감소 곡선(최소 5 tick 소진) |
+
+### 11.4 사전 점검 (EC2 기동 후, 측정 전)
+
+1. **`SHOW INDEX FROM seat`에 `idx_seat_status_hold_expired_at`이 있는지 확인한다.** `@Table`의 `@Index`는 `ddl-auto=update`인 신규 DB에서만 생기고 prod(`validate`)는 인덱스 부재를 검출하지 못한다(`Seat` javadoc, #296 관행). 없으면 아래를 먼저 적용하고 **metadata에 적용 여부를 기록**한다 — 인덱스가 없으면 청크 조회가 tick당 80회 풀스캔이 되어 측정값이 인덱스 결함과 섞인다.
+   ```sql
+   ALTER TABLE seat ADD INDEX idx_seat_status_hold_expired_at (seat_status, hold_expired_at),
+     ALGORITHM=INPLACE, LOCK=NONE;
+   ```
+2. 게이지 포함 이미지가 배포됐는지: seat-service actuator(컨테이너 내 8090)의 `/actuator/prometheus`에 `ticketrush_seat_hold_expired_backlog` 노출 확인.
+3. A1·B1은 yml 기본값이어야 한다 — `docker exec seat-service env | grep -E '^APP_SEAT_RELEASE_'` 가 비어야 정상.
+4. §7의 SSH 터널(3000·9090). **측정 중 Grafana 대시보드는 열어두지 않는다.**
+5. 현재 태그 확보: `TAG=$(docker inspect gateway-service --format '{{.Config.Image}}' | cut -d: -f2)`
+
+### 11.5 절차 (회차마다 반복)
+
+```bash
+SSH="ssh -i <key>.pem ubuntu@<EC2_IP>"
+SQL() { $SSH "docker exec -i ticketrush-mysql sh -c 'mysql -u root -p\"\$MYSQL_ROOT_PASSWORD\" -N ticket_rush'"; }
+```
+
+1. **시딩** — `seed_expired_holds.sql`은 리셋(outbox → booking → seat)과 시드를 한 파일에 담고 있어 매 회차 앞에 한 번만 돌리면 된다. 코호트 크기는 파일 상단 `@expired_count`로 정한다(2000 / 10000). `seed_load.sql`이 만든 LOADTEST 좌석이 코호트 크기 이상 AVAILABLE로 남아 있어야 한다(끝의 검증 쿼리가 `requested`/`cohort_bookings`/`expired_hold_seats` 일치를 보여준다).
+   ```bash
+   $SSH "docker exec -i ticketrush-mysql sh -c 'mysql -u root -p\"\$MYSQL_ROOT_PASSWORD\" \
+     --init-command=\"SET @i_confirm_loadtest_db=1\" ticket_rush'" < load-test/seed/seed_expired_holds.sql
+   ```
+   `seed_load.sql`의 `@booking_pct`는 `hold_expired_at = NOW() + 5분`(미만료)이라 이 측정에 쓸 수 없다. 코호트의 `created_at`은 `NOW()`로 둔다 — 과거로 당기면 booking-service의 `BookingExpireUseCase`(cutoff = now−5분)가 따로 물어 좌석 경로 측정이 오염된다. 예매 만료는 `SeatHoldExpiredEvent` 경유(프로덕션 경로)로만 일어난다.
+2. **샘플러 기동** (EC2에서, 스케줄러 tick보다 먼저 띄운다)
+   ```bash
+   DURATION=660 ./trx-sampler.sh > trx-samples-b1.csv   # load-test/bench/
+   ```
+3. **관측** — `SeatStatusScheduler`는 `fixedDelay=60000`이라 시딩 후 최대 1분 안에 첫 tick이 돈다. A1/A2는 5분, B1은 10분 이상 유지한다.
+4. **소진 확인** — 적체가 0이고 릴레이가 비었을 때가 측정 창 종점이다(§10.2 규약). UTC로 기록한다.
+   ```bash
+   echo "SELECT COUNT(*) FROM seat WHERE seat_status='HOLD' AND hold_expired_at <= NOW();" | SQL
+   echo "SELECT status, COUNT(*) FROM outbox WHERE event_type='SeatHoldExpiredEvent' GROUP BY status;" | SQL
+   ```
+5. **A2만** — override 적용/원복(§11.2). 적용 후 seat-service 로그에서 `chunkSize=2000 x maxChunks=1` 경고를 확인한 뒤 측정한다.
+   ```bash
+   IMAGE_TAG=$TAG docker compose -f docker-compose.prod.yml -f seat-release-singletrx.override.yml up -d seat-service
+   # ... 측정 ...
+   IMAGE_TAG=$TAG docker compose -f docker-compose.prod.yml up -d seat-service   # 원복
+   ```
+6. 증적을 `load-tests/k6/results/<YYMMDD>-345-chunk-trx/`에 기록(#344 디렉토리 구성 답습).
+
+### 11.6 PromQL
+
+```promql
+ticketrush_seat_hold_expired_backlog                 # 적체 해소 곡선 (B1 주 지표, §11.1)
+ticketrush_seat_held                                 # 미만료 HOLD (대조 — 코호트 측정에선 0 유지가 정상)
+hikaricp_connections_pending{application="seat-service"}   # 커넥션 풀 압박 피크
+hikaricp_connections_active{application="seat-service"}
+sum(rate(ticketrush_outbox_relay_total{result="success"}[1m]))  # 만료 이벤트 발행 소화
+ticketrush_outbox_backlog / ticketrush_outbox_in_flight         # 겹쳐 읽는다 (§10.3 판별표)
+```
+
+HikariCP·트랜잭션 패널은 Grafana System 대시보드(`monitoring/grafana/dashboards/ticketrush-system.json`)에 이미 있다. 적체 게이지는 Explore로 캡처한다.
+
+### 11.7 주의
+
+- **샘플러 값은 최장 지속시간의 하한이다.** 앱에 트랜잭션 지속시간 계측이 없어 `information_schema.innodb_trx`를 1초 간격으로 뜬다. 청크 트랜잭션(25건)은 수십 ms급이라 샘플 사이에 끝나면 기록되지 않는다. 단일 트랜잭션 arm은 초 단위라 안정적으로 잡힌다. **리포트에 이 한계를 반드시 명시한다.**
+- **`confirmSoldById` 블로킹은 직접 측정할 수 없다.** 결제 확정 이벤트를 대량 생성할 수단이 없다(§9.1이 같은 이유로 `ticket-group`을 보조 증적으로 돌린 전례). 락 점유는 샘플러의 `max_secs_running`(= 락 보유 상한)과 `lock_wait_trx`/`data_lock_waits` 관측 건수로 대신 기록하고, `application.yml` 주석이 근거로 든 경합은 구조적 논거 + 지속시간 수치로 서술한다. **추정을 수치로 위장하지 않는다.**
+- 단일 EC2에 앱 9개 + Kafka·MySQL·Redis·관측 스택이 동거하므로 절대 수치에는 포화가 섞인다(§10.5 단서와 동일).
+- 코호트 정리는 `cleanup_load.sql`이 `LT-%` 패턴으로 함께 처리한다(코호트 `booking_number` 프리픽스가 `LT-X`다).
+- `IMAGE_TAG` 명시: §8.4와 동일.
