@@ -520,6 +520,12 @@ select count(s) from Seat s where s.seatStatus = :hold and s.holdExpiredAt > :no
 
 ### 11.4 사전 점검 (EC2 기동 후, 측정 전)
 
+0. **⚠️ compose 는 반드시 `~/ticketrush/deploy/` 에서 실행한다. 리포 루트(`~/ticketrush/`)에 구버전 `docker-compose.prod.yml` 사본이 남아 있고, 그걸로 `up` 하면 Redis 가 비밀번호 없이 재생성되어 전 서비스 인증이 깨진다.** 실행 중 스택의 소유 경로는 라벨이 알려준다 — 손대기 전에 확인한다.
+   ```bash
+   docker inspect booking-service --format '{{index .Config.Labels "com.docker.compose.project.config_files"}}'
+   # → /home/ubuntu/ticketrush/deploy/docker-compose.prod.yml  (이 경로에서만 compose 를 돌린다)
+   ```
+   실측에서 실제로 밟았다. 루트 사본에는 `--requirepass` 가 없고 그 디렉토리의 `.env` 에는 `REDIS_PASSWORD` 키 자체가 없다(#426 이후 추가된 키다). `up -d seat-service` 가 `depends_on` 의 redis·mysql 까지 재생성하면서 Redis 가 인증 없이 떴고, 비밀번호를 보내는 나머지 앱들이 `ERR AUTH <password> called without any password configured` 로 전부 끊겼다 — seat-service 는 22회 재시작, `redis_up` 알림 발화. **복구는 정상 디렉토리에서 `up -d redis mysql seat-service`** 로 같은 프로젝트 이름(`ticketrush-prod`)에 재생성하면 된다(볼륨은 명시적 이름이라 데이터는 보존된다).
 1. **`SHOW INDEX FROM seat`에 `idx_seat_status_hold_expired_at`이 있는지 확인한다.** `@Table`의 `@Index`는 `ddl-auto=update`인 신규 DB에서만 생기고 prod(`validate`)는 인덱스 부재를 검출하지 못한다(`Seat` javadoc, #296 관행). 없으면 아래를 먼저 적용하고 **metadata에 적용 여부를 기록**한다 — 인덱스가 없으면 청크 조회가 tick당 80회 풀스캔이 되어 측정값이 인덱스 결함과 섞인다.
    ```sql
    ALTER TABLE seat ADD INDEX idx_seat_status_hold_expired_at (seat_status, hold_expired_at),
@@ -537,22 +543,50 @@ SSH="ssh -i <key>.pem ubuntu@<EC2_IP>"
 SQL() { $SSH "docker exec -i ticketrush-mysql sh -c 'mysql -u root -p\"\$MYSQL_ROOT_PASSWORD\" -N ticket_rush'"; }
 ```
 
-1. **시딩** — `seed_expired_holds.sql`은 리셋(outbox → booking → seat)과 시드를 한 파일에 담고 있어 매 회차 앞에 한 번만 돌리면 된다. 코호트 크기는 파일 상단 `@expired_count`로 정한다(2000 / 10000). `seed_load.sql`이 만든 LOADTEST 좌석이 코호트 크기 이상 AVAILABLE로 남아 있어야 한다(끝의 검증 쿼리가 `requested`/`cohort_bookings`/`expired_hold_seats` 일치를 보여준다).
+1. **시딩** — `seed_expired_holds.sql`은 리셋(outbox → seat → booking)과 시드를 한 파일에 담고 있어 매 회차 앞에 한 번만 돌리면 된다. outbox 리셋은 **미발행(PENDING/FAILED) 만료 이벤트만** 지운다 — SENT 는 릴레이가 다시 집지 않아 다음 창을 오염시키지 못하고, `aggregate_id IN (2,000건)` 으로 코호트를 특정하면 `(event_type, aggregate_id)` 인덱스가 없어 5만 행 풀스캔 두 번이 된다(실측에서 시딩이 회차당 **2분 30초 → 1초 미만**으로 줄었다). 코호트 크기는 파일 상단 `@expired_count`로 정한다(2000 / 10000). `seed_load.sql`이 만든 LOADTEST 좌석이 코호트 크기 이상 AVAILABLE로 남아 있어야 한다(끝의 검증 쿼리가 `requested`/`cohort_bookings`/`expired_hold_seats` 일치를 보여준다).
    ```bash
    $SSH "docker exec -i ticketrush-mysql sh -c 'mysql -u root -p\"\$MYSQL_ROOT_PASSWORD\" \
      --init-command=\"SET @i_confirm_loadtest_db=1\" ticket_rush'" < load-test/seed/seed_expired_holds.sql
    ```
    `seed_load.sql`의 `@booking_pct`는 `hold_expired_at = NOW() + 5분`(미만료)이라 이 측정에 쓸 수 없다. 코호트의 `created_at`은 `NOW()`로 둔다 — 과거로 당기면 booking-service의 `BookingExpireUseCase`(cutoff = now−5분)가 따로 물어 좌석 경로 측정이 오염된다. 예매 만료는 `SeatHoldExpiredEvent` 경유(프로덕션 경로)로만 일어난다.
-2. **샘플러 기동** (EC2에서, 스케줄러 tick보다 먼저 띄운다)
+2. **계측 2종을 tick 전에 준비한다.**
+
+   **(a) 최장 트랜잭션 지속시간 — `performance_schema` (주 계측)**. 이게 이 측정의 핵심 수치다. 청크 트랜잭션은 수십 ms라 초 단위 폴링으로는 원리상 못 잡는다. 대신 P_S 요약 테이블을 **tick 직전에 truncate 하고 tick 직후에 읽으면** 그 창의 최댓값이 정확히 나온다(`transaction` instrument 가 기본 enabled·timed 다).
+   ```bash
+   SEATIP=$(docker inspect seat-service --format '{{range .NetworkSettings.Networks}}{{.IPAddress}}{{end}}')
+   # 시딩 직후 = tick 직전에 리셋
+   echo "TRUNCATE performance_schema.events_transactions_summary_by_thread_by_event_name;" | SQL
+   # ... tick 이 만료 좌석을 소진할 때까지 대기 ...
+   echo "SELECT SUM(s.COUNT_STAR) trx_count,
+                ROUND(MAX(s.MAX_TIMER_WAIT)/1e9,1) max_ms,
+                ROUND(SUM(s.SUM_TIMER_WAIT)/SUM(s.COUNT_STAR)/1e9,1) avg_ms
+           FROM performance_schema.events_transactions_summary_by_thread_by_event_name s
+           JOIN performance_schema.threads t ON t.THREAD_ID = s.THREAD_ID
+          WHERE t.PROCESSLIST_HOST = '$SEATIP' AND s.COUNT_STAR > 0;" | SQL
+   ```
+   **`PROCESSLIST_HOST` 로 seat-service 커넥션만 거른다.** 전역 요약을 쓰면 다른 서비스의 릴레이·인박스 트랜잭션이 섞인다. 컨테이너를 재생성하면 IP 가 바뀌므로 회차마다 다시 뜬다.
+
+   **(b) 락 점유 규모·락 대기 — `trx-sampler.sh`** (보조). 1초 간격으로 `innodb_trx` 의 `trx_rows_locked`·`trx_state='LOCK WAIT'`·`data_lock_waits` 를 남긴다. 지속시간은 (a)를 쓰고, 이 CSV 는 "몇 행을 잠갔나 / 대기가 있었나"에만 쓴다.
    ```bash
    DURATION=660 ./trx-sampler.sh > trx-samples-b1.csv   # load-test/bench/
+   ```
+
+   **(c) HikariCP 는 1초로 따로 떠야 한다.** Prometheus 스크랩이 15초라 2~6초짜리 tick 을 통째로 놓친다. actuator 를 직접 1초로 긁는다.
+   ```bash
+   while :; do
+     printf '%s,' "$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+     docker exec seat-service sh -c \
+       'curl -s localhost:8090/actuator/prometheus | grep -E "^hikaricp_connections_(pending|active|idle)" | awk "{print \$2}" | paste -sd,'
+     sleep 1
+   done > hikari-a1.csv
    ```
 3. **관측** — `SeatStatusScheduler`는 `fixedDelay=60000`이라 시딩 후 최대 1분 안에 첫 tick이 돈다. A1/A2는 5분, B1은 10분 이상 유지한다.
 4. **소진 확인** — 적체가 0이고 릴레이가 비었을 때가 측정 창 종점이다(§10.2 규약). UTC로 기록한다.
    ```bash
-   echo "SELECT COUNT(*) FROM seat WHERE seat_status='HOLD' AND hold_expired_at <= NOW();" | SQL
+   echo "SELECT COUNT(*) FROM seat WHERE seat_status='HOLD' AND hold_expired_at <= UTC_TIMESTAMP();" | SQL
    echo "SELECT status, COUNT(*) FROM outbox WHERE event_type='SeatHoldExpiredEvent' GROUP BY status;" | SQL
    ```
+   `NOW()`가 아니라 `UTC_TIMESTAMP()`다 — 아래 §11.7의 시계 항목을 먼저 읽을 것.
 5. **A2만** — override 적용/원복(§11.2). 적용 후 seat-service 로그에서 `chunkSize=2000 x maxChunks=1` 경고를 확인한 뒤 측정한다.
    ```bash
    IMAGE_TAG=$TAG docker compose -f docker-compose.prod.yml -f seat-release-singletrx.override.yml up -d seat-service
@@ -576,7 +610,9 @@ HikariCP·트랜잭션 패널은 Grafana System 대시보드(`monitoring/grafana
 
 ### 11.7 주의
 
-- **샘플러 값은 최장 지속시간의 하한이다.** 앱에 트랜잭션 지속시간 계측이 없어 `information_schema.innodb_trx`를 1초 간격으로 뜬다. 청크 트랜잭션(25건)은 수십 ms급이라 샘플 사이에 끝나면 기록되지 않는다. 단일 트랜잭션 arm은 초 단위라 안정적으로 잡힌다. **리포트에 이 한계를 반드시 명시한다.**
+- **⚠️ 앱은 UTC, MySQL 세션은 KST다 — 만료 시딩에 `NOW()`를 쓰면 조용히 헛돈다.** 배포본 MySQL 컨테이너는 `system_time_zone=KST`라 세션 `NOW()`가 앱 컨테이너 시계보다 **9시간 앞선다**. `hold_expired_at`은 앱의 `LocalDateTime.now()`와 비교되므로(`findExpiredHoldSeats`), `NOW()`로 시딩하면 좌석이 "9시간 뒤 만료"로 저장되어 **스케줄러가 매 tick 정상 동작하면서도 0건을 처리한다.** 에러도 경고도 남지 않고 로그에는 `Fallback 스케줄러 동작` 만 반복 찍힌다 — 첫 실측에서 실제로 3 tick을 그렇게 날렸다. `seed_expired_holds.sql`은 `@app_now = UTC_TIMESTAMP()`를 잡아 전 구간에 쓰고, 검증 쿼리가 `db_now`/`app_now_used`를 함께 출력한다. **첫 실행 때 `docker exec seat-service date`와 `app_now_used`가 같은지 눈으로 확인한다.** (§8.4의 `verify-loss.sql` 타임존 주의와 같은 뿌리다.)
+- **`innodb_trx` 1초 샘플링으로는 청크 트랜잭션 지속시간을 잴 수 없다.** 청크 25건은 실측 수십 ms라 샘플 사이에 끝난다. 지속시간은 §11.5(a)의 `performance_schema` 로 재고, 샘플러는 락 점유 규모·대기 관측용으로만 읽는다. 샘플러 CSV 에 78초짜리 값이 보이면 시딩 자신의 대량 UPDATE 다 — 시딩 구간을 타임스탬프로 잘라내고 본다.
+- **커넥션 풀 압박(`hikaricp_connections_pending`)은 이 경로에서 구조적으로 0이다.** 만료 fallback 은 스케줄러 스레드 **하나**가 도는 단일 스레드 경로라 커넥션을 한 개만 쓴다(실측: 두 arm 모두 `pending=0`, `active` 피크 1, `idle` 9). 풀 크기가 10이므로 단일 트랜잭션이 5초를 물고 있어도 대기가 생기지 않는다. **"청크 분할로 커넥션 풀 고갈을 회피한다"는 서술은 이 규모·이 경로에서는 실측으로 뒷받침되지 않는다** — 풀 압박을 보려면 만료 처리와 동시에 다른 요청이 커넥션을 다투게 만들어야 하고, 그건 이 시나리오 밖이다. 청크 분할의 실측 이득은 **락 보유 시간**이다.
 - **`confirmSoldById` 블로킹은 직접 측정할 수 없다.** 결제 확정 이벤트를 대량 생성할 수단이 없다(§9.1이 같은 이유로 `ticket-group`을 보조 증적으로 돌린 전례). 락 점유는 샘플러의 `max_secs_running`(= 락 보유 상한)과 `lock_wait_trx`/`data_lock_waits` 관측 건수로 대신 기록하고, `application.yml` 주석이 근거로 든 경합은 구조적 논거 + 지속시간 수치로 서술한다. **추정을 수치로 위장하지 않는다.**
 - 단일 EC2에 앱 9개 + Kafka·MySQL·Redis·관측 스택이 동거하므로 절대 수치에는 포화가 섞인다(§10.5 단서와 동일).
 - 코호트 정리는 `cleanup_load.sql`이 `LT-%` 패턴으로 함께 처리한다(코호트 `booking_number` 프리픽스가 `LT-X`다).
