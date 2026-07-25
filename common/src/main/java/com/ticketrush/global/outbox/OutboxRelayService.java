@@ -8,6 +8,8 @@ import jakarta.annotation.PostConstruct;
 import java.time.Instant;
 import java.time.LocalDateTime;
 import java.time.ZoneId;
+import java.util.ArrayList;
+import java.util.Comparator;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
@@ -15,7 +17,6 @@ import java.util.concurrent.atomic.AtomicLong;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnExpression;
-import org.springframework.data.domain.PageRequest;
 import org.springframework.kafka.core.KafkaTemplate;
 import org.springframework.kafka.support.KafkaHeaders;
 import org.springframework.messaging.Message;
@@ -61,8 +62,8 @@ public class OutboxRelayService {
    * 발행을 띄운 행의 id → 띄운 시각(epoch millis).
    *
    * <p>없으면 같은 행이 반복 발행된다. 조회는 PENDING/FAILED를 보는데 SENT 전이는 프로듀서 콜백에서만 일어나므로, 콜백 커밋이 다음 폴링보다 늦으면
-   * {@code findBy...OrderByIdAsc}가 같은 행을 다시 집는다. #344 측정에서 outbox 1,324행에 발행 4,090건(3.09배)이 나왔고 그
-   * 중복은 전부 컨슈머 Inbox가 걸러내느라 단일 컨슈머 스레드 처리량의 68%를 썼다.
+   * {@link OutboxRepository#findOldestRelayTargets}가 같은 행을 다시 집는다. #344 측정에서 outbox 1,324행에 발행
+   * 4,090건(3.09배)이 나왔고 그 중복은 전부 컨슈머 Inbox가 걸러내느라 단일 컨슈머 스레드 처리량의 68%를 썼다.
    *
    * <p><b>시각을 함께 들고 폴링마다 낡은 항목을 걷어내는 이유</b>는 이 표시가 새면 조회 윈도(id 오름차순 {@code LIMIT batchSize})의 슬롯을
    * 영구 점유하기 때문이다. 슬롯이 batchSize만큼 잠기면 릴레이가 완전히 멈추고 재시작 외에 복구 수단이 없다. {@code catch}가 {@code Error}를
@@ -74,10 +75,17 @@ public class OutboxRelayService {
    */
   private final Map<Long, Long> inFlight = new ConcurrentHashMap<>();
 
-  /** 이 서비스가 소유한 aggregateTypes의 적체(PENDING/FAILED) 건수를 노출하는 Gauge를 등록한다(#335). */
+  /**
+   * 이 서비스가 소유한 aggregateTypes의 적체(PENDING/FAILED) 건수 Gauge(#335)와, 그중 콜백을 기다리는 중인 건수 Gauge(#483)를
+   * 등록한다.
+   *
+   * <p>backlog는 in-flight 행도 PENDING으로 세므로 단독으로는 "콜백 대기(정상)"와 "릴레이 정지(장애)"를 구분하지 못한다. 두 곡선을 겹쳐 봐야
+   * 갈린다 — backlog가 높은데 in-flight가 0이면 릴레이가 멈춘 것이고, backlog≈in-flight면 발행은 나갔고 콜백만 늦는 것이다.
+   */
   @PostConstruct
-  public void registerBacklogGauge() {
+  public void registerGauges() {
     Gauge.builder(MetricNames.OUTBOX_BACKLOG, backlog, AtomicLong::get).register(meterRegistry);
+    Gauge.builder(MetricNames.OUTBOX_IN_FLIGHT, inFlight, Map::size).register(meterRegistry);
   }
 
   public void relayBatch() {
@@ -95,9 +103,7 @@ public class OutboxRelayService {
       return;
     }
 
-    List<OutboxEntity> rows =
-        outboxRepository.findByAggregateTypeInAndStatusInOrderByIdAsc(
-            aggregateTypes, RELAY_TARGET_STATUSES, PageRequest.of(0, batchSize));
+    List<OutboxEntity> rows = findOldestRelayTargets(aggregateTypes, batchSize);
 
     long now = System.currentTimeMillis();
     // 콜백이 유실된 항목을 걷어낸다. 없으면 조회 윈도의 슬롯이 영구히 잠긴다(inFlight javadoc).
@@ -109,6 +115,25 @@ public class OutboxRelayService {
         dispatch(row);
       }
     }
+  }
+
+  /**
+   * 릴레이 대상 중 가장 오래된(id 오름차순) {@code batchSize}건을 가져온다.
+   *
+   * <p>조회를 (aggregateType, status) 조합별로 쪼개 부르는 이유는 {@link OutboxRepository#findOldestRelayTargets}
+   * javadoc 참고(#483). 각 조합에서 가장 오래된 {@code batchSize}건씩 가져오므로 전체 기준 오래된 {@code batchSize}건은 반드시 이
+   * 합집합 안에 있다 — 오래된 순 발행 semantics는 그대로다. 병합 정렬 대상은 최대 {@code aggregateTypes × 2 × batchSize}건이다.
+   */
+  private List<OutboxEntity> findOldestRelayTargets(List<String> aggregateTypes, int batchSize) {
+    List<OutboxEntity> rows = new ArrayList<>();
+    for (String aggregateType : aggregateTypes) {
+      for (OutboxStatus status : RELAY_TARGET_STATUSES) {
+        rows.addAll(
+            outboxRepository.findOldestRelayTargets(aggregateType, status.name(), batchSize));
+      }
+    }
+    rows.sort(Comparator.comparing(OutboxEntity::getId));
+    return rows.size() > batchSize ? rows.subList(0, batchSize) : rows;
   }
 
   private void dispatch(OutboxEntity row) {

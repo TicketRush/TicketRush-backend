@@ -103,7 +103,8 @@ CREATE TABLE `outbox` (
   PRIMARY KEY (`outbox_id`),
   UNIQUE KEY `uk_outbox_event_id` (`event_id`),
   KEY `idx_outbox_status_created_at` (`status`,`created_at`),
-  KEY `idx_outbox_aggtype_status_published` (`aggregate_type`,`status`,`published_at`)
+  KEY `idx_outbox_aggtype_status_published` (`aggregate_type`,`status`,`published_at`),
+  KEY `idx_outbox_aggtype_status_id` (`aggregate_type`,`status`,`outbox_id`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 /*!40101 SET character_set_client = @saved_cs_client */;
 DROP TABLE IF EXISTS `payment`;

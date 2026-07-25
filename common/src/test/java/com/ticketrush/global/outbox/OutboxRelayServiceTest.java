@@ -2,6 +2,7 @@ package com.ticketrush.global.outbox;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.ArgumentMatchers.argThat;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.BDDMockito.given;
@@ -10,7 +11,9 @@ import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 
+import com.ticketrush.global.constants.MetricNames;
 import com.ticketrush.global.event.DomainEventEnvelope;
+import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import java.time.Instant;
 import java.util.List;
 import java.util.Map;
@@ -22,7 +25,6 @@ import org.mockito.ArgumentCaptor;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
-import org.springframework.data.domain.Pageable;
 import org.springframework.kafka.core.KafkaTemplate;
 import org.springframework.kafka.support.KafkaHeaders;
 import org.springframework.kafka.support.SendResult;
@@ -38,6 +40,17 @@ class OutboxRelayServiceTest {
   @Mock private KafkaTemplate<String, DomainEventEnvelope> kafkaTemplate;
   @Mock private OutboxProperties outboxProperties;
   @Mock private OutboxStatusUpdater outboxStatusUpdater;
+
+  /**
+   * 릴레이 조회 스텁. 릴레이는 (aggregateType, status) 조합별 등치 조회로 쪼개 부르므로(#483) 상태별로 따로 스텁한다. {@code IN} 한 방이던
+   * 시절처럼 두 상태에 같은 목록을 물리면 같은 행이 병합 목록에 중복으로 들어가 테스트가 실제 동작과 어긋난다.
+   */
+  private void givenRelayTargets(List<OutboxEntity> pending, List<OutboxEntity> failed) {
+    given(outboxRepository.findOldestRelayTargets(eq("Booking"), eq("PENDING"), anyInt()))
+        .willReturn(pending);
+    given(outboxRepository.findOldestRelayTargets(eq("Booking"), eq("FAILED"), anyInt()))
+        .willReturn(failed);
+  }
 
   private OutboxEntity pendingRow(Long id, String eventId) {
     DomainEventEnvelope envelope =
@@ -61,12 +74,7 @@ class OutboxRelayServiceTest {
     OutboxEntity row = pendingRow(1L, "evt-1");
     given(outboxProperties.getAggregateTypes()).willReturn(List.of("Booking"));
     given(outboxProperties.getBatchSize()).willReturn(100);
-    given(
-            outboxRepository.findByAggregateTypeInAndStatusInOrderByIdAsc(
-                eq(List.of("Booking")),
-                eq(List.of(OutboxStatus.PENDING, OutboxStatus.FAILED)),
-                any(Pageable.class)))
-        .willReturn(List.of(row));
+    givenRelayTargets(List.of(row), List.of());
     given(kafkaTemplate.send(any(Message.class)))
         .willReturn(
             CompletableFuture.completedFuture((SendResult<String, DomainEventEnvelope>) null));
@@ -93,10 +101,7 @@ class OutboxRelayServiceTest {
     OutboxEntity row = pendingRow(2L, "evt-2");
     given(outboxProperties.getAggregateTypes()).willReturn(List.of("Booking"));
     given(outboxProperties.getBatchSize()).willReturn(100);
-    given(
-            outboxRepository.findByAggregateTypeInAndStatusInOrderByIdAsc(
-                any(), any(), any(Pageable.class)))
-        .willReturn(List.of(row));
+    givenRelayTargets(List.of(row), List.of());
     given(kafkaTemplate.send(any(Message.class)))
         .willReturn(CompletableFuture.failedFuture(new RuntimeException("kaboom")));
 
@@ -114,13 +119,10 @@ class OutboxRelayServiceTest {
   void relayBatch_does_not_republish_row_whose_callback_has_not_completed() {
     // given: 콜백이 아직 완료되지 않은 발행 = 조회에는 여전히 PENDING 으로 잡히는 상태
     OutboxEntity row = pendingRow(3L, "evt-3");
-    CompletableFuture<SendResult<String, DomainEventEnvelope>> pending = new CompletableFuture<>();
     given(outboxProperties.getAggregateTypes()).willReturn(List.of("Booking"));
     given(outboxProperties.getBatchSize()).willReturn(100);
-    given(
-            outboxRepository.findByAggregateTypeInAndStatusInOrderByIdAsc(
-                any(), any(), any(Pageable.class)))
-        .willReturn(List.of(row));
+    givenRelayTargets(List.of(row), List.of());
+    CompletableFuture<SendResult<String, DomainEventEnvelope>> pending = new CompletableFuture<>();
     given(kafkaTemplate.send(any(Message.class))).willReturn(pending);
 
     // when: 콜백이 오기 전에 폴링이 세 번 더 돈다 (#344 실측의 3.09배 증폭이 나온 상황)
@@ -149,10 +151,7 @@ class OutboxRelayServiceTest {
     OutboxEntity row = pendingRow(4L, "evt-4");
     given(outboxProperties.getAggregateTypes()).willReturn(List.of("Booking"));
     given(outboxProperties.getBatchSize()).willReturn(100);
-    given(
-            outboxRepository.findByAggregateTypeInAndStatusInOrderByIdAsc(
-                any(), any(), any(Pageable.class)))
-        .willReturn(List.of(row));
+    givenRelayTargets(List.of(row), List.of());
     given(kafkaTemplate.send(any(Message.class)))
         .willReturn(
             CompletableFuture.completedFuture((SendResult<String, DomainEventEnvelope>) null));
@@ -175,10 +174,7 @@ class OutboxRelayServiceTest {
     OutboxEntity healthy = pendingRow(6L, "evt-6");
     given(outboxProperties.getAggregateTypes()).willReturn(List.of("Booking"));
     given(outboxProperties.getBatchSize()).willReturn(100);
-    given(
-            outboxRepository.findByAggregateTypeInAndStatusInOrderByIdAsc(
-                any(), any(), any(Pageable.class)))
-        .willReturn(List.of(poison, healthy));
+    givenRelayTargets(List.of(poison, healthy), List.of());
     given(kafkaTemplate.send(any(Message.class)))
         .willThrow(new IllegalArgumentException("serialization boom"))
         .willReturn(
@@ -202,10 +198,7 @@ class OutboxRelayServiceTest {
     OutboxEntity row = pendingRow(7L, "evt-7");
     given(outboxProperties.getAggregateTypes()).willReturn(List.of("Booking"));
     given(outboxProperties.getBatchSize()).willReturn(100);
-    given(
-            outboxRepository.findByAggregateTypeInAndStatusInOrderByIdAsc(
-                any(), any(), any(Pageable.class)))
-        .willReturn(List.of(row));
+    givenRelayTargets(List.of(row), List.of());
     given(kafkaTemplate.send(any(Message.class))).willReturn(new CompletableFuture<>());
 
     outboxRelayService.relayBatch();
@@ -231,8 +224,7 @@ class OutboxRelayServiceTest {
     outboxRelayService.relayBatch();
 
     // then
-    verify(outboxRepository, never())
-        .findByAggregateTypeInAndStatusInOrderByIdAsc(any(), any(), any());
+    verify(outboxRepository, never()).findOldestRelayTargets(any(), any(), anyInt());
     verify(kafkaTemplate, never()).send(any(Message.class));
   }
 
@@ -247,8 +239,56 @@ class OutboxRelayServiceTest {
     outboxRelayService.relayBatch();
 
     // then
-    verify(outboxRepository, never())
-        .findByAggregateTypeInAndStatusInOrderByIdAsc(any(), any(), any());
+    verify(outboxRepository, never()).findOldestRelayTargets(any(), any(), anyInt());
     verify(kafkaTemplate, never()).send(any(Message.class));
+  }
+
+  @Test
+  @DisplayName("상태별로 쪼개 조회해도 두 상태를 합쳐 오래된 순으로 batchSize만큼만 발행한다")
+  @SuppressWarnings("unchecked")
+  void relayBatch_merges_per_status_results_in_id_order() {
+    // given: 조합별 등치 조회로 쪼갠 뒤에도 '전체 기준 오래된 순'이 유지돼야 한다(#483).
+    given(outboxProperties.getAggregateTypes()).willReturn(List.of("Booking"));
+    given(outboxProperties.getBatchSize()).willReturn(3);
+    givenRelayTargets(
+        List.of(pendingRow(3L, "evt-3"), pendingRow(5L, "evt-5")),
+        List.of(pendingRow(1L, "evt-1"), pendingRow(4L, "evt-4")));
+    given(kafkaTemplate.send(any(Message.class)))
+        .willReturn(
+            CompletableFuture.completedFuture((SendResult<String, DomainEventEnvelope>) null));
+
+    // when
+    outboxRelayService.relayBatch();
+
+    // then: 병합 정렬 결과 1,3,4,5 중 앞의 3건만 나가고 5번은 다음 폴링으로 밀린다
+    ArgumentCaptor<Message<DomainEventEnvelope>> captor = ArgumentCaptor.forClass(Message.class);
+    verify(kafkaTemplate, times(3)).send(captor.capture());
+    assertThat(captor.getAllValues())
+        .extracting(message -> message.getPayload().eventId())
+        .containsExactly("evt-1", "evt-3", "evt-4");
+  }
+
+  @Test
+  @DisplayName("in-flight 게이지가 콜백 대기 중인 건수를 노출한다")
+  @SuppressWarnings("unchecked")
+  void inFlightGauge_exposes_pending_callback_count() {
+    // given: 콜백이 오지 않는 발행 = backlog에는 PENDING으로 잡히지만 실제로는 대기 중인 상태
+    SimpleMeterRegistry registry = new SimpleMeterRegistry();
+    OutboxRelayService service =
+        new OutboxRelayService(
+            outboxRepository, kafkaTemplate, outboxProperties, outboxStatusUpdater, registry);
+    service.registerGauges();
+    given(outboxProperties.getAggregateTypes()).willReturn(List.of("Booking"));
+    given(outboxProperties.getBatchSize()).willReturn(100);
+    givenRelayTargets(List.of(pendingRow(8L, "evt-8"), pendingRow(9L, "evt-9")), List.of());
+    given(kafkaTemplate.send(any(Message.class))).willReturn(new CompletableFuture<>());
+
+    assertThat(registry.get(MetricNames.OUTBOX_IN_FLIGHT).gauge().value()).isZero();
+
+    // when
+    service.relayBatch();
+
+    // then
+    assertThat(registry.get(MetricNames.OUTBOX_IN_FLIGHT).gauge().value()).isEqualTo(2.0);
   }
 }
