@@ -21,6 +21,22 @@ import lombok.NoArgsConstructor;
  * <p>비즈니스 트랜잭션과 동일한 커밋으로 이 row가 저장되고, 폴링 스케줄러가 {@link OutboxStatus#PENDING} 상태의 row를 읽어 Kafka로
  * 발행한다. 폴링 조회가 빠르도록 {@code (status, created_at)} 복합 인덱스를 두고, retention 삭제 조회를 위해 {@code
  * (aggregate_type, status, published_at)} 복합 인덱스를 둔다.
+ *
+ * <p>여기에 릴레이 조회 전용으로 {@code (aggregate_type, status, outbox_id)} 복합 인덱스를 하나 더 둔다(#483). 릴레이는 조합별 등치
+ * 조건으로 걸러 {@code outbox_id} 오름차순으로 읽으므로, 이 인덱스의 정렬 순서가 그대로 ORDER BY가 되어 정렬이 사라진다. 이 인덱스가 없으면 옵티마이저가
+ * PK를 순회하며 retention이 남긴 SENT row까지 훑는다.
+ *
+ * <p><b>가동 중인 DB 수동 DDL(#483).</b> init 스냅샷은 빈 DB 최초 기동에만 실행되고 prod는 {@code ddl-auto: validate}라
+ * 인덱스를 만들어주지 않으므로(deploy/mysql/README.md), 가동 중인 DB에는 아래를 수동으로 적용해야 한다. 적용 전까지 릴레이 조회는 인덱스 힌트가 무시된
+ * 계획(기존 인덱스 + filesort)으로 돌아간다 — 느려질 뿐 실패하지는 않으므로 배포 순서에 강제성은 없다({@link
+ * OutboxRepository#findOldestRelayTargets}가 {@code FORCE INDEX} 대신 옵티마이저 힌트를 쓰는 이유).
+ *
+ * <pre>{@code
+ * -- 0) 사전 확인: 이미 있으면 아래 ALTER를 건너뛴다.
+ * SHOW INDEX FROM outbox WHERE Key_name = 'idx_outbox_aggtype_status_id';
+ *
+ * ALTER TABLE outbox ADD INDEX idx_outbox_aggtype_status_id (aggregate_type, status, outbox_id);
+ * }</pre>
  */
 @Entity
 @Table(
@@ -30,6 +46,9 @@ import lombok.NoArgsConstructor;
       @Index(
           name = "idx_outbox_aggtype_status_published",
           columnList = "aggregate_type, status, published_at"),
+      @Index(
+          name = "idx_outbox_aggtype_status_id",
+          columnList = "aggregate_type, status, outbox_id"),
       @Index(name = "uk_outbox_event_id", columnList = "event_id", unique = true)
     })
 @Getter

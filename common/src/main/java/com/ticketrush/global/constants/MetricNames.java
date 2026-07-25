@@ -38,6 +38,9 @@ public class MetricNames {
   public static final String KAFKA_DLT = "ticketrush.kafka.dlt";
   public static final String OUTBOX_RELAY = "ticketrush.outbox.relay";
   public static final String OUTBOX_BACKLOG = "ticketrush.outbox.backlog"; // Gauge
+  // 발행을 띄우고 콜백을 기다리는 중인 건수(#483). backlog가 in-flight 행도 세므로 둘을 겹쳐 봐야
+  // "콜백 대기(정상)"와 "릴레이 정지(장애)"가 갈린다.
+  public static final String OUTBOX_IN_FLIGHT = "ticketrush.outbox.in_flight"; // Gauge
 
   // ===== Tag keys =====
   public static final String TAG_RESULT = "result";

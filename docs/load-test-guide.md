@@ -422,6 +422,7 @@ echo "SELECT COUNT(*) FROM seat WHERE seat_id=$SEAT AND seat_status='HOLD';" | S
 | 지표 | 쿼리 |
 |------|------|
 | **릴레이 적체** (유입 대비 발행 지연) | `ticketrush_outbox_backlog` |
+| **릴레이 in-flight** (콜백 대기 건수, #483) | `ticketrush_outbox_in_flight` |
 | **릴레이 발행률** | `sum(rate(ticketrush_outbox_relay_total{result="success"}[1m]))` |
 | **컨슈머 랙** (#466 신규) | `max by (client_id, topic) (kafka_consumer_fetch_manager_records_lag{job="ticketrush-services", topic="booking-created-topic"})` |
 | **컨슈머 소화율** | `sum(rate(ticketrush_kafka_inbox_total{result="processed", consumer_group="seat-group"}[1m]))` |
@@ -429,6 +430,16 @@ echo "SELECT COUNT(*) FROM seat WHERE seat_id=$SEAT AND seat_status='HOLD';" | S
 컨슈머 랙은 Grafana System 대시보드의 **Kafka Consumer Lag** 패널(`monitoring/grafana/dashboards/ticketrush-system.json`)에 이미 있으므로 캡처는 그 패널을 쓴다.
 
 > **어느 축이 조이는지 판별한다.** 릴레이가 5초/100건이라 발행 상한이 ≈20 events/s다(§10.1). `outbox_backlog`가 계속 자라는데 컨슈머 랙이 낮게 유지되면 **1차 제약은 릴레이**이고, 랙이 backlog와 함께 자라면 **컨슈머 병렬도(1)**가 제약이다. 이슈가 세운 가설("병목은 락이 아니라 소비 병렬도")은 이 두 곡선의 대비로 확인/반증한다.
+
+> **backlog만 보고 릴레이 정지를 단정하지 않는다**(#483). in-flight 가드(#445) 도입 후로는 발행을 띄우고 콜백을 기다리는 행도 PENDING으로 남아 backlog에 잡힌다. `outbox_in_flight`를 겹쳐 봐야 갈린다. Grafana System 대시보드의 **Outbox Backlog / In-Flight** 패널이 두 곡선을 같이 그린다.
+>
+> | backlog 높음 + in-flight | 판정 |
+> |---|---|
+> | 0~`batch-size` 사이에서 **출렁인다** | 정상. 발행은 나가고 있고 콜백을 기다리는 중이다 |
+> | **`batch-size`(기본 100)에 붙어 정체** | **슬롯 고갈**. 콜백이 유실돼 조회 윈도가 잠긴 상태다 — 새 행이 한 건도 못 나간다. 180초 스윕(`IN_FLIGHT_TIMEOUT_MS`)이 걷어낼 때까지 진행이 없고, 반복되면 프로듀서 쪽을 봐야 한다 |
+> | **0에 고정** | 릴레이가 행을 집지 못하고 있다. 조회 실패나 스케줄러 정지를 의심한다 |
+>
+> **두 게이지가 동시에 얼어붙으면 값 자체를 믿지 않는다.** `backlog`는 `relayBatch()` 안에서만 갱신되므로(`backlog.set(...)`), 릴레이 스레드가 죽으면 마지막 값이 그대로 계속 노출된다 — 값이 낮다고 안전한 게 아니라 **관측이 멎은 것**이다. `rate(ticketrush_outbox_relay_total[1m])`가 0인데 두 게이지가 미동도 없으면 릴레이 자체가 돌지 않는다고 본다.
 
 HTTP 사전 차단율(409)은 k6 요약의 `seat_conflict` Rate를 그대로 읽는다(전체 요청이 분모인 비율이다). `seat_accepted`도 같은 분모라 둘을 나누지 않는다 — 201 비율은 `seat_accepted`를 따로 읽는다.
 

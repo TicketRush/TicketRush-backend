@@ -86,6 +86,29 @@ jobs:
           mysql -h 127.0.0.1 -P 3306 -uroot -pci-root-pw -N \
             -e "SELECT COUNT(*) FROM information_schema.tables WHERE table_schema='ticket_rush';"
 
+      - name: 릴레이 조회 스모크 (SQL 실행 + 인덱스 존재)
+        # OutboxRepository.findOldestRelayTargets는 nativeQuery라 부트스트랩 검증을 받지 않고,
+        # H2는 인덱스 힌트를 파싱하지 못해 @DataJpaTest로도 덮을 수 없다. 즉 저장소 어디에서도
+        # 이 SQL이 실행되지 않는다 — 컬럼명 오타가 prod 첫 폴링에서야 드러난다.
+        # 스냅샷이 적재된 실제 MySQL로 두 가지를 확인한다. 쿼리가 바뀌면 여기도 함께 바꿔야 한다.
+        #   1) SQL이 실행되는가 (문법·컬럼명)
+        #   2) 인덱스가 스냅샷에 있는가 — 힌트는 인덱스가 없어도 경고 후 무시되므로(1번이 통과해버린다)
+        #      information_schema로 따로 확인해야 한다. validate가 못 잡는 인덱스 drift가 여기서 걸린다.
+        run: |
+          mysql -h 127.0.0.1 -P 3306 -uroot -pci-root-pw ticket_rush -e "
+            SELECT /*+ INDEX(outbox idx_outbox_aggtype_status_id) */ * FROM outbox
+             WHERE aggregate_type = 'Booking' AND status = 'PENDING'
+             ORDER BY outbox_id ASC LIMIT 100;"
+          found=$(mysql -h 127.0.0.1 -P 3306 -uroot -pci-root-pw -N -e \
+            "SELECT COUNT(DISTINCT index_name) FROM information_schema.statistics
+              WHERE table_schema='ticket_rush' AND table_name='outbox'
+                AND index_name='idx_outbox_aggtype_status_id';")
+          if [ "$found" != "1" ]; then
+            echo "❌ 스냅샷에 idx_outbox_aggtype_status_id가 없습니다. 릴레이 조회가 적체 전체를 읽고 filesort하는 계획으로 되돌아갑니다(#483)."
+            exit 1
+          fi
+          echo "✅ 릴레이 조회가 실행 가능하고 인덱스도 스냅샷에 있습니다."
+
       - name: bootJar 빌드
         run: ./gradlew bootJar
 
