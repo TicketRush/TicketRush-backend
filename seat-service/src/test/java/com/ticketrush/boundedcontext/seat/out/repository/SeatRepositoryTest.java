@@ -420,6 +420,38 @@ class SeatRepositoryTest {
     assertThat(persisted.getBookingNumber()).isEqualTo("BOOK-WINNER");
   }
 
+  @Test
+  @DisplayName("미만료 HOLD와 만료 HOLD를 상호배타적으로 세고, 만료 시각이 기준시와 같으면 만료 쪽으로 센다 (#345)")
+  void countHeldSeats_AndCountExpiredHoldSeats_SplitAtSameBoundary() {
+    // given: countHeldSeats(> now)와 countExpiredHoldSeats(<= now)가 같은 경계에서 갈려야
+    // 두 카운트 합이 전체 HOLD가 되고, 적체 게이지가 스케줄러가 집어가는 집합(findExpiredHoldSeats)과 일치한다.
+    final Seat boundary =
+        seatRepository.save(buildSeat("A1", SeatStatus.HOLD, LocalDateTime.now(), "BOOK-1"));
+    seatRepository.save(
+        buildSeat("A2", SeatStatus.HOLD, LocalDateTime.now().minusMinutes(1), "BOOK-2"));
+    seatRepository.save(
+        buildSeat("A3", SeatStatus.HOLD, LocalDateTime.now().plusMinutes(5), "BOOK-3"));
+    // HOLD가 아닌 좌석은 어느 쪽에도 들어가지 않는다
+    seatRepository.save(
+        buildSeat("A4", SeatStatus.SOLD, LocalDateTime.now().minusMinutes(1), "BOOK-4"));
+    entityManager.flush();
+    entityManager.clear();
+
+    // 기준시는 DB에 저장된 값을 되읽어 쓴다. datetime(6)은 마이크로초라 앱이 만든 나노초 값을 그대로 쓰면
+    // 경계 좌석이 어느 쪽에도(또는 양쪽에) 걸릴 수 있다.
+    LocalDateTime now = seatRepository.findById(boundary.getId()).orElseThrow().getHoldExpiredAt();
+
+    // when
+    long held = seatRepository.countHeldSeats(SeatStatus.HOLD, now);
+    long expiredBacklog = seatRepository.countExpiredHoldSeats(SeatStatus.HOLD, now);
+
+    // then: 경계 좌석은 만료 쪽으로 간다
+    assertThat(held).isEqualTo(1L);
+    assertThat(expiredBacklog).isEqualTo(2L);
+    assertThat(seatRepository.findExpiredHoldSeats(SeatStatus.HOLD, now, PageRequest.of(0, 10)))
+        .hasSize((int) expiredBacklog);
+  }
+
   private Seat buildSeat(
       String seatNumber, SeatStatus status, LocalDateTime holdExpiredAt, String bookingNumber) {
     return Seat.builder()

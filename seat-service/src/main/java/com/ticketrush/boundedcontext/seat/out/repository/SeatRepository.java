@@ -114,4 +114,14 @@ public interface SeatRepository extends JpaRepository<Seat, Long> {
 
   @Query("select count(s) from Seat s where s.seatStatus = :hold and s.holdExpiredAt > :now")
   long countHeldSeats(@Param("hold") SeatStatus hold, @Param("now") LocalDateTime now);
+
+  /**
+   * 만료됐지만 아직 해제되지 않은 HOLD 좌석 수 = 만료 fallback의 처리 적체.
+   *
+   * <p>비교 연산자는 {@link #findExpiredHoldSeats}와 같은 {@code <=}다. 게이지가 세는 집합과 스케줄러가 실제로 집어가는 집합이 어긋나면
+   * 적체 곡선이 해제 진행을 따라가지 않는다. {@link #countHeldSeats}({@code > :now})와는 상호배타라 두 카운트의 합이 전체 HOLD 좌석
+   * 수다.
+   */
+  @Query("select count(s) from Seat s where s.seatStatus = :hold and s.holdExpiredAt <= :now")
+  long countExpiredHoldSeats(@Param("hold") SeatStatus hold, @Param("now") LocalDateTime now);
 }

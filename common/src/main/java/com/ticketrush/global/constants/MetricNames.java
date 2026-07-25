@@ -17,6 +17,9 @@ public class MetricNames {
   public static final String SEAT_HOLD = "ticketrush.seat.hold";
   public static final String SEAT_LOCK_CONTENTION = "ticketrush.seat.lock.contention";
   public static final String SEAT_HELD = "ticketrush.seat.held"; // Gauge (전역 미만료 HOLD 총수)
+  // 만료됐으나 아직 해제되지 않은 HOLD 총수 = 만료 fallback의 처리 적체(#345). SEAT_HELD가 미만료만 세므로
+  // 대량 만료의 해소 진행은 그 게이지에 나타나지 않는다. outbox.backlog의 좌석 버전.
+  public static final String SEAT_HOLD_EXPIRED_BACKLOG = "ticketrush.seat.hold.expired_backlog";
 
   // payment
   public static final String PAYMENT_CONFIRM = "ticketrush.payment.confirm";
