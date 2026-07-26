@@ -165,7 +165,7 @@ ALTER TABLE seat ADD INDEX idx_seat_status_hold_expired_at (seat_status, hold_ex
 ## 8. 한계·주의
 
 - **`seat_hold_expired_backlog` 게이지는 아직 배포되지 않았다.** CD가 `main` push 트리거라 develop 머지로는 배포되지 않는다. B1 적체 곡선은 SQL 폴링(`drain-b1.csv`)으로 기록했고, **Grafana 렌더 그래프는 다음 릴리스 이후 캡처한다.**
-- **Grafana PNG는 3장 첨부, 2장 미완**(§10). 관측 스택은 `127.0.0.1` 바인딩(ADR 0007)이고 이미지 렌더러 플러그인이 설치되어 있지 않아 API로 PNG를 뽑을 수 없다 — SSH 터널로 사람이 캡처해야 한다.
+- **Grafana PNG 5장 첨부, 남은 것은 적체 해소 곡선 1장**(§10). 관측 스택은 `127.0.0.1` 바인딩(ADR 0007)이고 이미지 렌더러 플러그인이 설치되어 있지 않아 API로 PNG를 뽑을 수 없다 — SSH 터널로 사람이 캡처해야 한다. 남은 1장은 게이지 배포가 선행 조건이다.
 - **`seat_held = 0`은 측정 창 기준이다.** 이 리포트의 모든 `seat_held` 수치는 A1·A2 반복 창(05:15~05:30Z)과 B1 창(05:41~05:55Z)을 범위로 산출했다. 더 넓게 잡으면 04:26~04:33Z에 2,000짜리 펄스가 있는데, 그건 측정 회차가 아니라 시계 함정으로 잘못 시딩된 코호트다(§2.1.1). 캡처 그래프를 볼 때 이 구간을 측정 결과로 읽으면 오독이다.
 - **n이 작다**(A1 5, A2 4). 단일 EC2에 앱 9개 + Kafka·MySQL·Redis·관측 스택이 동거하는 구성이라 회차 간 편차가 크다(A1 58.8~379 ms). 배율은 중위값으로 산출했고 원값을 모두 남겼다.
 - `confirmSoldById` 블로킹은 직접 측정 불가(§4).
@@ -189,6 +189,7 @@ ALTER TABLE seat ADD INDEX idx_seat_status_hold_expired_at (seat_status, hold_ex
 | `graph-outbox-backlog-b1.png` | **§6.1** — tick마다 2,000 계단 상승 → 피크 5,200(14:48) → 14:53 선형 소진 (14:41~14:57 KST) |
 | `graph-relay-rate-b1.png` | **§6.1** — 14:45~14:53 내내 정확히 20/s 천장에 눌린 평평한 선 (14:41~14:57 KST) |
 | `graph-hikari-b1.png` | **§5** — `pending` 0에 붙은 직선 / `active` 0↔1 / `idle` 10↔9 (14:41~14:57 KST). **bump가 5개 tick 중 3개만 보인다** — 15초 스크랩이 2~5초짜리 tick을 놓치는 것이고, `hikari-b1.csv`(actuator 1초 폴링)가 그 공백을 메운다 |
+| `graph-hikari-a1-a2.png` | **§5** — A1·A2 반복 구간(14:15~14:31 KST)의 같은 3종. 여기서도 `pending`은 창 전체 0이다. **중간의 시리즈 끊김 두 개는 컨테이너 재생성이다** — `up=0` 구간이 05:22:00~05:22:30Z(오버라이드 적용, 프로세스 기동 05:21:37Z)와 05:29:00~05:29:30Z(원복, 기동 05:28:37Z)로 `process_start_time_seconds`에서 확인된다. 따라서 **14:22 끊김이 A1(청크)과 A2(단일)의 경계**다 — 왼쪽이 A1, 오른쪽이 A2. 개별 bump를 특정 tick에 대응시키지는 않는다(15초 해상도로는 신뢰할 수 없다 — 그 대응은 `hikari-a1.csv`·`hikari-a2.csv`가 1초로 갖고 있다) |
 
 ## 10. Grafana 캡처 — 현황과 남은 것
 
@@ -218,8 +219,10 @@ B: hikaricp_connections_active{instance="seat-service:8090"}
 C: hikaricp_connections_idle{instance="seat-service:8090"}
 ```
 
+| `graph-hikari-a1-a2.png` | 위 세 쿼리 그대로, 시간 범위만 변경 | 14:15 ~ 14:31 |
+
 ### 남은 것
 
-`graph-hikari-a1-a2.png` — 위 세 쿼리 그대로, 시간 범위만 **14:15 ~ 14:31 KST**(A1 3회 + A2 3회 반복 구간)로 바꿔 캡처한다.
+**적체 해소 곡선(`ticketrush_seat_hold_expired_backlog`)뿐이다.** 게이지가 배포된 뒤에 캡처한다 — CD가 `main` push 트리거라 PR #487 머지(develop)로는 배포되지 않았다. 그때까지는 `drain-b1.csv`(5초 간격 SQL 폴링)가 그 자리를 대신한다. 캡처 시 범위는 B1 창 **14:41 ~ 14:57 KST**를 쓰고, 이 리포트 §6의 tick 표와 대조한다.
 
 **적체 해소 곡선 자체(`ticketrush_seat_hold_expired_backlog`)는 게이지가 배포된 뒤에 캡처한다**(CD는 `main` push 트리거다). 그때까지는 `drain-b1.csv`가 그 자리를 대신한다.
