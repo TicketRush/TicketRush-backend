@@ -135,7 +135,11 @@ ALTER TABLE seat ADD INDEX idx_seat_status_hold_expired_at (seat_status, hold_ex
 
 생성 33.3/s 대 발행 20/s다. tick마다 약 800건씩 밀려 5 tick 동안 단조 증가했고, 좌석 적체가 0이 된 05:48:13Z 시점에도 outbox에는 5,186건이 남아 있었다. 10,000건 전량 발행에는 좌석 해제가 끝난 뒤로도 20/s × ≈500초가 더 필요하다.
 
-**정합성 문제는 아니다** — 트랜잭셔널 Outbox의 at-least-once 설계대로 전부 발행되고, booking-service가 10,000건을 모두 EXPIRED로 전이했다(`bk_expired=10000`, `bk_pending=0`). 다만 **"만료 좌석이 AVAILABLE로 돌아온 시점"과 "예매가 EXPIRED로 보이는 시점"이 최대 8분 이상 벌어진다.** 좌석은 이미 재판매 가능한데 예매 목록에는 아직 PENDING으로 보이는 창이다. 릴레이 발행 상한 20/s는 #344가 이미 파이프라인의 1차 제약으로 지목한 값이고, 대량 만료는 그 상한을 정면으로 때리는 경로다.
+**정합성 문제는 아니다** — 트랜잭셔널 Outbox의 at-least-once 설계대로 전부 발행되고, booking-service가 10,000건을 모두 EXPIRED로 전이했다(`bk_expired=10000`, `bk_pending=0`). 다만 **"만료 좌석이 AVAILABLE로 돌아온 시점"과 "예매가 EXPIRED로 보이는 시점"이 최대 8분 이상 벌어진다.** 릴레이 발행 상한 20/s는 #344가 이미 파이프라인의 1차 제약으로 지목한 값이고, 대량 만료는 그 상한을 정면으로 때리는 경로다.
+
+그 지연은 단순한 가시화 지체가 아니다. `PaymentConfirmUseCase:82-85`의 만료 가드가 **이벤트 도착에 의존**하고(`expiredBookingRepository.existsByBookingId`, `BookingExpiredEvent`로 채워진다), 그 이벤트는 릴레이를 **두 홉**(seat→booking, booking→payment) 타야 한다. 창 안에서 결제가 들어오면 가드를 통과해 PG 승인이 실행되고(과금 발생), 이어지는 `SeatConfirmSoldUseCase:28`의 `confirmSoldById`가 이미 AVAILABLE·`booking_number = NULL`인 좌석을 만나 `updated = 0` → `SEAT_NOT_AVAILABLE`(`:45`) → 재시도 → DLT로 간다. **과금은 됐고 `Payment`는 COMPLETED인데 좌석이 확정되지 않는 상태다.** 창 자체는 릴레이 속도와 무관하게 존재하지만(주석이 "best-effort"라 적는 이유다) 릴레이 상한이 그것을 초 단위에서 분 단위로 늘린다.
+
+> **후속: #489** (`[공통]` / `fix`). 발행 처리량을 생성률 이상으로 올리는 것이 그 이슈의 범위다. 가드를 이벤트 의존에서 떼는 근본 해법은 payment-service 담당 경계라 별도로 다룬다.
 
 ## 7. 결론
 
@@ -143,7 +147,7 @@ ALTER TABLE seat ADD INDEX idx_seat_status_hold_expired_at (seat_status, hold_ex
 2. **처리량 대가는 없다** — tick 총 소요가 두 arm에서 겹친다.
 3. **커넥션 풀 고갈 회피는 이 경로의 효과가 아니다** — 단일 스레드 경로라 `pending`이 구조적으로 0이다.
 4. **상한 동작은 설계대로다** — 10,000건이 정확히 5 tick, tick당 2,000건으로 소진됐다(5분 18초).
-5. **관측 공백 두 개를 확정했다** — `seat_held`는 만료 적체를 세지 않는다(PR #487에서 게이지 추가). 만료 이벤트 생성률이 릴레이 상한을 초과해 outbox가 단조 증가한다(별도 이슈 후보).
+5. **관측 공백 두 개를 확정했다** — `seat_held`는 만료 적체를 세지 않는다(PR #487에서 게이지 추가). 만료 이벤트 생성률이 릴레이 상한을 초과해 outbox가 단조 증가하고, 그 지연이 결제 만료 가드를 분 단위로 무력화한다(**#489**).
 
 ## 8. 한계·주의
 
