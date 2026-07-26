@@ -417,6 +417,8 @@ echo "SELECT COUNT(*) FROM seat WHERE seat_id=$SEAT AND seat_status='HOLD';" | S
 | **p99 latency (생성기)** | `k6_http_req_duration_p99` |
 | **p99 latency (앱)** | `histogram_quantile(0.99, sum(rate(http_server_requests_seconds_bucket{uri="/api/v1/booking"}[1m])) by (le))` |
 
+> **"p99 latency (앱)"은 #495 이전 배포본에서 빈 결과를 냈다** — 히스토그램 버킷이 없었기 때문이다(§12.4). #495 이후 이미지에서만 값이 나오고, `slo` 경계(1ms~2s) 기반의 보간값이다.
+
 **처리 축 (릴레이 → Kafka → 컨슈머)**
 
 | 지표 | 쿼리 |
@@ -638,7 +640,7 @@ HikariCP·트랜잭션 패널은 Grafana System 대시보드(`monitoring/grafana
 
 **(b) 클라이언트 관점 왕복 지연은 Prometheus로 잡히지 않는다.** `ticket-service/.../global/config/RestClientConfig.java`가 오토컨피그된 `RestClient.Builder` 빈이 아니라 **생 `RestClient.builder()`**로 만들어 `ObservationRegistry`가 붙지 않는다 → `http_client_requests_seconds`가 아예 없다. 따라서 왕복 비용은 위 (a)의 차분(상한: 네트워크·커넥션 획득·역직렬화 포함)과 §12.4의 booking-service **서버** 메트릭(하한: 순수 처리시간)으로 협공한다. 둘의 차이는 게이트웨이 홉 + 컨테이너 네트워크로 읽고, 단일 EC2 내부 통신이라 작아야 정상이다.
 
-다만 **서버 축에서 얻을 수 있는 것은 평균과 롤링 max뿐이다** — `http_server_requests_seconds`에 히스토그램 버킷이 없어 p95/p99를 서버에서 계산할 수 없다(§12.4 경고). **퍼센타일의 SSOT는 k6 클라이언트 측정이다.**
+**#402 측정 당시** 서버 축에서 얻을 수 있는 것은 평균과 롤링 max뿐이었다 — 히스토그램 버킷이 없어 p95/p99를 서버에서 계산할 수 없었고, **그 회차의 퍼센타일 SSOT는 k6 클라이언트 측정이다.** #495에서 `slo` 버킷을 깔았으므로 **이후 회차에서는 서버 축 퍼센타일로 직접 교차검증한다**(§12.4). 다만 버킷 상한이 2s라 그 이상의 꼬리는 여전히 `_max`로 읽는다.
 
 **(c) "Prometheus 스크랩 1분 간격"은 사실과 다르다.** `monitoring/prometheus.aws.yml`의 `scrape_interval`은 **15s**다. baseline·회복을 각각 5분 이상 유지하라는 요구는 비교 기준선 확보 목적으로 여전히 유효하므로 프로파일은 그대로 둔다.
 
@@ -766,15 +768,42 @@ $SSH "docker exec -i ticketrush-mysql sh -c 'mysql -u root -p\"\$MYSQL_ROOT_PASS
 
 `job` 라벨은 MVC 앱 7개가 전부 `ticketrush-services`로 묶여 있다 — **서비스 구분은 `instance`다.**
 
-> ⚠️ **서버 측 p95/p99는 산출할 수 없다.** `http_server_requests_seconds`가 `_count`/`_sum`/`_max`만
-> 노출한다 — 히스토그램 버킷(`_bucket`)도 퍼센타일도 없다(`management.metrics.distribution.
-> percentiles-histogram` 미설정). 실측 전 Prometheus에서 확인했다:
-> `count(http_server_requests_seconds_bucket{...})` = **0 시계열**.
-> 따라서 `histogram_quantile()` 계열 쿼리는 전부 빈 결과를 낸다. 서버 축은 **평균(`_sum`/`_count`)과
-> 스크랩 창 최댓값(`_max`)** 으로 읽고, **퍼센타일은 k6 클라이언트 측정(`k6_entry_*_p95/p99`)이 SSOT다.**
-> 이 공백은 #402 범위 밖이라 후속 이슈로 분리한다(전 서비스에 영향).
+> ℹ️ **서버 측 p95/p99는 #495부터 산출된다.** MVC 7개 서비스의 base `application.yml`에
+> `management.metrics.distribution.slo.http.server.requests`로 버킷을 깔았다 —
+> `1ms,2ms,5ms,10ms,25ms,50ms,100ms,250ms,500ms,1s,2s` + `+Inf`. `percentiles-histogram`은
+> 켜지 않았다(Micrometer 사전정의 버킷이 깔려 `le` 수를 통제할 수 없다 — 앱 8개가 `mem_limit 384m`
+> Prometheus 하나로 모인다, ADR 0007).
+>
+> 읽을 때 주의할 것 셋:
+> - **`slo` 기반이라 `histogram_quantile()`은 경계 사이 선형보간이다.** 경계가 촘촘한 하단
+>   (1~25ms)에서는 쓸 만하고, **2s를 넘는 지연은 `+Inf`에만 세어져 p99가 2s에서 포화된 것처럼 보인다.**
+>   그 구간의 꼬리는 `_max`로 함께 읽는다.
+> - **#402 이전 회차의 측정분에는 버킷이 없다.** 그 회차들의 퍼센타일 SSOT는 k6 클라이언트
+>   측정(`k6_entry_*_p95/p99`)이고, 서버 축은 평균으로만 읽어야 한다.
+> - **매 회차 시작 전에 버킷 존재를 확인하고 `metadata.txt`에 적는다.** 배포본 이미지가 #495 이전이면
+>   여전히 0 시계열이고, `histogram_quantile()` 쿼리는 조용히 빈 결과를 낸다.
+>   ```promql
+>   count by (instance) (http_server_requests_seconds_bucket)
+>   ```
+> - **gateway(`job="gateway"`)는 아직 켜지 않았다.** Spring Cloud Gateway는 와일드카드 라우트
+>   (`Path=/api/v1/booking/**`)에 `BEST_MATCHING_PATTERN`을 세팅하지 않아 `uri` 라벨이 raw path로
+>   잡힐 수 있고, 그러면 버킷이 경로 수만큼 곱해진다. 판정 쿼리는
+>   `count(count by (uri) (http_server_requests_seconds_count{job="gateway"}))` 이며 #495에서 실측한다.
 
 ```promql
+# 검표 p95 / p99 (서버 관점, #495) — 네트워크·TLS·커넥션 수립이 빠진 순수 처리시간
+histogram_quantile(0.95, sum by (le, uri) (rate(http_server_requests_seconds_bucket{
+  instance="ticket-service:8090", uri=~"/api/v1/entries/.*"}[1m])))
+histogram_quantile(0.99, sum by (le, uri) (rate(http_server_requests_seconds_bucket{
+  instance="ticket-service:8090", uri=~"/api/v1/entries/.*"}[1m])))
+
+# 2s 초과 비율 — p99가 2s에 붙어 보일 때 실제로 꼬리가 있는지 가른다
+# le 라벨 값의 표기(2.0 / 2)는 클라이언트 버전에 달렸다. 첫 회차에 실제 값을 눈으로 확인하고 고정한다.
+1 - (
+  sum(rate(http_server_requests_seconds_bucket{instance="ticket-service:8090", le="2.0"}[1m]))
+  / sum(rate(http_server_requests_seconds_count{instance="ticket-service:8090"}[1m]))
+)
+
 # 검표 평균 지연 (ticket-service 가 본 처리시간, 게이트웨이·네트워크 제외)
 sum by (uri) (rate(http_server_requests_seconds_sum{
   instance="ticket-service:8090", uri=~"/api/v1/entries/.*"}[1m]))
