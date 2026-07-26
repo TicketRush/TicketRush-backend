@@ -16,8 +16,9 @@ export function login(email, password) {
   // setup()에서 1회 호출되므로 여기서 즉시 죽는 편이 측정 시간(=AWS 과금 시간)을 아낀다.
   if (!token) {
     fail(
-      `login failed (status=${res.status}). ` +
-        `LOAD_USER_PASSWORD 를 -e 로 주입했는지, seed_load.sql 로 계정을 시딩했는지 확인.`,
+      `login failed (status=${res.status}, email=${email}). ` +
+        `비밀번호 env(LOAD_USER_PASSWORD / LOAD_ADMIN_PASSWORD)를 -e 로 주입했는지, ` +
+        `해당 계정을 시딩했는지(seed_load.sql / seed_entry.sql) 확인.`,
     );
   }
   return token;

@@ -7,9 +7,12 @@ load-test/
 ├── config/   # env.js(환경변수), options.js(공통 stages·thresholds)
 ├── lib/      # auth.js(로그인 → access token)
 ├── scenarios/# booking-create.js(예매 생성, 인증), seat-layouts.js(좌석 조회, 비인증),
-│           #  seat-contention.js(단일 좌석 경합, 인증 — #344)
+│           #  seat-contention.js(단일 좌석 경합, 인증 — #344),
+│           #  entry-spike.js(입장 검표 스파이크 — #402),
+│           #  entry-duplicate-scan.js(동일 QR 동시 스캔 정합성 — #402)
 ├── seed/     # seed_load.sql(대량 시딩 + 부하테스트 계정), cleanup_load.sql(정리),
-│           #  seed_expired_holds.sql(만료 HOLD 코호트 — #345)
+│           #  seed_expired_holds.sql(만료 HOLD 코호트 — #345),
+│           #  seed_entry.sql(검표 코호트 + ADMIN 계정, 리셋 내장 — #402)
 ├── bench/    # trx-sampler.sh(MySQL 트랜잭션 지속시간·락 점유 샘플러 — #345)
 └── chaos/    # 장애 주입(#346): broker-outage.sh, verify-loss.sql, booking-outbox.override.yml,
             #  inbox-redeliver.sh·verify-inbox.sql(#347),
