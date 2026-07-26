@@ -2,6 +2,7 @@ package com.ticketrush.boundedcontext.booking.in.eventlistener;
 
 import com.ticketrush.boundedcontext.booking.app.usecase.BookingConfirmUseCase;
 import com.ticketrush.boundedcontext.booking.app.usecase.BookingGetBookingNumberUseCase;
+import com.ticketrush.boundedcontext.booking.app.usecase.BookingPublishSeatConfirmFailedUseCase;
 import com.ticketrush.boundedcontext.booking.out.apiclient.SeatRestClient;
 import com.ticketrush.global.event.DomainEventEnvelope;
 import com.ticketrush.global.event.KafkaConsumerErrorPolicy;
@@ -27,6 +28,7 @@ public class PaymentConfirmedEventListener {
 
   private final BookingConfirmUseCase bookingConfirmUseCase;
   private final BookingGetBookingNumberUseCase bookingGetBookingNumberUseCase;
+  private final BookingPublishSeatConfirmFailedUseCase bookingPublishSeatConfirmFailedUseCase;
   private final SeatRestClient seatRestClient;
   private final JsonConverter jsonConverter;
   private final InboxService inboxService;
@@ -81,15 +83,23 @@ public class PaymentConfirmedEventListener {
         seatRestClient.confirmSold(bookingNumber, seatId);
       } catch (HttpClientErrorException e) {
         // 4xx는 재시도해도 결과가 바뀌지 않는 결정적 응답이므로 삼키고 진행(ack)한다.
-        // 단 409(이미 SOLD된 중복)만 정상 상태로 보고, 그 외 4xx(401 토큰 오류·404 등)는 설정/요청 오류일 수 있어 CRITICAL로 가시화한다.
+        // 409는 이제 치명적 실패 전용이다(#489) — 정상 중복(이미 같은 예매로 SOLD)은 seat-service가 200으로
+        // 돌려주므로 여기 오지 않는다. 따라서 응답 본문을 파싱할 필요 없이 상태 코드만으로 갈린다.
+        // 그 외 4xx(401 토큰 오류·404 등)는 설정/요청 오류일 수 있어 마찬가지로 CRITICAL로 가시화한다.
         if (e.getStatusCode().value() == HttpStatus.CONFLICT.value()) {
-          log.warn(
-              "[좌석 SOLD 409] 이미 확정된 좌석(중복 수신). 재시도하지 않는다. "
+          log.error(
+              "[CRITICAL] 좌석 SOLD 확정이 409로 거부됨. 결제·예매는 확정됐으나 좌석이 이 예매의 것이 아닙니다"
+                  + "(만료 해제 또는 타 예매 점유). 보상이 필요합니다. "
                   + "eventId: {}, bookingId: {}, seatId: {}, bookingNumber: {}",
               envelope.eventId(),
               bookingId,
               seatId,
-              bookingNumber);
+              bookingNumber,
+              e);
+
+          // 로그 뒤에 발행한다 — 발행이 실패해도 CRITICAL 한 줄은 반드시 남는다. 발행 실패는 감싸지 않고
+          // 바깥 catch로 보내 #269 분류에 맡긴다(DB 장애=일시→재시도→DLT, BOOKING_NOT_FOUND=영구→ack).
+          bookingPublishSeatConfirmFailedUseCase.execute(bookingId);
         } else {
           log.error(
               "[CRITICAL] 좌석 SOLD 확정이 4xx로 거부됨(설정/요청 오류 의심). 예매는 확정됐으나 좌석 미확정. 확인이 필요합니다. "

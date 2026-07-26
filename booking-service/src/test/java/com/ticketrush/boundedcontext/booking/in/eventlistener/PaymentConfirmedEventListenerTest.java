@@ -12,6 +12,7 @@ import static org.mockito.Mockito.verify;
 
 import com.ticketrush.boundedcontext.booking.app.usecase.BookingConfirmUseCase;
 import com.ticketrush.boundedcontext.booking.app.usecase.BookingGetBookingNumberUseCase;
+import com.ticketrush.boundedcontext.booking.app.usecase.BookingPublishSeatConfirmFailedUseCase;
 import com.ticketrush.boundedcontext.booking.out.apiclient.SeatRestClient;
 import com.ticketrush.global.event.DomainEventEnvelope;
 import com.ticketrush.global.event.KafkaConsumerGroup;
@@ -44,6 +45,8 @@ class PaymentConfirmedEventListenerTest {
   @Mock private BookingConfirmUseCase bookingConfirmUseCase;
 
   @Mock private BookingGetBookingNumberUseCase bookingGetBookingNumberUseCase;
+
+  @Mock private BookingPublishSeatConfirmFailedUseCase bookingPublishSeatConfirmFailedUseCase;
 
   @Mock private SeatRestClient seatRestClient;
 
@@ -154,9 +157,9 @@ class PaymentConfirmedEventListenerTest {
   }
 
   @Test
-  @DisplayName("좌석 SOLD 확정이 4xx(예: 409 중복)로 실패하면 재시도하지 않고 오프셋을 커밋한다")
-  void handlePaymentConfirmedAcksWhenSoldReturns4xx() {
-    // given: 이미 SOLD된 좌석에 대한 409 등 4xx는 결정적 응답이라 재시도해도 결과가 같다
+  @DisplayName("좌석 SOLD 확정이 409로 실패하면 CRITICAL 로그 후 보상 신호를 발행하고 오프셋을 커밋한다")
+  void handlePaymentConfirmedPublishesSignalWhenSoldReturns409() {
+    // given: 409는 이제 "좌석이 이 예매의 것이 아님"만 뜻한다(#489). 정상 중복은 seat가 200으로 답한다.
     final DomainEventEnvelope envelope = envelope();
     given(jsonConverter.deserialize(PAYLOAD, PaymentConfirmedEvent.class)).willReturn(event());
     givenInboxProcessesFirst();
@@ -165,19 +168,20 @@ class PaymentConfirmedEventListenerTest {
         .given(seatRestClient)
         .confirmSold(BOOKING_NUMBER, SEAT_ID);
 
-    // when & then: 4xx는 삼키고 예매 확정을 유지하며 커밋한다
+    // when & then: 4xx는 결정적이라 삼키고 커밋하되, 보상이 가능하도록 신호를 남긴다
     assertThatCode(() -> listener.handlePaymentConfirmed(envelope, acknowledgment))
         .doesNotThrowAnyException();
 
     // then
     verify(seatRestClient).confirmSold(BOOKING_NUMBER, SEAT_ID);
+    verify(bookingPublishSeatConfirmFailedUseCase).execute(BOOKING_ID);
     verify(acknowledgment).acknowledge();
   }
 
   @Test
-  @DisplayName("좌석 SOLD 확정이 409가 아닌 4xx(예: 404)로 실패해도 결정적 응답이라 재시도하지 않고 오프셋을 커밋한다")
+  @DisplayName("좌석 SOLD 확정이 409가 아닌 4xx(예: 404)면 보상 신호를 발행하지 않고 오프셋을 커밋한다")
   void handlePaymentConfirmedAcksWhenSoldReturnsNon409_4xx() {
-    // given: 404 등 409가 아닌 4xx도 결정적이라 재시도 무의미 → CRITICAL 로그 후 커밋
+    // given: 404 등은 설정/요청 오류 의심 구간이라 CRITICAL로 남기되, 좌석 소유 문제가 아니므로 보상 대상이 아니다
     final DomainEventEnvelope envelope = envelope();
     given(jsonConverter.deserialize(PAYLOAD, PaymentConfirmedEvent.class)).willReturn(event());
     givenInboxProcessesFirst();
@@ -185,6 +189,51 @@ class PaymentConfirmedEventListenerTest {
     willThrow(HttpClientErrorException.create(HttpStatus.NOT_FOUND, "Not Found", null, null, null))
         .given(seatRestClient)
         .confirmSold(BOOKING_NUMBER, SEAT_ID);
+
+    // when & then
+    assertThatCode(() -> listener.handlePaymentConfirmed(envelope, acknowledgment))
+        .doesNotThrowAnyException();
+
+    verify(bookingPublishSeatConfirmFailedUseCase, never()).execute(anyLong());
+    verify(acknowledgment).acknowledge();
+  }
+
+  @Test
+  @DisplayName("409 후 보상 신호 발행이 일시(인프라) 오류로 실패하면 예외를 전파하고 오프셋을 커밋하지 않는다")
+  void handlePaymentConfirmedRethrowsWhenSignalPublishFailsTransiently() {
+    // given: 신호가 유실되면 보상 경로가 통째로 사라지므로, 재시도→DLT로 보존해야 한다
+    final DomainEventEnvelope envelope = envelope();
+    given(jsonConverter.deserialize(PAYLOAD, PaymentConfirmedEvent.class)).willReturn(event());
+    givenInboxProcessesFirst();
+    given(bookingGetBookingNumberUseCase.execute(BOOKING_ID)).willReturn(BOOKING_NUMBER);
+    willThrow(HttpClientErrorException.create(HttpStatus.CONFLICT, "Conflict", null, null, null))
+        .given(seatRestClient)
+        .confirmSold(BOOKING_NUMBER, SEAT_ID);
+    willThrow(new DataIntegrityViolationException("db down"))
+        .given(bookingPublishSeatConfirmFailedUseCase)
+        .execute(BOOKING_ID);
+
+    // when & then
+    assertThatThrownBy(() -> listener.handlePaymentConfirmed(envelope, acknowledgment))
+        .isInstanceOf(DataIntegrityViolationException.class);
+
+    verify(acknowledgment, never()).acknowledge();
+  }
+
+  @Test
+  @DisplayName("409 후 보상 신호 발행이 예매 없음(영구 실패)으로 끝나면 CRITICAL 로그 후 오프셋을 커밋한다")
+  void handlePaymentConfirmedAcksWhenSignalPublishFailsPermanently() {
+    // given: 재시도해도 없는 예매는 생기지 않으므로 재시도 파이프라인에 태우지 않는다
+    final DomainEventEnvelope envelope = envelope();
+    given(jsonConverter.deserialize(PAYLOAD, PaymentConfirmedEvent.class)).willReturn(event());
+    givenInboxProcessesFirst();
+    given(bookingGetBookingNumberUseCase.execute(BOOKING_ID)).willReturn(BOOKING_NUMBER);
+    willThrow(HttpClientErrorException.create(HttpStatus.CONFLICT, "Conflict", null, null, null))
+        .given(seatRestClient)
+        .confirmSold(BOOKING_NUMBER, SEAT_ID);
+    willThrow(new BusinessException(ErrorStatus.BOOKING_NOT_FOUND))
+        .given(bookingPublishSeatConfirmFailedUseCase)
+        .execute(BOOKING_ID);
 
     // when & then
     assertThatCode(() -> listener.handlePaymentConfirmed(envelope, acknowledgment))
