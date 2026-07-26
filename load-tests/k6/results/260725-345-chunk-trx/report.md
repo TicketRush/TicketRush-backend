@@ -188,6 +188,7 @@ ALTER TABLE seat ADD INDEX idx_seat_status_hold_expired_at (seat_status, hold_ex
 | `graph-seat-held-semantics.png` | **§2.1.1** — 같은 좌석 2,000건이 미만료일 때 2,000, 만료 적체일 때 0으로 읽히는 대조 (13:20~14:56 KST) |
 | `graph-outbox-backlog-b1.png` | **§6.1** — tick마다 2,000 계단 상승 → 피크 5,200(14:48) → 14:53 선형 소진 (14:41~14:57 KST) |
 | `graph-relay-rate-b1.png` | **§6.1** — 14:45~14:53 내내 정확히 20/s 천장에 눌린 평평한 선 (14:41~14:57 KST) |
+| `graph-hikari-b1.png` | **§5** — `pending` 0에 붙은 직선 / `active` 0↔1 / `idle` 10↔9 (14:41~14:57 KST). **bump가 5개 tick 중 3개만 보인다** — 15초 스크랩이 2~5초짜리 tick을 놓치는 것이고, `hikari-b1.csv`(actuator 1초 폴링)가 그 공백을 메운다 |
 
 ## 10. Grafana 캡처 — 현황과 남은 것
 
@@ -207,15 +208,18 @@ ssh -i <key>.pem -L 3000:localhost:3000 ubuntu@54.116.243.250
 | `graph-seat-held-semantics.png` | `ticketrush_seat_held{instance="seat-service:8090"}` | 13:20 ~ 14:56 |
 | `graph-outbox-backlog-b1.png` | `ticketrush_outbox_backlog{instance="seat-service:8090"}` | 14:41 ~ 14:57 |
 | `graph-relay-rate-b1.png` | `sum(rate(ticketrush_outbox_relay_total{instance="seat-service:8090",result="success"}[1m]))` | 14:41 ~ 14:57 |
+| `graph-hikari-b1.png` | 아래 세 쿼리를 A·B·C 행에 하나씩 | 14:41 ~ 14:57 |
 
-### 남은 것
-
-`hikaricp_connections_pending` / `active` / `idle` 세 시리즈를 겹쳐 그린 그래프 2장(B1 창 14:41~14:57, A1·A2 창 14:15~14:31). **쿼리 세 개를 한 칸에 넣을 수 없다** — Explore의 `+ Add query`로 A·B·C 행을 만들어 한 행에 하나씩 넣는다. 세 시리즈 모두 15초 스크랩으로 존재하며(B1 창 각 64 샘플) `pending`은 0에 붙은 직선으로 그려진다(§5). PromQL은 줄바꿈 태그를 해석하지 못하므로 표 셀의 `<br>` 같은 서식 문자를 그대로 붙여넣지 않는다.
+**HikariCP 3종은 쿼리 세 개를 한 칸에 넣을 수 없다.** Explore의 `+ Add query`로 A·B·C 행을 만들어 한 행에 하나씩 넣는다(한 칸에 이어 붙이면 PromQL 파싱이 실패해 `No data`가 된다).
 
 ```promql
 A: hikaricp_connections_pending{instance="seat-service:8090"}
 B: hikaricp_connections_active{instance="seat-service:8090"}
 C: hikaricp_connections_idle{instance="seat-service:8090"}
 ```
+
+### 남은 것
+
+`graph-hikari-a1-a2.png` — 위 세 쿼리 그대로, 시간 범위만 **14:15 ~ 14:31 KST**(A1 3회 + A2 3회 반복 구간)로 바꿔 캡처한다.
 
 **적체 해소 곡선 자체(`ticketrush_seat_hold_expired_backlog`)는 게이지가 배포된 뒤에 캡처한다**(CD는 `main` push 트리거다). 그때까지는 `drain-b1.csv`가 그 자리를 대신한다.
