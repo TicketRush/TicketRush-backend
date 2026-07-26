@@ -139,6 +139,19 @@
         { "refId": "A", "expr": "sum(rate(node_disk_read_bytes_total{job=\"node\"}[1m]))", "legendFormat": "read" },
         { "refId": "B", "expr": "sum(rate(node_disk_written_bytes_total{job=\"node\"}[1m]))", "legendFormat": "write" }
       ]
+    },
+    {
+      "id": 11,
+      "title": "Outbox Backlog / In-Flight",
+      "description": "backlog는 in-flight 행도 세므로 둘을 겹쳐 본다. backlog가 높은데 in-flight가 0이면 릴레이 정지, backlog와 in-flight가 붙어 움직이면 발행은 나갔고 콜백만 늦는 것이다(#483).",
+      "type": "timeseries",
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 40 },
+      "fieldConfig": { "defaults": { "unit": "short" }, "overrides": [] },
+      "targets": [
+        { "refId": "A", "expr": "ticketrush_outbox_backlog{job=\"ticketrush-services\", instance=~\"$instance\"}", "legendFormat": "backlog {{instance}}" },
+        { "refId": "B", "expr": "ticketrush_outbox_in_flight{job=\"ticketrush-services\", instance=~\"$instance\"}", "legendFormat": "in-flight {{instance}}" }
+      ]
     }
   ]
 }

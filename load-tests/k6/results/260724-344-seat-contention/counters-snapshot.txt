@@ -1,0 +1,23 @@
+# 측정 창 종료 시점(12:38:22Z) 카운터 총량 스냅샷 — report.md §6.1 수치의 원본
+# 조회: Prometheus instant query @ time=1784896702
+
+## sum(ticketrush_seat_hold_total) by (result)
+   {'result': 'success'} = 3
+   {'result': 'unavailable'} = 1321
+
+## ticketrush_seat_lock_contention_total
+  (시리즈 없음)
+
+## sum(ticketrush_outbox_relay_total) by (instance,result)
+   {'instance': 'seat-service:8090', 'result': 'success'} = 1324
+   {'instance': 'booking-service:8090', 'result': 'success'} = 4090
+
+## sum(ticketrush_kafka_inbox_total) by (consumer_group,result)
+   {'consumer_group': 'seat-group', 'result': 'processed'} = 1324
+   {'consumer_group': 'booking-group', 'result': 'processed'} = 1324
+   {'consumer_group': 'seat-group', 'result': 'duplicate'} = 2763
+   {'consumer_group': 'payment-group', 'result': 'processed'} = 3
+
+## ticketrush_seat_held
+   {'instance': 'seat-service:8090'} = 1
+

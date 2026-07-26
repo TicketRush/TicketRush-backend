@@ -1,0 +1,26 @@
+# #345 측정 전용 — seat-service의 만료 해제를 "단일 트랜잭션" 비교군으로 임시 전환하는 compose override.
+# 프로덕션 반영이 아니다. 측정이 끝나면 반드시 원복한다.
+#
+# 원리: chunkSize x maxChunks가 곧 (트랜잭션 범위) x (tick당 청크 수)다. chunk-size를 코호트 전량으로,
+#   max-chunks를 1로 주면 SeatReleaseExpiredUseCase의 루프가 한 번만 돌아 2,000건이 단일 트랜잭션으로
+#   커밋된다. 벤치용 브랜치나 토글 코드가 필요 없다(application.yml 운영값은 25 x 80).
+#
+# 바인딩 확인: 만료 2,000건에 이 설정이면 fetched == chunkSize이고 processedChunks == maxChunks라
+#   SeatReleaseExpiredUseCase의 상한 도달 경고가 "chunkSize=2000 x maxChunks=1"을 그대로 찍는다.
+#   그 로그가 곧 env가 먹었다는 증거다(actuator/env는 노출 대상이 아니라 쓸 수 없다).
+#
+# ⚠ .env의 IMAGE_TAG가 실행 중 컨테이너보다 뒤처져 있을 수 있다(CD가 배포 시점에만 주입).
+#   up은 의존 서비스까지 재생성하므로 현재 태그를 확인해 반드시 명시한다:
+#   TAG=$(docker inspect gateway-service --format '{{.Config.Image}}' | cut -d: -f2)
+# 적용:  IMAGE_TAG=$TAG docker compose -f docker-compose.prod.yml -f seat-release-singletrx.override.yml up -d seat-service
+# 원복:  IMAGE_TAG=$TAG docker compose -f docker-compose.prod.yml up -d seat-service
+#
+# ⚠ 10,000건 arm에는 쓰지 않는다. seat-service의 mem_limit이 640m이고, 단일 트랜잭션이
+#   ShedLock lockAtMostFor=2m를 넘기면 락이 풀려 중복 실행 창이 열린다.
+services:
+  seat-service:
+    environment:
+      # Spring이 app.seat.release.chunk-size 조회 시 dot/dash를 '_'로 치환해 이 env를 찾는다
+      # (booking-outbox.override.yml의 APP_EVENT_PUBLISHER_TYPE과 같은 규칙).
+      APP_SEAT_RELEASE_CHUNK_SIZE: 2000
+      APP_SEAT_RELEASE_MAX_CHUNKS: 1

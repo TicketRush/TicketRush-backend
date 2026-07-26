@@ -59,6 +59,11 @@ public class KafkaConfig {
   private static final int FETCH_MAX_WAIT_MS = 500;
   private static final int MAX_POLL_INTERVAL_MS = 300_000;
   private static final int DELIVERY_TIMEOUT_MS = 120_000;
+  // send()가 브로커 메타데이터·버퍼 대기로 동기 블로킹되는 최대 시간. 기본 60초는 outbox relay가
+  // @Scheduled 스레드에서 send()를 호출하므로 브로커가 불가할 때 그 스레드를 60초씩 문다. 5초로 잘라
+  // relay가 스레드를 오래 붙잡지 않게 한다. relay 주기(5s)와 정합하며, 짧은 메타데이터 갱신·리더 선출은
+  // 견딘다. 장기 브로커 장애 시에는 어차피 발행이 불가하고, DEAD 전이(max-retries)와 DLT/알림이 받는다.
+  private static final int MAX_BLOCK_MS = 5_000;
   private static final long BACKOFF_INITIAL_INTERVAL_MS = 1_000L;
   private static final long BACKOFF_MAX_INTERVAL_MS = 60_000L;
 
@@ -80,6 +85,7 @@ public class KafkaConfig {
     configProps.put(ProducerConfig.ACKS_CONFIG, ACKS_ALL);
     configProps.put(ProducerConfig.RETRIES_CONFIG, PRODUCER_RETRIES);
     configProps.put(ProducerConfig.DELIVERY_TIMEOUT_MS_CONFIG, DELIVERY_TIMEOUT_MS);
+    configProps.put(ProducerConfig.MAX_BLOCK_MS_CONFIG, MAX_BLOCK_MS);
     configProps.put(ProducerConfig.ENABLE_IDEMPOTENCE_CONFIG, ENABLE_IDEMPOTENCE);
     configProps.put(ProducerConfig.MAX_IN_FLIGHT_REQUESTS_PER_CONNECTION, MAX_IN_FLIGHT_REQUESTS);
     configProps.put(ProducerConfig.LINGER_MS_CONFIG, LINGER_MS);
