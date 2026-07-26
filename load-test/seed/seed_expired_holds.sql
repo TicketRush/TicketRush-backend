@@ -22,7 +22,10 @@ EXECUTE guard_check;
 DEALLOCATE PREPARE guard_check;
 
 -- ---- 규모 파라미터 (여기만 조정) -------------------------------------------
-SET @expired_count = 2000;   -- 만료 코호트 크기. 2000 = tick당 처리 상한(25 x 80) / 10000 = 최소 5 tick
+-- 만료 코호트 크기. 2000 = tick당 처리 상한(25 x 80) / 10000 = 최소 5 tick.
+-- --init-command 로 미리 넣으면 그 값을 쓴다(회차마다 파일을 고치지 않아도 되게):
+--   --init-command="SET @i_confirm_loadtest_db=1, @expired_count=10000"
+SET @expired_count = COALESCE(@expired_count, 2000);
 SET @marker        = 'LOADTEST';
 SET @load_email    = 'loadtest@ticketrush.local';
 -- 코호트 전용 booking_number 프리픽스. 'LT-' 로 시작하므로 cleanup_load.sql 의 'LT-%' 패턴에도 걸린다.
