@@ -17,8 +17,17 @@ PREPARE guard_check FROM @stmt;
 EXECUTE guard_check;
 DEALLOCATE PREPARE guard_check;
 
-SET @marker     = 'LOADTEST';
-SET @load_email = 'loadtest@ticketrush.local';
+SET @marker      = 'LOADTEST';
+SET @load_email  = 'loadtest@ticketrush.local';
+SET @admin_email = 'loadtest-admin@ticketrush.local';
+
+-- ---- #402 검표 코호트 -------------------------------------------------------
+-- 아래 공연 계열 삭제보다 먼저 지운다. ticket 은 booking 을 통해서만 대상을 특정할 수 있고
+-- (ticket 에 공연/마커 컬럼이 없다), 이 코호트의 booking 은 좌석을 공유해 공연 JOIN 만으로는
+-- 범위가 겹친다. ticket -> booking 순서는 앱 정합 역순이기도 하다.
+-- ticket_token_hash·booking_number 둘 다 UNIQUE 인덱스라 프리픽스 LIKE 가 range scan 을 탄다.
+DELETE FROM ticket  WHERE ticket_token_hash LIKE 'LOADTEST-ENTRY-%';
+DELETE FROM booking WHERE booking_number    LIKE 'LT-E%';
 
 DELETE b FROM booking b
 JOIN performance p ON p.performance_id = b.performance_id
@@ -35,8 +44,9 @@ WHERE p.title LIKE CONCAT(@marker, '-%');
 DELETE FROM performance WHERE title LIKE CONCAT(@marker, '-%');
 
 -- 부하테스트 전용 계정 (FK 때문에 user_account 를 먼저 지운다).
+-- 검표용 ADMIN 계정(#402)도 함께 지운다. 남겨두면 인터넷에 열린 배포본에 관리자 계정이 상주한다.
 DELETE ua FROM user_account ua
 JOIN `user` u ON u.id = ua.user_id
-WHERE u.email = @load_email;
+WHERE u.email IN (@load_email, @admin_email);
 
-DELETE FROM `user` WHERE email = @load_email;
+DELETE FROM `user` WHERE email IN (@load_email, @admin_email);
