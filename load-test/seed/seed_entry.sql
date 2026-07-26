@@ -11,7 +11,13 @@
 --
 --   런북: docs/load-test-guide.md §12
 --
---     mysql --init-command="SET @i_confirm_loadtest_db=1, @ticket_count=25000, @admin_pw_hash='<bcrypt>'" ... < seed_entry.sql
+--   ⚠ 변수를 --init-command 로 넘기지 말 것. bcrypt 해시는 '$2a$10$...' 형태라 $2·$10 이 셸에서
+--     위치 매개변수로 확장돼 조용히 잘린 해시가 들어간다(시딩은 성공하고 로그인만 실패한다).
+--     SET 문을 파일 앞에 붙여 stdin 으로 흘려보내면 해시가 데이터로만 지나간다:
+--
+--     printf "SET @i_confirm_loadtest_db=1, @ticket_count=25000, @admin_pw_hash='%s';\n" "$HASH" \
+--       | cat - load-test/seed/seed_entry.sql \
+--       | mysql -u root -p"$MYSQL_ROOT_PASSWORD" ticket_rush
 -- ============================================================================
 
 -- ---- 오실행 가드 -----------------------------------------------------------

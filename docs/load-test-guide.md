@@ -682,14 +682,22 @@ curl -i -X POST https://<aws-gateway>/api/v1/entries/verify \
 ```
 
 **2. 터널 + 시딩.** §7의 SSH 터널(3000·9090)을 먼저 띄운다. ADMIN 해시는 파일에 기본값이 없으므로 직접 만들어 주입한다.
-```bash
-# bcrypt 해시 생성 (평문은 저장소·증적에 남기지 않는다)
-docker run --rm httpd:alpine htpasswd -bnBC 10 "" '<평문>' | tr -d ':\n'
 
-scp -i <key>.pem load-test/seed/seed_entry.sql ubuntu@<EC2_IP>:/tmp/
-$SSH "docker exec -i ticketrush-mysql sh -c 'mysql -u root -p\"\$MYSQL_ROOT_PASSWORD\" \
-  --init-command=\"SET @i_confirm_loadtest_db=1, @ticket_count=25000, @admin_pw_hash=\\\"<해시>\\\"\" \
-  ticket_rush'" < load-test/seed/seed_entry.sql
+```bash
+# bcrypt 해시 생성 (평문은 저장소·증적에 남기지 않는다). 계정은 측정 후 cleanup 으로 지운다.
+PW=$(openssl rand -base64 24)
+HASH=$(docker run --rm httpd:alpine htpasswd -bnBC 10 "" "$PW" | tr -d ':\n')
+```
+
+> ⚠️ **`--init-command` 으로 해시를 넘기지 않는다.** bcrypt 해시는 `$2a$10$...` 형태라 `$2`·`$10` 이
+> 셸에서 위치 매개변수로 확장돼 **조용히 잘린 해시가 들어간다**(로그인만 실패하고 시딩은 성공한다).
+> `$SSH "... 'mysql ...'"` 는 따옴표가 3중이라 이스케이프로 막기도 어렵다.
+> 변수 SET 을 파일 앞에 붙여 **stdin 으로 흘려보낸다** — 해시가 데이터로만 지나가 확장되지 않는다.
+
+```bash
+printf "SET @i_confirm_loadtest_db=1, @ticket_count=25000, @admin_pw_hash='%s';\n" "$HASH" \
+  | cat - load-test/seed/seed_entry.sql \
+  | $SSH "docker exec -i ticketrush-mysql sh -c 'mysql -u root -p\"\$MYSQL_ROOT_PASSWORD\" ticket_rush'"
 ```
 검증 쿼리에서 **`booking_id_min=1000001`, `contiguous=1`, `not_confirmed=0`, `unused=25000`, `owned_by_admin=25000`** 을 확인한다. 하나라도 어긋나면 진행하지 않는다. `booking_id_min`이 다르면 `-e ENTRY_BOOKING_ID_MIN`으로 맞춘다.
 
