@@ -73,7 +73,16 @@ export default function (data) {
     },
   );
 
-  const code = res.status === 200 ? null : res.json('code');
+  // res.json() 은 본문이 없으면 예외를 던진다. 여기서 죽으면 그 VU 의 유일한 iteration 이
+  // 사라져 "N번 중 1번 성공" 의 분모가 조용히 줄어든다 — 정합성 판정 자체가 무의미해진다.
+  let code = null;
+  if (res.status !== 200 && res.body) {
+    try {
+      code = res.json('code');
+    } catch (e) {
+      code = null;
+    }
+  }
   checkinOk.add(res.status === 200);
   alreadyUsed.add(res.status === 409 && code === 'TICKET_409_002');
   unexpected.add(!(res.status === 200 || code === 'TICKET_409_002'));

@@ -114,9 +114,9 @@ export default function (data) {
   });
   qrDuration.add(qr.timings.duration);
 
-  const token = qr.json('result.payload');
+  const token = jsonField(qr, 'result.payload');
   if (!token) {
-    // 여기서 실패하면 시딩이 잘못된 것이다(소유자 불일치 404, 티켓 없음 404 등).
+    // 여기서 실패하면 시딩이 잘못됐거나(소유자 불일치·티켓 없음 404) 앱이 포화된 것이다.
     check(qr, { 'qr issued(200)': (r) => r.status === 200 });
     return;
   }
@@ -153,8 +153,23 @@ function recordCodes(res) {
     bookingDown.add(false);
     return;
   }
-  const code = res.json('code');
+  const code = jsonField(res, 'code');
   alreadyUsed.add(code === 'TICKET_409_002');
   notUsable.add(code === 'TICKET_409_001');
   bookingDown.add(code === 'TICKET_503_001');
+}
+
+// res.json() 은 본문이 없거나 JSON 이 아니면 예외를 던지고, 그러면 iteration 이 통째로 죽는다.
+// 타임아웃·연결 실패는 status=0 / body=null 로 오는데 그건 스파이크 피크에서 실제로 나올 수 있는
+// 상황이다. 하필 포화를 관측해야 할 구간에서 지표가 비뚤어지므로 파싱 실패를 삼킨다.
+// 이렇게 삼켜도 그 요청은 http_req_failed 에 그대로 남아 에러율에서 빠지지 않는다.
+function jsonField(res, path) {
+  if (!res.body) {
+    return null;
+  }
+  try {
+    return res.json(path);
+  } catch (e) {
+    return null;
+  }
 }
