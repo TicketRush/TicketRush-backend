@@ -617,3 +617,176 @@ HikariCP·트랜잭션 패널은 Grafana System 대시보드(`monitoring/grafana
 - 단일 EC2에 앱 9개 + Kafka·MySQL·Redis·관측 스택이 동거하므로 절대 수치에는 포화가 섞인다(§10.5 단서와 동일).
 - 코호트 정리는 `cleanup_load.sql`이 `LT-%` 패턴으로 함께 처리한다(코호트 `booking_number` 프리픽스가 `LT-X`다).
 - `IMAGE_TAG` 명시: §8.4와 동일.
+
+## 12. 입장 검표 스파이크 측정 (#402)
+
+공연 시작 직전 입장 게이트의 burst를 재현해 검표 경로(`POST /api/v1/entries/verify` → `/check-in`)의 처리량·p95/p99·에러율을 재고, **booking-service 동기 왕복이 검표 지연에 얼마나 기여하는지**와 **동일 QR 동시 스캔에서 정확히 1건만 통과하는지**를 확인한다.
+
+시나리오: `load-test/scenarios/entry-spike.js`(스파이크), `entry-duplicate-scan.js`(정합성).
+시드: `load-test/seed/seed_entry.sql`(리셋 내장).
+
+### 12.1 이슈 서사와 실측의 차이 — 먼저 읽을 것
+
+**(a) "verify 단독 vs check-in 포함"으로는 booking 왕복이 분리되지 않는다.** `EntryCheckInUseCase`도 `EntryVerifyUseCase`와 **같은 `verifyAndLoad()`를 거쳐 booking을 호출한다.** 두 경로의 차이는 왕복이 아니라 조건부 UPDATE 트랜잭션이다.
+
+그래서 통제군을 **QR 발급(`GET /api/v1/ticket/bookings/{id}/qr`)**으로 잡았다. 이 경로는 게이트웨이 1홉 + JWT 처리 + ticket 단건 SELECT까지 verify와 동일하고, **booking 호출만 없다**(`TicketQrGetUseCase`는 로컬 데이터만 읽는다 — #364). 같은 iteration에서 연속 측정하므로 부하·호스트 상태도 같다.
+
+```
+Δp95 = entry_verify_duration_p95 − entry_qr_duration_p95   ← booking 왕복 비용(상한)
+      entry_checkin_duration − entry_verify_duration        ← 조건부 UPDATE 비용
+```
+
+**(b) 클라이언트 관점 왕복 지연은 Prometheus로 잡히지 않는다.** `ticket-service/.../global/config/RestClientConfig.java`가 오토컨피그된 `RestClient.Builder` 빈이 아니라 **생 `RestClient.builder()`**로 만들어 `ObservationRegistry`가 붙지 않는다 → `http_client_requests_seconds`가 아예 없다. 따라서 왕복 비용은 위 (a)의 차분(상한: 네트워크·커넥션 획득·역직렬화 포함)과 §12.4의 booking-service **서버** 메트릭(하한: 순수 처리시간)으로 협공한다. 둘의 차이는 게이트웨이 홉 + 컨테이너 네트워크로 읽고, 단일 EC2 내부 통신이라 작아야 정상이다.
+
+**(c) "Prometheus 스크랩 1분 간격"은 사실과 다르다.** `monitoring/prometheus.aws.yml`의 `scrape_interval`은 **15s**다. baseline·회복을 각각 5분 이상 유지하라는 요구는 비교 기준선 확보 목적으로 여전히 유효하므로 프로파일은 그대로 둔다.
+
+**(d) 게이트웨이에 검표 라우트가 없었다.** `/api/v1/entries/**`는 ticket-service 라우트 predicate에 빠져 있어 **외부에서 도달 자체가 불가능**했다(인터넷에 열린 포트는 게이트웨이 8080뿐 — §7.1). `SecurityConfig`가 `hasRole("ADMIN")`을 걸고 `GatewayHeaderFilter`가 게이트웨이 주입 헤더로 인증하는 설계이므로 의도가 아니라 결함이다(#367 계열). #402에서 predicate에 추가했다 — **측정 전에 그 커밋이 배포본에 포함돼 있어야 한다**(§12.3-1의 스모크로 확인).
+
+### 12.2 부하 모델 — 왜 `ramping-arrival-rate`인가
+
+기존 시나리오는 전부 `config/options.js`의 `ramping-vus` 3단 stages를 썼다. 검표만 예외다.
+
+`check-in`은 티켓을 `UNUSED → USED`로 **비가역** 소모한다. VU 수를 통제하면 소요 티켓 수가 응답 지연에 반비례해 변해서 시딩 규모를 미리 정할 수 없다(앱이 느려지면 덜 쓰고, 빨라지면 고갈된다). 도착률을 통제하면 소요량이 `stages`만으로 계산된다. 실제 입장 게이트의 부하도 스캐너 수가 아니라 **관객 도착률**이다.
+
+| 구간 | 도착률 | 지속 | iterations | HTTP req/s |
+|---|---|---|---|---|
+| baseline | 10 /s | **6m** | 3,600 | 30 |
+| 스파이크 램프업 | 10→60 /s | 20s | ~700 | 30→180 |
+| 피크 유지 | 60 /s | 3m | 10,800 | **180** |
+| 램프다운 | 60→10 /s | 20s | ~700 | 180→30 |
+| 회복 유지 | 10 /s | **6m** | 3,600 | 30 |
+| **합계** | | **15m 40s** | **≈19,400** | **≈58,200 req** |
+
+- baseline·회복 6분 = 완료조건("최소 5분") + 램프 경계 오염분 여유 1분. 15s 스크랩 기준 24 포인트.
+- iteration 1회 = 요청 3개(QR 발급 → verify → check-in)이고 그중 2건이 booking 홉을 포함하므로 **실효 부하는 req/s 수치보다 크다.** #344는 `POST /api/v1/booking` 258 RPS에서 호스트 CPU 99.87%였다. 그래서 피크를 의도적으로 낮게 잡았다.
+- **첫 회차는 반드시 스모크로 포화점을 잡고 본 회차 값을 정한다**(§12.3-3). 캘리브레이션 노브는 `ENTRY_PEAK_RATE` 하나다.
+- 필요 티켓 ≈ 19,400 → **25,000 시딩**(여유 29% + 중복 스캔 회차용 tail).
+
+### 12.3 절차
+
+```bash
+SSH="ssh -i <key>.pem ubuntu@<EC2_IP>"
+SQL() { $SSH "docker exec -i ticketrush-mysql sh -c 'mysql -u root -p\"\$MYSQL_ROOT_PASSWORD\" -N ticket_rush'"; }
+```
+
+**1. 재배포 + 라우트 반영 확인.** CD는 `push: main` + `workflow_dispatch`라 브랜치를 그대로 띄우려면 수동 디스패치한다.
+```bash
+gh workflow run cd.yml --ref test/402 && gh run watch
+```
+`actions/checkout@v7`이 디스패치된 ref를 체크아웃하고 `IMAGE_TAG=${{ github.sha }}`로 전 서비스를 굽는다. job에 `environment: production`이 걸려 있으므로 GitHub Environment의 "Deployment branches" 규칙이 main 전용이면 거부된다 — 그때는 규칙에 브랜치를 추가하거나 PR을 main까지 올린 뒤 측정한다.
+
+라우트 스모크 — **404가 아니라 401**이 나와야 한다(라우트 존재 + JWT 필요):
+```bash
+curl -i -X POST https://<aws-gateway>/api/v1/entries/verify \
+  -H 'Content-Type: application/json' -d '{"token":"x"}'
+```
+
+**2. 터널 + 시딩.** §7의 SSH 터널(3000·9090)을 먼저 띄운다. ADMIN 해시는 파일에 기본값이 없으므로 직접 만들어 주입한다.
+```bash
+# bcrypt 해시 생성 (평문은 저장소·증적에 남기지 않는다)
+docker run --rm httpd:alpine htpasswd -bnBC 10 "" '<평문>' | tr -d ':\n'
+
+scp -i <key>.pem load-test/seed/seed_entry.sql ubuntu@<EC2_IP>:/tmp/
+$SSH "docker exec -i ticketrush-mysql sh -c 'mysql -u root -p\"\$MYSQL_ROOT_PASSWORD\" \
+  --init-command=\"SET @i_confirm_loadtest_db=1, @ticket_count=25000, @admin_pw_hash=\\\"<해시>\\\"\" \
+  ticket_rush'" < load-test/seed/seed_entry.sql
+```
+검증 쿼리에서 **`booking_id_min=1000001`, `contiguous=1`, `not_confirmed=0`, `unused=25000`, `owned_by_admin=25000`** 을 확인한다. 하나라도 어긋나면 진행하지 않는다. `booking_id_min`이 다르면 `-e ENTRY_BOOKING_ID_MIN`으로 맞춘다.
+
+> `seed_entry.sql`은 `seed_load.sql`이 만든 LOADTEST 공연을 전제로 하고 **좌석은 건드리지 않는다**(검표 경로에 seat-service가 없다). 그래서 #344/#345 좌석 코호트와 간섭하지 않는 대신, 시드 상태는 '좌석은 AVAILABLE인데 예매는 CONFIRMED'라는 도메인상 불완전한 조합이 된다 — 측정 경로에 영향이 없음을 확인하고 의도적으로 남긴 것이며 리포트에도 적는다.
+
+**3. 스모크 (수치 폐기용).** 포화점과 라벨을 확인하는 회차다.
+```bash
+docker compose run --rm --no-deps \
+  -e K6_PROMETHEUS_RW_SERVER_URL=http://<PROM_HOST>:9090/api/v1/write \
+  k6 run \
+  -e BASE_URL=https://<aws-gateway> \
+  -e LOAD_ADMIN_PASSWORD='<평문>' \
+  -e ENTRY_BASELINE_DURATION=1m -e ENTRY_PEAK_DURATION=30s -e ENTRY_PEAK_RATE=60 \
+  //scripts/scenarios/entry-spike.js
+```
+(`-e` 위치 규칙·`--no-deps`·Git Bash `//scripts` 경로 치환은 §7.2·§10.2와 동일)
+
+확인할 것: `entry_not_usable=0`, `entry_already_used=0`, `entry_ticket_exhausted=0`, `dropped_iterations=0`, 그리고 Prometheus에서 booking-service의 `uri` 라벨 실제 값(§12.4). 피크 CPU를 보고 `ENTRY_PEAK_RATE`를 확정한다.
+
+**4. 본 측정.** 매 회차 앞에 `seed_entry.sql`을 다시 돌린다(리셋이 내장돼 있어 USED가 UNUSED로 되돌아간다). 측정 중 **Grafana 대시보드는 열어두지 않는다**(§7.2).
+
+k6 종료 후 유입 축과 DB를 대조한다 — USED 수가 `entry_checkin_ok`의 ✓ 건수와 같아야 한다.
+```bash
+echo "SELECT ticket_status, COUNT(*) FROM ticket
+       WHERE ticket_token_hash LIKE 'LOADTEST-ENTRY-%' GROUP BY ticket_status;" | SQL
+```
+
+> **이 시나리오의 측정 창 종점은 k6 종료 시각이다.** 검표 경로에는 outbox·컨슈머 같은 비동기 파이프라인이 없어 §10.2의 "PENDING=0 첫 관측" 규약이 적용되지 않는다. `metadata.txt`의 `WINDOW_END_SOURCE`에 그렇게 적는다.
+
+회차는 2~3회 반복하고 회차 간 60초 이상 띄운다.
+
+**5. 동일 QR 동시 다중 스캔 (3라운드).** 대상은 코호트 뒤쪽(스파이크가 도달하지 않는 구간)에서 고른다.
+```bash
+for BID in 1025000 1024999 1024998; do
+  docker compose run --rm --no-deps \
+    -e K6_PROMETHEUS_RW_SERVER_URL=http://<PROM_HOST>:9090/api/v1/write \
+    k6 run -e BASE_URL=https://<aws-gateway> -e LOAD_ADMIN_PASSWORD='<평문>' \
+    -e ENTRY_DUP_BOOKING_ID=$BID -e ENTRY_DUP_VUS=30 \
+    //scripts/scenarios/entry-duplicate-scan.js
+done
+```
+**권위 있는 판정은 k6가 아니라 SQL이다**(§10.2의 oversell 검증과 같은 선). 라운드마다:
+```sql
+-- 반드시 1행, USED, used_at NOT NULL
+SELECT ticket_id, ticket_status, used_at FROM ticket WHERE booking_id = <BID>;
+```
+k6 요약의 `dup_checkin_ok ... ✓ 1 ✗ 29`(절대건수)를 함께 증적에 남긴다.
+
+**6. 증적 + 정리.** `load-tests/k6/results/<YYMMDD>-402-entry-spike/`에 §10.5 구성대로 기록한 뒤:
+```bash
+$SSH "docker exec -i ticketrush-mysql sh -c 'mysql -u root -p\"\$MYSQL_ROOT_PASSWORD\" \
+  --init-command=\"SET @i_confirm_loadtest_db=1\" ticket_rush'" < load-test/seed/cleanup_load.sql
+```
+**ADMIN 계정을 반드시 지운다.** `cleanup_load.sql`이 검표 코호트(ticket → booking 순)와 ADMIN 계정을 함께 처리한다. 이어 EC2를 중지한다(§7.3 온디맨드 전제).
+
+### 12.4 PromQL
+
+`job` 라벨은 MVC 앱 7개가 전부 `ticketrush-services`로 묶여 있다 — **서비스 구분은 `instance`다.**
+
+```promql
+# 검표 지연 (ticket-service 가 본 처리시간, 게이트웨이·네트워크 제외)
+histogram_quantile(0.95, sum(rate(http_server_requests_seconds_bucket{
+  instance="ticket-service:8090", uri=~"/api/v1/entries/.*"}[1m])) by (le, uri))
+
+# booking 내부 조회 지연 (왕복 비용의 하한)
+histogram_quantile(0.95, sum(rate(http_server_requests_seconds_bucket{
+  instance="booking-service:8090", uri="/api/v1/internal/booking/{bookingId}"}[1m])) by (le))
+
+# 내부 조회 호출량 — (verify RPS + check-in RPS) 와 1:1 이어야 한다(정합 검증)
+sum(rate(http_server_requests_seconds_count{
+  instance="booking-service:8090", uri="/api/v1/internal/booking/{bookingId}"}[1m]))
+
+# 왕복 실패 — 재시도·서킷브레이커가 없어 곧바로 사용자 503(TICKET_503_001)이 된다
+sum(rate(http_server_requests_seconds_count{
+  instance="booking-service:8090", uri="/api/v1/internal/booking/{bookingId}",
+  outcome!="SUCCESS"}[1m]))
+
+# 왕복 기여분 곡선 (k6 클라이언트 관점, §12.1-(a))
+k6_entry_verify_duration_p95 - k6_entry_qr_duration_p95
+
+# 엔드포인트별 유입 (tags:{name} 이 라벨로 실린다)
+sum by (name, status) (rate(k6_http_reqs_total[1m]))
+
+# 커넥션 풀 압박 — 메트릭명에 ticketrush_ 접두사가 붙지 않는다(Micrometer 기본)
+hikaricp_connections_pending{instance=~"ticket-service:8090|booking-service:8090"}
+```
+
+> `uri` 라벨이 `/api/v1/internal/booking/{bookingId}` 템플릿으로 정규화되는지 **스모크 회차에서 눈으로 확인하고 metadata에 고정한다.**
+
+### 12.5 주의
+
+- **티켓 인덱싱은 `exec.scenario.iterationInTest`다.** `booking-create.js`의 `__VU * 1000 + __ITER`을 쓰면 안 된다 — arrival-rate는 VU를 풀에서 재사용해 `(VU=2,ITER=0)`과 `(VU=1,ITER=1000)`이 충돌하고, 값이 희소·비단조라 필요 티켓 수를 계산할 수 없다. 인덱스가 겹치면 이미 USED인 티켓을 다시 쳐서 409가 나는데 **그게 '정상 차단'으로 위장되어 측정이 조용히 오염된다.** 단일 k6 인스턴스 전제이며, 이 토폴로지(ADR 0004)는 로컬 컨테이너 1개라 성립한다.
+- **회차 무효 판정 기준.** 요약에서 `entry_not_usable > 0`(시드에 CONFIRMED 아닌 booking 혼입), `entry_already_used > 0`(인덱싱 결함으로 티켓 재사용), `entry_ticket_exhausted > 0`(티켓 고갈) 중 하나라도 걸리면 **그 회차의 수치를 쓰지 않는다.** 티켓 고갈 시 `exec.test.abort()`를 하지 않는 이유는 회복 구간 도중 abort하면 회차 전체를 버려야 하기 때문이다.
+- **에러율 정의.** `http.setResponseCallback(http.expectedStatuses(200, 409))`로 409를 기대 응답에 넣어 `http_req_failed`에 5xx·401·400·404·타임아웃만 남긴다 = "정상경합 제외 에러율"(#348 기준과 동일). 409 두 종류는 상태코드로 못 가르므로 본문 `code`로 나눈다(`ApiResponse.code`는 최상위 String이라 전역 snake_case의 영향을 받지 않는다). 401(만료 QR)·404(티켓 없음)를 기대 응답에서 **뺀 것이 핵심**이다 — 이 시나리오에서 그것들은 전부 시딩/인덱싱 버그의 신호다.
+- **`tags:{name}`은 선택이 아니라 필수다.** QR URL에 `bookingId`가 들어가서 태그를 안 주면 k6가 URL을 그대로 `name` 라벨로 써서 Prometheus에 티켓 수만큼 시계열이 생긴다.
+- **QR은 iteration마다 새로 발급한다.** `ticket.qr.ttl-millis`가 5분인데 본 회차는 15분 40초다. `setup()`에서 미리 뽑으면 5분째부터 전 요청이 401 `TICKET_401_001`로 뒤집혀 스파이크 구간을 통째로 잃는다. 발급을 체인에 두면 TTL이 구조적으로 무관해지고 덤으로 §12.1-(a)의 통제군이 생긴다.
+- **ADMIN 계정 해시는 커밋하지 않는다.** `seed_load.sql`의 MEMBER 해시는 저장소에 있지만, 검표 API는 ADMIN 권한만으로 남의 티켓을 입장 처리할 수 있어 위험도가 다르다. `seed_entry.sql`은 `@admin_pw_hash`가 없으면 가드에서 중단되고, 측정이 끝나면 `cleanup_load.sql`이 계정을 지운다. **측정 후 정리를 건너뛰면 인터넷에 열린 배포본에 관리자 계정이 상주한다.**
+- **booking-service 지연/다운 주입은 이 회차에 하지 않는다.** 이슈의 (선택) 항목이지만 "왕복이 **끊겼을 때** 무슨 일이 나는가"는 다른 질문이고, 답은 코드로 이미 확정적이다 — `BookingRestClient`에 재시도·서킷브레이커가 없고 read-timeout이 10s라 booking이 느려지면 ticket-service 톰캣 스레드가 요청당 최대 10초 묶이고 곧 503 폭풍이 된다. 별도 측정 창(baseline+주입+회복)이 또 필요해 EC2 과금이 배가 되므로 **후속 이슈로 분리**하고, 이번에는 §12.4의 `outcome!="SUCCESS"` 곡선이 정상 부하에서 0인지 확인하는 데까지만 쓴다.
+- 단일 EC2에 앱 9개 + Kafka·MySQL·Redis·관측 스택이 동거하므로 절대 수치에는 포화가 섞인다(§10.5·§11.7 단서와 동일).
+- 시딩·정리 SQL의 오실행 가드(`@i_confirm_loadtest_db=1`)와 `IMAGE_TAG` 명시는 §8.4·§11과 동일하다.
