@@ -23,6 +23,7 @@ import com.ticketrush.global.json.DeserializationException;
 import com.ticketrush.global.json.JsonConverter;
 import com.ticketrush.global.status.ErrorStatus;
 import com.ticketrush.shared.payment.event.PaymentConfirmedEvent;
+import java.nio.charset.StandardCharsets;
 import java.time.Instant;
 import java.time.LocalDateTime;
 import org.junit.jupiter.api.DisplayName;
@@ -32,6 +33,7 @@ import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.dao.DataIntegrityViolationException;
+import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
 import org.springframework.kafka.support.Acknowledgment;
 import org.springframework.web.client.HttpClientErrorException;
@@ -90,6 +92,25 @@ class PaymentConfirmedEventListenerTest {
               invocation.getArgument(2, Runnable.class).run();
               return true;
             });
+  }
+
+  /**
+   * seat-service 가 "그 좌석이 이 예매의 것이 아님"(SEAT_409_003)으로 거부한 응답을 만든다.
+   *
+   * <p>본문이 실려 있어야 보상 경로로 갈린다 — 리스너는 상태 코드가 아니라 code 로 판정한다(#489).
+   */
+  private HttpClientErrorException seatNotOwnedConflict() {
+    return conflictWithBody(
+        "{\"is_success\":false,\"code\":\"" + ErrorStatus.SEAT_CONFIRM_NOT_OWNED.getCode() + "\"}");
+  }
+
+  private HttpClientErrorException conflictWithBody(String body) {
+    return HttpClientErrorException.create(
+        HttpStatus.CONFLICT,
+        "Conflict",
+        HttpHeaders.EMPTY,
+        body.getBytes(StandardCharsets.UTF_8),
+        StandardCharsets.UTF_8);
   }
 
   @Test
@@ -164,9 +185,7 @@ class PaymentConfirmedEventListenerTest {
     given(jsonConverter.deserialize(PAYLOAD, PaymentConfirmedEvent.class)).willReturn(event());
     givenInboxProcessesFirst();
     given(bookingGetBookingNumberUseCase.execute(BOOKING_ID)).willReturn(BOOKING_NUMBER);
-    willThrow(HttpClientErrorException.create(HttpStatus.CONFLICT, "Conflict", null, null, null))
-        .given(seatRestClient)
-        .confirmSold(BOOKING_NUMBER, SEAT_ID);
+    willThrow(seatNotOwnedConflict()).given(seatRestClient).confirmSold(BOOKING_NUMBER, SEAT_ID);
 
     // when & then: 4xx는 결정적이라 삼키고 커밋하되, 보상이 가능하도록 신호를 남긴다
     assertThatCode(() -> listener.handlePaymentConfirmed(envelope, acknowledgment))
@@ -175,6 +194,53 @@ class PaymentConfirmedEventListenerTest {
     // then
     verify(seatRestClient).confirmSold(BOOKING_NUMBER, SEAT_ID);
     verify(bookingPublishSeatConfirmFailedUseCase).execute(BOOKING_ID);
+    verify(acknowledgment).acknowledge();
+  }
+
+  @Test
+  @DisplayName("구버전 seat의 정상 중복 409(SEAT_409_001)에는 보상 신호를 발행하지 않는다")
+  void handlePaymentConfirmedIgnoresLegacyDuplicateConflict() {
+    // given: #489 이전 seat-service 는 정상 중복(이미 같은 예매로 SOLD)에도 SEAT_409_001 을 준다.
+    // 배포 순서가 뒤바뀌거나 seat 만 롤백되면 이 응답이 도착하는데, 그때 보상 신호를 내보내면
+    // 멀쩡한 결제가 환불된다. 상태 코드가 아니라 code 로 갈라야 하는 이유다.
+    final DomainEventEnvelope envelope = envelope();
+    given(jsonConverter.deserialize(PAYLOAD, PaymentConfirmedEvent.class)).willReturn(event());
+    givenInboxProcessesFirst();
+    given(bookingGetBookingNumberUseCase.execute(BOOKING_ID)).willReturn(BOOKING_NUMBER);
+    willThrow(
+            conflictWithBody(
+                "{\"is_success\":false,\"code\":\""
+                    + ErrorStatus.SEAT_NOT_AVAILABLE.getCode()
+                    + "\"}"))
+        .given(seatRestClient)
+        .confirmSold(BOOKING_NUMBER, SEAT_ID);
+
+    // when & then
+    assertThatCode(() -> listener.handlePaymentConfirmed(envelope, acknowledgment))
+        .doesNotThrowAnyException();
+
+    verify(bookingPublishSeatConfirmFailedUseCase, never()).execute(anyLong());
+    verify(acknowledgment).acknowledge();
+  }
+
+  @Test
+  @DisplayName("응답 본문이 없는 409에는 보상 신호를 발행하지 않는다(fail-closed)")
+  void handlePaymentConfirmedIgnoresConflictWithoutBody() {
+    // given: 낙관적 락 충돌(COMMON_409)이나 프록시가 본문을 지운 경우. 근거가 불확실하면 보상하지 않는다 —
+    // 잘못된 환불보다 놓친 알림이 낫다.
+    final DomainEventEnvelope envelope = envelope();
+    given(jsonConverter.deserialize(PAYLOAD, PaymentConfirmedEvent.class)).willReturn(event());
+    givenInboxProcessesFirst();
+    given(bookingGetBookingNumberUseCase.execute(BOOKING_ID)).willReturn(BOOKING_NUMBER);
+    willThrow(HttpClientErrorException.create(HttpStatus.CONFLICT, "Conflict", null, null, null))
+        .given(seatRestClient)
+        .confirmSold(BOOKING_NUMBER, SEAT_ID);
+
+    // when & then
+    assertThatCode(() -> listener.handlePaymentConfirmed(envelope, acknowledgment))
+        .doesNotThrowAnyException();
+
+    verify(bookingPublishSeatConfirmFailedUseCase, never()).execute(anyLong());
     verify(acknowledgment).acknowledge();
   }
 
@@ -206,9 +272,7 @@ class PaymentConfirmedEventListenerTest {
     given(jsonConverter.deserialize(PAYLOAD, PaymentConfirmedEvent.class)).willReturn(event());
     givenInboxProcessesFirst();
     given(bookingGetBookingNumberUseCase.execute(BOOKING_ID)).willReturn(BOOKING_NUMBER);
-    willThrow(HttpClientErrorException.create(HttpStatus.CONFLICT, "Conflict", null, null, null))
-        .given(seatRestClient)
-        .confirmSold(BOOKING_NUMBER, SEAT_ID);
+    willThrow(seatNotOwnedConflict()).given(seatRestClient).confirmSold(BOOKING_NUMBER, SEAT_ID);
     willThrow(new DataIntegrityViolationException("db down"))
         .given(bookingPublishSeatConfirmFailedUseCase)
         .execute(BOOKING_ID);
@@ -228,9 +292,7 @@ class PaymentConfirmedEventListenerTest {
     given(jsonConverter.deserialize(PAYLOAD, PaymentConfirmedEvent.class)).willReturn(event());
     givenInboxProcessesFirst();
     given(bookingGetBookingNumberUseCase.execute(BOOKING_ID)).willReturn(BOOKING_NUMBER);
-    willThrow(HttpClientErrorException.create(HttpStatus.CONFLICT, "Conflict", null, null, null))
-        .given(seatRestClient)
-        .confirmSold(BOOKING_NUMBER, SEAT_ID);
+    willThrow(seatNotOwnedConflict()).given(seatRestClient).confirmSold(BOOKING_NUMBER, SEAT_ID);
     willThrow(new BusinessException(ErrorStatus.BOOKING_NOT_FOUND))
         .given(bookingPublishSeatConfirmFailedUseCase)
         .execute(BOOKING_ID);

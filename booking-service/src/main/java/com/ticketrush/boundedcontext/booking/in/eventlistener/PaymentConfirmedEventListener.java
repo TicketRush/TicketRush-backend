@@ -10,6 +10,7 @@ import com.ticketrush.global.event.KafkaConsumerGroup;
 import com.ticketrush.global.inbox.DuplicateEventException;
 import com.ticketrush.global.inbox.InboxService;
 import com.ticketrush.global.json.JsonConverter;
+import com.ticketrush.global.status.ErrorStatus;
 import com.ticketrush.shared.payment.event.PaymentConfirmedEvent;
 import java.time.LocalDateTime;
 import lombok.RequiredArgsConstructor;
@@ -83,14 +84,15 @@ public class PaymentConfirmedEventListener {
         seatRestClient.confirmSold(bookingNumber, seatId);
       } catch (HttpClientErrorException e) {
         // 4xx는 재시도해도 결과가 바뀌지 않는 결정적 응답이므로 삼키고 진행(ack)한다.
-        // 409는 이제 치명적 실패 전용이다(#489) — 정상 중복(이미 같은 예매로 SOLD)은 seat-service가 200으로
-        // 돌려주므로 여기 오지 않는다. 따라서 응답 본문을 파싱할 필요 없이 상태 코드만으로 갈린다.
-        // 이 단정은 확정 경로에서 409가 SEAT_409_003 하나뿐이라는 데 기댄다. GlobalExceptionHandler가
-        // OptimisticLockingFailureException도 409(COMMON_409)로 바꾸지만, SeatConfirmSoldUseCase는
-        // 벌크 UPDATE + 읽기만 해 @Version 검사가 커밋에서 발화하지 않는다. 그 경로에 더티 체킹 쓰기가
-        // 생기면 일시 오류가 보상 신호로 둔갑하므로, 그때는 응답 본문의 code로 갈라야 한다.
-        // 그 외 4xx(401 토큰 오류·404 등)는 설정/요청 오류일 수 있어 마찬가지로 CRITICAL로 가시화한다.
-        if (e.getStatusCode().value() == HttpStatus.CONFLICT.value()) {
+        // 409 중 보상이 필요한 것은 SEAT_409_003("그 좌석이 이 예매의 것이 아님") 하나뿐이라, 상태 코드가
+        // 아니라 응답 본문의 code로 가른다(#489). 상태 코드만 보면 두 경우에 오판한다.
+        //   - 버전 스큐: #489 이전 seat-service는 정상 중복(이미 같은 예매로 SOLD)에도 409를 준다. 배포
+        //     순서가 뒤바뀌거나 seat만 롤백되면 그 정상 중복이 보상 신호로 둔갑해 멀쩡한 결제가 환불된다.
+        //   - COMMON_409: GlobalExceptionHandler가 OptimisticLockingFailureException을 409로 바꾼다.
+        //     이건 일시 오류라 보상 대상이 아니다.
+        // code를 못 읽으면(본문 없음) 보상하지 않는다 — 잘못된 환불보다 놓친 알림이 낫다.
+        // 그 외 4xx(401 토큰 오류·404 등)는 설정/요청 오류일 수 있어 CRITICAL로 가시화한다.
+        if (isSeatNotOwned(e)) {
           log.error(
               "[CRITICAL] 좌석 SOLD 확정이 409로 거부됨. 결제·예매는 확정됐으나 좌석이 이 예매의 것이 아닙니다"
                   + "(만료 해제 또는 타 예매 점유). 보상이 필요합니다. "
@@ -104,6 +106,15 @@ public class PaymentConfirmedEventListener {
           // 로그 뒤에 발행한다 — 발행이 실패해도 CRITICAL 한 줄은 반드시 남는다. 발행 실패는 감싸지 않고
           // 바깥 catch로 보내 #269 분류에 맡긴다(DB 장애=일시→재시도→DLT, BOOKING_NOT_FOUND=영구→ack).
           bookingPublishSeatConfirmFailedUseCase.execute(bookingId);
+        } else if (e.getStatusCode().value() == HttpStatus.CONFLICT.value()) {
+          log.warn(
+              "[좌석 SOLD 409] 보상 대상이 아닌 상태충돌(구버전 정상 중복·낙관적 락 등). 재시도하지 않는다. "
+                  + "eventId: {}, bookingId: {}, seatId: {}, bookingNumber: {}, body: {}",
+              envelope.eventId(),
+              bookingId,
+              seatId,
+              bookingNumber,
+              e.getResponseBodyAsString());
         } else {
           log.error(
               "[CRITICAL] 좌석 SOLD 확정이 4xx로 거부됨(설정/요청 오류 의심). 예매는 확정됐으나 좌석 미확정. 확인이 필요합니다. "
@@ -156,5 +167,19 @@ public class PaymentConfirmedEventListener {
         throw e;
       }
     }
+  }
+
+  /**
+   * seat-service가 "그 좌석이 이 예매의 것이 아님"({@code SEAT_409_003})으로 거부했는가 (#489).
+   *
+   * <p>응답 본문에서 코드 문자열을 직접 찾는다. {@code getResponseBodyAs(...)}는 RestClient가 주입하는 body converter에 의존해
+   * 예외를 직접 만든 단위 테스트에서 {@code IllegalStateException}으로 터지는데, 여기 필요한 판정은 "그 코드가 왔는가" 하나뿐이라 역직렬화까지 갈
+   * 이유가 없다.
+   *
+   * <p>본문이 없거나 코드가 없으면 {@code false}다 — 호출부는 그것을 "보상 대상 아님"으로 읽는다. 이 신호는 자동 환불로 이어지므로(#492) 근거가
+   * 불확실할 때 발행하지 않는 쪽이 안전하다: 잘못된 환불보다 놓친 알림이 낫다.
+   */
+  private boolean isSeatNotOwned(HttpClientErrorException e) {
+    return e.getResponseBodyAsString().contains(ErrorStatus.SEAT_CONFIRM_NOT_OWNED.getCode());
   }
 }
