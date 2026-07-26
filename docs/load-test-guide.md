@@ -318,7 +318,7 @@ sum(rate(ticketrush_kafka_inbox_total{result="duplicate",consumer_group="seat-gr
 ```
 
 - 좌석 홀드는 HTTP API가 아니다. `SeatController`는 GET만 있고, 홀드 진입점은 `BookingCreatedEventListener`의 Kafka 리스너뿐이다. k6는 `POST /api/v1/booking`으로 **간접 유발만** 할 수 있고, 그 201 응답은 "예매 생성됨"이지 "좌석 선점됨"이 아니다.
-- **릴레이가 유입을 5초 단위로 정형화한다**(#471). booking-service는 이벤트를 즉시 발행하지 않고 outbox 행으로 커밋한 뒤, `OutboxRelayScheduler`가 5초마다 최대 100건씩 꺼내 발행한다. 따라서 k6가 초당 수백 건을 밀어넣어도 Kafka로 나가는 속도는 **≈20 events/s로 상한**이 걸리고, 초과분은 `ticketrush_outbox_backlog`에 쌓인다. 이슈가 세운 "1차 병목은 락이 아니라 소비 병렬도"라는 가설은 이제 **릴레이 배치 주기까지 포함해** 확인해야 한다 — 릴레이가 컨슈머보다 앞에서 조이면 컨슈머 랙은 애초에 크게 자라지 않는다.
+- **릴레이가 유입을 5초 단위로 정형화한다**(#471). booking-service는 이벤트를 즉시 발행하지 않고 outbox 행으로 커밋한 뒤, `OutboxRelayScheduler`가 5초마다 최대 `app.outbox.batch-size`건씩 꺼내 발행한다. 따라서 k6가 초당 수백 건을 밀어넣어도 Kafka로 나가는 속도에 상한이 걸리고, 초과분은 `ticketrush_outbox_backlog`에 쌓인다. **아래 §10.5 수치는 `batch-size: 100` 시절(≈20 events/s)의 것이다** — 현행은 300(≈60 events/s)이므로 재측정 시 상한선을 다시 계산한다(#489, §11.8). 이슈가 세운 "1차 병목은 락이 아니라 소비 병렬도"라는 가설은 이제 **릴레이 배치 주기까지 포함해** 확인해야 한다 — 릴레이가 컨슈머보다 앞에서 조이면 컨슈머 랙은 애초에 크게 자라지 않는다.
 - 그 리스너의 컨슈머 스레드는 **1개**다. `common/.../config/KafkaConfig.java`의 컨테이너 팩토리에 `setConcurrency`가 없고 `spring.kafka.listener.concurrency`도 어디에도 없어 기본값 1이 적용된다(#466이 추가한 것은 Micrometer 리스너뿐이고 동시성은 건드리지 않았다).
 - Redisson `RLock`은 `(clientUUID:threadId)` 기준 **재진입** 락이다. 같은 스레드가 1,000건을 순차 처리하면 `tryLock`은 실패하지 않고 **재진입으로 성공**한다. 카운터는 `tryLock == false` 경로에서만 오르므로(`SeatLockUseCase`) 구조적으로 0이다.
 
@@ -382,7 +382,7 @@ docker compose run --rm --no-deps \
   -e TARGET_SEAT_ID=$SEAT -e VUS=200 -e RAMP=30s -e STEADY=6m \
   /scripts/scenarios/seat-contention.js
 
-# (3) 릴레이 소진 대기 — k6 종료 시점엔 outbox 에 미발행분이 남아 있다(5s/100건 상한).
+# (3) 릴레이 소진 대기 — k6 종료 시점엔 outbox 에 미발행분이 남아 있다(5초/batch-size 상한).
 #     PENDING 이 0 이 된 뒤에 검증해야 "처리가 끝난 상태"의 수치를 본다.
 #     이 시각이 측정 창의 종점이므로 UTC 로 기록한다(§10.5 / metadata 의 WINDOW_END_SOURCE).
 echo "SELECT status, COUNT(*) FROM outbox WHERE event_type='BookingCreatedEvent' GROUP BY status;" | SQL
@@ -431,14 +431,14 @@ echo "SELECT COUNT(*) FROM seat WHERE seat_id=$SEAT AND seat_status='HOLD';" | S
 
 컨슈머 랙은 Grafana System 대시보드의 **Kafka Consumer Lag** 패널(`monitoring/grafana/dashboards/ticketrush-system.json`)에 이미 있으므로 캡처는 그 패널을 쓴다.
 
-> **어느 축이 조이는지 판별한다.** 릴레이가 5초/100건이라 발행 상한이 ≈20 events/s다(§10.1). `outbox_backlog`가 계속 자라는데 컨슈머 랙이 낮게 유지되면 **1차 제약은 릴레이**이고, 랙이 backlog와 함께 자라면 **컨슈머 병렬도(1)**가 제약이다. 이슈가 세운 가설("병목은 락이 아니라 소비 병렬도")은 이 두 곡선의 대비로 확인/반증한다.
+> **어느 축이 조이는지 판별한다.** 릴레이 발행 상한은 `batch-size` / 5초다(§10.1 — 이 회차는 100이라 ≈20/s, 현행 300은 ≈60/s). `outbox_backlog`가 계속 자라는데 컨슈머 랙이 낮게 유지되면 **1차 제약은 릴레이**이고, 랙이 backlog와 함께 자라면 **컨슈머 병렬도(1)**가 제약이다. 이슈가 세운 가설("병목은 락이 아니라 소비 병렬도")은 이 두 곡선의 대비로 확인/반증한다.
 
 > **backlog만 보고 릴레이 정지를 단정하지 않는다**(#483). in-flight 가드(#445) 도입 후로는 발행을 띄우고 콜백을 기다리는 행도 PENDING으로 남아 backlog에 잡힌다. `outbox_in_flight`를 겹쳐 봐야 갈린다. Grafana System 대시보드의 **Outbox Backlog / In-Flight** 패널이 두 곡선을 같이 그린다.
 >
 > | backlog 높음 + in-flight | 판정 |
 > |---|---|
 > | 0~`batch-size` 사이에서 **출렁인다** | 정상. 발행은 나가고 있고 콜백을 기다리는 중이다 |
-> | **`batch-size`(기본 100)에 붙어 정체** | **슬롯 고갈**. 콜백이 유실돼 조회 윈도가 잠긴 상태다 — 새 행이 한 건도 못 나간다. 180초 스윕(`IN_FLIGHT_TIMEOUT_MS`)이 걷어낼 때까지 진행이 없고, 반복되면 프로듀서 쪽을 봐야 한다 |
+> | **`batch-size`(현행 300 — #489 이전 회차는 100)에 붙어 정체** | **슬롯 고갈**. 콜백이 유실돼 조회 윈도가 잠긴 상태다 — 새 행이 한 건도 못 나간다. 180초 스윕(`IN_FLIGHT_TIMEOUT_MS`)이 걷어낼 때까지 진행이 없고, 반복되면 프로듀서 쪽을 봐야 한다 |
 > | **0에 고정** | 릴레이가 행을 집지 못하고 있다. 조회 실패나 스케줄러 정지를 의심한다 |
 >
 > **두 게이지가 동시에 얼어붙으면 값 자체를 믿지 않는다.** `backlog`는 `relayBatch()` 안에서만 갱신되므로(`backlog.set(...)`), 릴레이 스레드가 죽으면 마지막 값이 그대로 계속 노출된다 — 값이 낮다고 안전한 게 아니라 **관측이 멎은 것**이다. `rate(ticketrush_outbox_relay_total[1m])`가 0인데 두 게이지가 미동도 없으면 릴레이 자체가 돌지 않는다고 본다.
@@ -602,8 +602,10 @@ SQL() { $SSH "docker exec -i ticketrush-mysql sh -c 'mysql -u root -p\"\$MYSQL_R
 ```promql
 ticketrush_seat_hold_expired_backlog                 # 적체 해소 곡선 (B1 주 지표, §11.1)
 ticketrush_seat_held                                 # 미만료 HOLD (대조 — 코호트 측정에선 0 유지가 정상)
-hikaricp_connections_pending{application="seat-service"}   # 커넥션 풀 압박 피크
-hikaricp_connections_active{application="seat-service"}
+# 라벨은 application 이 아니라 instance 다(#489에서 확인 — application 라벨은 이 스택에 존재하지 않는다).
+# 잘못 쓰면 Grafana 가 조용히 "No data" 를 낸다.
+hikaricp_connections_pending{instance="seat-service:8090"}   # 커넥션 풀 압박 피크
+hikaricp_connections_active{instance="seat-service:8090"}
 sum(rate(ticketrush_outbox_relay_total{result="success"}[1m]))  # 만료 이벤트 발행 소화
 ticketrush_outbox_backlog / ticketrush_outbox_in_flight         # 겹쳐 읽는다 (§10.3 판별표)
 ```
@@ -619,6 +621,55 @@ HikariCP·트랜잭션 패널은 Grafana System 대시보드(`monitoring/grafana
 - 단일 EC2에 앱 9개 + Kafka·MySQL·Redis·관측 스택이 동거하므로 절대 수치에는 포화가 섞인다(§10.5 단서와 동일).
 - 코호트 정리는 `cleanup_load.sql`이 `LT-%` 패턴으로 함께 처리한다(코호트 `booking_number` 프리픽스가 `LT-X`다).
 - `IMAGE_TAG` 명시: §8.4와 동일.
+- **좌석 확정 409 오분류는 로그와 토픽으로 관측한다(#489).** 대량 만료 창에서 결제가 들어오면 과금 후 좌석 미확정이 발생할 수 있는데, 이건 게이지에 안 잡힌다. 측정 후 booking 로그의 `[CRITICAL] 좌석 SOLD 확정이 409로` 건수와 `seat-confirm-failed-topic` 발행 건수로 그 창이 실제로 열렸는지 사후 확인한다. 만료 코호트만 시딩하는 이 시나리오에서는 결제가 없어 보통 0건이다 — 0이 아니면 다른 트래픽이 섞인 것이다.
+
+### 11.8 재측정 — 릴레이 발행 상한 (#489)
+
+§11.6의 부수 발견(발행 20/s < 생성 33.3/s)을 고쳐 `app.outbox.batch-size`를 100 → 300으로 올렸다. 그 변경이 실제로 적체를 해소하는지 **같은 B1 시나리오로 재측정**한다.
+
+**판정 기준**
+
+| 항목 | 이전 실측 (#345) | 목표 |
+|---|---|---|
+| 릴레이 발행률 피크 | 20.0/s | **≥ 33.3/s** (이론 상한 300/5s = 60/s) |
+| `ticketrush_outbox_backlog` | 5,200까지 단조 증가 | tick마다 해소, **단조 증가 없음** |
+| 좌석 적체 0 시점의 미발행 outbox | 5,186건 | 0 근방 |
+| 좌석 해제 완료 ↔ outbox 소진 간격 | 8분 이상 | 측정해 기록(개선치) |
+
+**A1/A2(청크 vs 단일 트랜잭션)는 반복하지 않는다.** #345에서 답이 나왔고 이번 변경과 무관하다. B1(만료 10,000건) 하나만 돌린다.
+
+**사전 점검** — §11.4를 그대로 밟되 두 가지를 더 본다.
+
+1. `SHOW INDEX FROM outbox`에 `idx_outbox_aggtype_status_id`가 있는지 확인한다. 릴레이 조회는 `INDEX()` 옵티마이저 힌트를 쓰는데, 이 힌트는 인덱스가 없어도 **경고 후 무시**되고 조용히 filesort로 degrade한다(#483). 없으면 먼저 적용하고 metadata에 기록한다.
+   ```sql
+   ALTER TABLE outbox ADD INDEX idx_outbox_aggtype_status_id (aggregate_type, status, outbox_id),
+     ALGORITHM=INPLACE, LOCK=NONE;
+   ```
+2. **`batch-size: 300`이 실제로 물렸는지는 게이지가 증명한다.** actuator는 health·info·prometheus 3개만 노출해 `env`로 볼 수 없다(§11.4-3과 같은 제약). `docker exec seat-service env | grep APP_OUTBOX`가 비어 있는지(= yml 기본값 사용) 확인한 뒤, 측정 중 다음 둘로 확정한다.
+   - `ticketrush_outbox_in_flight`가 **100을 넘는 표본이 한 번이라도** 잡히면 `batchSize > 100`이다
+   - `rate(ticketrush_outbox_relay_total{result="success"}[1m])`가 **20/s를 넘으면** 확정이다
+
+   (§11.2 "바인딩은 로그가 증명한다"와 같은 논법이다.)
+
+**절차** — §11.5를 그대로 쓰고(`seed_expired_holds.sql`의 `@expired_count=10000`), 계측에 샘플러 하나를 추가한다.
+
+```bash
+DURATION=900 INTERVAL=5 ./outbox-sampler.sh > outbox-b1.csv   # load-test/bench/
+```
+
+이 CSV가 필요한 이유는 Prometheus 15초 스크랩이 in-flight 피크를 놓칠 수 있고(위 2번의 확정 근거가 거기 달려 있다), 리포트 표에 넣을 수치를 보존·결손과 무관한 원본에서 계산하기 위해서다. 적체 곡선 자체는 §11.6 PromQL로도 읽힌다.
+
+**함께 확인할 트레이드오프**(이슈가 "측정으로 확인한다"고 적은 부분)
+
+- **in-flight 슬롯 동작** — §10.3 판별표로 읽되 **임계값이 `batch-size`이므로 이제 300 기준**이다. in-flight가 0~300 사이에서 출렁이면 정상, 300에 붙어 정체하면 슬롯 고갈이다.
+- **커넥션** — §11.5(c)의 HikariCP 1초 루프 그대로. 한 배치가 커졌으니 `active`가 이전(피크 1)보다 오르는지 본다.
+- **프로듀서 버퍼** — 앱이 노출하면 `kafka_producer_buffer_available_bytes`로 본다. 없으면 발행 실패(`ticketrush_outbox_relay_total{result="fail"}`)가 0인지로 갈음하고, 추정을 수치로 쓰지 않는다.
+- **⚠️ 폴링 소요시간 대 `lockAtMostFor="1m"`** — 이 상향에서 가장 위험한 축이다. `dispatch()`는 배치를 순차로 `send()` 하는데 그 호출이 `MAX_BLOCK_MS`(5초)까지 동기 블로킹될 수 있어(브로커 메타데이터·버퍼 대기), 최악 소요가 배치 크기에 비례해 3배가 된다. **`lockAtMostFor`를 넘겨 도는 폴링이 있으면 다른 인스턴스가 동시에 들어와 in-flight 가드가 무력해지고 중복 발행이 돌아온다**(`OutboxRelayService`의 `inFlight` javadoc이 자기고백한 한계). 릴레이 로그의 폴링 간 간격이 60초를 넘는 구간이 있는지 보고, `relay_total{result="success"}` 증가분과 실제 outbox 행 수를 대조해 증폭이 없는지 확인한다.
+- **60/s는 이론 상한이지 보장값이 아니다.** `markSuccess`/`markFail`는 프로듀서 IO 스레드 하나에서 직렬로 `REQUIRES_NEW` 트랜잭션을 돈다(`OutboxStatusUpdater`). 배치가 3배면 그 스레드의 DB 왕복도 3배이고, 콜백이 다음 폴링(5초)보다 늦으면 그 폴링은 in-flight 때문에 0건을 발행한다 — 실효 발행률이 `batch-size / 5초`가 아니라 **콜백 처리율**에 묶인다. 측정값이 60/s에 못 미쳐도 33.3/s를 넘으면 이 이슈의 목표는 달성이며, 그 경우 상한이 어디서 걸렸는지 기록한다.
+
+**릴레이 주기를 안 건드린 이유** — `OutboxRelayScheduler`의 `@SchedulerLock(lockAtLeastFor = "3s")`가 배치가 즉시 끝나도 락을 3초간 붙잡는다. `fixedDelay`를 1초로 낮춰도 실질 주기가 3초에 묶여 기대한 100/s가 아니라 33/s가 된다. 처리량은 주기가 아니라 `batch-size`로 올린다. 주기를 진짜로 낮추려면 `lockAtLeastFor`부터 재조정해야 하고, 그 값은 다중 인스턴스 failover 지연과 맞물린 별개 축이다.
+
+증적은 `load-tests/k6/results/<YYMMDD>-489-relay-throughput/`에 남긴다(§11.5-6과 같은 구성).
 
 ## 12. 입장 검표 스파이크 측정 (#402)
 

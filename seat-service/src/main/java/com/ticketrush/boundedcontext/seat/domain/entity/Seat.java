@@ -134,6 +134,19 @@ public class Seat extends AutoIdBaseEntity {
     return this.seatStatus == SeatStatus.AVAILABLE;
   }
 
+  /**
+   * 이 예매 번호로 이미 SOLD인가 (#489).
+   *
+   * <p>판매 확정 재수신(멱등 성공)을 "그 예매의 좌석이 아님"(과금 후 좌석 없음)과 가르는 판정이다. {@code
+   * SeatRepository.confirmSoldById}가 SOLD 전이에서 {@code booking_number}를 지우지 않기 때문에 성립한다 — 지우도록 바꾸면 이
+   * 판정이 조용히 전부 false가 되어 정상 중복까지 409로 뒤집힌다.
+   */
+  public boolean isSoldTo(String bookingNumber) {
+    return this.seatStatus == SeatStatus.SOLD
+        && this.bookingNumber != null
+        && this.bookingNumber.equals(bookingNumber);
+  }
+
   public void hold(LocalDateTime expiredAt, String bookingNumber) {
     // 1. 상태 검증
     if (this.seatStatus != SeatStatus.AVAILABLE) {

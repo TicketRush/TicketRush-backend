@@ -76,7 +76,15 @@ app:
   outbox:
     aggregate-types:
       - Seat
-    batch-size: 100
+    # 발행 상한 = batch-size / 릴레이 주기(5초). 100이면 20/s 인데, 대량 만료 시 이벤트 생성률이
+    # 33.3/s(tick당 2,000건 / 60초)라 적체가 단조 증가했다(#345 실측: backlog 피크 5,200,
+    # 좌석 해제 완료 후로도 8분간 미발행). 300 이면 이론 상한이 60/s 로 생성률 위에 온다. 실효 발행률은
+    # 콜백 처리율(OutboxStatusUpdater 가 프로듀서 IO 스레드 하나에서 직렬로 돈다)에 묶일 수 있어
+    # 상한보다 낮을 수 있다 — 재측정으로 확인한다. 주기가 아니라 이 값을
+    # 올리는 이유는 OutboxRelayScheduler 주석 참고. 조회 윈도(LIMIT batch-size)의 in-flight 슬롯
+    # 여유도 함께 커지지만, 한 배치가 붙잡는 커넥션·프로듀서 버퍼도 같이 커진다 — 그 트레이드오프는
+    # 재측정으로 확인한다(#489).
+    batch-size: 300
     max-retries: 3
     retention-hours: 72
 
