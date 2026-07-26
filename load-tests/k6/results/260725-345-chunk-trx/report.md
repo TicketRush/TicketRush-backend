@@ -27,7 +27,20 @@ select count(s) from Seat s where s.seatStatus = :hold and s.holdExpiredAt > :no
 | 같은 값 — B1 창(만료 10,000건 소진) | **0.00** |
 | 같은 창에서 실제 소진된 만료 좌석 | 2,000×9회 + 10,000 |
 
-곡선이 평평한 게 아니라 **시리즈가 그 사건을 담지 않는다.** #484가 고친 스케줄러 스레드 굶주림과 무관한, 지표 정의의 공백이다. PR #487이 `ticketrush.seat.hold.expired_backlog` 게이지를 추가한 근거가 이 수치이며, 그 게이지는 아직 배포되지 않았다(CD는 `main` push 트리거다). **이번 B1의 적체 곡선은 SQL 폴링으로 기록했다**(§6, `drain-b1.csv`).
+곡선이 평평한 게 아니라 **시리즈가 그 사건을 담지 않는다.** #484가 고친 스케줄러 스레드 굶주림과 무관한, 지표 정의의 공백이다.
+
+### 2.1.1 같은 좌석 2,000건이 2,000으로도, 0으로도 읽힌다
+
+`graph-seat-held-semantics.png`(13:20~14:56 KST)에는 **04:26~04:33Z 구간에만 2,000짜리 사각 펄스**가 있고 앞뒤는 0이다. 우연이 아니라 이 게이지의 의미를 그대로 드러낸 구간이다.
+
+| 시각 (UTC) | 코호트 상태 | `seat_held` |
+|---|---|---|
+| 04:24:39 시딩 (최초 시도, `NOW()` = KST로 시딩) | HOLD · `hold_expired_at`이 앱(UTC) 기준 **9시간 미래** = 미만료 | **2,000** |
+| 04:32:48 재시딩 (`UTC_TIMESTAMP()`로 정정) | 같은 좌석이 HOLD · **이미 만료** = 해제 대기 적체 | **0** |
+
+**좌석 2,000건은 그대로인데 게이지만 2,000 → 0으로 바뀐다.** `hold_expired_at > now` 조건이 만료 순간 좌석을 시리즈에서 탈락시키기 때문이다. 이 측정이 재려는 것은 아래쪽 행(만료 적체)이고, 그 행에서 게이지는 0이다.
+
+> 이 펄스는 §8의 시계 함정이 남긴 부산물이다 — 잘못 시딩된 코호트가 "미만료"로 존재했던 8분이 우연히 대조군이 됐다. 펄스 종료 시각(04:32:48Z)이 정정 시드의 **완료** 시각과 맞는 이유는, 그 시드의 리셋에서 느린 outbox DELETE 두 개가 좌석 UPDATE보다 앞에 있어 좌석 해제가 배치 끝에 일어났기 때문이다(§8의 시딩 2분 30초). PR #487이 `ticketrush.seat.hold.expired_backlog` 게이지를 추가한 근거가 이 수치이며, 그 게이지는 아직 배포되지 않았다(CD는 `main` push 트리거다). **이번 B1의 적체 곡선은 SQL 폴링으로 기록했다**(§6, `drain-b1.csv`).
 
 ### 2.2 단일 트랜잭션 비교군은 코드 변경이 아니다
 
@@ -152,7 +165,8 @@ ALTER TABLE seat ADD INDEX idx_seat_status_hold_expired_at (seat_status, hold_ex
 ## 8. 한계·주의
 
 - **`seat_hold_expired_backlog` 게이지는 아직 배포되지 않았다.** CD가 `main` push 트리거라 develop 머지로는 배포되지 않는다. B1 적체 곡선은 SQL 폴링(`drain-b1.csv`)으로 기록했고, **Grafana 렌더 그래프는 다음 릴리스 이후 캡처한다.**
-- **Grafana PNG 미첨부.** 관측 스택은 `127.0.0.1` 바인딩(ADR 0007)이고 Grafana 이미지 렌더러 플러그인이 설치되어 있지 않아 API로 PNG를 뽑을 수 없다 — SSH 터널로 사람이 캡처해야 한다(§10).
+- **Grafana PNG는 3장 첨부, 2장 미완**(§10). 관측 스택은 `127.0.0.1` 바인딩(ADR 0007)이고 이미지 렌더러 플러그인이 설치되어 있지 않아 API로 PNG를 뽑을 수 없다 — SSH 터널로 사람이 캡처해야 한다.
+- **`seat_held = 0`은 측정 창 기준이다.** 이 리포트의 모든 `seat_held` 수치는 A1·A2 반복 창(05:15~05:30Z)과 B1 창(05:41~05:55Z)을 범위로 산출했다. 더 넓게 잡으면 04:26~04:33Z에 2,000짜리 펄스가 있는데, 그건 측정 회차가 아니라 시계 함정으로 잘못 시딩된 코호트다(§2.1.1). 캡처 그래프를 볼 때 이 구간을 측정 결과로 읽으면 오독이다.
 - **n이 작다**(A1 5, A2 4). 단일 EC2에 앱 9개 + Kafka·MySQL·Redis·관측 스택이 동거하는 구성이라 회차 간 편차가 크다(A1 58.8~379 ms). 배율은 중위값으로 산출했고 원값을 모두 남겼다.
 - `confirmSoldById` 블로킹은 직접 측정 불가(§4).
 - **측정 중 사고를 냈다.** 04:45~04:58Z, 리포 루트(`~/ticketrush/`)의 구버전 `docker-compose.prod.yml` 사본으로 `up -d seat-service`를 실행해 `depends_on`의 redis·mysql이 재생성됐고, 그 디렉토리 `.env`에 `REDIS_PASSWORD` 키가 없어(#426 이후 추가된 키) Redis가 `--requirepass` 없이 떴다. 비밀번호를 보내는 앱들이 전부 `ERR AUTH ... called without any password configured`로 끊겼고 seat-service는 22회 재시작, `redis_up=0` 알림이 발화했다. 정상 디렉토리 `~/ticketrush/deploy/`에서 재실행해 04:58Z 복구했다(볼륨이 명시적 이름이라 데이터 손실 없음). **이 구간 수치는 리포트에 쓰지 않았다.** 실행 중 스택의 소유 경로는 `docker inspect <c> --format '{{index .Config.Labels "com.docker.compose.project.config_files"}}'`로 확인한다 — 런북 §11.4에 고정했다.
@@ -165,28 +179,43 @@ ALTER TABLE seat ADD INDEX idx_seat_status_hold_expired_at (seat_status, hold_ex
 | `drain-b1.csv` | B1 적체 해소 곡선 (5초 간격, `hold_expired_at <= UTC_TIMESTAMP()` 카운트 + outbox pending) |
 | `hikari-a1.csv` / `hikari-a2.csv` / `hikari-b1.csv` | actuator 1초 폴링 — `pending`/`active`/`idle` |
 | `trx-samples-a1.csv` / `trx-samples-b1.csv` | `innodb_trx` 1초 샘플러 — `rows_locked`·`LOCK WAIT`·`data_lock_waits` |
-| `timeseries-seat-held-*.json` | **`ticketrush_seat_held` = 0 전 구간** — §2.1의 근거 |
+| `timeseries-seat-held-*.json` | **측정 창(A1·A2 반복 / B1)에서 `ticketrush_seat_held` = 0** — §2.1의 근거 |
 | `timeseries-outbox-backlog-b1.json` | backlog 5,200 단조 증가 — §6.1 |
 | `timeseries-relay-rate-b1.json` | 릴레이 발행률 20.00/s 상한 — §6.1 |
 | `timeseries-hikari-{pending,active}-*.json` | Prometheus 15초 스크랩 대조군 (§5의 해상도 한계) |
 | `timeseries-node-cpu*.json` | 호스트 CPU (포화 여부 단서) |
 | `timeseries-inbox-rate-b1.json` | booking-group 인박스 소화율 |
+| `graph-seat-held-semantics.png` | **§2.1.1** — 같은 좌석 2,000건이 미만료일 때 2,000, 만료 적체일 때 0으로 읽히는 대조 (13:20~14:56 KST) |
+| `graph-outbox-backlog-b1.png` | **§6.1** — tick마다 2,000 계단 상승 → 피크 5,200(14:48) → 14:53 선형 소진 (14:41~14:57 KST) |
+| `graph-relay-rate-b1.png` | **§6.1** — 14:45~14:53 내내 정확히 20/s 천장에 눌린 평평한 선 (14:41~14:57 KST) |
 
-## 10. Grafana 캡처 절차 (사람이 수행)
+## 10. Grafana 캡처 — 현황과 남은 것
+
+관측 스택은 `127.0.0.1` 바인딩(ADR 0007)이고 이미지 렌더러 플러그인이 없어(`grafana cli plugins ls` → no installed plugins) API로 PNG를 뽑을 수 없다. SSH 터널을 열고 Explore에서 수동 캡처한다.
 
 ```bash
 ssh -i <key>.pem -L 3000:localhost:3000 ubuntu@54.116.243.250
 # → http://localhost:3000 (admin/admin) → Explore → datasource Prometheus
 ```
 
-시간 범위는 **KST**로 지정한다(위 UTC + 9시간).
+시간 범위는 **KST**로 입력한다(측정 로그의 UTC + 9시간). 날짜는 전부 2026-07-25다.
 
-| 캡처 | 쿼리 | 시간 범위 (KST) |
+### 완료
+
+| 파일 | 쿼리 | 범위 (KST) |
 |---|---|---|
-| `graph-outbox-backlog-b1.png` | `ticketrush_outbox_backlog{instance="seat-service:8090"}` | 14:41 ~ 14:56 |
-| `graph-relay-rate-b1.png` | `sum(rate(ticketrush_outbox_relay_total{instance="seat-service:8090",result="success"}[1m]))` | 14:41 ~ 14:56 |
-| `graph-hikari-b1.png` | `hikaricp_connections_{pending,active,idle}{instance="seat-service:8090"}` | 14:41 ~ 14:56 |
-| `graph-seat-held-zero.png` | `ticketrush_seat_held{instance="seat-service:8090"}` | 14:15 ~ 14:56 (0에 붙어 있는 것이 §2.1의 증거다) |
-| `graph-a1-a2-window.png` | HikariCP + CPU 패널 (System 대시보드) | 14:15 ~ 14:30 |
+| `graph-seat-held-semantics.png` | `ticketrush_seat_held{instance="seat-service:8090"}` | 13:20 ~ 14:56 |
+| `graph-outbox-backlog-b1.png` | `ticketrush_outbox_backlog{instance="seat-service:8090"}` | 14:41 ~ 14:57 |
+| `graph-relay-rate-b1.png` | `sum(rate(ticketrush_outbox_relay_total{instance="seat-service:8090",result="success"}[1m]))` | 14:41 ~ 14:57 |
 
-**적체 해소 곡선 자체(`seat_hold_expired_backlog`)는 게이지가 배포된 뒤에 캡처한다.** 그때까지는 `drain-b1.csv`가 그 자리를 대신한다.
+### 남은 것
+
+`hikaricp_connections_pending` / `active` / `idle` 세 시리즈를 겹쳐 그린 그래프 2장(B1 창 14:41~14:57, A1·A2 창 14:15~14:31). **쿼리 세 개를 한 칸에 넣을 수 없다** — Explore의 `+ Add query`로 A·B·C 행을 만들어 한 행에 하나씩 넣는다. 세 시리즈 모두 15초 스크랩으로 존재하며(B1 창 각 64 샘플) `pending`은 0에 붙은 직선으로 그려진다(§5). PromQL은 줄바꿈 태그를 해석하지 못하므로 표 셀의 `<br>` 같은 서식 문자를 그대로 붙여넣지 않는다.
+
+```promql
+A: hikaricp_connections_pending{instance="seat-service:8090"}
+B: hikaricp_connections_active{instance="seat-service:8090"}
+C: hikaricp_connections_idle{instance="seat-service:8090"}
+```
+
+**적체 해소 곡선 자체(`ticketrush_seat_hold_expired_backlog`)는 게이지가 배포된 뒤에 캡처한다**(CD는 `main` push 트리거다). 그때까지는 `drain-b1.csv`가 그 자리를 대신한다.
