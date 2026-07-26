@@ -781,10 +781,18 @@ $SSH "docker exec -i ticketrush-mysql sh -c 'mysql -u root -p\"\$MYSQL_ROOT_PASS
 > - **#402 이전 회차의 측정분에는 버킷이 없다.** 그 회차들의 퍼센타일 SSOT는 k6 클라이언트
 >   측정(`k6_entry_*_p95/p99`)이고, 서버 축은 평균으로만 읽어야 한다.
 > - **매 회차 시작 전에 버킷 존재를 확인하고 `metadata.txt`에 적는다.** 배포본 이미지가 #495 이전이면
->   여전히 0 시계열이고, `histogram_quantile()` 쿼리는 조용히 빈 결과를 낸다.
+>   여전히 0 시계열이고, `histogram_quantile()` 쿼리는 조용히 빈 결과를 낸다. 인스턴스 8개가 모두
+>   나와야 하고, 값은 조합 수 × 12(`slo` 11 + `+Inf`)다.
 >   ```promql
 >   count by (instance) (http_server_requests_seconds_bucket)
 >   ```
+>   **MVC 서비스는 스모크 트래픽을 앱 포트로 흘린 뒤에 확인해야 한다** — 관리 포트(8090)로 오는
+>   Prometheus 스크랩은 MVC의 `http_server_requests`에 잡히지 않는다(gateway는 WebFlux라 잡힌다).
+>   요청이 한 번도 없던 서비스는 조합이 없어 버킷도 없다. 인증이 필요 없는 `/v3/api-docs`를 쓰면
+>   도메인 상태를 건드리지 않고 조합을 만들 수 있다.
+> - **`histogram_quantile()`이 `NaN`이면 데이터 부족이지 결함이 아니다.** 버킷 카운터가 rate 창에서
+>   평평하면(요청이 몰아서 들어오고 멈춘 경우) 분모가 0이 되어 `NaN`이 나온다. 부하 중에는 문제되지
+>   않지만, 스모크로 확인할 때는 rate 창을 채울 만큼 지속적으로 요청을 흘려야 한다.
 > - **gateway(`job="gateway"`)의 p95는 엔드포인트별로 가를 수 없다.** Spring Cloud Gateway는
 >   와일드카드 라우트에 `BEST_MATCHING_PATTERN`을 세팅하지 않아 `uri` 라벨이 `/**`·`UNKNOWN`으로
 >   뭉개진다(#495 실측: gateway uri 카디널리티 **4** — `/**`, `UNKNOWN`, actuator 2개). 덕분에 버킷이
@@ -799,7 +807,7 @@ histogram_quantile(0.99, sum by (le, uri) (rate(http_server_requests_seconds_buc
   instance="ticket-service:8090", uri=~"/api/v1/entries/.*"}[1m])))
 
 # 2s 초과 비율 — p99가 2s에 붙어 보일 때 실제로 꼬리가 있는지 가른다
-# le 라벨 값의 표기(2.0 / 2)는 클라이언트 버전에 달렸다. 첫 회차에 실제 값을 눈으로 확인하고 고정한다.
+# le 표기는 실측으로 확정했다: 0.001 / 0.002 / 0.005 / 0.01 / 0.025 / 0.05 / 0.1 / 0.25 / 0.5 / 1.0 / 2.0 / +Inf
 1 - (
   sum(rate(http_server_requests_seconds_bucket{instance="ticket-service:8090", le="2.0"}[1m]))
   / sum(rate(http_server_requests_seconds_count{instance="ticket-service:8090"}[1m]))
