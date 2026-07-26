@@ -638,6 +638,8 @@ HikariCP·트랜잭션 패널은 Grafana System 대시보드(`monitoring/grafana
 
 **(b) 클라이언트 관점 왕복 지연은 Prometheus로 잡히지 않는다.** `ticket-service/.../global/config/RestClientConfig.java`가 오토컨피그된 `RestClient.Builder` 빈이 아니라 **생 `RestClient.builder()`**로 만들어 `ObservationRegistry`가 붙지 않는다 → `http_client_requests_seconds`가 아예 없다. 따라서 왕복 비용은 위 (a)의 차분(상한: 네트워크·커넥션 획득·역직렬화 포함)과 §12.4의 booking-service **서버** 메트릭(하한: 순수 처리시간)으로 협공한다. 둘의 차이는 게이트웨이 홉 + 컨테이너 네트워크로 읽고, 단일 EC2 내부 통신이라 작아야 정상이다.
 
+다만 **서버 축에서 얻을 수 있는 것은 평균과 롤링 max뿐이다** — `http_server_requests_seconds`에 히스토그램 버킷이 없어 p95/p99를 서버에서 계산할 수 없다(§12.4 경고). **퍼센타일의 SSOT는 k6 클라이언트 측정이다.**
+
 **(c) "Prometheus 스크랩 1분 간격"은 사실과 다르다.** `monitoring/prometheus.aws.yml`의 `scrape_interval`은 **15s**다. baseline·회복을 각각 5분 이상 유지하라는 요구는 비교 기준선 확보 목적으로 여전히 유효하므로 프로파일은 그대로 둔다.
 
 **(d) 게이트웨이에 검표 라우트가 없었다.** `/api/v1/entries/**`는 ticket-service 라우트 predicate에 빠져 있어 **외부에서 도달 자체가 불가능**했다(인터넷에 열린 포트는 게이트웨이 8080뿐 — §7.1). `SecurityConfig`가 `hasRole("ADMIN")`을 걸고 `GatewayHeaderFilter`가 게이트웨이 주입 헤더로 인증하는 설계이므로 의도가 아니라 결함이다(#367 계열). #402에서 predicate에 추가했다 — **측정 전에 그 커밋이 배포본에 포함돼 있어야 한다**(§12.3-1의 스모크로 확인).
@@ -757,14 +759,32 @@ $SSH "docker exec -i ticketrush-mysql sh -c 'mysql -u root -p\"\$MYSQL_ROOT_PASS
 
 `job` 라벨은 MVC 앱 7개가 전부 `ticketrush-services`로 묶여 있다 — **서비스 구분은 `instance`다.**
 
-```promql
-# 검표 지연 (ticket-service 가 본 처리시간, 게이트웨이·네트워크 제외)
-histogram_quantile(0.95, sum(rate(http_server_requests_seconds_bucket{
-  instance="ticket-service:8090", uri=~"/api/v1/entries/.*"}[1m])) by (le, uri))
+> ⚠️ **서버 측 p95/p99는 산출할 수 없다.** `http_server_requests_seconds`가 `_count`/`_sum`/`_max`만
+> 노출한다 — 히스토그램 버킷(`_bucket`)도 퍼센타일도 없다(`management.metrics.distribution.
+> percentiles-histogram` 미설정). 실측 전 Prometheus에서 확인했다:
+> `count(http_server_requests_seconds_bucket{...})` = **0 시계열**.
+> 따라서 `histogram_quantile()` 계열 쿼리는 전부 빈 결과를 낸다. 서버 축은 **평균(`_sum`/`_count`)과
+> 스크랩 창 최댓값(`_max`)** 으로 읽고, **퍼센타일은 k6 클라이언트 측정(`k6_entry_*_p95/p99`)이 SSOT다.**
+> 이 공백은 #402 범위 밖이라 후속 이슈로 분리한다(전 서비스에 영향).
 
-# booking 내부 조회 지연 (왕복 비용의 하한)
-histogram_quantile(0.95, sum(rate(http_server_requests_seconds_bucket{
-  instance="booking-service:8090", uri="/api/v1/internal/booking/{bookingId}"}[1m])) by (le))
+```promql
+# 검표 평균 지연 (ticket-service 가 본 처리시간, 게이트웨이·네트워크 제외)
+sum by (uri) (rate(http_server_requests_seconds_sum{
+  instance="ticket-service:8090", uri=~"/api/v1/entries/.*"}[1m]))
+/
+sum by (uri) (rate(http_server_requests_seconds_count{
+  instance="ticket-service:8090", uri=~"/api/v1/entries/.*"}[1m]))
+
+# 검표 최댓값 (Micrometer 롤링 max — 꼬리 지연의 유일한 서버측 단서)
+max by (uri) (http_server_requests_seconds_max{
+  instance="ticket-service:8090", uri=~"/api/v1/entries/.*"})
+
+# booking 내부 조회 평균 지연 (왕복 비용의 하한)
+sum(rate(http_server_requests_seconds_sum{
+  instance="booking-service:8090", uri="/api/v1/internal/booking/{bookingId}"}[1m]))
+/
+sum(rate(http_server_requests_seconds_count{
+  instance="booking-service:8090", uri="/api/v1/internal/booking/{bookingId}"}[1m]))
 
 # 내부 조회 호출량 — (verify RPS + check-in RPS) 와 1:1 이어야 한다(정합 검증)
 sum(rate(http_server_requests_seconds_count{
@@ -775,7 +795,7 @@ sum(rate(http_server_requests_seconds_count{
   instance="booking-service:8090", uri="/api/v1/internal/booking/{bookingId}",
   outcome!="SUCCESS"}[1m]))
 
-# 왕복 기여분 곡선 (k6 클라이언트 관점, §12.1-(a))
+# 왕복 기여분 곡선 (k6 클라이언트 관점, §12.1-(a) — 퍼센타일은 이쪽이 SSOT)
 k6_entry_verify_duration_p95 - k6_entry_qr_duration_p95
 
 # 엔드포인트별 유입 (tags:{name} 이 라벨로 실린다)
@@ -785,7 +805,7 @@ sum by (name, status) (rate(k6_http_reqs_total[1m]))
 hikaricp_connections_pending{instance=~"ticket-service:8090|booking-service:8090"}
 ```
 
-> `uri` 라벨이 `/api/v1/internal/booking/{bookingId}` 템플릿으로 정규화되는지 **스모크 회차에서 눈으로 확인하고 metadata에 고정한다.**
+> `uri` 라벨이 `/api/v1/internal/booking/{bookingId}` 템플릿으로 정규화되는지 **스모크 회차에서 눈으로 확인하고 metadata에 고정한다.** 검표 경로가 지금까지 도달 불가였던 탓에 이 시계열은 실측 전에는 존재하지 않는다(확인 시점의 booking-service `uri` 라벨은 `/api/v1/booking` 하나뿐이었다).
 
 ### 12.5 주의
 
