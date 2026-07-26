@@ -158,6 +158,7 @@ git config core.hooksPath .githooks
     * `service.http.connect-timeout-ms: ${SERVICE_HTTP_CONNECT_TIMEOUT_MS:3000}`
     * `service.http.read-timeout-ms: ${SERVICE_HTTP_READ_TIMEOUT_MS:10000}`
 * **타임아웃 적용:** `RestClient` 빈은 공통 모듈의 `RestClientFactorySupport.withTimeouts(connectMs, readMs)`(`common/.../global/config`)로 생성한 `ClientHttpRequestFactory` 를 반드시 적용합니다. 타임아웃 미설정 시 상대 서비스 지연이 Kafka 컨슈머 스레드 등을 장시간 블로킹할 수 있습니다.
+* **타임아웃 값은 실측 근거가 있으면 서비스별로 낮출 수 있습니다.** 위 3000/10000 은 근거가 없을 때의 출발점이지 상한이 아닙니다. read-timeout 은 곧 요청당 톰캣 스레드 점유 시간이라 값이 클수록 상대 서비스 지연이 이쪽 스레드 고갈로 번지기 쉽습니다. 낮출 때는 **근거가 된 실측치를 yml 주석에 남깁니다**(예: ticket-service 는 #402 실측 왕복 3.20ms 를 근거로 1000/1000, [#496](https://github.com/TicketRush/TicketRush-backend/issues/496)).
 
 ```yaml
 service:

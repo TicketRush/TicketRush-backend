@@ -911,6 +911,72 @@ hikaricp_connections_pending{instance=~"ticket-service:8090|booking-service:8090
 - **`tags:{name}`은 선택이 아니라 필수다.** QR URL에 `bookingId`가 들어가서 태그를 안 주면 k6가 URL을 그대로 `name` 라벨로 써서 Prometheus에 티켓 수만큼 시계열이 생긴다.
 - **QR은 iteration마다 새로 발급한다.** `ticket.qr.ttl-millis`가 5분인데 본 회차는 15분 40초다. `setup()`에서 미리 뽑으면 5분째부터 전 요청이 401 `TICKET_401_001`로 뒤집혀 스파이크 구간을 통째로 잃는다. 발급을 체인에 두면 TTL이 구조적으로 무관해지고 덤으로 §12.1-(a)의 통제군이 생긴다.
 - **ADMIN 계정 해시는 커밋하지 않는다.** `seed_load.sql`의 MEMBER 해시는 저장소에 있지만, 검표 API는 ADMIN 권한만으로 남의 티켓을 입장 처리할 수 있어 위험도가 다르다. `seed_entry.sql`은 `@admin_pw_hash`가 없으면 가드에서 중단되고, 측정이 끝나면 `cleanup_load.sql`이 계정을 지운다. **측정 후 정리를 건너뛰면 인터넷에 열린 배포본에 관리자 계정이 상주한다.**
-- **booking-service 지연/다운 주입은 이 회차에 하지 않는다.** 이슈의 (선택) 항목이지만 "왕복이 **끊겼을 때** 무슨 일이 나는가"는 다른 질문이고, 답은 코드로 이미 확정적이다 — `BookingRestClient`에 재시도·서킷브레이커가 없고 read-timeout이 10s라 booking이 느려지면 ticket-service 톰캣 스레드가 요청당 최대 10초 묶이고 곧 503 폭풍이 된다. 별도 측정 창(baseline+주입+회복)이 또 필요해 EC2 과금이 배가 되므로 **후속 이슈로 분리**하고, 이번에는 §12.4의 `outcome!="SUCCESS"` 곡선이 정상 부하에서 0인지 확인하는 데까지만 쓴다.
+- **booking-service 지연/다운 주입은 이 회차에 하지 않았다.** 이슈의 (선택) 항목이지만 "왕복이 **끊겼을 때** 무슨 일이 나는가"는 다른 질문이고, 별도 측정 창(baseline+주입+회복)이 또 필요해 EC2 과금이 배가 되므로 **#496으로 분리**했다. 이 회차에서 쓴 것은 §12.4의 `outcome!="SUCCESS"` 곡선이 정상 부하에서 0인지 확인하는 데까지다. **주입 회차의 절차·쿼리는 §12.6에 있다.**
 - 단일 EC2에 앱 9개 + Kafka·MySQL·Redis·관측 스택이 동거하므로 절대 수치에는 포화가 섞인다(§10.5·§11.7 단서와 동일).
 - 시딩·정리 SQL의 오실행 가드(`@i_confirm_loadtest_db=1`)와 `IMAGE_TAG` 명시는 §8.4·§11과 동일하다.
+
+### 12.6 booking 장애 주입 회차 (#496)
+
+§12.1~12.5는 **booking이 정상일 때** 검표 경로가 버티는지를 쟀다. 이 절은 그 반대 — **booking이 죽거나 느려졌을 때 검표 경로가 함께 죽는가**를 잰다. #402가 (선택) 항목으로 남긴 질문이고, #496이 서킷브레이커·타임아웃 단축으로 답을 바꾸려 한 대상이다.
+
+측정 대상 코드는 `ticket-service/.../out/apiclient/BookingRestClient.java`와 `.../global/config/BookingCircuitBreakerConfig.java`다. 서킷은 `booking` 인스턴스 하나이며 임계값은 실패율 50% / 느린호출 300ms 초과 50% / 윈도우 20(최소 10) / open 유지 10s / 반열림 3건이다.
+
+**(a) 무엇을 비교하는가**
+
+| | before | after |
+|---|---|---|
+| read-timeout | 10s | 1s |
+| 서킷브레이커 | 없음 | `booking` |
+
+before는 배포본을 되돌리지 않고 **환경변수 오버라이드로 재현**한다. 서킷은 코드에 박혀 있어 env로 끌 수 없으므로, before 회차는 `SERVICE_HTTP_READ_TIMEOUT_MS=10000`으로 타임아웃만 되돌리고 **서킷 임계에 닿기 전 구간(주입 직후 10~20초)** 을 비교 구간으로 쓴다. 두 축을 완전히 분리하려면 #402 배포본 이미지 태그(`91fa085…`)로 한 회차를 더 돌려야 하는데, 그 배포본에는 §12.4의 `slo` 버킷(#495)이 없어 서버 축 퍼센타일이 나오지 않는다 — **before/after를 같은 관측 해상도로 놓으려면 env 오버라이드 쪽이 맞다.** 이 선택을 metadata에 적는다.
+
+**(b) 주입**
+
+```bash
+# EC2 배포 디렉토리에서. 원복은 스크립트의 trap 이 보장한다.
+MODE=pause OUTAGE_SEC=120 ./booking-outage.sh   # 응답 없음 = read-timeout 경로
+MODE=stop  OUTAGE_SEC=120 ./booking-outage.sh   # 연결 거부 = connect 실패 경로
+```
+
+`load-test/chaos/booking-outage.sh`. **두 모드를 모두 돌린다** — `stop`은 즉시 실패라 스레드를 묶지 않고, 이 이슈가 겨냥한 스레드 고갈은 `pause`에서만 재현된다. 주입 중에는 compose `up`/`restart`를 실행하지 않는다(`depends_on` 재기동이 걸린다).
+
+부하는 `load-test/scenarios/entry-spike.js`를 그대로 쓴다. 구간은 **baseline → 주입 → 회복** 3분할이고, 주입 창은 부하 피크 구간 안에 들어가야 한다.
+
+**(c) PromQL** (`instance` 축은 §12.4와 동일하게 `ticket-service:8090`)
+
+```promql
+# 서킷 상태 — 1 인 라벨이 현재 상태다. open 으로 전이한 시각과 closed 복귀 시각이 회복 시간이다
+resilience4j_circuitbreaker_state{name="booking"}
+
+# 서킷이 차단한 호출 수 (= booking 을 치지 않고 즉시 503 으로 떨어진 요청)
+rate(resilience4j_circuitbreaker_not_permitted_calls_total{name="booking"}[1m])
+
+# 서킷이 실패로 센 호출 / 실패율·느린호출율
+rate(resilience4j_circuitbreaker_calls_seconds_count{name="booking",kind="failed"}[1m])
+resilience4j_circuitbreaker_failure_rate{name="booking"}
+resilience4j_circuitbreaker_slow_call_rate{name="booking"}
+
+# 톰캣 스레드 점유 — 이 이슈의 핵심 지표. before 는 이 값이 max 로 붙고, after 는 붙지 않아야 한다
+tomcat_threads_busy_threads{instance="ticket-service:8090"}
+tomcat_threads_config_max_threads{instance="ticket-service:8090"}
+
+# 검표 503 비율
+sum(rate(http_server_requests_seconds_count{instance="ticket-service:8090",uri=~"/api/v1/entries.*",status="503"}[1m]))
+  / sum(rate(http_server_requests_seconds_count{instance="ticket-service:8090",uri=~"/api/v1/entries.*"}[1m]))
+```
+
+> ⚠️ **`resilience4j_*` 시계열은 첫 호출 전에는 존재하지 않는다.** 서킷은 `create()`가 아니라 첫 `run()`에서 레지스트리에 등록되므로, 배포 직후 검표 트래픽이 한 번도 없었으면 쿼리가 조용히 빈 결과를 낸다. §12.4의 버킷 확인과 같은 선에서 **스모크로 한 번 흘린 뒤 시계열 존재를 확인하고 metadata에 적는다.**
+>
+> ⚠️ **톰캣 메트릭 이름은 스모크에서 눈으로 확인한다.** `tomcat_threads_busy_threads`는 Micrometer 관례를 따른 이름이고, 이 스택에서 실제로 그 이름인지 확인 전에는 단정하지 않는다(§12.4의 `uri` 라벨 확인과 같은 규칙).
+
+**(d) 회차 무효 판정**
+
+§12.5의 기준(`entry_not_usable`·`entry_already_used`·`entry_ticket_exhausted`)이 그대로 적용된다. 여기에 하나 추가한다 — **주입 구간에서 `resilience4j_circuitbreaker_state{state="open"}`이 한 번도 1이 되지 않으면 after 회차는 무효다.** 서킷이 열리지 않았다는 것은 주입이 서킷 임계에 닿지 못했다는 뜻이고(주입 시간이 짧거나 도착률이 낮음), 그 회차로는 "완화됐다"를 말할 수 없다.
+
+**(e) 기록할 값**
+
+`metadata.txt`에 before/after 각각: 검표 503 비율, `tomcat_threads_busy` 피크와 max 대비 비율, 서킷 open 전이 시각·closed 복귀 시각(= 복구 시간), 주입 시작·종료 UTC, 그리고 (a)에서 고른 before 재현 방식.
+
+**(f) 폴백 정책 — 측정으로 바뀌지 않는 것**
+
+서킷 open 구간의 검표 요청은 **전부 503(`TICKET_503_001`)이 되는 것이 정상이다.** 검표는 권위 있는 `bookingStatus` 확인이 목적이라(#364) 조회 불가 상태에서 입장을 통과시킬 수 없다 — 통과시키면 환불 진행 중(REFUNDING)인 예매가 그대로 입장한다. 따라서 이 회차의 성공 기준은 "503이 줄었다"가 아니라 **"503이 검표 경로에 갇혔고, 스레드 고갈로 번지지 않았다"** 이다. 가용성을 잃되 정합성을 지키는 이 비대칭은 Redis SPOF에 대한 [ADR 0008](adr/0008-accept-redis-spof-with-fail-closed.md)의 fail-closed와 같은 선택이다.
