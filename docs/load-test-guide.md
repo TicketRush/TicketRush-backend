@@ -687,8 +687,15 @@ curl -i -X POST https://<aws-gateway>/api/v1/entries/verify \
 
 ```bash
 # bcrypt 해시 생성 (평문은 저장소·증적에 남기지 않는다). 계정은 측정 후 cleanup 으로 지운다.
-PW=$(openssl rand -base64 24)
-HASH=$(docker run --rm httpd:alpine htpasswd -bnBC 10 "" "$PW" | tr -d ':\n')
+# rand -hex: 영숫자만 나와 셸·JSON 어디서도 이스케이프가 필요 없다.
+# tr -d '\r\n': Windows Git Bash 에서 openssl·htpasswd 가 CRLF 를 내보낸다. \n 만 지우면 \r 이
+#   평문 끝에 남아 해시에 섞이고, 시딩은 성공하는데 로그인만 401 로 죽는다. 실측에서 실제로 밟았다.
+#   게다가 파일을 텍스트 모드로 다시 읽으면 \r 이 \n 으로 변환돼 눈으로는 차이가 보이지 않는다.
+PW=$(openssl rand -hex 20 | tr -d '\r\n')
+HASH=$(docker run --rm httpd:alpine htpasswd -bnBC 10 "" "$PW" | tr -d ':\r\n')
+
+# 확인: 40 / 60 이 아니면 오염된 것이다.
+echo "${#PW} ${#HASH}"
 ```
 
 > ⚠️ **`--init-command` 으로 해시를 넘기지 않는다.** bcrypt 해시는 `$2a$10$...` 형태라 `$2`·`$10` 이

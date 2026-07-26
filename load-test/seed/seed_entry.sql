@@ -95,6 +95,14 @@ INSERT INTO user_account (user_id, password, created_at, updated_at)
 SELECT @admin_id, @admin_pw_hash, @app_now, @app_now FROM DUAL
 WHERE NOT EXISTS (SELECT 1 FROM user_account ua WHERE ua.user_id = @admin_id);
 
+-- 해시가 바뀌면 기존 행을 갱신한다. 위 INSERT 는 idempotency 때문에 NOT EXISTS 로 막혀 있어,
+-- 계정이 이미 있는 상태에서 새 해시로 재시딩하면 비밀번호가 반영되지 않는다. 그런데 시딩은
+-- 성공하고 검증 쿼리의 admin_users 도 1을 찍어서, k6 setup() 의 로그인만 401 로 죽는다.
+-- 회차마다 비밀번호를 새로 만드는 것이 정상 운용이므로 재시딩이 항상 권위를 갖게 한다.
+UPDATE user_account
+   SET password = @admin_pw_hash, updated_at = @app_now
+ WHERE user_id = @admin_id AND password <> @admin_pw_hash;
+
 -- ---- 1) 리셋 — 직전 회차를 되돌린다 ----------------------------------------
 -- 삭제 후 재삽입이 아니다. booking_id 를 고정해야 ENTRY_BOOKING_ID_MIN 이 회차마다 안 바뀐다.
 UPDATE ticket
