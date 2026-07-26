@@ -115,3 +115,12 @@ management:
   endpoint:
     health:
       show-details: never
+  # 서버 관점 p95/p99용 히스토그램 버킷(#495). MVC 7개와 같은 경계를 쓴다.
+  # 게이트웨이는 uri 라벨이 라우트 패턴으로 정규화되지 않고 `/**`·`UNKNOWN` 으로 뭉개진다
+  # (#402 배포본 실측: uri 카디널리티 4). 그래서 켜도 버킷이 경로 수만큼 곱해지지 않는 대신,
+  # 여기서 얻는 p95는 엔드포인트별이 아니라 인스턴스 전체를 합친 값이다 — 엔드포인트별 서버
+  # 퍼센타일은 MVC 쪽(job=ticketrush-services)에서 본다.
+  metrics:
+    distribution:
+      slo:
+        http.server.requests: 1ms,2ms,5ms,10ms,25ms,50ms,100ms,250ms,500ms,1s,2s
