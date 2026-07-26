@@ -28,6 +28,10 @@ public class SeatConfirmSoldUseCase {
         seatRepository.confirmSoldById(seatId, bookingNumber, SeatStatus.HOLD, SeatStatus.SOLD);
 
     // UPDATE 뒤에 읽는다. @Modifying(clearAutomatically=true)로 영속성 컨텍스트가 비워져 DB 최신 상태가 온다.
+    // 아래 판정은 이 UPDATE가 트랜잭션의 첫 SQL이라는 데도 의존한다 — MySQL REPEATABLE READ의 read view는
+    // 첫 consistent read 시점에 열리고, 잠금 쓰기인 UPDATE는 그것을 만들지 않는다. 그래서 이 조회가 경합
+    // 트랜잭션의 커밋까지 반영된 스냅샷을 잡는다. 이 메서드(또는 상위)에 UPDATE보다 앞서는 조회가 추가되면
+    // 스냅샷이 과거로 고정되어 정상 중복이 409로 뒤집힌다(안전한 방향이지만 오탐이 된다).
     Seat seat =
         seatRepository
             .findById(seatId)
@@ -41,11 +45,12 @@ public class SeatConfirmSoldUseCase {
     }
 
     // 이미 같은 예매로 SOLD면 결제 확정 이벤트 재수신이다. 목표 상태에 이미 도달했으므로 멱등 성공으로 돌려준다(#489).
-    // 여기서 409를 내면 호출자가 "정상 중복"과 "좌석 없음"을 구분할 수 없다. SSE는 다시 쏘지 않는다 —
-    // 첫 확정이 이미 발행했다. Redis 락만 다시 푼다: forceUnlock은 멱등이고, 첫 확정의 afterCommit이
-    // 프로세스 종료로 유실됐을 경우의 값싼 보험이다.
+    // 여기서 409를 내면 호출자가 "정상 중복"과 "좌석 없음"을 구분할 수 없다.
+    // 부수효과(SSE·Redis 락 해제)는 다시 실행하지 않는다. 둘 다 첫 확정의 같은 afterCommit 훅에 매달려 있어
+    // 한쪽만 "유실됐을 수 있으니 보험"이라고 볼 근거가 없고, 락은 tryLock의 leaseTime(5분)이 어차피 걷는다.
+    // 무엇보다 forceRelease를 여기서 부르면 트랜잭션 안 동기 Redis 호출이 되어, Redis 장애 시
+    // SeatRedissonExceptionHandler가 503을 내고 정상 중복 재수신이 booking에서 재시도→DLT로 빠진다.
     if (seat.isSoldTo(bookingNumber)) {
-      seatUnlockUseCase.forceRelease(seatId);
       log.info("이미 같은 예매로 확정된 좌석(멱등 성공). bookingNumber: {}, seatId: {}", bookingNumber, seatId);
       return;
     }

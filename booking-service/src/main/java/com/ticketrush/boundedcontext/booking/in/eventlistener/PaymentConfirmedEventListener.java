@@ -85,6 +85,10 @@ public class PaymentConfirmedEventListener {
         // 4xx는 재시도해도 결과가 바뀌지 않는 결정적 응답이므로 삼키고 진행(ack)한다.
         // 409는 이제 치명적 실패 전용이다(#489) — 정상 중복(이미 같은 예매로 SOLD)은 seat-service가 200으로
         // 돌려주므로 여기 오지 않는다. 따라서 응답 본문을 파싱할 필요 없이 상태 코드만으로 갈린다.
+        // 이 단정은 확정 경로에서 409가 SEAT_409_003 하나뿐이라는 데 기댄다. GlobalExceptionHandler가
+        // OptimisticLockingFailureException도 409(COMMON_409)로 바꾸지만, SeatConfirmSoldUseCase는
+        // 벌크 UPDATE + 읽기만 해 @Version 검사가 커밋에서 발화하지 않는다. 그 경로에 더티 체킹 쓰기가
+        // 생기면 일시 오류가 보상 신호로 둔갑하므로, 그때는 응답 본문의 code로 갈라야 한다.
         // 그 외 4xx(401 토큰 오류·404 등)는 설정/요청 오류일 수 있어 마찬가지로 CRITICAL로 가시화한다.
         if (e.getStatusCode().value() == HttpStatus.CONFLICT.value()) {
           log.error(
@@ -132,9 +136,12 @@ public class PaymentConfirmedEventListener {
               failedBookingId,
               e);
         } else {
+          // 예매 확정뿐 아니라 좌석 확정 실패 신호 발행(#489)도 이 경로로 떨어지므로, 문구는 어느 단계인지
+          // 단정하지 않는다 — 스택트레이스가 그것을 말한다.
           log.error(
-              "[CRITICAL] 결제 완료 이벤트로 예매 확정 중 치명적 오류 발생! "
-                  + "결제는 완료되었으나 예매 확정에 실패했습니다. 확인이 필요합니다. eventId: {}, bookingId: {}",
+              "[CRITICAL] 결제 완료 이벤트 처리 중 치명적 오류 발생! "
+                  + "결제는 완료되었으나 후속 처리(예매 확정 또는 좌석 확정 실패 신호 발행)가 실패했습니다. "
+                  + "확인이 필요합니다. eventId: {}, bookingId: {}",
               envelope.eventId(),
               failedBookingId,
               e);

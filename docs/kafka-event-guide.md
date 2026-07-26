@@ -274,7 +274,7 @@ Kafka는 at-least-once라 같은 이벤트가 재전달될 수 있다. **비멱�
 ### 5.1. 언제 쓰나
 
 - **비즈니스 컨슈머는 기본적으로 Inbox로 감싼다.** 현재 모든 도메인 `@KafkaListener`가 `InboxService.runIfFirst`를 거친다(§5.5 목록). Inbox를 쓰지 않는 유일한 `@KafkaListener`는 DLT 모니터(`DeadLetterConsumer`, groupId `dlt-monitor-group`)로, 이는 멱등 처리 대상이 아니라 실패 메시지 적재용이다.
-- **도메인 멱등은 2차 방어(방어 심층화)로 유지한다.** 예: `TicketIssueUseCase`의 `alreadyIssued`, 좌석 SOLD 확정의 409 응답. Inbox가 1차 중복 차단을, 도메인 멱등이 2차 안전망을 담당한다.
+- **도메인 멱등은 2차 방어(방어 심층화)로 유지한다.** 예: `TicketIssueUseCase`의 `alreadyIssued`, 좌석 SOLD 확정이 이미 같은 예매로 SOLD면 200을 반환하는 것(#489 — 이전에는 409였다. §2.3 참고). Inbox가 1차 중복 차단을, 도메인 멱등이 2차 안전망을 담당한다.
 
 ### 5.2. 사용법
 

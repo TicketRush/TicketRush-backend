@@ -11,6 +11,7 @@ import com.ticketrush.global.outbox.OutboxEntity;
 import com.ticketrush.global.outbox.OutboxRepository;
 import com.ticketrush.global.outbox.OutboxStatus;
 import com.ticketrush.shared.booking.event.BookingCreatedEvent;
+import com.ticketrush.shared.booking.event.SeatConfirmFailedEvent;
 import com.ticketrush.shared.payment.event.PaymentConfirmedEvent;
 import java.time.LocalDateTime;
 import org.junit.jupiter.api.AfterEach;
@@ -65,6 +66,30 @@ class OutboxEventPublisherTest {
     assertThat(saved.getStatus()).isEqualTo(OutboxStatus.PENDING);
     assertThat(saved.getRetryCount()).isZero();
     assertThat(saved.getEventId()).isNotBlank();
+  }
+
+  @Test
+  @DisplayName("성공: SeatConfirmFailedEvent는 이름과 무관하게 Booking 애그리거트로 유도된다(#489)")
+  void publish_derives_booking_aggregate_type_for_seat_confirm_failed_event() {
+    // given — 이름은 seat를 가리키지만 발행 주체는 booking이다. 패키지를 shared.seat로 옮기면
+    // aggregateType이 Seat가 되어, outbox 테이블을 공유하는 seat-service 릴레이가 booking이 쓴 행을
+    // 대신 발행하게 된다(소유권 역전). 그 전제를 여기서 고정한다.
+    TransactionSynchronizationManager.setActualTransactionActive(true);
+    SeatConfirmFailedEvent event =
+        new SeatConfirmFailedEvent(100L, "BOOK-1234", 3L, 2L, LocalDateTime.of(2026, 7, 26, 10, 0));
+    given(jsonConverter.serialize(event)).willReturn("{\"booking_id\":100}");
+
+    // when
+    outboxEventPublisher.publish(event);
+
+    // then
+    ArgumentCaptor<OutboxEntity> captor = ArgumentCaptor.forClass(OutboxEntity.class);
+    verify(outboxRepository).save(captor.capture());
+
+    OutboxEntity saved = captor.getValue();
+    assertThat(saved.getAggregateType()).isEqualTo("Booking");
+    assertThat(saved.getTopic()).isEqualTo("seat-confirm-failed-topic");
+    assertThat(saved.getAggregateId()).isEqualTo("100");
   }
 
   @Test

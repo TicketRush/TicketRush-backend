@@ -97,9 +97,9 @@ class SeatConfirmSoldUseCaseTest {
     assertThatCode(() -> seatConfirmSoldUseCase.execute(bookingNumber, seatId))
         .doesNotThrowAnyException();
 
-    // SSE는 첫 확정이 이미 발행했으므로 다시 쏘지 않는다. Redis 락만 멱등하게 다시 푼다.
-    verify(seatUnlockUseCase).forceRelease(seatId);
-    verifyNoInteractions(seatStatusEventPublisher);
+    // 부수효과는 다시 실행하지 않는다. 특히 forceRelease를 부르면 트랜잭션 안 동기 Redis 호출이 되어
+    // Redis 장애 시 정상 중복이 503이 되고, 호출자가 재시도→DLT로 빠진다.
+    verifyNoInteractions(seatUnlockUseCase, seatStatusEventPublisher);
   }
 
   @Test

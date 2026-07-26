@@ -34,6 +34,17 @@ metric() {
   echo "$1" | awk -v pat="$2" '$0 ~ pat && $0 !~ /^#/ { print $2; exit }'
 }
 
+# 첫 샘플 전에 한 번 확인한다. docker exec 이나 actuator 가 안 되면 모든 칼럼이 공란으로 나오는데,
+# 그건 "지표가 없다"와 구분되지 않는다 — §11.8 이 batch-size 적용 증명을 이 CSV 에 걸어 두었으므로
+# 조용히 빈 파일을 남기면 측정을 통째로 날린다.
+for svc in $SERVICES; do
+  if ! docker exec "$svc" curl -sf "localhost:${PORT}/actuator/prometheus" > /dev/null 2>&1; then
+    echo "preflight 실패: $svc 의 actuator(localhost:${PORT})를 읽지 못했다." >&2
+    echo "  컨테이너가 떠 있는지, PORT 가 맞는지 확인한다. (§11.5(c) 의 HikariCP 루프와 같은 경로다)" >&2
+    exit 1
+  fi
+done
+
 end=$(( $(date +%s) + DURATION ))
 while [ "$(date +%s)" -lt "$end" ]; do
   ts=$(date -u '+%Y-%m-%dT%H:%M:%SZ')

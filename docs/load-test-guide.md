@@ -662,6 +662,8 @@ DURATION=900 INTERVAL=5 ./outbox-sampler.sh > outbox-b1.csv   # load-test/bench/
 - **in-flight 슬롯 동작** — §10.3 판별표로 읽되 **임계값이 `batch-size`이므로 이제 300 기준**이다. in-flight가 0~300 사이에서 출렁이면 정상, 300에 붙어 정체하면 슬롯 고갈이다.
 - **커넥션** — §11.5(c)의 HikariCP 1초 루프 그대로. 한 배치가 커졌으니 `active`가 이전(피크 1)보다 오르는지 본다.
 - **프로듀서 버퍼** — 앱이 노출하면 `kafka_producer_buffer_available_bytes`로 본다. 없으면 발행 실패(`ticketrush_outbox_relay_total{result="fail"}`)가 0인지로 갈음하고, 추정을 수치로 쓰지 않는다.
+- **⚠️ 폴링 소요시간 대 `lockAtMostFor="1m"`** — 이 상향에서 가장 위험한 축이다. `dispatch()`는 배치를 순차로 `send()` 하는데 그 호출이 `MAX_BLOCK_MS`(5초)까지 동기 블로킹될 수 있어(브로커 메타데이터·버퍼 대기), 최악 소요가 배치 크기에 비례해 3배가 된다. **`lockAtMostFor`를 넘겨 도는 폴링이 있으면 다른 인스턴스가 동시에 들어와 in-flight 가드가 무력해지고 중복 발행이 돌아온다**(`OutboxRelayService`의 `inFlight` javadoc이 자기고백한 한계). 릴레이 로그의 폴링 간 간격이 60초를 넘는 구간이 있는지 보고, `relay_total{result="success"}` 증가분과 실제 outbox 행 수를 대조해 증폭이 없는지 확인한다.
+- **60/s는 이론 상한이지 보장값이 아니다.** `markSuccess`/`markFail`는 프로듀서 IO 스레드 하나에서 직렬로 `REQUIRES_NEW` 트랜잭션을 돈다(`OutboxStatusUpdater`). 배치가 3배면 그 스레드의 DB 왕복도 3배이고, 콜백이 다음 폴링(5초)보다 늦으면 그 폴링은 in-flight 때문에 0건을 발행한다 — 실효 발행률이 `batch-size / 5초`가 아니라 **콜백 처리율**에 묶인다. 측정값이 60/s에 못 미쳐도 33.3/s를 넘으면 이 이슈의 목표는 달성이며, 그 경우 상한이 어디서 걸렸는지 기록한다.
 
 **릴레이 주기를 안 건드린 이유** — `OutboxRelayScheduler`의 `@SchedulerLock(lockAtLeastFor = "3s")`가 배치가 즉시 끝나도 락을 3초간 붙잡는다. `fixedDelay`를 1초로 낮춰도 실질 주기가 3초에 묶여 기대한 100/s가 아니라 33/s가 된다. 처리량은 주기가 아니라 `batch-size`로 올린다. 주기를 진짜로 낮추려면 `lockAtLeastFor`부터 재조정해야 하고, 그 값은 다중 인스턴스 failover 지연과 맞물린 별개 축이다.
 

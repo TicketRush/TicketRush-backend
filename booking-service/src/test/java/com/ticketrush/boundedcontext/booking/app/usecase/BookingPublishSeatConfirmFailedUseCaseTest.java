@@ -8,6 +8,7 @@ import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 
 import com.ticketrush.boundedcontext.booking.domain.entity.Booking;
+import com.ticketrush.boundedcontext.booking.domain.types.BookingStatus;
 import com.ticketrush.boundedcontext.booking.out.repository.BookingRepository;
 import com.ticketrush.global.event.DomainEvent;
 import com.ticketrush.global.eventpublisher.EventPublisher;
@@ -38,13 +39,14 @@ class BookingPublishSeatConfirmFailedUseCaseTest {
   private static final Long USER_ID = 4L;
   private static final String BOOKING_NUMBER = "BOOK-1234";
 
-  private Booking booking() {
+  private Booking booking(BookingStatus status) {
     Booking booking =
         Booking.builder()
             .bookingNumber(BOOKING_NUMBER)
             .userId(USER_ID)
             .performanceId(1L)
             .seatId(SEAT_ID)
+            .bookingStatus(status)
             .build();
     ReflectionTestUtils.setField(booking, "id", BOOKING_ID);
     return booking;
@@ -54,7 +56,8 @@ class BookingPublishSeatConfirmFailedUseCaseTest {
   @DisplayName("성공: 예매를 조회해 SeatConfirmFailedEvent를 발행한다")
   void execute_success() {
     // given
-    given(bookingRepository.findById(BOOKING_ID)).willReturn(Optional.of(booking()));
+    given(bookingRepository.findById(BOOKING_ID))
+        .willReturn(Optional.of(booking(BookingStatus.CONFIRMED)));
 
     // when
     bookingPublishSeatConfirmFailedUseCase.execute(BOOKING_ID);
@@ -70,6 +73,35 @@ class BookingPublishSeatConfirmFailedUseCaseTest {
     assertThat(event.seatId()).isEqualTo(SEAT_ID);
     assertThat(event.userId()).isEqualTo(USER_ID);
     assertThat(event.failedAt()).isNotNull();
+  }
+
+  @Test
+  @DisplayName("성공: 이미 환불된 예매면 보상 대상이 아니므로 발행하지 않는다")
+  void execute_skips_when_already_refunded() {
+    // given — 환불이 끝난 예매의 PaymentConfirmedEvent 가 재전달되면(리밸런스·DLT 리플레이) 좌석은 이미
+    // 반환돼 있어 409 가 뜬다. 여기서 신호를 내보내면 #492 가 이미 환불된 건에 두 번째 환불을 건다.
+    given(bookingRepository.findById(BOOKING_ID))
+        .willReturn(Optional.of(booking(BookingStatus.REFUNDED)));
+
+    // when
+    bookingPublishSeatConfirmFailedUseCase.execute(BOOKING_ID);
+
+    // then
+    verify(eventPublisher, never()).publish(any());
+  }
+
+  @Test
+  @DisplayName("성공: 환불 진행 중인 예매면 보상 대상이 아니므로 발행하지 않는다")
+  void execute_skips_when_refunding() {
+    // given
+    given(bookingRepository.findById(BOOKING_ID))
+        .willReturn(Optional.of(booking(BookingStatus.REFUNDING)));
+
+    // when
+    bookingPublishSeatConfirmFailedUseCase.execute(BOOKING_ID);
+
+    // then
+    verify(eventPublisher, never()).publish(any());
   }
 
   @Test
