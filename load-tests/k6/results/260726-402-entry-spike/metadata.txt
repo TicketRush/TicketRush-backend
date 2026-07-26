@@ -96,6 +96,11 @@ NODE_CPU_AVG_PCT=구간별 22.38 → 67.61 → 21.92
 # 미실시
 CHAOS_BOOKING_OUTAGE=미실시 — 후속 이슈로 분리. 사유는 런북 §12.5 참고
 
+# 증적 캡처
+GRAFANA_CAPTURES=4/4 완료 (graph-latency-p95 / graph-rps-cpu / graph-server-avg / graph-booking-internal)
+GRAFANA_CAPTURE_RANGE=2026-07-26 18:56:00 ~ 19:12:00 (KST) — 전 캡처 동일
+GRAFANA_CAPTURE_LINKS=grafana-capture-links.md (쿼리·시간범위가 박힌 Explore URL)
+
 # ── 스모크 회차 (수치 폐기용, 포화점 캘리브레이션) ───────────────────────────
 SMOKE_PROFILE=baseline 1m@10/s -> 20s ramp -> 30s@60/s -> 20s ramp -> 1m@10/s (총 3m10s)
 SMOKE_ITERATIONS=4380

@@ -185,15 +185,15 @@ VU 30개가 **같은 QR 토큰**으로 동시에 `check-in`을 친다. 3라운�
 | `timeseries-node-cpu.json` | 호스트 CPU |
 | `timeseries-hikari-pending.json` / `hikari-active.json` | 커넥션 풀 |
 
-## 9. Grafana 캡처 — 완료 / 남은 것
+## 9. Grafana 캡처
 
-렌더러 플러그인이 없어 Explore 수동 캡처다(§11.6과 동일). SSH 터널(`-L 3000:localhost:3000`)로 접속해 아래 쿼리·시간범위로 캡처한다.
+렌더러 플러그인이 없어 Explore 수동 캡처다(§11.6과 동일). **4장 모두 완료.** 시간범위는 전부 `2026-07-26 18:56:00 ~ 19:12:00 KST`(= 측정 창 09:56:01~10:11:43 UTC)로 통일했다. 쿼리가 박힌 Explore 링크는 `grafana-capture-links.md`에 있다.
 
-| 파일 | PromQL | 시간범위 (KST) |
+| 파일 | PromQL | 그림이 보여주는 것 |
 |---|---|---|
-| `graph-latency-p95.png` | `1000*k6_entry_qr_duration_p95` / `..._verify_...` / `..._checkin_...` (3개 겹쳐) | 18:56 ~ 19:12 |
-| `graph-rps-cpu.png` | `sum(rate(k6_http_reqs_total[1m]))` 와 `100 - (avg(rate(node_cpu_seconds_total{mode="idle"}[1m])) * 100)` | 18:56 ~ 19:12 |
-| `graph-server-avg.png` | `1000 * (sum by (uri) (rate(http_server_requests_seconds_sum{instance="ticket-service:8090",uri=~"/api/v1/(entries/.*\|ticket/bookings/.*)"}[1m])) / sum by (uri) (rate(http_server_requests_seconds_count{...}[1m])))` | 18:56 ~ 19:12 |
-| `graph-booking-internal.png` | `sum(rate(http_server_requests_seconds_count{instance="booking-service:8090",uri="/api/v1/internal/booking/{bookingId}"}[1m]))` | 18:56 ~ 19:12 |
+| `graph-latency-p95.png` | `1000*k6_entry_qr_duration_p95` / `..._verify_...` / `..._checkin_...` | **피크(19:02~19:05)에도 세 선이 평평하다.** 부하 6배에 p95가 반응하지 않는다는 §3의 결론이 그림으로 보인다. 초반 18:56~18:57의 봉우리는 qr(녹색)만의 것으로, §4.2의 커넥션 수립 비용이다 |
+| `graph-rps-cpu.png` | `sum(rate(k6_http_reqs_total[1m]))` + 호스트 CPU | RPS 30 → **180 고원** → 30, CPU 22% → **73%** → 22%. baseline·스파이크·회복 3구간이 대칭으로 잡혔다 |
+| `graph-server-avg.png` | 서버 측 uri별 평균 지연 (ticket-service) | check-in(11~12.5ms) > verify(4~4.6ms) > qr(1.3~1.6ms)의 **세 띠가 분리된 채 피크에서도 순서가 유지된다.** §4.2가 "클라이언트 p95 역전은 앱이 아니다"라고 판정한 근거 1이 이 그림이다 |
+| `graph-booking-internal.png` | booking 내부조회 RPS + 평균 지연 | 내부조회 RPS가 20 → **120** → 20. entries RPS(verify+check-in) 120과 1:1로 일치해 §2.2의 통제군 설계가 맞았음을 보여준다 |
 
-**상태: 4장 모두 미완료.** 측정 데이터는 Prometheus에 남아 있으므로 EC2를 다시 켜고 터널을 띄우면 언제든 캡처할 수 있다.
+> `graph-booking-internal.png`의 평균 지연(노란선)은 RPS와 축을 공유해 바닥에 붙어 보인다. 실제 값은 1.36~1.61ms이며 수치는 §4.1 표와 `timeseries-booking-internal-avg-ms.json`을 본다.
