@@ -45,7 +45,11 @@
 
 **중복 발행 증폭은 없었다.** 코호트 10,000건에 대해 `relay_total{result="success"}`가 seat 10,005 / booking 10,000이다(seat의 +5는 코호트 밖 이벤트). #344에서 in-flight 가드 도입 전 3.09배 증폭이 실측됐던 것을 감안하면, 가드가 배치 300에서도 정상 동작했다.
 
-**커넥션 풀 압박 없음.** `hikaricp_connections_pending` 0, `active` 0. 만료 fallback이 단일 스레드 경로라는 #345 §5의 구조적 결론이 배치 상향 후에도 유지된다.
+**커넥션 풀 압박 없음.** `hikaricp_connections_pending`이 측정 전 구간 **0**이다. 만료 fallback이 단일 스레드 경로라는 #345 §5의 구조적 결론이 배치 상향 후에도 유지된다.
+
+다만 `hikaricp_connections_active`는 **피크 2**로, #345의 피크 1보다 하나 늘었다(tick마다 1~2로 오르내린다 — `graph-hikari.png`). 만료 처리 스레드와 릴레이 스레드가 겹치는 순간이 배치가 커지면서 길어진 것으로 보인다. 풀 크기가 10이라 여유가 크고 `pending`이 0인 이상 대기는 발생하지 않지만, **배치 상향의 대가가 실제로 관측된 유일한 지점**이므로 기록해 둔다.
+
+> 측정 종료 직후 actuator를 긁었을 때는 `active` 0이었다. 그 단발값만 보고 "active 0"으로 적었다가 Grafana 캡처에서 잡혔다 — 게이지의 순간값과 구간 최댓값을 구분해야 한다는 #345 §11.7의 교훈과 같은 종류다.
 
 **`lockAtMostFor="1m"` 초과 위험은 이 토폴로지에서 재현되지 않는다.** `dispatch()`가 배치를 순차로 `send()` 하고 그 호출이 `MAX_BLOCK_MS`(5초)까지 블로킹될 수 있으므로 최악 소요는 배치 크기에 비례하지만, 단일 인스턴스 배포라 락이 풀려도 동시 진입할 다른 노드가 없다. 다중 인스턴스로 가면 이 축을 다시 봐야 한다. 이번 회차에서 간접 증거는 위의 "증폭 없음"이다.
 
@@ -88,4 +92,4 @@
 | `graph-seat-expired-backlog.png` | 좌석 소진 계단 — 10,000 → 0, 정확히 5 tick |
 | `graph-outbox-backlog-inflight.png` | outbox 적체가 tick마다 0으로 돌아오는 톱니. in-flight 피크는 15초 스크랩이 놓치므로 CSV로 읽는다 |
 | `graph-relay-rate.png` | 발행률 |
-| `graph-hikari.png` | 커넥션 풀 — 전 구간 pending 0 |
+| `graph-hikari.png` | 커넥션 풀 — pending 전 구간 0, active 피크 2 |
