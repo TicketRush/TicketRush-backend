@@ -20,6 +20,7 @@ import io.github.resilience4j.circuitbreaker.CircuitBreakerConfig;
 import io.github.resilience4j.circuitbreaker.CircuitBreakerRegistry;
 import io.github.resilience4j.timelimiter.TimeLimiterRegistry;
 import java.time.Duration;
+import java.util.concurrent.atomic.AtomicReference;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -232,6 +233,28 @@ class BookingRestClientTest {
     assertThat(client.getBooking(BOOKING_ID).bookingStatus()).isEqualTo("CONFIRMED");
 
     assertThat(circuitState()).isEqualTo(CircuitBreaker.State.CLOSED);
+  }
+
+  @Test
+  @DisplayName("서킷: 호출은 별도 스레드풀이 아니라 호출 스레드에서 실행된다")
+  void circuit_runs_on_caller_thread() {
+    // disable-threadpool 을 켠 이유가 여기 있다. 풀에 넘기면 톰캣 스레드는 Future 를 기다리고
+    // 풀 스레드가 실제 호출을 잡아 요청당 스레드를 둘 다 점유한다 — 스레드 고갈을 줄이려는
+    // 이 이슈의 목적과 정반대다. 상한은 RestClient 의 read-timeout 이 준다.
+    Thread callerThread = Thread.currentThread();
+    AtomicReference<Thread> executingThread = new AtomicReference<>();
+    mockServer
+        .expect(requestTo(REQUEST_URL))
+        .andExpect(method(HttpMethod.GET))
+        .andRespond(
+            request -> {
+              executingThread.set(Thread.currentThread());
+              return withSuccess(SUCCESS_BODY, MediaType.APPLICATION_JSON).createResponse(request);
+            });
+
+    client.getBooking(BOOKING_ID);
+
+    assertThat(executingThread.get()).isSameAs(callerThread);
   }
 
   @Test
