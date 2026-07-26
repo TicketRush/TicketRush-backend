@@ -282,6 +282,9 @@ class SeatRepositoryTest {
 
     assertThat(updatedSeat1.getSeatStatus()).isEqualTo(SeatStatus.SOLD);
     assertThat(updatedSeat1.getHoldExpiredAt()).isNull();
+    // SOLD 전이가 booking_number를 보존한다는 것이 Seat.isSoldTo 멱등 판정의 전제다(#489).
+    // 이게 깨지면 정상 중복 재수신까지 "그 예매의 좌석이 아님"(409)으로 뒤집힌다.
+    assertThat(updatedSeat1.getBookingNumber()).isEqualTo("BOOK-1234");
     assertThat(notUpdatedSeat.getSeatStatus()).isEqualTo(SeatStatus.AVAILABLE);
   }
 

@@ -111,6 +111,10 @@ public enum ErrorStatus {
   // Seat 409
   SEAT_NOT_AVAILABLE(HttpStatus.CONFLICT, "SEAT_409_001", "현재 예매 가능한 좌석이 아닙니다."),
   SEAT_ALREADY_LOCKED(HttpStatus.CONFLICT, "SEAT_409_002", "이미 다른 사용자가 결제를 진행 중인 좌석입니다."),
+  // 판매 확정에서 "이미 같은 예매로 SOLD"(멱등 성공, 200)와 갈리는 치명적 실패다(#489). 좌석이 만료
+  // 해제됐거나 다른 예매가 쥐고 있어, 결제는 끝났는데 좌석이 없는 상태다 — SEAT_409_001 로 뭉개면
+  // 호출자가 정상 중복으로 읽고 삼킨다.
+  SEAT_CONFIRM_NOT_OWNED(HttpStatus.CONFLICT, "SEAT_409_003", "해당 예매의 좌석이 아니어서 판매 확정할 수 없습니다."),
 
   // Performance 400
   PERFORMANCE_MAIN_IMAGE_MISSING(HttpStatus.BAD_REQUEST, "PERFORMANCE_400_001", "메인 이미지는 필수입니다."),
