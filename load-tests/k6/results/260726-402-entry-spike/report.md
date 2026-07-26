@@ -184,6 +184,8 @@ VU 30개가 **같은 QR 토큰**으로 동시에 `check-in`을 친다. 3라운�
 | `timeseries-ticket-server-avg-ms.json` | 서버 측 엔드포인트별 평균 지연(§4.1의 원천) |
 | `timeseries-node-cpu.json` | 호스트 CPU |
 | `timeseries-hikari-pending.json` / `hikari-active.json` | 커넥션 풀 |
+| `graph-*.png` (4장) | Grafana Explore 수동 캡처 — 내용은 §9 |
+| `grafana-capture-links.md` | 위 캡처를 재현하는 Explore URL(쿼리·시간범위 포함) |
 
 ## 9. Grafana 캡처
 
