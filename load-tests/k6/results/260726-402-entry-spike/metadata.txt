@@ -1,0 +1,138 @@
+SERIES_ID=260726-402-entry-spike
+ISSUE=#402
+PR=#494
+DATE=2026-07-26 (KST)
+TARGET_HOST=EC2 54.116.243.250 (탄력 IP) — https://api.ticketrush.store
+TOPOLOGY=k6 local (docker compose, ADR 0004) --SSH tunnel(9090)--> EC2 deploy stack (Prometheus/Grafana EC2 로컬, ADR 0007)
+IMAGE_TAG=91fa085460f0f3bb99a2b2aa20d8498073e26adc (전 서비스 동일 — 게이트웨이 검표 라우트 추가 cd89e4b 포함 배포본)
+RUNBOOK=docs/load-test-guide.md §12
+SCENARIO=load-test/scenarios/entry-spike.js
+SCENARIO_DUP=load-test/scenarios/entry-duplicate-scan.js
+SEED=load-test/seed/seed_entry.sql (@ticket_count=25000, 리셋 내장)
+PROM_SCRAPE_INTERVAL=15s
+
+# 측정 대상
+ENTRY_BOOKING_ID_MIN=1000001
+ENTRY_TICKET_COUNT=25000
+BOOKING_ID_RANGE=1000001..1025000 (연속, seed 검증쿼리 contiguous=1)
+LOAD_ADMIN=loadtest-admin@ticketrush.local (user_role=ADMIN) — 평문·해시는 저장소·증적에 남기지 않음
+TICKET_OWNER=위 ADMIN 계정과 동일 (QR 소유자 검사와 hasRole(ADMIN)을 토큰 하나로 통과시키기 위함)
+SEAT_UNTOUCHED=true (검표 경로에 seat-service 없음 — #344/#345 좌석 코호트 미간섭)
+
+# 선결 수정 (이 배포본에 포함)
+GATEWAY_ROUTE_ADDED=/api/v1/entries/** (cd89e4b) — 이전 배포본은 이 경로에 404를 반환했다
+ROUTE_SMOKE_BEFORE=404 (2026-07-26 17:5x KST, 배포 전 main 빌드)
+ROUTE_SMOKE_AFTER=401 (2026-07-26 18:41 KST, 배포 91fa085 직후) — 라우트 반영 확인
+
+# 서비스 설정 (측정 당시 실제 값, Prometheus 조회)
+HIKARI_MAX_POOL=10 (ticket-service / booking-service 모두 — 명시 설정 없음, Spring Boot 기본)
+JVM_HEAP_MAX_MB=371 (ticket-service / booking-service 모두)
+TICKET_BOOKING_READ_TIMEOUT_MS=10000
+TICKET_BOOKING_CONNECT_TIMEOUT_MS=3000
+TICKET_BOOKING_RETRY=none
+TICKET_BOOKING_CIRCUIT_BREAKER=none
+TICKET_QR_TTL_MS=300000
+
+# 부하 프로파일 (k6 inspect 로 확정된 값)
+EXECUTOR=ramping-arrival-rate
+TIME_UNIT=1s
+START_RATE=10
+STAGES=6m@10/s -> 20s@10->60/s -> 3m@60/s -> 20s@60->10/s -> 6m@10/s
+TOTAL_DURATION=15m40s
+PRE_ALLOCATED_VUS=60 (env 오버라이드 — 파일 기본값 20 은 스모크에서 초기 램프에 부족했다)
+MAX_VUS=400
+REQUESTS_PER_ITERATION=3 (qr -> verify -> check-in)
+ACTUAL_ITERATIONS=19399 (예상 ≈19,400)
+DROPPED_ITERATIONS=0 (preAllocatedVUs 60 상향으로 해소)
+
+# 측정 창
+SMOKE_START_UTC=2026-07-26T09:50:21Z
+SMOKE_END_UTC=2026-07-26T09:53:33Z
+START_UTC=2026-07-26T09:56:01Z
+K6_END_UTC=2026-07-26T10:11:43Z
+WINDOW_END_UTC=2026-07-26T10:11:43Z
+WINDOW_END_SOURCE=k6 종료 시각 (검표 경로에 outbox·컨슈머 등 비동기 파이프라인이 없어 §10.2 의 "PENDING=0 첫 관측" 규약이 적용되지 않는다)
+
+# 정합성 결과
+DUP_SCAN_ROUNDS=3 (bookingId 1025000 / 1024999 / 1024998)
+DUP_SCAN_VUS=30
+DUP_SCAN_SUCCESS_PER_ROUND=1 / 1 / 1  (dup_already_used 29/30, dup_unexpected 0)
+DUP_SCAN_SQL_VERIFIED=yes — 3라운드 모두 ticket_status=USED 1행, used_at 기록됨
+USED_TICKETS_AFTER_RUN=19399 (booking_id 1000001..1019399 연속) — k6 entry_checkin_ok 19399 와 정확히 일치
+
+# 유입 축 (k6, 퍼센타일 SSOT)
+QR_P95_MS=27.07 (전 구간) / 구간별 46.50 → 28.89 → 27.19
+VERIFY_P95_MS=22.11 (전 구간) / 구간별 21.73 → 21.71 → 22.20
+CHECKIN_P95_MS=33.41 (전 구간) / 구간별 36.78 → 33.65 → 33.57
+QR_P99_MS=구간별 228.30 → 68.90 → 45.33 (전 구간값은 k6 기본 요약에 없음)
+VERIFY_P99_MS=구간별 57.54 → 41.98 → 42.54
+CHECKIN_P99_MS=구간별 195.47 → 52.31 → 51.05
+BOOKING_ROUNDTRIP_P95_DELTA_MS=-4.96 (클라이언트 p95 는 역전됨 — 아래 주석 참고). 서버 축 기준 2.59 / 3.20 / 2.65
+CONDITIONAL_UPDATE_P95_DELTA_MS=11.30 (클라이언트). 서버 축 기준 6.80 / 7.73 / 6.75
+HTTP_REQ_FAILED_RATE=0.00% (0 / 58198) — 전 구간
+ENTRY_NOT_USABLE_RATE=0.00% (0 / 38798)
+ENTRY_ALREADY_USED_RATE=0.00% (0 / 38798)
+ENTRY_TICKET_EXHAUSTED_RATE=0.00% (0 / 19399)
+ENTRY_BOOKING_UNAVAILABLE_RATE=0.00% (0 / 38798)
+
+# 처리 축 (Prometheus 서버 관점)
+# ⚠ http_server_requests_seconds 에 히스토그램 버킷이 없다(_count/_sum/_max 만 노출).
+#   서버 측 p95/p99 는 산출 불가이며 평균·롤링 max 만 기록한다. 근거·PromQL 은 런북 §12.4.
+BOOKING_INTERNAL_URI_LABEL=/api/v1/internal/booking/{bookingId} (스모크에서 실제 시계열로 확인)
+BOOKING_INTERNAL_AVG_MS=1.51 (전 구간) / 구간별 1.36 → 1.61 → 1.37
+BOOKING_INTERNAL_MAX_MS=구간 max 1.44 / 1.70 / 1.47 (1분 rate 기준 평균의 max)
+BOOKING_INTERNAL_RPS=피크 120.0 — entries RPS(verify+check-in) 120.0 과 1:1 일치 확인
+BOOKING_INTERNAL_NON_SUCCESS_RPS=0 (시계열 자체가 생성되지 않음 = 비성공 응답 0건)
+ENTRY_VERIFY_AVG_MS=서버 4.27 (전 구간) / 구간별 4.04 → 4.44 → 4.05  |  클라이언트 14.83
+ENTRY_CHECKIN_AVG_MS=서버 11.65 (전 구간) / 구간별 10.84 → 12.17 → 10.80  |  클라이언트 22.78
+HIKARI_PENDING_PEAK_TICKET=0 (전 구간)
+HIKARI_PENDING_PEAK_BOOKING=0 (전 구간). active peak: ticket 3 / booking 2 (풀 10)
+
+# 호스트 자원
+NODE_CPU_IDLE_BEFORE_PCT=8.00 (부하 전, 2026-07-26T09:50:06Z)
+NODE_CPU_PEAK_PCT=73.93 (피크 구간)
+NODE_CPU_AVG_PCT=구간별 22.38 → 67.61 → 21.92
+
+# 미실시
+CHAOS_BOOKING_OUTAGE=미실시 — 후속 이슈로 분리. 사유는 런북 §12.5 참고
+
+# ── 스모크 회차 (수치 폐기용, 포화점 캘리브레이션) ───────────────────────────
+SMOKE_PROFILE=baseline 1m@10/s -> 20s ramp -> 30s@60/s -> 20s ramp -> 1m@10/s (총 3m10s)
+SMOKE_ITERATIONS=4380
+SMOKE_HTTP_REQS=13141
+SMOKE_HTTP_REQ_FAILED=0.00%
+SMOKE_CHECKIN_OK=100.00% (4380/4380)
+SMOKE_QR_P95_MS=101.35
+SMOKE_VERIFY_P95_MS=215.96
+SMOKE_CHECKIN_P95_MS=234.55
+SMOKE_ROUNDTRIP_DELTA_P95_MS=114.61 (verify - qr)
+SMOKE_CONDITIONAL_UPDATE_DELTA_P95_MS=18.59 (checkin - verify)
+SMOKE_DROPPED_ITERATIONS=20 (preAllocatedVUs=20 이 초기 램프에서 부족 -> 본 회차는 60 으로 상향)
+SMOKE_NODE_CPU_MAX_PCT=97.91
+SMOKE_NODE_CPU_AVG_PCT=54.82
+SMOKE_ENTRIES_RPS_MAX=110.16
+SMOKE_BOOKING_INTERNAL_RPS_MAX=109.30
+SMOKE_HIKARI_PENDING_MAX_TICKET=1
+SMOKE_HIKARI_ACTIVE_MAX_TICKET=8
+
+# 캘리브레이션 판단
+# 피크 60 iter/s (= 180 HTTP req/s, iteration 당 3요청) 에서 호스트 CPU 가 97.91% 에 닿는다.
+# 무릎이 그 지점이므로 본 회차도 피크 60/s 를 유지한다 — 더 올리면 포화된 호스트의 큐잉을
+# 재는 것이 되어 검표 경로 자체의 수치가 흐려진다. 단일 EC2 에 앱 9 + Kafka·MySQL·Redis·
+# 관측 스택이 동거하므로 절대 수치에 포화가 섞인다는 §10.5·§11.7 단서가 그대로 적용된다.
+#
+# booking 내부조회 RPS(109.30) 가 entries RPS(110.16) 와 1:1 로 일치한다. verify 와 check-in
+# 양쪽 모두 booking 을 호출한다는 §12.1-(a) 의 근거가 실측으로 확인됐다.
+
+# ── 클라이언트 p95 역전에 대한 주석 ─────────────────────────────────────────
+# 전 구간 클라이언트 p95 는 qr(27.07) > verify(22.11) 로 역전돼 있다. 설계상 verify 는 qr 에
+# booking 왕복이 더해진 경로이므로 이 값을 그대로 왕복 비용으로 쓰면 음수가 된다.
+# 원인은 앱이 아니라 측정 순서다. qr 은 iteration 의 첫 요청이라 커넥션 수립 비용을 떠안는다.
+#   근거 1) 서버 측 평균은 전 구간·전 단계에서 qr < verify < check-in 으로 단조롭다
+#           (1.30 < 4.27 < 11.65 ms). 서버 측정은 네트워크·TLS 를 포함하지 않는다.
+#   근거 2) 부하가 6배 오른 피크에서 qr p95 가 46.50 -> 28.89 로 '내려간다'. 포화라면 반대로
+#           올라야 한다. 도착률이 높아 커넥션이 계속 살아 있는 구간에서 값이 낮아진 것이다.
+#   근거 3) 같은 구간에서 verify p95 는 21.73 -> 21.71 로 평평하다(커넥션 비용을 안 진다).
+# 따라서 왕복 비용의 SSOT 는 서버 축 차분(verify - qr)으로 둔다.
+# k6_http_req_blocked_p95 도 같은 방향을 가리키지만, baseline 구간 17개 표본이 전부 동일값이라
+# staleness 반복으로 판단해 방향성 근거로만 쓰고 수치로 인용하지 않는다.

@@ -1,0 +1,259 @@
+time="2026-07-26T18:50:21+09:00" level=warning msg="C:\\Users\\PC\\Desktop\\TicketRush-backend\\docker-compose.yml: the attribute `version` is obsolete, it will be ignored, please remove it to avoid potential confusion"
+ Container ticketrush-backend-k6-run-8826a4dff349 Creating 
+ Container ticketrush-backend-k6-run-8826a4dff349 Created 
+
+         /\      Grafana   /‾‾/  
+    /\  /  \     |\  __   /  /   
+   /  \/    \    | |/ /  /   ‾‾\ 
+  /          \   |   (  |  (‾)  |
+ / __________ \  |_|\_\  \_____/ 
+
+
+     execution: local
+        script: /scripts/scenarios/entry-spike.js
+        output: Prometheus remote write (http://host.docker.internal:9090/api/v1/write)
+
+     scenarios: (100.00%) 1 scenario, 400 max VUs, 3m40s max duration (incl. graceful stop):
+              * entry_spike: Up to 60.00 iterations/s for 3m10s over 5 stages (maxVUs: 20-400, gracefulStop: 30s)
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+  █ THRESHOLDS 
+
+    http_req_duration
+    ✓ 'p(95)<800' p(95)=203.47ms
+
+    http_req_failed
+    ✓ 'rate<0.01' rate=0.00%
+
+
+  █ TOTAL RESULTS 
+
+    checks_total.......: 4381    23.028819/s
+    checks_succeeded...: 100.00% 4381 out of 4381
+    checks_failed......: 0.00%   0 out of 4381
+
+    ✓ login 200
+    ✓ checked in(200)
+
+    CUSTOM
+    entry_already_used.............: 0.00%   0 out of 8760
+    entry_booking_unavailable......: 0.00%   0 out of 8760
+    entry_checkin_duration.........: avg=86.25ms  min=16.47ms med=56.8ms   max=639.56ms p(90)=193.31ms p(95)=234.55ms
+    entry_checkin_ok...............: 100.00% 4380 out of 4380
+    entry_not_usable...............: 0.00%   0 out of 8760
+    entry_qr_duration..............: avg=34.81ms  min=7.97ms  med=20.66ms  max=489.81ms p(90)=74.73ms  p(95)=101.35ms
+    entry_ticket_exhausted.........: 0.00%   0 out of 4380
+    entry_verify_duration..........: avg=70.99ms  min=10.1ms  med=41.49ms  max=523.22ms p(90)=166.73ms p(95)=215.96ms
+
+    HTTP
+    http_req_duration..............: avg=64.02ms  min=7.97ms  med=34.88ms  max=639.56ms p(90)=156.62ms p(95)=203.47ms
+      { expected_response:true }...: avg=64.02ms  min=7.97ms  med=34.88ms  max=639.56ms p(90)=156.62ms p(95)=203.47ms
+    http_req_failed................: 0.00%   0 out of 13141
+    http_reqs......................: 13141   69.075944/s
+
+    EXECUTION
+    dropped_iterations.............: 20      0.10513/s
+    iteration_duration.............: avg=192.63ms min=35.44ms med=130.17ms max=880.13ms p(90)=426.24ms p(95)=493.65ms
+    iterations.....................: 4380    23.023562/s
+    vus............................: 0       min=0            max=34
+    vus_max........................: 40      min=20           max=40
+
+    NETWORK
+    data_received..................: 12 MB   62 kB/s
+    data_sent......................: 7.3 MB  38 kB/s
+
+
+
+
+entry_spike ✓ [ 100% ] 000/040 VUs  3m10s  10.00 iters/s
