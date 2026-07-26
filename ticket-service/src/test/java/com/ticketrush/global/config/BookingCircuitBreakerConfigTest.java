@@ -59,7 +59,9 @@ class BookingCircuitBreakerConfigTest {
           assertThat(config.getSlidingWindowSize()).isEqualTo(20);
           assertThat(config.getMinimumNumberOfCalls()).isEqualTo(10);
           assertThat(config.getFailureRateThreshold()).isEqualTo(50f);
-          assertThat(config.getSlowCallDurationThreshold()).isEqualTo(Duration.ofMillis(300));
+          // 300ms 가 아니다 — #496 실측에서 배포 직후 워밍업 구간의 정상 호출이 300ms 를 넘겨
+          // 서킷이 오탐으로 열렸다(실패 0건, 차단 1472건). 되돌리면 그 회귀가 다시 난다.
+          assertThat(config.getSlowCallDurationThreshold()).isEqualTo(Duration.ofMillis(500));
           assertThat(config.getPermittedNumberOfCallsInHalfOpenState()).isEqualTo(3);
         });
   }

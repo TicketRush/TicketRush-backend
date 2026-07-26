@@ -30,8 +30,13 @@ public class BookingCircuitBreakerConfig {
   }
 
   /**
-   * 임계값은 #402 실측을 기준선으로 잡았다. 정상 왕복이 3.20ms(서버 축 차분, 피크)이므로 300ms 를 넘는 호출은 이미 비정상이다 —
+   * 임계값은 #402 실측을 기준선으로 잡았다. 정상 왕복이 3.20ms(서버 축 차분, 피크)이므로 느린호출 임계를 넘는 호출은 이미 비정상이다 —
    * read-timeout(1s)에 걸리지 않는 '느려짐'까지 실패로 세야 이 이슈가 겨냥한 시나리오(booking 이 죽지 않고 느려지는 경우)에서 서킷이 열린다.
+   *
+   * <p><b>느린호출 임계가 300ms 가 아니라 500ms 인 이유는 실측이다</b>(#496). 300ms 로 측정했을 때 <b>배포 직후 JIT 워밍업 구간에서 서킷이
+   * 오탐으로 열렸다</b> — 실패 호출은 0건인데 차단된 호출이 1,472건이었다. booking 은 멀쩡했고 워밍업이 끝난 뒤에는 slow_call_rate 가 0
+   * 이었다. 상한을 read-timeout(1s)까지 올리면 느린호출 축 자체가 무의미해지므로 500ms 를 절충선으로 둔다. 실측 왕복 기준으로는 여전히 156배 여유다.
+   * 근거: {@code load-tests/k6/results/260727-496-booking-outage/report.md} §5.3.
    *
    * <p>public 인 이유는 테스트가 {@code CircuitBreakerConfig.from(...)} 으로 이 설정을 파생해 윈도우 크기·대기 시간만 줄여 쓰기
    * 위함이다. 실패 판정 규칙({@link #isDownstreamFailure})을 테스트가 손으로 복제하면 규칙이 바뀌어도 테스트가 눈치채지 못한다.
@@ -42,7 +47,7 @@ public class BookingCircuitBreakerConfig {
         .slidingWindowSize(20)
         .minimumNumberOfCalls(10)
         .failureRateThreshold(50)
-        .slowCallDurationThreshold(Duration.ofMillis(300))
+        .slowCallDurationThreshold(Duration.ofMillis(500))
         .slowCallRateThreshold(50)
         .waitDurationInOpenState(Duration.ofSeconds(10))
         .permittedNumberOfCallsInHalfOpenState(3)

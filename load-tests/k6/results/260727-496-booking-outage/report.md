@@ -201,7 +201,7 @@ resilience4j_circuitbreaker_not_permitted_calls_total          = 1472   ← 그�
 2. `minimumNumberOfCalls`를 올려 초기 표본을 더 요구한다 — 워밍업 구간의 짧은 이상치가 임계를 흔들지 못하게 한다.
 3. CD가 배포 후 워밍업 트래픽을 흘린다 — 근본 해결이지만 이 이슈 범위 밖이다.
 
-이 회차에서는 before/after 비교 조건을 흔들지 않기 위해 임계를 바꾸지 않았다. 조정은 이 측정을 근거로 후속 커밋에서 판단한다.
+**측정 종료 후 1번을 채택해 `slowCallDurationThreshold`를 300ms → 500ms로 완화했다.** 이 리포트의 after 수치는 조정 전(300ms) 기준이며, 조정값 자체는 재측정하지 않았다 — 완화 방향이라 장애 검출이 늦어질 수는 있어도 오탐이 늘지는 않고, 실측 왕복 3.20ms 기준으로는 여전히 156배 여유다. 2번(`minimumNumberOfCalls` 상향)은 함께 넣지 않았다. 두 값을 동시에 바꾸면 다음에 문제가 났을 때 어느 쪽 효과인지 가를 수 없다.
 
 ### 5.4 before 배포가 필요 없었다
 
@@ -214,7 +214,7 @@ resilience4j_circuitbreaker_not_permitted_calls_total          = 1472   ← 그�
 - **`tomcat_threads_busy`는 15초 스크랩이라 순간 피크를 놓칠 수 있다.** `stop` 회차의 busy 87은 하한으로 읽어야 한다 — 같은 구간 `tomcat_threads_current`가 200(상한까지 확장)이고 gateway가 연결을 거부당한 것이 실제 포화의 증거다.
 - **측정 중 ticket-service·payment-service의 actuator health가 DOWN이었다.** Redis 연결 실패(`localhost:6379`)가 원인이며 검표 경로는 Redis를 쓰지 않아 이 측정에는 영향이 없다. 다만 별개 결함이다(아래 참고).
 - **after `pause` 회차의 k6 클라이언트 시계열은 Prometheus에 없다.** 측정 도중 k6 → Prometheus remote-write 경로의 SSH 터널이 끊겼다. 서버 축(ticket/gateway/booking/node)은 EC2 안에서 수집되므로 무관하고, k6 요약은 파일로 남아 있다. **이 리포트의 비교는 서버 축을 SSOT로 쓰고 k6는 요약값만 인용하므로 결론에 영향이 없다.** 다만 before 회차와 달리 이 회차의 k6 시계열 그래프는 만들 수 없다.
-- **서킷 임계값을 이 회차 중에 조정하지 않았다.** §5.3의 워밍업 오탐을 발견한 시점이 after 배포 직후였고, 임계를 바꾸면 재배포로 before/after 비교 조건이 흔들린다. 따라서 이 리포트의 after 수치는 **조정 전 임계(slow 300ms)** 기준이다.
+- **이 리포트의 after 수치는 `slowCallDurationThreshold=300ms` 기준이다.** §5.3의 워밍업 오탐을 발견한 시점이 after 배포 직후였고, 임계를 바꾸면 재배포로 before/after 비교 조건이 흔들리므로 측정 중에는 건드리지 않았다. **측정 종료 후 500ms로 완화했고 그 값은 재측정하지 않았다.** 완화 방향이라 이 리포트의 결론(전파 차단)은 유지되지만, 장애 검출 시각(§3.4의 10~18초)은 조정값에서 다소 늦어질 수 있다.
 
 ## 7. 이 측정과 별개로 발견한 것
 
