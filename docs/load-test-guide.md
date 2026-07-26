@@ -785,10 +785,11 @@ $SSH "docker exec -i ticketrush-mysql sh -c 'mysql -u root -p\"\$MYSQL_ROOT_PASS
 >   ```promql
 >   count by (instance) (http_server_requests_seconds_bucket)
 >   ```
-> - **gateway(`job="gateway"`)는 아직 켜지 않았다.** Spring Cloud Gateway는 와일드카드 라우트
->   (`Path=/api/v1/booking/**`)에 `BEST_MATCHING_PATTERN`을 세팅하지 않아 `uri` 라벨이 raw path로
->   잡힐 수 있고, 그러면 버킷이 경로 수만큼 곱해진다. 판정 쿼리는
->   `count(count by (uri) (http_server_requests_seconds_count{job="gateway"}))` 이며 #495에서 실측한다.
+> - **gateway(`job="gateway"`)의 p95는 엔드포인트별로 가를 수 없다.** Spring Cloud Gateway는
+>   와일드카드 라우트에 `BEST_MATCHING_PATTERN`을 세팅하지 않아 `uri` 라벨이 `/**`·`UNKNOWN`으로
+>   뭉개진다(#495 실측: gateway uri 카디널리티 **4** — `/**`, `UNKNOWN`, actuator 2개). 덕분에 버킷이
+>   경로 수만큼 곱해지지 않아 켜는 데 문제는 없지만, **게이트웨이 축에서 얻는 값은 전 트래픽을
+>   합친 p95다.** 엔드포인트별 서버 퍼센타일은 `job="ticketrush-services"` 쪽에서 본다.
 
 ```promql
 # 검표 p95 / p99 (서버 관점, #495) — 네트워크·TLS·커넥션 수립이 빠진 순수 처리시간
