@@ -11,8 +11,8 @@ public class RestClientConfig {
   @Bean
   public RestClient bookingServiceRestClient(
       @Value("${service.booking.url}") String bookingServiceUrl,
-      @Value("${service.http.connect-timeout-ms:3000}") long connectTimeoutMs,
-      @Value("${service.http.read-timeout-ms:10000}") long readTimeoutMs) {
+      @Value("${service.http.connect-timeout-ms:1000}") long connectTimeoutMs,
+      @Value("${service.http.read-timeout-ms:1000}") long readTimeoutMs) {
     return RestClient.builder()
         .baseUrl(bookingServiceUrl)
         .requestFactory(RestClientFactorySupport.withTimeouts(connectTimeoutMs, readTimeoutMs))

@@ -1,0 +1,28 @@
+# #496 측정 전용 — ticket-service 의 톰캣 스레드 메트릭을 켜는 compose override.
+#
+# Spring Boot 는 2.2 부터 server.tomcat.mbeanregistry.enabled 기본값이 false 라 톰캣 ThreadPool
+# MBean 이 등록되지 않고, 그래서 Micrometer 의 tomcat.threads.* 바인딩이 통째로 비어 있다.
+# 실제로 이 배포본(da2c85e)의 /actuator/prometheus 에는 tomcat_sessions_* 6개만 있고
+# tomcat_threads_busy_threads / tomcat_threads_config_max_threads 는 존재하지 않는다.
+#
+# #496 의 완료 조건이 "톰캣 스레드 점유를 수치로 기록"이므로 이 override 없이는 before/after
+# 어느 쪽도 그 항목을 채울 수 없다. **before 와 after 회차에 동일하게 적용해야** 두 회차의
+# 관측 조건이 같아진다.
+#
+# ⚠ .env 의 IMAGE_TAG 가 실행 중 컨테이너보다 뒤처져 있다(확인 시점: .env 6b7301a vs 실행 da2c85e).
+#   반드시 현재 태그를 확인해 명시한다:
+#   TAG=$(docker inspect ticket-service --format '{{.Config.Image}}' | cut -d: -f2)
+#
+# 적용:  IMAGE_TAG=$TAG docker compose -f docker-compose.prod.yml -f ticket-tomcat-mbean.override.yml up -d --no-deps ticket-service
+# 원복:  IMAGE_TAG=$TAG docker compose -f docker-compose.prod.yml up -d --no-deps ticket-service
+#
+# 확인: docker exec ticket-service sh -c 'curl -s localhost:8090/actuator/prometheus' | grep tomcat_threads
+#       tomcat_threads_busy_threads / tomcat_threads_config_max_threads 가 나오면 활성.
+#
+# ⚠ 컨테이너 재생성이므로 JVM 워밍업이 리셋된다. 적용 후 20분 이상 두고 측정한다
+#   (#402 §6.1: 배포 직후 CPU 97.91% vs 20분 뒤 73.93%).
+services:
+  ticket-service:
+    environment:
+      # Spring relaxed binding 이 이 env 를 server.tomcat.mbeanregistry.enabled 로 매핑한다.
+      SERVER_TOMCAT_MBEANREGISTRY_ENABLED: "true"

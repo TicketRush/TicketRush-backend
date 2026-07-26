@@ -1,0 +1,4 @@
+=== DB 대조 (entry_checkin_ok=11793 과 일치해야 함) ===
+ticket_status	COUNT(*)
+USED	11793
+UNUSED	13207

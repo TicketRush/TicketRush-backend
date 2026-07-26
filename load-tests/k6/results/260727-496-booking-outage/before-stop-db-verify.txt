@@ -1,0 +1,3 @@
+ticket_status	COUNT(*)
+USED	1761
+UNUSED	23239

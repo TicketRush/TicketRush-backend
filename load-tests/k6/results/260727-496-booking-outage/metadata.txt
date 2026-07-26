@@ -1,0 +1,168 @@
+SERIES_ID=260727-496-booking-outage
+ISSUE=#496
+PR=(미생성)
+DATE=2026-07-27 (KST)
+TARGET_HOST=EC2 54.116.243.250 (탄력 IP) — https://api.ticketrush.store
+TOPOLOGY=k6 local (docker compose, ADR 0004) --SSH tunnel(9090)--> EC2 deploy stack (Prometheus/Grafana EC2 로컬, ADR 0007)
+RUNBOOK=docs/load-test-guide.md §12.6
+SCENARIO=load-test/scenarios/entry-spike.js
+CHAOS=load-test/chaos/booking-outage.sh (MODE=pause|stop)
+SEED=load-test/seed/seed_entry.sql (@ticket_count=25000, 리셋 내장)
+PROM_SCRAPE_INTERVAL=15s
+
+# 측정 목적
+# #402 가 (선택) 항목으로 남긴 "booking 왕복이 끊기거나 느려졌을 때 검표 경로가 어떻게 되는가"를
+# 잰다. before(서킷 없음·read 10s) 와 after(서킷 있음·read 1s) 를 각각 두 실패 경로에 노출한다.
+
+# ── 회차 구성 ──────────────────────────────────────────────────────────────
+# before 는 별도 배포가 필요 없었다. 측정 시작 시점 EC2 배포본이 정확히 before 조건이었다.
+BEFORE_IMAGE_TAG=da2c85edb9ca2e53aca74160f138cbd88a04751b
+BEFORE_IMAGE_IS_DEVELOP_ANCESTOR=yes (git merge-base --is-ancestor 확인)
+BEFORE_IMAGE_HAS_495_BUCKETS=yes (slo 1ms~2s — after 와 관측 해상도 동일)
+BEFORE_TICKET_READ_TIMEOUT_MS=10000
+BEFORE_TICKET_CONNECT_TIMEOUT_MS=3000
+BEFORE_TICKET_CIRCUIT_BREAKER=none (resilience4j 시계열 부재로 확인)
+AFTER_IMAGE_TAG=ed2742c84ea979d74eda080c7a68528d158877ca (refactor/496 HEAD, CD run 30212379631, 20m04s)
+AFTER_TICKET_READ_TIMEOUT_MS=1000
+AFTER_TICKET_CONNECT_TIMEOUT_MS=1000
+AFTER_TICKET_CIRCUIT_BREAKER=booking (window 20 / min 10 / fail 50% / slow 300ms 50% / open 10s / half-open 3)
+
+# ── 관측 설정 (before/after 공통, 측정 전용) ────────────────────────────────
+# ⚠ 톰캣 스레드 메트릭은 기본 배포본에 존재하지 않았다. Spring Boot 2.2+ 는
+#   server.tomcat.mbeanregistry.enabled 기본값이 false 라 ThreadPool MBean 이 등록되지 않고,
+#   Micrometer 의 tomcat.threads.* 가 통째로 비어 있다(확인 당시 tomcat_sessions_* 6개만 존재).
+#   이 이슈의 완료 조건이 "톰캣 스레드 점유 기록"이므로 override 로 켜고 두 회차에 동일 적용했다.
+TOMCAT_MBEAN_OVERRIDE=load-test/chaos/ticket-tomcat-mbean.override.yml (SERVER_TOMCAT_MBEANREGISTRY_ENABLED=true)
+TOMCAT_THREADS_CONFIG_MAX=200 (Spring Boot 기본, 실측 확인)
+
+# ── 워밍업 (두 회차 동일 절차) ─────────────────────────────────────────────
+# #402 §6.1 의 "20분 뒤 CPU 73.93%" 는 그 사이 스모크 부하가 JIT 를 돌렸기 때문이다.
+# 가만히 두는 것이 아니라 부하를 흘리는 것이 워밍업이므로, 두 회차 모두
+# [컨테이너 재생성 → 스모크(3m10s) → 약 23분 대기 → 본 측정] 순서와 간격을 동일하게 맞췄다.
+BEFORE_TICKET_RECREATED_UTC=2026-07-26T16:23:51Z
+BEFORE_SMOKE_UTC=2026-07-26T16:33Z~16:36Z (3m10s)
+
+# ── 회차 1: before / MODE=pause (read-timeout 경로) ─────────────────────────
+B1_K6_START_UTC=2026-07-26T16:58:57Z
+B1_K6_END_UTC=2026-07-26T17:14:38Z
+B1_PROFILE=6m@10/s -> 20s ramp -> 3m@60/s -> 20s ramp -> 6m@10/s (15m40s, #402 와 동일)
+B1_INJECT_UTC=2026-07-26T17:05:32Z ~ 17:07:32Z (120s, docker pause)
+B1_TOMCAT_BUSY_PEAK=200 / 200 (완전 고갈)
+B1_TOMCAT_CURRENT_PEAK=200
+B1_VERIFY_SERVER_AVG_PEAK_MS=6504.73 (#402 평상시 4.27)
+B1_CHECKIN_SERVER_AVG_PEAK_MS=1977.85 (#402 평상시 11.65)
+B1_ENTRIES_503_RATE_PEAK=6.67/s (서버 축)
+B1_GATEWAY_5XX_RATE_PEAK=63.64/s (전체 150.38/s 대비 42.3%)
+B1_NODE_CPU_PEAK_PCT=99.60
+B1_K6_BOOKING_UNAVAILABLE=2761 / 27950 (9.87%)
+B1_K6_QR_ISSUED_FAIL=3319 / 3319 (100% 실패)
+B1_K6_VERIFY_MAX_MS=10300  (read-timeout 10s 상한에 붙음)
+B1_K6_CHECKIN_MAX_MS=10020
+B1_K6_HTTP_REQ_FAILED=16.97% (7682 / 45245)
+B1_K6_DROPPED_ITERATIONS=2105
+B1_DB_VERIFY=USED 11793 = entry_checkin_ok 11793 (일치)
+B1_VALID=yes (already_used=0, not_usable=0, ticket_exhausted=0)
+
+# ── 회차 2: before / MODE=stop (connect 실패 경로) ──────────────────────────
+B2_K6_START_UTC=2026-07-26T17:16:20Z
+B2_K6_END_UTC=2026-07-26T17:20:32Z
+B2_PROFILE=1m@10/s -> 20s ramp -> 1m30s@60/s -> 20s ramp -> 1m@10/s (4m10s)
+B2_INJECT_UTC=2026-07-26T17:17:48Z ~ 17:18:49Z (60s, docker stop)
+B2_TOMCAT_BUSY_PEAK=87 / 200
+B2_TOMCAT_CURRENT_PEAK=200 (풀은 상한까지 확장됨)
+B2_ENTRIES_503_RATE_PEAK=시계열 없음 (아래 주석 참고 — 결함이 아니라 관측의 한계)
+B2_GATEWAY_5XX_RATE_PEAK=54.51/s (전체 133.04/s 대비 41.0%)
+B2_NODE_CPU_PEAK_PCT=71.12
+B2_K6_BOOKING_UNAVAILABLE=1839 / 5368 (34.25%)
+B2_K6_QR_ISSUED_FAIL=3380 / 3380 (100% 실패)
+B2_K6_QR_MAX_MS=30220
+B2_K6_VERIFY_MAX_MS=3060 (connect-timeout 3s 상한에 붙음)
+B2_K6_HTTP_REQ_FAILED=45.70% (5225 / 11433)
+B2_DB_VERIFY=USED 1761 = entry_checkin_ok 1761 (일치)
+B2_VALID=yes (already_used=0, not_usable=0, ticket_exhausted=0)
+
+# ⚠ B2 에서 ticket-service 의 http_server_requests 에는 entries 요청이 **전부 200** 으로만
+#   잡혔다(503 시계열 자체가 생성되지 않음). 서버 축만 보면 "지연 4.96ms, 무사고"로 읽힌다.
+#   실제로는 톰캣이 accept 를 거부하고 있었고, gateway 로그에 그 증거가 남아 있다:
+#     Connection refused: ticket-service/172.19.0.11:8087
+#   즉 **거부된 요청은 서버 축 메트릭에 아예 기록되지 않는다.** 전파 장애의 크기는
+#   gateway 축(job="gateway", outcome="SERVER_ERROR")과 k6 축에서만 보인다.
+#   이 회차를 서버 축만으로 판정했다면 "문제 없음"이라는 정반대 결론이 나왔을 것이다.
+
+# ── 폐기 회차 ──────────────────────────────────────────────────────────────
+DISCARDED_1=discarded-before-pause-k6-seedbug.txt
+DISCARDED_1_REASON=본 회차 앞에 seed_entry.sql 을 다시 돌리지 않아 스모크가 USED 로 만든 티켓
+  4399 장을 재사용했다. entry_already_used=8798 (= 4399 x 2, verify+check-in 양쪽)로
+  §12.5 무효 판정 기준에 걸린다. 런북의 "매 회차 앞에 시드를 다시 돌린다"를 빠뜨린 결과다.
+  이후 모든 회차 앞에 시드 리셋을 넣었다.
+
+# ── after 워밍업 (before 와 동일 절차·동일 간격) ────────────────────────────
+AFTER_TICKET_RECREATED_UTC=2026-07-26T17:41:5xZ (CD 배포 후 override 재적용)
+AFTER_SMOKE_UTC=2026-07-26T17:42:14Z~17:45:32Z (3m10s)
+AFTER_SMOKE_TO_RUN_GAP=23m (before 의 22m57s 와 맞춤)
+# ⚠ 이 스모크에서 서킷이 오탐으로 열렸다. failed=0 인데 not_permitted=1472 —
+#   slowCallDurationThreshold(300ms)를 JIT 워밍업 구간의 정상 호출이 넘겼기 때문이다.
+#   워밍업 후에는 slow_call_rate=0 / failure_rate=0 / not_permitted 증가 0 으로 깨끗했다.
+#   상세와 대응 선택지는 report.md §5.3.
+
+# ── 회차 3: after / MODE=pause ─────────────────────────────────────────────
+A1_K6_START_UTC=2026-07-26T18:08:59Z
+A1_K6_END_UTC=2026-07-26T18:24:45Z
+A1_PROFILE=B1 과 동일 (15m40s)
+A1_INJECT_UTC=2026-07-26T18:15:34Z ~ 18:17:34Z (120s, docker pause)
+A1_TOMCAT_BUSY_PEAK=4 / 200
+A1_TOMCAT_CURRENT_PEAK=68
+A1_VERIFY_SERVER_AVG_PEAK_MS=180.13
+A1_CHECKIN_SERVER_AVG_PEAK_MS=25.75
+A1_ENTRIES_503_RATE_PEAK=120.47/s
+A1_GATEWAY_5XX_RATE_PEAK=120.33/s (전체 181.09/s)
+A1_CB_NOT_PERMITTED_RATE_PEAK=120.20/s
+A1_CB_OPEN_UTC=18:15:44 (주입 후 10s) ~ 18:17:14
+A1_CB_HALF_OPEN_UTC=18:17:29
+A1_CB_CLOSED_RECOVERY_UTC=~18:17:44 (주입 해제 후 ~10s)
+A1_NODE_CPU_PEAK_PCT=68.86
+A1_K6_BOOKING_UNAVAILABLE=14576 / 38646 (37.71%)
+A1_K6_QR_ISSUED_FAIL=0  (before 3319 = 100% 실패)
+A1_K6_VERIFY_AVG_MS=23.59 / p95 23.87
+A1_K6_HTTP_REQ_P95_MS=30.71
+A1_K6_HTTP_REQ_FAILED=25.14%
+A1_K6_DROPPED_ITERATIONS=76  (before 2105)
+A1_K6_ITERATIONS=19323  (before 17294)
+A1_DB_VERIFY=USED 12034 = entry_checkin_ok 12034 (일치)
+A1_VALID=yes (already_used=0, not_usable=0, ticket_exhausted=0)
+
+# ── 회차 4: after / MODE=stop ──────────────────────────────────────────────
+A2_K6_START_UTC=2026-07-26T18:24:48Z
+A2_K6_END_UTC=2026-07-26T18:28:59Z
+A2_PROFILE=B2 와 동일 (4m10s)
+A2_INJECT_UTC=2026-07-26T18:26:15Z ~ 18:27:16Z (60s, docker stop)
+A2_TOMCAT_BUSY_PEAK=2 / 200
+A2_VERIFY_SERVER_AVG_PEAK_MS=17.18
+A2_ENTRIES_503_RATE_PEAK=120.04/s
+A2_GATEWAY_5XX_RATE_PEAK=120.09/s (전체 180.20/s)
+A2_CB_OPEN_UTC=18:26:33 (주입 후 18s) ~ 18:27:48
+A2_CB_CLOSED_RECOVERY_UTC=~18:27:48 (주입 해제 후 ~32s)
+A2_CB_FAILURE_RATE_PEAK=100 / A2_CB_SLOW_RATE_PEAK=0
+  (연결 거부는 즉시 실패라 failure 축으로 열린다. pause 회차는 slow 축이 먼저 반응했다)
+A2_NODE_CPU_PEAK_PCT=75.14
+A2_K6_BOOKING_UNAVAILABLE=10774 / 15998 (67.34%)
+A2_K6_QR_ISSUED_FAIL=0  (before 3380 = 100% 실패)
+A2_K6_QR_MAX_MS=503.11  (before 30220)
+A2_K6_VERIFY_MAX_MS=1010 (read-timeout 1s 상한)
+A2_K6_HTTP_REQ_P95_MS=28.02  (before 11240)
+A2_K6_HTTP_REQ_FAILED=44.89%
+A2_DB_VERIFY=USED 2611 = entry_checkin_ok 2611 (일치)
+A2_VALID=yes (already_used=0, not_usable=0, ticket_exhausted=0)
+
+# ⚠ after 회차의 k6 클라이언트 시계열은 Prometheus 에 없다(A1 도중 SSH 터널 단절).
+#   서버 축은 EC2 안에서 수집되므로 무관하고, k6 요약은 파일로 남아 있다.
+#   이 회차의 비교는 서버 축이 SSOT 이므로 결론에 영향 없음 — report.md §6 참고.
+
+# ── 계정·정리 ──────────────────────────────────────────────────────────────
+LOAD_ADMIN=loadtest-admin@ticketrush.local (user_role=ADMIN) — 평문·해시는 저장소·증적에 남기지 않음
+CLEANUP=완료 (cleanup_load.sql — admin_left=0, tickets_left=0, bookings_left=0 확인)
+DEPLOY_BRANCH_POLICY=refactor/496 임시 추가(id 55676818) → 측정 후 제거 완료 (main 만 남음)
+TOMCAT_MBEAN_OVERRIDE_REVERTED=완료 (기본 compose 로 ticket-service 재생성, EC2 임시 파일 삭제)
+DEPLOYED_IMAGE_AFTER_MEASUREMENT=ed2742c (refactor/496) — 이 브랜치가 EC2 에 남아 있다.
+  CD 는 push:main + workflow_dispatch 라 develop 머지가 자동 배포를 하지 않는다.
+  PR 머지 후 develop 을 배포하거나, 필요하면 이전 태그(da2c85e)로 되돌린다.
