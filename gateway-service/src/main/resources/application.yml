@@ -65,7 +65,10 @@ spring:
             - id: ticket-service
               uri: http://${services.ticket.host}:8087
               predicates:
-                - Path=/api/v1/ticket/**,/v3/api-docs/ticket
+                # /api/v1/entries/** = 입장 검표(verify·check-in). ticket-service SecurityConfig가
+                # hasRole("ADMIN")을 걸고 GatewayHeaderFilter가 게이트웨이 주입 헤더로 인증하는 설계인데
+                # 라우트가 없어 외부에서 도달 자체가 불가능했다(인터넷에 열린 포트는 게이트웨이 8080뿐).
+                - Path=/api/v1/ticket/**,/api/v1/entries/**,/v3/api-docs/ticket
               filters:
                 - RewritePath=/v3/api-docs/ticket,/v3/api-docs
 
