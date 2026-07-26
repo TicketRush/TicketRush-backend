@@ -72,8 +72,9 @@
 
 - **n=1.** #345 B1과의 1:1 대조가 목적이라 반복하지 않았다.
 - 단일 EC2에 앱 9개 + Kafka·MySQL·Redis·관측 스택이 동거하므로 절대 수치에 포화가 섞인다.
-- **Grafana 캡처 없음.** 관측 스택이 `127.0.0.1` 바인딩이고 이미지 렌더러 플러그인이 없어 API로 PNG를 뽑을 수 없다(#345 §8과 같은 제약). 곡선은 위 두 CSV로 대신한다.
+- **Grafana 캡처는 사람이 SSH 터널로 뜬 것이다.** 관측 스택이 `127.0.0.1` 바인딩이고 이미지 렌더러 플러그인이 없어 API로 PNG를 뽑을 수 없다(#345 §8과 같은 제약). 링크는 `grafana-capture-links.md`에 있다.
 - 실효 발행률은 5초 폴링 CSV의 구간 계산값이다. 5초 샘플 경계에 폴링이 겹치면 순간값이 부풀 수 있어(단발 피크는 73~77/s까지 튄다) **피크가 아니라 구간 소진 시간으로 산출했다.**
+- **산출 방식에 따라 수치가 갈린다는 점에 주의한다.** 위 표의 53.2/s는 "적체 피크 → 0" 구간만 나눈 값(= 릴레이가 실제로 일하는 동안의 속도)이고, Grafana의 `rate(...[1m])`는 tick 사이 유휴 구간까지 평균에 넣어 **서비스당 44.4/s**로 나온다. 둘 다 맞으며 생성률 33.3/s를 넘는다는 결론도 같다. 그래프를 읽을 때는 **`sum by (instance)`로 나눠 봐야 한다** — 라벨 없이 `sum`하면 seat+booking이 합쳐져 약 90/s로 보이고, 그걸 단일 서비스 처리량으로 오독하기 쉽다.
 - 이 측정은 발행 처리량만 다룬다. #489의 다른 축(좌석 확정 409 오분류)은 대량 만료 창에 결제가 들어와야 재현되는데 이 시나리오에는 결제가 없다 — 그쪽은 단위 테스트와 로컬 수동 확인으로 검증했다.
 
 ## 8. 증적 파일
@@ -83,3 +84,8 @@
 | `drain-b1.csv` | 좌석 만료 적체 + 미발행 outbox (5초, SQL 폴링). 헤더가 #345 `drain-b1.csv`와 같아 직접 비교된다 |
 | `outbox-b1.csv` | `backlog` / `in_flight` / `relay_total` (5초, actuator). seat·booking 두 홉 |
 | `metadata.txt` | 배포 태그·설정·사전 점검·측정 창 |
+| `grafana-capture-links.md` | 측정 창·쿼리가 채워진 Explore 링크. 라벨 함정(`application` 아님, `instance`)을 함께 적어 뒀다 |
+| `graph-seat-expired-backlog.png` | 좌석 소진 계단 — 10,000 → 0, 정확히 5 tick |
+| `graph-outbox-backlog-inflight.png` | outbox 적체가 tick마다 0으로 돌아오는 톱니. in-flight 피크는 15초 스크랩이 놓치므로 CSV로 읽는다 |
+| `graph-relay-rate.png` | 발행률 |
+| `graph-hikari.png` | 커넥션 풀 — 전 구간 pending 0 |

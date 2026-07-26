@@ -602,8 +602,10 @@ SQL() { $SSH "docker exec -i ticketrush-mysql sh -c 'mysql -u root -p\"\$MYSQL_R
 ```promql
 ticketrush_seat_hold_expired_backlog                 # 적체 해소 곡선 (B1 주 지표, §11.1)
 ticketrush_seat_held                                 # 미만료 HOLD (대조 — 코호트 측정에선 0 유지가 정상)
-hikaricp_connections_pending{application="seat-service"}   # 커넥션 풀 압박 피크
-hikaricp_connections_active{application="seat-service"}
+# 라벨은 application 이 아니라 instance 다(#489에서 확인 — application 라벨은 이 스택에 존재하지 않는다).
+# 잘못 쓰면 Grafana 가 조용히 "No data" 를 낸다.
+hikaricp_connections_pending{instance="seat-service:8090"}   # 커넥션 풀 압박 피크
+hikaricp_connections_active{instance="seat-service:8090"}
 sum(rate(ticketrush_outbox_relay_total{result="success"}[1m]))  # 만료 이벤트 발행 소화
 ticketrush_outbox_backlog / ticketrush_outbox_in_flight         # 겹쳐 읽는다 (§10.3 판별표)
 ```
