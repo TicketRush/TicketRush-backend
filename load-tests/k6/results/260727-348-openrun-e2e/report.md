@@ -232,9 +232,11 @@ iowait 이 스모크의 1.85% 에서 11.29% 로 6배 오른 것도 같은 원인
 
 | 순위 | 병목 | 근거 | 개선 |
 |---|---|---|---|
-| 1 | **조회 응답 압축 부재** | 서버 82ms ↔ 클라이언트 35s, 221KB→9.7KB 가능 | `server.compression` 또는 nginx gzip (§3.4) |
-| 2 | **outbox 릴레이 발행 상한** | HTTP 는 놀고(tomcat 1) backlog 868 | batch-size·주기 재조정, 릴레이 병렬화 |
+| 1 | **조회 응답 압축 부재** | 서버 82ms ↔ 클라이언트 35s, 221KB→9.7KB 가능 | **[#505](https://github.com/TicketRush/TicketRush-backend/issues/505)** — `server.compression` 또는 nginx gzip (§3.4) |
+| 2 | **outbox 릴레이 발행 상한** | HTTP 는 놀고(tomcat 1) backlog 868 | batch-size·주기 재조정, 릴레이 병렬화 (후속 이슈 미생성) |
 | 3 (후보) | 호스트 CPU / 디스크 I/O | CPU 순간 100%, iowait 11.29% | 2 vCPU 단일 EC2 구성 자체 |
+
+> **1번을 풀기 전에는 2번 이하를 제대로 측정할 수 없다.** 조회 축이 회선에서 막혀 앱을 끝까지 밀어붙일 수 없기 때문이다. #505 적용 후 재측정이 다음 단계다.
 
 Kafka consumer concurrency 1 은 이 회차에서 **병목이 아니었다**(lag 최대 52). 릴레이가 앞에서 조여 컨슈머까지 부하가 도달하지 않았기 때문이며, §2 에서 예고한 대로 "릴레이가 컨슈머보다 앞에서 조인다"가 실측으로 확인됐다. **1번을 풀면 다음은 2번, 그 다음이 concurrency 일 것이다.**
 
