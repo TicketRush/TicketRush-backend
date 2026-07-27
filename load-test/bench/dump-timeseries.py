@@ -4,9 +4,13 @@
 주면 정해진 목록을 한 번에 떠서 파일로 남긴다. bench/ 의 다른 샘플러(trx/outbox)가 부하 '중'
 폴링이라면 이쪽은 부하가 '끝난 뒤' 한 번 도는 도구다.
 
-사용법:  python load-test/bench/dump-timeseries.py <START_UTC> <END_UTC> <OUTDIR>
+사용법:  python load-test/bench/dump-timeseries.py <START_UTC> <END_UTC> <OUTDIR> [회차이름]
   예:    python load-test/bench/dump-timeseries.py \
-           2026-07-27T14:38:00Z 2026-07-27T15:10:00Z load-tests/k6/results/260727-348-openrun-e2e
+           2026-07-27T14:38:00Z 2026-07-27T15:10:00Z load-tests/k6/results/260727-348-openrun-e2e ramp
+
+회차이름을 주면 `timeseries-<지표>-<회차이름>.json` 으로 저장한다. 한 리포트에 회차가 둘 이상이면
+반드시 줄 것 — 안 주면 뒤 회차가 앞 회차 파일을 덮어쓴다(#496 이 before/after 를 접미사로
+구분한 것과 같은 규약).
 
 전제:
   - Prometheus 에 SSH 터널이 떠 있어야 한다(localhost:9090). 관측 포트는 인터넷에 열려 있지
@@ -25,12 +29,14 @@ import sys
 import urllib.parse
 import urllib.request
 
-if len(sys.argv) != 4:
-    sys.exit(f"사용법: python {sys.argv[0]} <START_UTC> <END_UTC> <OUTDIR>\n"
+if len(sys.argv) not in (4, 5):
+    sys.exit(f"사용법: python {sys.argv[0]} <START_UTC> <END_UTC> <OUTDIR> [회차이름]\n"
              f"  예:   python {sys.argv[0]} 2026-07-27T14:38:00Z 2026-07-27T15:10:00Z "
-             f"load-tests/k6/results/260727-348-openrun-e2e")
+             f"load-tests/k6/results/260727-348-openrun-e2e ramp")
 
 START, END, OUTDIR = sys.argv[1], sys.argv[2], pathlib.Path(sys.argv[3])
+# 회차가 둘 이상인 리포트에서 파일이 서로 덮이지 않게 한다.
+SUFFIX = f"-{sys.argv[4]}" if len(sys.argv) == 5 else ""
 STEP = "15s"
 
 # (파일 슬러그, PromQL) — 파일명은 #402/#496 관행(timeseries-<slug>.json)을 따른다
@@ -104,7 +110,7 @@ for slug, expr in QUERIES:
     if not series:
         empty.append(slug)
         continue
-    path = OUTDIR / f"timeseries-{slug}.json"
+    path = OUTDIR / f"timeseries-{slug}{SUFFIX}.json"
     path.write_text(json.dumps({"query": expr, "start": START, "end": END,
                                 "step": STEP, "data": series},
                                ensure_ascii=False, indent=1), encoding="utf-8")
