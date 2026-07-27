@@ -5,7 +5,7 @@ import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.test.context.ActiveProfiles;
 
 @ActiveProfiles("test")
-@SpringBootTest(classes = UserServiceApplicationTests.class)
+@SpringBootTest(classes = UserServiceApplication.class)
 class UserServiceApplicationTests {
 
   @Test
