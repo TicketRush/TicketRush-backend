@@ -1,0 +1,17 @@
+SPIKE_START_UTC=2026-07-27T15:15:59Z
+SPIKE_K6_END_UTC=2026-07-27T15:33:28Z
+
+# 프로파일 구간 (k6 stages 로 확정)
+SPIKE_BASELINE_1=15:16:09Z ~ 15:22:09Z  (browse 2/s, purchase 5/s)
+SPIKE_RAMP_UP=15:22:09Z ~ 15:22:19Z     (10s)
+SPIKE_PEAK=15:22:19Z ~ 15:27:19Z        (browse 12/s, purchase 30/s)
+SPIKE_RAMP_DOWN=15:27:19Z ~ 15:27:29Z   (10s)
+SPIKE_BASELINE_2=15:27:29Z ~ 15:33:29Z  (회복)
+
+# outbox 5초 샘플러 (load-test/bench/outbox-sampler.sh, INTERVAL=5, DURATION=1250)
+SAMPLER_START_UTC=2026-07-27T15:20:35Z
+# ⚠ 샘플러는 baseline 중반부터 붙었다. 앞선 두 번의 시도(15:18:36Z, 15:19:40Z)가 즉시 실패했기
+#   때문이다 — Windows 워킹트리의 스크립트가 CRLF 라(core.autocrlf=true) ssh 로 넘기면
+#   `set -euo pipefail\r` 이 되어 "pipefail: invalid option name" 으로 죽는다.
+#   `tr -d '\r'` 로 흘려보내 해결했다. 피크(15:22:19Z~)와 회복 구간은 온전히 커버한다.
+SAMPLER_END_UTC=2026-07-27T15:41:26Z
