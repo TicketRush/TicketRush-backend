@@ -392,6 +392,16 @@ echo "SELECT COUNT(*) FROM seat WHERE seat_id=$SEAT AND seat_status='HOLD';" | S
 ```
 
 > Windows Git Bash 에서는 `/scripts/...` 가 `C:/Program Files/Git/scripts/...` 로 치환된다. 경로 앞에 `//` 를 붙이거나(`//scripts/scenarios/seat-contention.js`) `MSYS_NO_PATHCONV=1` 을 준다. PowerShell 은 그대로 쓴다.
+>
+> ⚠️ **Windows 에서 `bench/`·`chaos/` 스크립트를 EC2 로 흘려보낼 때는 CRLF 를 벗겨야 한다.** 워킹트리 파일이 CRLF 라(`core.autocrlf=true`) `ssh ... 'bash -s' < script.sh` 나 `cat > /tmp/x.sh` 로 넘기면 `set -euo pipefail\r` 이 되어 **`set: pipefail: invalid option name` 으로 첫 줄부터 죽는다.** 에러 메시지가 bash 버전 문제처럼 보여서 헤매기 쉽다(2026-07-27 #348 측정에서 샘플러가 두 번 이렇게 실패했다).
+>
+> ```bash
+> tr -d '\r' < load-test/bench/outbox-sampler.sh \
+>   | ssh -i <key> ubuntu@<EC2_IP> 'cat > /tmp/outbox-sampler.sh'
+> ssh -i <key> ubuntu@<EC2_IP> 'DURATION=1200 INTERVAL=5 bash /tmp/outbox-sampler.sh' > samples.csv
+> ```
+>
+> 넘긴 뒤 `bash -n /tmp/x.sh` 로 문법을 확인하면 실행 전에 걸러진다. `/bin/sh` 가 dash 인 것도 함께 주의한다 — 반드시 `bash` 로 실행한다.
 
 ### 10.3 PromQL
 
