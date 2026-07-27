@@ -247,7 +247,7 @@ increase(ticketrush_kafka_dlt_total[<구간>])                    # DLT 유입(�
 
 ### 8.4 주의
 
-- **DEAD 전이**: `app.outbox.max-retries=3` 초과 시 `DEAD`가 되고 relay가 더는 집지 않는다. 정지 180초에서는 시도당 실패 판정에 delivery.timeout(120초)이 걸려 보통 1~2회 실패로 끝나지만, 정지를 길게 잡으면 나올 수 있다. `verify-loss.sql` ③에서 DEAD가 보이면 유실이 아니라 **"수동 개입 필요"로 분리 기록**하고, `status='PENDING'`으로 되돌려 소진을 재확인한다.
+- **DEAD 전이**: `app.outbox.max-retries=3` 초과 시 `DEAD`가 되고 relay가 더는 집지 않는다. 정지 180초에서는 시도당 실패 판정에 delivery.timeout(120초)이 걸려 보통 1-2회 실패로 끝나지만, 정지를 길게 잡으면 나올 수 있다. `verify-loss.sql` ③에서 DEAD가 보이면 유실이 아니라 **"수동 개입 필요"로 분리 기록**하고, `status='PENDING'`으로 되돌려 소진을 재확인한다.
 - **구간 분리**: Phase A/B 측정 구간이 시간상 겹치면 inbox 대조가 오염된다. `verify-loss.sql`은 드레인 지연 때문에 inbox를 실행 시점까지 세므로, 반드시 backlog 소진 후 실행한다.
 - **타임존**: `verify-loss.sql`의 `@from/@to`는 **앱이 기록하는 `created_at` 기준(프로드 컨테이너는 UTC)**으로 준다. DB 세션 `NOW()`는 KST라 그대로 쓰면 구간이 안 맞아 조용히 0이 나온다.
 - **IMAGE_TAG 명시**: EC2 `deploy/.env`의 `IMAGE_TAG`는 CD가 배포 시점에만 주입하고 갱신하지 않아 실행 중 컨테이너보다 **뒤처져 있을 수 있다**. override 적용/원복의 `docker compose up`은 booking의 의존 서비스(seat·performance)까지 재생성하므로, 스테일 태그면 그 서비스들이 조용히 구버전으로 다운그레이드된다(실측 중 actuator 8090 분리 이전 이미지로 내려간 사례 있음). 반드시 현재 컨테이너 태그를 확인(`docker inspect gateway-service --format '{{.Config.Image}}'`)하고 `IMAGE_TAG=<그 태그> docker compose ... up -d booking-service`로 명시한다.
@@ -583,7 +583,7 @@ SQL() { $SSH "docker exec -i ticketrush-mysql sh -c 'mysql -u root -p\"\$MYSQL_R
    DURATION=660 ./trx-sampler.sh > trx-samples-b1.csv   # load-test/bench/
    ```
 
-   **(c) HikariCP 는 1초로 따로 떠야 한다.** Prometheus 스크랩이 15초라 2~6초짜리 tick 을 통째로 놓친다. actuator 를 직접 1초로 긁는다.
+   **(c) HikariCP 는 1초로 따로 떠야 한다.** Prometheus 스크랩이 15초라 2-6초짜리 tick 을 통째로 놓친다. actuator 를 직접 1초로 긁는다.
    ```bash
    while :; do
      printf '%s,' "$(date -u +%Y-%m-%dT%H:%M:%SZ)"
@@ -671,7 +671,7 @@ DURATION=900 INTERVAL=5 ./outbox-sampler.sh > outbox-b1.csv   # load-test/bench/
 
 **함께 확인할 트레이드오프**(이슈가 "측정으로 확인한다"고 적은 부분)
 
-- **in-flight 슬롯 동작** — §10.3 판별표로 읽되 **임계값이 `batch-size`이므로 이제 300 기준**이다. in-flight가 0~300 사이에서 출렁이면 정상, 300에 붙어 정체하면 슬롯 고갈이다.
+- **in-flight 슬롯 동작** — §10.3 판별표로 읽되 **임계값이 `batch-size`이므로 이제 300 기준**이다. in-flight가 0-300 사이에서 출렁이면 정상, 300에 붙어 정체하면 슬롯 고갈이다.
 - **커넥션** — §11.5(c)의 HikariCP 1초 루프 그대로. 한 배치가 커졌으니 `active`가 이전(피크 1)보다 오르는지 본다.
 - **프로듀서 버퍼** — 앱이 노출하면 `kafka_producer_buffer_available_bytes`로 본다. 없으면 발행 실패(`ticketrush_outbox_relay_total{result="fail"}`)가 0인지로 갈음하고, 추정을 수치로 쓰지 않는다.
 - **⚠️ 폴링 소요시간 대 `lockAtMostFor="1m"`** — 이 상향에서 가장 위험한 축이다. `dispatch()`는 배치를 순차로 `send()` 하는데 그 호출이 `MAX_BLOCK_MS`(5초)까지 동기 블로킹될 수 있어(브로커 메타데이터·버퍼 대기), 최악 소요가 배치 크기에 비례해 3배가 된다. **`lockAtMostFor`를 넘겨 도는 폴링이 있으면 다른 인스턴스가 동시에 들어와 in-flight 가드가 무력해지고 중복 발행이 돌아온다**(`OutboxRelayService`의 `inFlight` javadoc이 자기고백한 한계). 릴레이 로그의 폴링 간 간격이 60초를 넘는 구간이 있는지 보고, `relay_total{result="success"}` 증가분과 실제 outbox 행 수를 대조해 증폭이 없는지 확인한다.
@@ -799,7 +799,7 @@ echo "SELECT ticket_status, COUNT(*) FROM ticket
 
 > **이 시나리오의 측정 창 종점은 k6 종료 시각이다.** 검표 경로에는 outbox·컨슈머 같은 비동기 파이프라인이 없어 §10.2의 "PENDING=0 첫 관측" 규약이 적용되지 않는다. `metadata.txt`의 `WINDOW_END_SOURCE`에 그렇게 적는다.
 
-회차는 2~3회 반복하고 회차 간 60초 이상 띄운다.
+회차는 2-3회 반복하고 회차 간 60초 이상 띄운다.
 
 **5. 동일 QR 동시 다중 스캔 (3라운드).** 대상은 코호트 뒤쪽(스파이크가 도달하지 않는 구간)에서 고른다.
 ```bash
@@ -837,7 +837,7 @@ $SSH "docker exec -i ticketrush-mysql sh -c 'mysql -u root -p\"\$MYSQL_ROOT_PASS
 >
 > 읽을 때 주의할 것 셋:
 > - **`slo` 기반이라 `histogram_quantile()`은 경계 사이 선형보간이다.** 경계가 촘촘한 하단
->   (1~25ms)에서는 쓸 만하고, **2s를 넘는 지연은 `+Inf`에만 세어져 p99가 2s에서 포화된 것처럼 보인다.**
+>   (1-25ms)에서는 쓸 만하고, **2s를 넘는 지연은 `+Inf`에만 세어져 p99가 2s에서 포화된 것처럼 보인다.**
 >   그 구간의 꼬리는 `_max`로 함께 읽는다.
 > - **#402 이전 회차의 측정분에는 버킷이 없다.** 그 회차들의 퍼센타일 SSOT는 k6 클라이언트
 >   측정(`k6_entry_*_p95/p99`)이고, 서버 축은 평균으로만 읽어야 한다.
@@ -927,7 +927,7 @@ hikaricp_connections_pending{instance=~"ticket-service:8090|booking-service:8090
 
 ### 12.6 booking 장애 주입 회차 (#496)
 
-§12.1~12.5는 **booking이 정상일 때** 검표 경로가 버티는지를 쟀다. 이 절은 그 반대 — **booking이 죽거나 느려졌을 때 검표 경로가 함께 죽는가**를 잰다. #402가 (선택) 항목으로 남긴 질문이고, #496이 서킷브레이커·타임아웃 단축으로 답을 바꾸려 한 대상이다.
+§12.1-12.5는 **booking이 정상일 때** 검표 경로가 버티는지를 쟀다. 이 절은 그 반대 — **booking이 죽거나 느려졌을 때 검표 경로가 함께 죽는가**를 잰다. #402가 (선택) 항목으로 남긴 질문이고, #496이 서킷브레이커·타임아웃 단축으로 답을 바꾸려 한 대상이다.
 
 측정 대상 코드는 `ticket-service/.../out/apiclient/BookingRestClient.java`와 `.../global/config/BookingCircuitBreakerConfig.java`다. 서킷은 `booking` 인스턴스 하나이며 임계값은 실패율 50% / 느린호출 300ms 초과 50% / 윈도우 20(최소 10) / open 유지 10s / 반열림 3건이다.
 
@@ -938,7 +938,7 @@ hikaricp_connections_pending{instance=~"ticket-service:8090|booking-service:8090
 | read-timeout | 10s | 1s |
 | 서킷브레이커 | 없음 | `booking` |
 
-before는 배포본을 되돌리지 않고 **환경변수 오버라이드로 재현**한다. 서킷은 코드에 박혀 있어 env로 끌 수 없으므로, before 회차는 `SERVICE_HTTP_READ_TIMEOUT_MS=10000`으로 타임아웃만 되돌리고 **서킷 임계에 닿기 전 구간(주입 직후 10~20초)** 을 비교 구간으로 쓴다. 두 축을 완전히 분리하려면 #402 배포본 이미지 태그(`91fa085…`)로 한 회차를 더 돌려야 하는데, 그 배포본에는 §12.4의 `slo` 버킷(#495)이 없어 서버 축 퍼센타일이 나오지 않는다 — **before/after를 같은 관측 해상도로 놓으려면 env 오버라이드 쪽이 맞다.** 이 선택을 metadata에 적는다.
+before는 배포본을 되돌리지 않고 **환경변수 오버라이드로 재현**한다. 서킷은 코드에 박혀 있어 env로 끌 수 없으므로, before 회차는 `SERVICE_HTTP_READ_TIMEOUT_MS=10000`으로 타임아웃만 되돌리고 **서킷 임계에 닿기 전 구간(주입 직후 10-20초)** 을 비교 구간으로 쓴다. 두 축을 완전히 분리하려면 #402 배포본 이미지 태그(`91fa085…`)로 한 회차를 더 돌려야 하는데, 그 배포본에는 §12.4의 `slo` 버킷(#495)이 없어 서버 축 퍼센타일이 나오지 않는다 — **before/after를 같은 관측 해상도로 놓으려면 env 오버라이드 쪽이 맞다.** 이 선택을 metadata에 적는다.
 
 **(b) 주입**
 

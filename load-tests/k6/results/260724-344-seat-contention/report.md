@@ -68,7 +68,7 @@ http.setResponseCallback(http.expectedStatuses(200, 201, 409));
 
 `seat_hold{success}`가 1이 아닌 **3**이다. 동시 3중 선점이 아니라 **획득 → 해제 → 재획득**이 3회 반복된 것이다.
 
-해제 주체는 seat-service 로그가 특정한다 — `SeatReleaseSingleUseCase`의 *"Redis 만료 이벤트 수신: 좌석 121 상태를 AVAILABLE로 즉시 롤백했습니다"* 가 **12:35:40 · 12:37:16 · 12:38:03** 세 번 찍혔다. 그때마다 `SeatHoldExpiredEvent`가 booking-service로 흘러 해당 예매를 EXPIRED로 전이시켰고(로그: `ExpireBookingByNumberUseCase`, 예매 22887 · 23294 · 23994), 좌석이 AVAILABLE로 돌아온 순간 booking-service의 사전 체크가 다시 통과해 새 201 버스트가 생겼다. 예매 생성 시각 분포가 이를 그대로 보여준다 — **12:31분 408건 → 12:32~12:34분 0건(전부 409) → 12:35분 702건 → 12:37분 214건**.
+해제 주체는 seat-service 로그가 특정한다 — `SeatReleaseSingleUseCase`의 *"Redis 만료 이벤트 수신: 좌석 121 상태를 AVAILABLE로 즉시 롤백했습니다"* 가 **12:35:40 · 12:37:16 · 12:38:03** 세 번 찍혔다. 그때마다 `SeatHoldExpiredEvent`가 booking-service로 흘러 해당 예매를 EXPIRED로 전이시켰고(로그: `ExpireBookingByNumberUseCase`, 예매 22887 · 23294 · 23994), 좌석이 AVAILABLE로 돌아온 순간 booking-service의 사전 체크가 다시 통과해 새 201 버스트가 생겼다. 예매 생성 시각 분포가 이를 그대로 보여준다 — **12:31분 408건 → 12:32-12:34분 0건(전부 409) → 12:35분 702건 → 12:37분 214건**.
 
 > **미규명**: 세 번의 해제가 락 lease(`LOCK_TTL_MINUTES = 5`)보다 이른 **약 4분** 시점에 일어났다. 재진입 `tryLock`/`unlock`이 TTL을 어떻게 밀거나 당기는지까지는 이번 측정으로 특정하지 못했다. **위 시각과 주체는 로그로 확인된 사실이고, 그 간격의 원인은 확인하지 못했다** — 추정으로 메우지 않는다.
 
@@ -126,7 +126,7 @@ booking-service 릴레이가 **4,090건**을 발행했는데 outbox 행은 **1,3
 | `timeseries-inbox-rate.json` | `sum(rate(ticketrush_kafka_inbox_total{consumer_group="seat-group"}[1m])) by (result)` |
 | `timeseries-relay-rate.json` | booking-service 릴레이 발행률 |
 | `timeseries-k6-rps.json` | `sum(rate(k6_http_reqs_total[1m]))` |
-| `graph-*.png` (아래 4종) | Grafana Explore 캡처. 시간 범위 2026-07-24 21:31~21:39 KST |
+| `graph-*.png` (아래 4종) | Grafana Explore 캡처. 시간 범위 2026-07-24 21:31-21:39 KST |
 | `graph-seat-hold.png` | `sum(ticketrush_seat_hold_total) by (result)` — success 계단 vs unavailable 상승 |
 | `graph-outbox-backlog.png` | backlog 피크 634 → 0 소진 |
 | `graph-consumer-lag.png` | 컨슈머 랙 피크 14 — 거의 평평 (§6의 반증 근거) |
