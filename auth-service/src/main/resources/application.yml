@@ -1,6 +1,11 @@
 server:
   port: 8082
   forward-headers-strategy: framework
+  # Boot 2.2 부터 기본값이 false 라 톰캣 ThreadPool MBean 이 등록되지 않고, Micrometer 의
+  # tomcat.threads.* 바인딩이 통째로 빈다(#500). 스레드 포화를 수치로 볼 수단이라 켠다.
+  tomcat:
+    mbeanregistry:
+      enabled: true
 
 spring:
   profiles:

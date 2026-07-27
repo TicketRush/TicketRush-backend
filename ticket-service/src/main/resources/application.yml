@@ -1,6 +1,11 @@
 server:
   port: 8087
   forward-headers-strategy: framework
+  # Boot 2.2 부터 기본값이 false 라 톰캣 ThreadPool MBean 이 등록되지 않고, Micrometer 의
+  # tomcat.threads.* 바인딩이 통째로 빈다(#500). 스레드 포화를 수치로 볼 수단이라 켠다.
+  tomcat:
+    mbeanregistry:
+      enabled: true
 
 spring:
   profiles:
@@ -8,9 +13,12 @@ spring:
   application:
     name: ticket-service
   # ticket-service는 Redis를 쓰지 않는다. common의 redis 스타터가 전이돼 오토컨피그가 뜨는 것을 막는다(#425).
+  # FQCN 은 Boot 4.0 에서 boot.autoconfigure.data.redis → boot.data.redis.autoconfigure 로 옮겨졌고
+  # 클래스명도 DataRedis* 로 바뀌었다. 클래스패스에 없는 exclude 는 예외 없이 조용히 무시되므로
+  # (AutoConfigurationImportSelector#checkExcludedClasses) 구 이름을 남겨두면 이 줄이 통째로 죽는다(#500).
   autoconfigure:
     exclude:
-      - org.springframework.boot.autoconfigure.data.redis.RedisAutoConfiguration
+      - org.springframework.boot.data.redis.autoconfigure.DataRedisAutoConfiguration
   cloud:
     circuitbreaker:
       resilience4j:
