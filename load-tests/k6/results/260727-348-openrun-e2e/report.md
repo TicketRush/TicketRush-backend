@@ -383,4 +383,11 @@ k6 축도 같은 방향이다.
 
 시계열 중 **`k6_dropped_iterations_total` · gateway 5xx · `ticketrush_seat_lock_contention_total` 은 파일이 없다.** 쿼리는 성공했으나 데이터가 없었던 것이고, 각각 **도착률 전량 충족 / 5xx 0건 / 락 경합 0건**을 뜻한다.
 
-Grafana 패널 캡처는 이번 세션에서 남기지 않았다(배포본에 image renderer 가 없어 사람이 터널로 직접 찍어야 한다).
+**Grafana 패널 캡처는 아직 없다.** 배포본 Grafana 에 image renderer 가 없어(Alpine 이미지라 플러그인 방식 불가) 사람이 터널로 열어 직접 찍어야 한다. **찍을 패널 6개와 시간 범위가 박힌 Explore 링크를 `grafana-capture-links.md` 에 준비해 뒀다** — EC2 를 다시 켤 때(예: #505 재측정) 열어서 캡처하면 된다. Prometheus 보관이 15일이라 **2026-08-11 경까지** 위 측정 창을 조회할 수 있다.
+
+우선순위가 높은 두 장:
+
+| 파일 | 무엇을 보여주나 |
+|---|---|
+| `graph-seat-layouts-smoke.png` | 클라이언트 p95(34.97s)와 서버 평균(81.96ms)이 같은 축에 — 400배 차이가 전송 대기임 |
+| `graph-outbox-backlog-spike.png` | 부하(VU)는 내려갔는데 backlog 는 올라가는 2차 파동 |
