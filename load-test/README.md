@@ -15,13 +15,15 @@ load-test/
 │           #  seed_expired_holds.sql(만료 HOLD 코호트 — #345),
 │           #  seed_entry.sql(검표 코호트 + ADMIN 계정, 리셋 내장 — #402),
 │           #  reset_e2e.sql(e2e 회차 간 리셋 — #348)
-├── bench/    # trx-sampler.sh(MySQL 트랜잭션 지속시간·락 점유 샘플러 — #345)
+├── bench/    # trx-sampler.sh(MySQL 트랜잭션 지속시간·락 점유 샘플러 — #345),
+│           #  outbox-sampler.sh(outbox backlog·릴레이 처리량 샘플러 — #489),
+│           #  dump-timeseries.py(회차 시계열 증적 덤프 — #348, 로컬 실행)
 └── chaos/    # 장애 주입(#346): broker-outage.sh, verify-loss.sql, booking-outbox.override.yml,
             #  inbox-redeliver.sh·verify-inbox.sql(#347),
             #  seat-release-singletrx.override.yml(단일 트랜잭션 비교군 — #345)
 ```
 
-`bench/`·`chaos/`의 스크립트와 override는 **측정 전용**이다(프로덕션 반영 아님). 스크립트는 EC2 배포본 호스트에서 실행하고, override는 적용 후 반드시 원복한다.
+`bench/`·`chaos/`의 스크립트와 override는 **측정 전용**이다(프로덕션 반영 아님). 스크립트는 EC2 배포본 호스트에서 실행하고, override는 적용 후 반드시 원복한다. 예외로 `bench/dump-timeseries.py`는 **로컬에서** 실행한다(Prometheus SSH 터널 경유, 부하가 끝난 뒤 1회).
 
 k6는 docker-compose의 `loadtest` profile로 분리된 컨테이너에서 실행한다(상시 기동 대상 아님).
 
