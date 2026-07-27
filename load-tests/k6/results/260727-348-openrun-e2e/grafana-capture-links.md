@@ -12,7 +12,7 @@ ssh -i <key>.pem -N -L 9090:localhost:9090 -L 3000:localhost:3000 ubuntu@54.116.
 |---|---|
 | 스모크 (캘리브레이션) | 17:39:02 ~ 17:43:01 |
 | 계단식 | 23:38:24 ~ 00:05:05 (드레인 포함) |
-| 오픈런 스파이크 | 00:15:59 ~ 00:38:48 (드레인 포함) · **피크 00:22:19~00:27:19** |
+| 오픈런 스파이크 | 00:15:59 ~ 00:38:48 (드레인 포함) · **피크 00:22:19-00:27:19** |
 | 검표 스모크 | 00:41:41 ~ 00:44:59 |
 
 각 링크는 시간 범위가 URL 에 박혀 있어 열면 바로 해당 창이 뜬다. 캡처 후 이 디렉토리에 같은 파일명으로 저장한다.
@@ -28,7 +28,7 @@ http://localhost:3000/explore?orgId=1&schemaVersion=1&panes=%7B%22a%22%3A%7B%22d
 
 ## graph-outbox-backlog-spike.png
 
-**이 회차의 핵심 그림 2.** 피크(15:22:19~15:27:19Z)가 끝난 뒤 86초에 backlog 정점(1,219)이 온다. VU 곡선과 겹쳐 보면 '부하는 내려갔는데 backlog는 올라간다'가 한눈에 보인다.
+**이 회차의 핵심 그림 2.** 피크(15:22:19-15:27:19Z)가 끝난 뒤 86초에 backlog 정점(1,219)이 온다. VU 곡선과 겹쳐 보면 '부하는 내려갔는데 backlog는 올라간다'가 한눈에 보인다.
 
 http://localhost:3000/explore?orgId=1&schemaVersion=1&panes=%7B%22a%22%3A%7B%22datasource%22%3A%22prometheus%22%2C%22queries%22%3A%5B%7B%22refId%22%3A%22A%22%2C%22expr%22%3A%22ticketrush_outbox_backlog%7Bjob%3D%5C%22ticketrush-services%5C%22%7D%22%2C%22datasource%22%3A%7B%22type%22%3A%22prometheus%22%2C%22uid%22%3A%22prometheus%22%7D%7D%2C%7B%22refId%22%3A%22B%22%2C%22expr%22%3A%22k6_vus%22%2C%22datasource%22%3A%7B%22type%22%3A%22prometheus%22%2C%22uid%22%3A%22prometheus%22%7D%7D%5D%2C%22range%22%3A%7B%22from%22%3A%221785165300000%22%2C%22to%22%3A%221785166800000%22%7D%7D%7D
 

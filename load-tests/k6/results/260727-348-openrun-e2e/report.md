@@ -214,7 +214,7 @@ HTTP 계층이 놀고 있는 동안 **outbox 가 쌓였다.**
 
 ```
 예매 1건 → BookingCreatedEvent 1건
-         → (5~6분 뒤 만료) BookingExpiredEvent 1건 + SeatHoldExpiredEvent 1건
+         → (5-6분 뒤 만료) BookingExpiredEvent 1건 + SeatHoldExpiredEvent 1건
 ```
 
 피크 구간 purchase 25/s 에서 생성 25/s + 만료 계열 약 50/s = **약 75/s** 가 되어 릴레이 상한 53.2/s 를 넘는다. 실제로 **생성한 18,449건 중 13,651건(74%)이 측정 창 안에서 EXPIRED 로 전이했다.**
@@ -268,7 +268,7 @@ purchase  5 → 30 → 5 iter/s   (ratio 2.5)
 
 좌석 충돌·고갈 0건. **10초 램프로 6배를 밀어 넣어도 앱은 도착률을 전부 채웠다**(`dropped_iterations` 항목 자체가 요약에 없다).
 
-### 5.2 ⚠️ 부하가 끝난 뒤에 backlog 정점이 온다 — 5~6분 지연된 2차 파동
+### 5.2 ⚠️ 부하가 끝난 뒤에 backlog 정점이 온다 — 5-6분 지연된 2차 파동
 
 `outbox-sampler.sh` 로 5초 간격 164샘플을 떴다(Prometheus 15초 스크랩보다 3배 정밀).
 
@@ -280,11 +280,11 @@ purchase  5 → 30 → 5 iter/s   (ratio 2.5)
 
 **피크 중 최대가 358 인데, 피크가 끝나고 86초 뒤에 1,219 로 3.4배가 됐다.**
 
-메커니즘은 명확하다. 피크 5분(15:22:19~15:27:19)에 만든 약 9,000건이 `BookingExpireUseCase.PAYMENT_WAIT_MINUTES=5` 뒤 만료되기 시작하는데, **그 시점이 정확히 피크 종료 시점**이다. `BookingExpirationScheduler` 가 60초 주기로 배치 처리하면서 예매 1건당 `BookingExpiredEvent` + `SeatHoldExpiredEvent` 2건을 추가로 밀어 넣는다.
+메커니즘은 명확하다. 피크 5분(15:22:19-15:27:19)에 만든 약 9,000건이 `BookingExpireUseCase.PAYMENT_WAIT_MINUTES=5` 뒤 만료되기 시작하는데, **그 시점이 정확히 피크 종료 시점**이다. `BookingExpirationScheduler` 가 60초 주기로 배치 처리하면서 예매 1건당 `BookingExpiredEvent` + `SeatHoldExpiredEvent` 2건을 추가로 밀어 넣는다.
 
 ```
 피크 유입 (5분, ~9,000건)
-   └─ 5~6분 지연 ─→ 만료 파동 (이벤트 ~18,000건) ─→ backlog 정점
+   └─ 5-6분 지연 ─→ 만료 파동 (이벤트 ~18,000건) ─→ backlog 정점
 ```
 
 ### 5.3 회복시간
@@ -307,7 +307,7 @@ backlog 가 1,219 까지 쌓인 구간에도 **HTTP 응답은 영향받지 않�
 
 ## 6. 정합성 — oversell 0
 
-검증은 **outbox 가 완전히 드레인된 뒤**에 했다. 측정 창의 종점은 `outbox PENDING/FAILED = 0` 첫 관측인 **15:05:05Z** 이며, k6 종료(14:59:06Z)보다 6분 늦다 — 마지막 예매가 5~6분 뒤 만료되며 만료 계열 이벤트가 뒤따라 나왔기 때문이다.
+검증은 **outbox 가 완전히 드레인된 뒤**에 했다. 측정 창의 종점은 `outbox PENDING/FAILED = 0` 첫 관측인 **15:05:05Z** 이며, k6 종료(14:59:06Z)보다 6분 늦다 — 마지막 예매가 5-6분 뒤 만료되며 만료 계열 이벤트가 뒤따라 나왔기 때문이다.
 
 | 검증 | 결과 |
 |---|---|
@@ -362,7 +362,7 @@ k6 축도 같은 방향이다.
 - **조회 축의 절대 수치는 클라이언트 회선이 지배한다**(§3). 서버 축과 함께 읽어야 하며, 조회 경로의 "앱 처리량"은 이 회차로 확정할 수 없다.
 - **Nginx 가 부하 경로에 있는데 전용 지표가 없다.** 호스트 CPU 로만 간접 관측되므로 게이트웨이 앞단이 상한인지 가릴 수 없다.
 - **결제·티켓 발급이 여정에서 빠져 있다**(§2.2). 파이프라인 backlog 회복시간은 #504 로 분리했다.
-- **결제를 하지 않으므로 예매가 5~6분 뒤 전부 만료되고, 그 만료가 outbox 부하를 사실상 2배로 만든다.** `BookingExpireUseCase.PAYMENT_WAIT_MINUTES=5`, `BookingExpirationScheduler` 는 60초 주기다. outbox 수치에는 생성 트래픽과 만료 트래픽이 섞여 있어 운영 예측에 그대로 쓸 수 없다.
+- **결제를 하지 않으므로 예매가 5-6분 뒤 전부 만료되고, 그 만료가 outbox 부하를 사실상 2배로 만든다.** `BookingExpireUseCase.PAYMENT_WAIT_MINUTES=5`, `BookingExpirationScheduler` 는 60초 주기다. outbox 수치에는 생성 트래픽과 만료 트래픽이 섞여 있어 운영 예측에 그대로 쓸 수 없다.
 - **좌석을 유일 배정하므로 경합은 재지 않는다.** 경합 하의 거동은 #344 가 SSOT 다.
 
 ## 9. 증적 파일

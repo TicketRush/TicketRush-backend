@@ -1060,11 +1060,11 @@ POST /api/v1/booking → booking + outbox 한 트랜잭션 커밋
 
 Nginx는 부하 경로에 있으면서(443 → `127.0.0.1:8080`) 자체 지표가 없다. node-exporter의 호스트 CPU로만 간접 관측되므로 **"게이트웨이 앞단이 상한인지"는 이 회차로 가릴 수 없다.** 리포트 §한계에 명시한다.
 
-**(e) 예매가 5~6분 뒤 만료되면서 배경 부하를 만든다 — 유입의 2배가 outbox로 간다**
+**(e) 예매가 5-6분 뒤 만료되면서 배경 부하를 만든다 — 유입의 2배가 outbox로 간다**
 
-`BookingExpireUseCase`의 `PAYMENT_WAIT_MINUTES = 5`, `BookingExpirationScheduler`는 `@Scheduled(fixedDelay = 60000)`이다. **이 회차는 결제를 하지 않으므로(§13.1-(b)) 생성한 예매가 예외 없이 5~6분 뒤 EXPIRED로 전이**하며, booking당 `BookingExpiredEvent`를 outbox에 한 행 더 쓴다. 좌석도 `SeatHoldExpiredEvent` 경로로 풀린다.
+`BookingExpireUseCase`의 `PAYMENT_WAIT_MINUTES = 5`, `BookingExpirationScheduler`는 `@Scheduled(fixedDelay = 60000)`이다. **이 회차는 결제를 하지 않으므로(§13.1-(b)) 생성한 예매가 예외 없이 5-6분 뒤 EXPIRED로 전이**하며, booking당 `BookingExpiredEvent`를 outbox에 한 행 더 쓴다. 좌석도 `SeatHoldExpiredEvent` 경로로 풀린다.
 
-계단식 회차는 20m30s 동안 9,210건을 만드는데 **마지막 5~6분 치를 뺀 대부분이 측정 창 안에서 만료된다.** 그 결과:
+계단식 회차는 20m30s 동안 9,210건을 만드는데 **마지막 5-6분 치를 뺀 대부분이 측정 창 안에서 만료된다.** 그 결과:
 
 - outbox로 나가는 이벤트 총량이 생성분의 **사실상 2배** — (d)가 상한으로 제시한 릴레이 53.2/s에 대한 유효 여유가 절반이 된다
 - `ticketrush_outbox_backlog`를 병목 신호로 읽을 때 **생성 트래픽과 만료 트래픽이 섞인다**
@@ -1233,7 +1233,7 @@ docker compose run --rm --no-deps \
 
 k6 종료 시점에는 outbox에 미발행분이 남아 있다. **PENDING이 0이 된 뒤**에 검증해야 "처리가 끝난 상태"의 수치를 본다. 이 시각이 측정 창의 종점이므로 UTC로 기록한다(§10.2·metadata의 `WINDOW_END_SOURCE` 규약).
 
-**생성 계열만 기다리면 안 된다.** §13.1-(e)대로 예매가 5~6분 뒤 만료되면서 만료 계열 이벤트가 뒤따라 나온다. `BookingCreatedEvent`만 0을 확인하고 종점을 찍으면 **만료 계열이 아직 드레인 중인 시점을 "처리가 끝난 상태"로 기록**하게 된다.
+**생성 계열만 기다리면 안 된다.** §13.1-(e)대로 예매가 5-6분 뒤 만료되면서 만료 계열 이벤트가 뒤따라 나온다. `BookingCreatedEvent`만 0을 확인하고 종점을 찍으면 **만료 계열이 아직 드레인 중인 시점을 "처리가 끝난 상태"로 기록**하게 된다.
 
 ```bash
 echo "SELECT event_type, status, COUNT(*) FROM outbox
@@ -1261,7 +1261,7 @@ echo "SELECT b.seat_id, COUNT(*) c FROM booking b
        GROUP BY b.seat_id HAVING c > 1;" | SQL
 
 # (b) 유령 HOLD — 좌석은 HOLD 인데 대응 booking 이 없거나 이미 PENDING 을 벗어났다. 0행이어야 한다.
-#     "HOLD 좌석 수 <= 예매 수" 로 재면 안 된다. §13.1-(e) 대로 예매가 5~6분이면 만료돼
+#     "HOLD 좌석 수 <= 예매 수" 로 재면 안 된다. §13.1-(e) 대로 예매가 5-6분이면 만료돼
 #     좌석이 풀리므로 종료 시점 HOLD 는 예매 수보다 훨씬 작고, 그 부등식은 항상 참이라 검출력이 0 이다.
 #     시드 코호트(LT-*)는 reset_e2e.sql 이 일부러 보존하므로 (a) 와 같은 필터로 제외한다.
 echo "SELECT s.seat_id, s.booking_number, b.booking_status
@@ -1380,6 +1380,6 @@ resilience4j_circuitbreaker_failure_rate
 - **단일 EC2에 앱 8개 + Kafka·MySQL·Redis·관측 스택이 동거한다.** 절대 수치에 포화가 섞인다(§10.5·§12와 동일한 단서). 이 회차의 산출물은 "앱의 성능"이 아니라 **"이 구성의 최대치"** 다.
 - **Nginx가 부하 경로에 있는데 전용 지표가 없다.** 게이트웨이 앞단이 상한인지 가릴 수 없다(§13.1-(d)).
 - **결제·티켓 발급이 여정에서 빠져 있다.** 파이프라인 backlog 회복시간은 이 회차로 답하지 못한다(§13.1-(b)).
-- **결제를 안 하므로 예매가 전부 5~6분 뒤 만료되고, 그 만료가 outbox 부하를 사실상 2배로 만든다**(§13.1-(e)). `ticketrush_outbox_backlog`와 릴레이 처리량 수치에는 생성 트래픽과 만료 트래픽이 섞여 있다. 결제까지 도는 실제 운영과 이벤트 구성이 다르다는 뜻이므로, 이 회차의 outbox 수치를 운영 예측에 그대로 쓰면 안 된다.
+- **결제를 안 하므로 예매가 전부 5-6분 뒤 만료되고, 그 만료가 outbox 부하를 사실상 2배로 만든다**(§13.1-(e)). `ticketrush_outbox_backlog`와 릴레이 처리량 수치에는 생성 트래픽과 만료 트래픽이 섞여 있다. 결제까지 도는 실제 운영과 이벤트 구성이 다르다는 뜻이므로, 이 회차의 outbox 수치를 운영 예측에 그대로 쓰면 안 된다.
 - **k6 생성기가 가정용 회선을 탄다.** 좌석맵 응답이 공연당 200KB대라 조회 도착률이 높으면 다운로드 대역이 먼저 찰 수 있다. k6 축과 서버 축의 차이가 곧 네트워크 왕복이므로 그 간격이 벌어지는지 함께 본다([ADR 0004](adr/0004-load-test-execution-topology.md) §한계).
 - **좌석을 유일 배정하므로 경합은 재지 않는다.** 경합 하의 거동은 §10(#344)이 SSOT다.
