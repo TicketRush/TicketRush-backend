@@ -18,6 +18,6 @@ tools: Read, Grep, Glob, Bash, WebSearch, WebFetch
 4. 팀 컨벤션은 `docs/backend-convention.md`(단일 출처)와 `CLAUDE.md`(아키텍처) 기준으로 확인한다.
 
 ## 보고 형식
-- **요약**: 핵심 발견 2~3줄
+- **요약**: 핵심 발견 2-3줄
 - **상세 발견**: 항목별로 `근거: 파일:라인 / URL` 명시
 - **확실하지 않은 점 / 추가 조사 필요**: 솔직하게 분리 기재

@@ -24,13 +24,13 @@ ssh -i /c/Users/PC/Downloads/ticket_rush_ssh.pem -N -L 9090:localhost:9090 -L 30
 
 ## graph-tomcat-busy-before-pause.png
 
-**이 회차의 핵심 그림.** 주입 구간(02:05:32~02:07:32 KST)에 busy 가 config_max(200) 에 붙는다 = 완전 고갈
+**이 회차의 핵심 그림.** 주입 구간(02:05:32-02:07:32 KST)에 busy 가 config_max(200) 에 붙는다 = 완전 고갈
 
 http://localhost:3000/explore?orgId=1&schemaVersion=1&panes=%7B%22a%22%3A%7B%22datasource%22%3A%22prometheus%22%2C%22queries%22%3A%5B%7B%22refId%22%3A%22A%22%2C%22expr%22%3A%22tomcat_threads_busy_threads%7Binstance%3D%5C%22ticket-service%3A8090%5C%22%7D%22%2C%22datasource%22%3A%7B%22type%22%3A%22prometheus%22%2C%22uid%22%3A%22prometheus%22%7D%7D%2C%7B%22refId%22%3A%22B%22%2C%22expr%22%3A%22tomcat_threads_config_max_threads%7Binstance%3D%5C%22ticket-service%3A8090%5C%22%7D%22%2C%22datasource%22%3A%7B%22type%22%3A%22prometheus%22%2C%22uid%22%3A%22prometheus%22%7D%7D%5D%2C%22range%22%3A%7B%22from%22%3A%221785085020000%22%2C%22to%22%3A%221785086160000%22%7D%7D%7D
 
 ## graph-tomcat-busy-after-pause.png
 
-같은 주입(03:15:34~03:17:34 KST)인데 busy 가 바닥에 붙어 있다. 서킷 open(빨간 선 1) 구간과 겹쳐 보면 인과가 한눈에 들어온다
+같은 주입(03:15:34-03:17:34 KST)인데 busy 가 바닥에 붙어 있다. 서킷 open(빨간 선 1) 구간과 겹쳐 보면 인과가 한눈에 들어온다
 
 http://localhost:3000/explore?orgId=1&schemaVersion=1&panes=%7B%22a%22%3A%7B%22datasource%22%3A%22prometheus%22%2C%22queries%22%3A%5B%7B%22refId%22%3A%22A%22%2C%22expr%22%3A%22tomcat_threads_busy_threads%7Binstance%3D%5C%22ticket-service%3A8090%5C%22%7D%22%2C%22datasource%22%3A%7B%22type%22%3A%22prometheus%22%2C%22uid%22%3A%22prometheus%22%7D%7D%2C%7B%22refId%22%3A%22B%22%2C%22expr%22%3A%22resilience4j_circuitbreaker_state%7Bname%3D%5C%22booking%5C%22%2Cstate%3D%5C%22open%5C%22%7D%22%2C%22datasource%22%3A%7B%22type%22%3A%22prometheus%22%2C%22uid%22%3A%22prometheus%22%7D%7D%5D%2C%22range%22%3A%7B%22from%22%3A%221785089219000%22%2C%22to%22%3A%221785090405000%22%7D%7D%7D
 

@@ -75,4 +75,4 @@ EC2에는 결제 흐름이 없어 ticket 테이블이 0행이므로, 티켓 경�
 | `graph-inbox-duplicate-rate.png` | Grafana Explore 캡처 — duplicate 1m rate 곡선 (피크 ~481/s, 구간 내 연속) |
 | `graph-inbox-duplicate-counter.png` | Grafana Explore 캡처 — 원시 카운터 톱니 6개 (사이클당 0→22,366) |
 
-> Grafana 캡처 구간은 16:35~16:46 KST(= 07:35~07:46 UTC). 카운터 캡처의 중간 톱니 일부가 ~21K/~11.7K에서 잘려 보이는 것은 재시작 직전 스크랩이 피크를 놓친 것으로, §6의 PromQL ~8% 과소집계를 시각적으로 보여준다.
+> Grafana 캡처 구간은 16:35-16:46 KST(= 07:35-07:46 UTC). 카운터 캡처의 중간 톱니 일부가 ~21K/~11.7K에서 잘려 보이는 것은 재시작 직전 스크랩이 피크를 놓친 것으로, §6의 PromQL ~8% 과소집계를 시각적으로 보여준다.
