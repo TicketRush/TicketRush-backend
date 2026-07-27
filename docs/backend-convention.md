@@ -158,6 +158,7 @@ git config core.hooksPath .githooks
     * `service.http.connect-timeout-ms: ${SERVICE_HTTP_CONNECT_TIMEOUT_MS:3000}`
     * `service.http.read-timeout-ms: ${SERVICE_HTTP_READ_TIMEOUT_MS:10000}`
 * **타임아웃 적용:** `RestClient` 빈은 공통 모듈의 `RestClientFactorySupport.withTimeouts(connectMs, readMs)`(`common/.../global/config`)로 생성한 `ClientHttpRequestFactory` 를 반드시 적용합니다. 타임아웃 미설정 시 상대 서비스 지연이 Kafka 컨슈머 스레드 등을 장시간 블로킹할 수 있습니다.
+* **타임아웃 값은 실측 근거가 있으면 서비스별로 낮출 수 있습니다.** 위 3000/10000 은 근거가 없을 때의 출발점이지 상한이 아닙니다. read-timeout 은 곧 요청당 톰캣 스레드 점유 시간이라 값이 클수록 상대 서비스 지연이 이쪽 스레드 고갈로 번지기 쉽습니다. 낮출 때는 **근거가 된 실측치를 yml 주석에 남깁니다**(예: ticket-service 는 #402 실측 왕복 3.20ms 를 근거로 1000/1000, [#496](https://github.com/TicketRush/TicketRush-backend/issues/496)).
 
 ```yaml
 service:
@@ -350,5 +351,7 @@ class SeatControllerTest {
 * **prefix 상수화** — 키 prefix는 도메인별 상수(예: `SeatLockKey`) 또는 Repository 상수 한 곳에서 관리하고, 여러 클래스에 리터럴을 하드코딩하지 않습니다.
 * **예외** — ShedLock 락 네임스페이스는 `{applicationName}-{profile}`(케밥, 예: `seat-service-local`) 형태입니다. 이는 `RedisLockProvider` 라이브러리 규약이라 위 콜론 컨벤션의 예외로 둡니다.
 * **DB 인덱스** — 현재 전 서비스가 단일 Redis 인스턴스의 **DB 0을 공유**하며, 충돌은 위 키 prefix로만 논리 분리합니다. 서비스별 `spring.data.redis.database` 분리는 실익(FLUSHDB 격리) 대비 기존 DB 0 키 마이그레이션·무중단 배포 순서 설계 비용이 커, 현재는 **보류**합니다(#425). 분리가 필요해지면 마이그레이션 절차부터 설계합니다.
-* **미사용 서비스** — Redis를 쓰지 않는 서비스(현재 user/payment/ticket)는 `spring.data.redis` 설정을 두지 않고 `RedisAutoConfiguration`을 exclude합니다. `common`의 `RedisConfig`는 `@ConditionalOnProperty("spring.data.redis.host")`로 게이트되어 host가 없으면 로드되지 않습니다.
+* **미사용 서비스** — Redis를 쓰지 않는 서비스(현재 user/payment/ticket)는 `spring.data.redis` 설정을 두지 않고 `org.springframework.boot.data.redis.autoconfigure.DataRedisAutoConfiguration`을 exclude합니다. `common`의 `RedisConfig`는 `@ConditionalOnProperty("spring.data.redis.host")`로 게이트되어 host가 없으면 로드되지 않습니다.
+  * **FQCN 주의** — Boot 4.0에서 Redis 오토컨피그가 `boot.autoconfigure.data.redis.RedisAutoConfiguration` → `boot.data.redis.autoconfigure.DataRedisAutoConfiguration`으로 이동·개명됐습니다. **클래스패스에 없는 exclude는 예외 없이 조용히 무시되므로**(`AutoConfigurationImportSelector#checkExcludedClasses`가 `ClassUtils.isPresent` 통과분만 검사) 구 이름을 남기면 기동은 정상인 채 exclude만 통째로 죽습니다. 실제로 세 서비스가 `localhost:6379`에 붙으려다 actuator health가 상시 DOWN이었습니다(#500). **오토컨피그를 exclude할 때는 해당 Boot 버전의 `AutoConfiguration.imports`에 그 FQCN이 실제로 있는지 확인하세요.**
+  * health indicator는 `DataRedis(Reactive)HealthContributorAutoConfiguration`이 `@ConditionalOnBean(RedisConnectionFactory)`로 걸어두므로, 오토컨피그가 제대로 제외되면 별도 `management.health.redis.enabled: false` 없이 함께 사라집니다.
 * **인프라 전제** — 좌석 락 만료 즉시 해제(`SeatLockExpirationListener`)는 Redis keyspace 만료 이벤트에 의존합니다. `--notify-keyspace-events Ex`가 로컬(`docker-compose.yml`)·운영(`deploy/docker-compose.prod.yml`) 양쪽에 켜져 있어야 하며, 없으면 1분 주기 `SeatStatusScheduler` fallback에만 의존하게 됩니다.

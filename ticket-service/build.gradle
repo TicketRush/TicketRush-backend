@@ -58,6 +58,13 @@ dependencies {
 	testRuntimeOnly 'org.junit.platform:junit-platform-launcher'
 	testAnnotationProcessor 'org.mapstruct:mapstruct-processor:1.5.5.Final'
 
+	// booking 동기 호출 장애 격리 — 서킷브레이커 (#496).
+	// 버전은 하단 dependencyManagement 의 Spring Cloud BOM 이 관리한다.
+	// resilience4j-micrometer(서킷 상태·차단 호출수를 /actuator/prometheus 에 노출)는 이 스타터가
+	// 전이로 가져오므로 따로 선언하지 않는다. 장애 주입 측정의 전/후 비교가 그 메트릭에 의존한다
+	// (docs/load-test-guide.md §12.6).
+	implementation 'org.springframework.cloud:spring-cloud-starter-circuitbreaker-resilience4j'
+
 	// swagger
 	implementation 'org.springdoc:springdoc-openapi-starter-webmvc-ui:3.0.1'
 

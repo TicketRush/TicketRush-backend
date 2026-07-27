@@ -63,7 +63,9 @@ public void handleXxx(@Payload DomainEventEnvelope envelope, Acknowledgment ack)
 
 ### 2.3. 주의사항
 
-- **크로스서비스 HTTP 호출은 `isPermanent`로 분류하지 않는다.** RestClient 호출 실패는 `BusinessException`이 아니라 `HttpClientErrorException`(4xx)/`HttpServerErrorException`(5xx)/`ResourceAccessException`(네트워크)으로 도착한다. **HTTP 상태코드 기반으로 직접 분기**한다: 4xx(결정적)→진행(ack)하되 **409(이미 처리된 중복)만 warn, 그 외 4xx(401·404 등 설정/요청 오류)는 `[CRITICAL]`**, 5xx/네트워크(일시)→re-throw. 예) booking `PaymentConfirmedEventListener`의 `seatRestClient.confirmSold()`.
+- **크로스서비스 HTTP 호출은 `isPermanent`로 분류하지 않는다.** RestClient 호출 실패는 `BusinessException`이 아니라 `HttpClientErrorException`(4xx)/`HttpServerErrorException`(5xx)/`ResourceAccessException`(네트워크)으로 도착한다. **HTTP 상태코드 기반으로 직접 분기**한다: 4xx(결정적)→진행(ack), 5xx/네트워크(일시)→re-throw.
+- **409를 "이미 처리된 중복"으로 삼키려면 피호출 측이 멱등 성공을 2xx로 답하는 것이 전제다.** 그 전제 없이 409를 warn으로 뭉개면 정상 중복과 정합성 위반이 같은 코드로 도착해 후자가 로그 한 줄에 묻힌다. 예) seat `POST /internal/seat/sold`는 **이미 같은 예매로 SOLD면 200**을 반환하고(#489), 409(`SEAT_409_003`)는 "그 좌석이 이 예매의 것이 아님"이라는 치명적 실패에만 쓴다. 이 규약이 없던 시절 실측에서 **과금 완료 + 좌석 미확정**이 "중복 수신" warn 한 줄로 사라졌다(#345 §6.1).
+- **그 상태 코드에 보상(환불 등) 부수효과를 매달 때는 상태 코드가 아니라 응답 본문의 `code`로 판정한다.** 상태 코드는 배포 사이에 의미가 바뀔 수 있어서다 — 위 규약이 적용되기 전 버전의 seat는 정상 중복에도 409를 주므로, 배포 순서가 뒤바뀌거나 한쪽만 롤백되면 **멀쩡한 결제가 보상 대상으로 둔갑한다.** booking `PaymentConfirmedEventListener`가 `SEAT_409_003`을 본문에서 확인한 뒤에만 신호를 발행하는 이유다. `code`를 못 읽으면 발행하지 않는다(fail-closed) — 잘못된 환불보다 놓친 알림이 낫다. 이 방식은 API 계약을 버전 스큐에 대해 안전하게 만들어, 서비스 간 **배포 순서 의존성 자체를 없앤다.**
 - **2계층 분류(상보적):** 리스너 레벨(`isPermanent`)은 **ack vs 전파**를 결정하고, 컨테이너 레벨(`KafkaConfig`의 `addNotRetryableExceptions`)은 전파된 예외의 **재시도 횟수 vs 즉시 DLT**를 결정한다.
 - **동명 `DeserializationException` 2종 구분:** ① envelope(외부) 역직렬화 = spring-kafka `org.springframework.kafka.support.serializer.DeserializationException` → 컨테이너 not-retryable로 **즉시 DLT**(리스너 실행 안 됨). ② payload(내부) 역직렬화 = `com.ticketrush.global.json.DeserializationException`(`BusinessException` 하위) → 리스너 catch에서 **영구→ack**. 이름만 같고 경로가 다르다.
 - **groupId/topic 상수화:** topic은 각 이벤트의 `*Event.TOPIC` 상수를, groupId는 `com.ticketrush.global.event.KafkaConsumerGroup`의 상수를 참조한다(리터럴 하드코딩 금지). `@KafkaListener`는 컴파일 타임 상수 String을 요구하므로 상수는 `public static final String`으로 둔다(enum 불가).
@@ -273,7 +275,7 @@ Kafka는 at-least-once라 같은 이벤트가 재전달될 수 있다. **비멱�
 ### 5.1. 언제 쓰나
 
 - **비즈니스 컨슈머는 기본적으로 Inbox로 감싼다.** 현재 모든 도메인 `@KafkaListener`가 `InboxService.runIfFirst`를 거친다(§5.5 목록). Inbox를 쓰지 않는 유일한 `@KafkaListener`는 DLT 모니터(`DeadLetterConsumer`, groupId `dlt-monitor-group`)로, 이는 멱등 처리 대상이 아니라 실패 메시지 적재용이다.
-- **도메인 멱등은 2차 방어(방어 심층화)로 유지한다.** 예: `TicketIssueUseCase`의 `alreadyIssued`, 좌석 SOLD 확정의 409 응답. Inbox가 1차 중복 차단을, 도메인 멱등이 2차 안전망을 담당한다.
+- **도메인 멱등은 2차 방어(방어 심층화)로 유지한다.** 예: `TicketIssueUseCase`의 `alreadyIssued`, 좌석 SOLD 확정이 이미 같은 예매로 SOLD면 200을 반환하는 것(#489 — 이전에는 409였다. §2.3 참고). Inbox가 1차 중복 차단을, 도메인 멱등이 2차 안전망을 담당한다.
 
 ### 5.2. 사용법
 

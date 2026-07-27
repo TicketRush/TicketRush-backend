@@ -1,6 +1,11 @@
 server:
   port: 8083
   forward-headers-strategy: framework
+  # Boot 2.2 부터 기본값이 false 라 톰캣 ThreadPool MBean 이 등록되지 않고, Micrometer 의
+  # tomcat.threads.* 바인딩이 통째로 빈다(#500). 스레드 포화를 수치로 볼 수단이라 켠다.
+  tomcat:
+    mbeanregistry:
+      enabled: true
 
 spring:
   profiles:
@@ -76,3 +81,11 @@ management:
   endpoint:
     health:
       show-details: never
+  # 서버 관점 p95/p99용 히스토그램 버킷(#495). percentiles-histogram(true)은 Micrometer 사전정의
+  # 버킷을 깔아 le 수를 통제할 수 없어 쓰지 않는다 — 앱 8개가 mem_limit 384m Prometheus 하나로
+  # 모인다(ADR 0007). slo만 주면 버킷 = 지정 11개 + Inf 로 고정된다. 하단이 촘촘한 근거는 #402
+  # 실측 서버측 평균(qr 1.30 / verify 4.27 / check-in 11.65ms)이다. Duration은 정수만 받는다.
+  metrics:
+    distribution:
+      slo:
+        http.server.requests: 1ms,2ms,5ms,10ms,25ms,50ms,100ms,250ms,500ms,1s,2s

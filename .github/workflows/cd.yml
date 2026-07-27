@@ -325,6 +325,34 @@ jobs:
             fi
           done
 
+          # pull 전에 죽은 이미지를 버려 공간을 확보한다. 앱 이미지는 커밋 SHA 로 태깅되므로
+          # 배포마다 8개(약 5.2GB)가 새로 쌓이고, 상한이 없으면 루트 EBS(19GB)가 3~4회 배포로 찬다.
+          # 실제로 #495 첫 배포가 여기서 죽었다 — `no space left on device`(잔여 214MB).
+          # 그때 루트 EBS를 MySQL·Kafka·Prometheus TSDB 가 함께 쓰므로(ADR 0007) 배포 실패보다
+          # 데이터 계층 손상이 먼저 온다.
+          #
+          # `prune -a` 는 **실행 중 컨테이너가 참조하는 이미지는 지우지 않는다** — 이 시점의 실행분은
+          # 직전 릴리스이므로 롤백 대상 한 세대는 자동으로 남고, 그 이전만 정리된다.
+          # 더 과거로 롤백해야 하면 deploy/PREVIOUS_RELEASE 태그로 ECR 에서 다시 pull 한다.
+          # 정리 실패가 배포를 막지는 않게 하되(|| true), 회수량과 잔여 공간은 로그에 남긴다.
+          echo "Disk before prune:"
+          df -h / | tail -1
+
+          docker image prune -af || echo "image prune failed; continuing"
+
+          echo "Disk after prune:"
+          df -h / | tail -1
+
+          # 남은 공간이 이미지 1세대(약 5.2GB)를 못 받으면 다음 배포가 같은 지점에서 죽는다.
+          # 이번 배포는 계속 진행하고 경고만 남긴다 — 여기서 멈추면 정상 배포까지 막힌다.
+          # set -Eeuo pipefail 이 걸려 있으므로 df 실패가 배포를 죽이지 않게 막는다.
+          # 값을 못 얻으면 빈 문자열이 되고 아래 비교에서 0 으로 평가돼 경고 쪽으로 넘어간다.
+          AVAIL_GB="$(df -BG --output=avail / | tail -1 | tr -dc '0-9' || true)"
+
+          if [[ "${AVAIL_GB}" -lt 6 ]]; then
+            echo "::warning::Root disk has only ${AVAIL_GB}GB free after prune (one release needs ~5.2GB). Grow the EBS volume or trim TSDB retention."
+          fi
+
           "${COMPOSE[@]}" pull
 
           # 전체 서비스에 변경된 이미지·Compose 설정 반영

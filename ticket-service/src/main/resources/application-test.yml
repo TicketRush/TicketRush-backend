@@ -1,3 +1,9 @@
 app:
   event-publisher:
     type: kafka
+
+ticket:
+  qr:
+    # base 는 기본값 없는 ${TICKET_QR_SECRET} 을 요구한다(공개 시크릿으로 서명되는 사고 방지).
+    # 컨텍스트 로딩 테스트가 뜨도록 더미값만 채운다 — 단위 테스트들과 같은 값(#500).
+    secret: ticketrush-qr-test-secret-key-0123456789

@@ -1,6 +1,11 @@
 server:
   port: 8087
   forward-headers-strategy: framework
+  # Boot 2.2 부터 기본값이 false 라 톰캣 ThreadPool MBean 이 등록되지 않고, Micrometer 의
+  # tomcat.threads.* 바인딩이 통째로 빈다(#500). 스레드 포화를 수치로 볼 수단이라 켠다.
+  tomcat:
+    mbeanregistry:
+      enabled: true
 
 spring:
   profiles:
@@ -8,9 +13,21 @@ spring:
   application:
     name: ticket-service
   # ticket-service는 Redis를 쓰지 않는다. common의 redis 스타터가 전이돼 오토컨피그가 뜨는 것을 막는다(#425).
+  # FQCN 은 Boot 4.0 에서 boot.autoconfigure.data.redis → boot.data.redis.autoconfigure 로 옮겨졌고
+  # 클래스명도 DataRedis* 로 바뀌었다. 클래스패스에 없는 exclude 는 예외 없이 조용히 무시되므로
+  # (AutoConfigurationImportSelector#checkExcludedClasses) 구 이름을 남겨두면 이 줄이 통째로 죽는다(#500).
   autoconfigure:
     exclude:
-      - org.springframework.boot.autoconfigure.data.redis.RedisAutoConfiguration
+      - org.springframework.boot.data.redis.autoconfigure.DataRedisAutoConfiguration
+  cloud:
+    circuitbreaker:
+      resilience4j:
+        # 서킷 호출을 별도 스레드풀 + TimeLimiter 로 감싸지 않는다(#496). 이 이슈의 목적이
+        # '요청당 스레드 점유 상한'인데 풀을 끼우면 톰캣 스레드와 풀 스레드를 둘 다 잡는다.
+        # 끄면 호출 스레드에서 그대로 실행된다. 상한은 RestClient 의 read-timeout(1s)이 주므로
+        # TimeLimiter 도 함께 끈다 — 두 개의 타임아웃이 겹치면 어느 쪽이 끊었는지 알 수 없다.
+        disable-threadpool: true
+        disable-timelimiter: true
   jpa:
     open-in-view: false
 
@@ -18,8 +35,12 @@ service:
   booking:
     url: ${BOOKING_SERVICE_URL:http://localhost:8084}
   http:
-    connect-timeout-ms: ${SERVICE_HTTP_CONNECT_TIMEOUT_MS:3000}
-    read-timeout-ms: ${SERVICE_HTTP_READ_TIMEOUT_MS:10000}
+    # 팀 공통 기본값(3000/10000)에서 낮춘 값이다(#496). read-timeout 은 곧 톰캣 스레드의 최대
+    # 점유 시간이라 10s 면 20 req/s 만 돼도 200 스레드가 소진되고 검표 경로 전체가 무너진다.
+    # 1s 근거는 #402 실측 왕복 3.20ms(서버 축 차분, 피크) — 300배 여유다. connect 도 같은 호스트의
+    # 컨테이너 간 통신이라 3s 가 과도하다. 컨벤션의 서비스별 조정 단서는 docs/backend-convention.md 참고.
+    connect-timeout-ms: ${SERVICE_HTTP_CONNECT_TIMEOUT_MS:1000}
+    read-timeout-ms: ${SERVICE_HTTP_READ_TIMEOUT_MS:1000}
 
 app:
   event-publisher:
@@ -67,3 +88,11 @@ management:
   endpoint:
     health:
       show-details: never
+  # 서버 관점 p95/p99용 히스토그램 버킷(#495). percentiles-histogram(true)은 Micrometer 사전정의
+  # 버킷을 깔아 le 수를 통제할 수 없어 쓰지 않는다 — 앱 8개가 mem_limit 384m Prometheus 하나로
+  # 모인다(ADR 0007). slo만 주면 버킷 = 지정 11개 + Inf 로 고정된다. 하단이 촘촘한 근거는 #402
+  # 실측 서버측 평균(qr 1.30 / verify 4.27 / check-in 11.65ms)이다. Duration은 정수만 받는다.
+  metrics:
+    distribution:
+      slo:
+        http.server.requests: 1ms,2ms,5ms,10ms,25ms,50ms,100ms,250ms,500ms,1s,2s

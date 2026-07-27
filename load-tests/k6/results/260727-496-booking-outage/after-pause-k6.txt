@@ -1,0 +1,2982 @@
+time="2026-07-27T03:08:59+09:00" level=warning msg="C:\\Users\\PC\\Desktop\\TicketRush-backend\\docker-compose.yml: the attribute `version` is obsolete, it will be ignored, please remove it to avoid potential confusion"
+ Container ticketrush-backend-k6-run-19926be265d8 Creating 
+ Container ticketrush-backend-k6-run-19926be265d8 Created 
+
+         /\      Grafana   /‾‾/  
+    /\  /  \     |\  __   /  /   
+   /  \/    \    | |/ /  /   ‾‾\ 
+  /          \   |   (  |  (‾)  |
+ / __________ \  |_|\_\  \_____/ 
+
+
+     execution: local
+        script: //scripts/scenarios/entry-spike.js
+        output: Prometheus remote write (http://host.docker.internal:9090/api/v1/write)
+
+     scenarios: (100.00%) 1 scenario, 400 max VUs, 16m10s max duration (incl. graceful stop):
+              * entry_spike: Up to 60.00 iterations/s for 15m40s over 5 stages (maxVUs: 60-400, gracefulStop: 30s)
+
+
+running (00m01.0s), 001/060 VUs, 7 complete and 0 interrupted iterations
+entry_spike   [   0% ] 001/060 VUs  00m00.8s/15m40s  10.00 iters/s
+
+running (00m02.0s), 001/060 VUs, 17 complete and 0 interrupted iterations
+entry_spike   [   0% ] 001/060 VUs  00m01.8s/15m40s  10.00 iters/s
+
+running (00m03.0s), 001/060 VUs, 27 complete and 0 interrupted iterations
+entry_spike   [   0% ] 001/060 VUs  00m02.8s/15m40s  10.00 iters/s
+
+running (00m04.0s), 001/060 VUs, 37 complete and 0 interrupted iterations
+entry_spike   [   0% ] 001/060 VUs  00m03.8s/15m40s  10.00 iters/s
+
+running (00m05.0s), 001/060 VUs, 47 complete and 0 interrupted iterations
+entry_spike   [   1% ] 001/060 VUs  00m04.8s/15m40s  10.00 iters/s
+
+running (00m06.0s), 001/060 VUs, 57 complete and 0 interrupted iterations
+entry_spike   [   1% ] 001/060 VUs  00m05.8s/15m40s  10.00 iters/s
+
+running (00m07.0s), 001/060 VUs, 67 complete and 0 interrupted iterations
+entry_spike   [   1% ] 001/060 VUs  00m06.8s/15m40s  10.00 iters/s
+
+running (00m08.0s), 001/060 VUs, 77 complete and 0 interrupted iterations
+entry_spike   [   1% ] 001/060 VUs  00m07.8s/15m40s  10.00 iters/s
+
+running (00m09.0s), 001/060 VUs, 87 complete and 0 interrupted iterations
+entry_spike   [   1% ] 001/060 VUs  00m08.8s/15m40s  10.00 iters/s
+
+running (00m10.0s), 001/060 VUs, 97 complete and 0 interrupted iterations
+entry_spike   [   1% ] 001/060 VUs  00m09.8s/15m40s  10.00 iters/s
+
+running (00m11.0s), 001/060 VUs, 107 complete and 0 interrupted iterations
+entry_spike   [   1% ] 001/060 VUs  00m10.8s/15m40s  10.00 iters/s
+
+running (00m12.0s), 001/060 VUs, 117 complete and 0 interrupted iterations
+entry_spike   [   1% ] 001/060 VUs  00m11.8s/15m40s  10.00 iters/s
+
+running (00m13.0s), 001/060 VUs, 127 complete and 0 interrupted iterations
+entry_spike   [   1% ] 001/060 VUs  00m12.8s/15m40s  10.00 iters/s
+
+running (00m14.0s), 001/060 VUs, 137 complete and 0 interrupted iterations
+entry_spike   [   1% ] 001/060 VUs  00m13.8s/15m40s  10.00 iters/s
+
+running (00m15.0s), 001/060 VUs, 147 complete and 0 interrupted iterations
+entry_spike   [   2% ] 001/060 VUs  00m14.8s/15m40s  10.00 iters/s
+
+running (00m16.0s), 001/060 VUs, 157 complete and 0 interrupted iterations
+entry_spike   [   2% ] 001/060 VUs  00m15.8s/15m40s  10.00 iters/s
+
+running (00m17.0s), 001/060 VUs, 167 complete and 0 interrupted iterations
+entry_spike   [   2% ] 001/060 VUs  00m16.8s/15m40s  10.00 iters/s
+
+running (00m18.0s), 001/060 VUs, 177 complete and 0 interrupted iterations
+entry_spike   [   2% ] 001/060 VUs  00m17.8s/15m40s  10.00 iters/s
+
+running (00m19.0s), 001/060 VUs, 187 complete and 0 interrupted iterations
+entry_spike   [   2% ] 001/060 VUs  00m18.8s/15m40s  10.00 iters/s
+
+running (00m20.0s), 001/060 VUs, 197 complete and 0 interrupted iterations
+entry_spike   [   2% ] 001/060 VUs  00m19.8s/15m40s  10.00 iters/s
+
+running (00m21.0s), 001/060 VUs, 207 complete and 0 interrupted iterations
+entry_spike   [   2% ] 001/060 VUs  00m20.8s/15m40s  10.00 iters/s
+
+running (00m22.0s), 001/060 VUs, 217 complete and 0 interrupted iterations
+entry_spike   [   2% ] 001/060 VUs  00m21.8s/15m40s  10.00 iters/s
+
+running (00m23.0s), 001/060 VUs, 227 complete and 0 interrupted iterations
+entry_spike   [   2% ] 001/060 VUs  00m22.8s/15m40s  10.00 iters/s
+
+running (00m24.0s), 001/060 VUs, 237 complete and 0 interrupted iterations
+entry_spike   [   3% ] 001/060 VUs  00m23.8s/15m40s  10.00 iters/s
+
+running (00m25.0s), 001/060 VUs, 247 complete and 0 interrupted iterations
+entry_spike   [   3% ] 001/060 VUs  00m24.8s/15m40s  10.00 iters/s
+
+running (00m26.0s), 001/060 VUs, 257 complete and 0 interrupted iterations
+entry_spike   [   3% ] 001/060 VUs  00m25.8s/15m40s  10.00 iters/s
+
+running (00m27.0s), 001/060 VUs, 267 complete and 0 interrupted iterations
+entry_spike   [   3% ] 001/060 VUs  00m26.8s/15m40s  10.00 iters/s
+
+running (00m28.0s), 001/060 VUs, 277 complete and 0 interrupted iterations
+entry_spike   [   3% ] 001/060 VUs  00m27.8s/15m40s  10.00 iters/s
+
+running (00m29.0s), 001/060 VUs, 287 complete and 0 interrupted iterations
+entry_spike   [   3% ] 001/060 VUs  00m28.8s/15m40s  10.00 iters/s
+
+running (00m30.0s), 001/060 VUs, 297 complete and 0 interrupted iterations
+entry_spike   [   3% ] 001/060 VUs  00m29.8s/15m40s  10.00 iters/s
+
+running (00m31.0s), 001/060 VUs, 307 complete and 0 interrupted iterations
+entry_spike   [   3% ] 001/060 VUs  00m30.8s/15m40s  10.00 iters/s
+
+running (00m32.0s), 001/060 VUs, 317 complete and 0 interrupted iterations
+entry_spike   [   3% ] 001/060 VUs  00m31.8s/15m40s  10.00 iters/s
+
+running (00m33.0s), 004/060 VUs, 324 complete and 0 interrupted iterations
+entry_spike   [   3% ] 004/060 VUs  00m32.8s/15m40s  10.00 iters/s
+
+running (00m34.0s), 004/060 VUs, 334 complete and 0 interrupted iterations
+entry_spike   [   4% ] 004/060 VUs  00m33.8s/15m40s  10.00 iters/s
+
+running (00m35.0s), 001/060 VUs, 347 complete and 0 interrupted iterations
+entry_spike   [   4% ] 001/060 VUs  00m34.8s/15m40s  10.00 iters/s
+
+running (00m36.0s), 001/060 VUs, 357 complete and 0 interrupted iterations
+entry_spike   [   4% ] 001/060 VUs  00m35.8s/15m40s  10.00 iters/s
+
+running (00m37.0s), 001/060 VUs, 367 complete and 0 interrupted iterations
+entry_spike   [   4% ] 001/060 VUs  00m36.8s/15m40s  10.00 iters/s
+
+running (00m38.0s), 001/060 VUs, 377 complete and 0 interrupted iterations
+entry_spike   [   4% ] 001/060 VUs  00m37.8s/15m40s  10.00 iters/s
+
+running (00m39.0s), 001/060 VUs, 387 complete and 0 interrupted iterations
+entry_spike   [   4% ] 001/060 VUs  00m38.8s/15m40s  10.00 iters/s
+
+running (00m40.0s), 001/060 VUs, 397 complete and 0 interrupted iterations
+entry_spike   [   4% ] 001/060 VUs  00m39.8s/15m40s  10.00 iters/s
+
+running (00m41.0s), 001/060 VUs, 407 complete and 0 interrupted iterations
+entry_spike   [   4% ] 001/060 VUs  00m40.8s/15m40s  10.00 iters/s
+
+running (00m42.0s), 001/060 VUs, 417 complete and 0 interrupted iterations
+entry_spike   [   4% ] 001/060 VUs  00m41.8s/15m40s  10.00 iters/s
+
+running (00m43.0s), 001/060 VUs, 427 complete and 0 interrupted iterations
+entry_spike   [   5% ] 001/060 VUs  00m42.8s/15m40s  10.00 iters/s
+
+running (00m44.0s), 001/060 VUs, 437 complete and 0 interrupted iterations
+entry_spike   [   5% ] 001/060 VUs  00m43.8s/15m40s  10.00 iters/s
+
+running (00m45.0s), 001/060 VUs, 447 complete and 0 interrupted iterations
+entry_spike   [   5% ] 001/060 VUs  00m44.8s/15m40s  10.00 iters/s
+
+running (00m46.0s), 001/060 VUs, 457 complete and 0 interrupted iterations
+entry_spike   [   5% ] 001/060 VUs  00m45.8s/15m40s  10.00 iters/s
+
+running (00m47.0s), 001/060 VUs, 467 complete and 0 interrupted iterations
+entry_spike   [   5% ] 001/060 VUs  00m46.8s/15m40s  10.00 iters/s
+
+running (00m48.0s), 001/060 VUs, 477 complete and 0 interrupted iterations
+entry_spike   [   5% ] 001/060 VUs  00m47.8s/15m40s  10.00 iters/s
+
+running (00m49.0s), 001/060 VUs, 487 complete and 0 interrupted iterations
+entry_spike   [   5% ] 001/060 VUs  00m48.8s/15m40s  10.00 iters/s
+
+running (00m50.0s), 001/060 VUs, 497 complete and 0 interrupted iterations
+entry_spike   [   5% ] 001/060 VUs  00m49.8s/15m40s  10.00 iters/s
+
+running (00m51.0s), 001/060 VUs, 507 complete and 0 interrupted iterations
+entry_spike   [   5% ] 001/060 VUs  00m50.8s/15m40s  10.00 iters/s
+
+running (00m52.0s), 001/060 VUs, 517 complete and 0 interrupted iterations
+entry_spike   [   6% ] 001/060 VUs  00m51.8s/15m40s  10.00 iters/s
+
+running (00m53.0s), 001/060 VUs, 527 complete and 0 interrupted iterations
+entry_spike   [   6% ] 001/060 VUs  00m52.8s/15m40s  10.00 iters/s
+
+running (00m54.0s), 001/060 VUs, 537 complete and 0 interrupted iterations
+entry_spike   [   6% ] 001/060 VUs  00m53.8s/15m40s  10.00 iters/s
+
+running (00m55.0s), 001/060 VUs, 547 complete and 0 interrupted iterations
+entry_spike   [   6% ] 001/060 VUs  00m54.8s/15m40s  10.00 iters/s
+
+running (00m56.0s), 001/060 VUs, 557 complete and 0 interrupted iterations
+entry_spike   [   6% ] 001/060 VUs  00m55.8s/15m40s  10.00 iters/s
+
+running (00m57.0s), 001/060 VUs, 567 complete and 0 interrupted iterations
+entry_spike   [   6% ] 001/060 VUs  00m56.8s/15m40s  10.00 iters/s
+
+running (00m58.0s), 001/060 VUs, 577 complete and 0 interrupted iterations
+entry_spike   [   6% ] 001/060 VUs  00m57.8s/15m40s  10.00 iters/s
+
+running (00m59.0s), 001/060 VUs, 587 complete and 0 interrupted iterations
+entry_spike   [   6% ] 001/060 VUs  00m58.8s/15m40s  10.00 iters/s
+
+running (01m00.0s), 001/060 VUs, 597 complete and 0 interrupted iterations
+entry_spike   [   6% ] 001/060 VUs  00m59.8s/15m40s  10.00 iters/s
+
+running (01m01.0s), 001/060 VUs, 607 complete and 0 interrupted iterations
+entry_spike   [   6% ] 001/060 VUs  01m00.8s/15m40s  10.00 iters/s
+
+running (01m02.0s), 001/060 VUs, 617 complete and 0 interrupted iterations
+entry_spike   [   7% ] 001/060 VUs  01m01.8s/15m40s  10.00 iters/s
+
+running (01m03.0s), 001/060 VUs, 627 complete and 0 interrupted iterations
+entry_spike   [   7% ] 001/060 VUs  01m02.8s/15m40s  10.00 iters/s
+
+running (01m04.0s), 001/060 VUs, 637 complete and 0 interrupted iterations
+entry_spike   [   7% ] 001/060 VUs  01m03.8s/15m40s  10.00 iters/s
+
+running (01m05.0s), 001/060 VUs, 647 complete and 0 interrupted iterations
+entry_spike   [   7% ] 001/060 VUs  01m04.8s/15m40s  10.00 iters/s
+
+running (01m06.0s), 001/060 VUs, 657 complete and 0 interrupted iterations
+entry_spike   [   7% ] 001/060 VUs  01m05.8s/15m40s  10.00 iters/s
+
+running (01m07.0s), 001/060 VUs, 667 complete and 0 interrupted iterations
+entry_spike   [   7% ] 001/060 VUs  01m06.8s/15m40s  10.00 iters/s
+
+running (01m08.0s), 001/060 VUs, 677 complete and 0 interrupted iterations
+entry_spike   [   7% ] 001/060 VUs  01m07.8s/15m40s  10.00 iters/s
+
+running (01m09.0s), 001/060 VUs, 687 complete and 0 interrupted iterations
+entry_spike   [   7% ] 001/060 VUs  01m08.8s/15m40s  10.00 iters/s
+
+running (01m10.0s), 001/060 VUs, 697 complete and 0 interrupted iterations
+entry_spike   [   7% ] 001/060 VUs  01m09.8s/15m40s  10.00 iters/s
+
+running (01m11.0s), 001/060 VUs, 707 complete and 0 interrupted iterations
+entry_spike   [   8% ] 001/060 VUs  01m10.8s/15m40s  10.00 iters/s
+
+running (01m12.0s), 001/060 VUs, 717 complete and 0 interrupted iterations
+entry_spike   [   8% ] 001/060 VUs  01m11.8s/15m40s  10.00 iters/s
+
+running (01m13.0s), 001/060 VUs, 727 complete and 0 interrupted iterations
+entry_spike   [   8% ] 001/060 VUs  01m12.8s/15m40s  10.00 iters/s
+
+running (01m14.0s), 001/060 VUs, 737 complete and 0 interrupted iterations
+entry_spike   [   8% ] 001/060 VUs  01m13.8s/15m40s  10.00 iters/s
+
+running (01m15.0s), 001/060 VUs, 747 complete and 0 interrupted iterations
+entry_spike   [   8% ] 001/060 VUs  01m14.8s/15m40s  10.00 iters/s
+
+running (01m16.0s), 001/060 VUs, 757 complete and 0 interrupted iterations
+entry_spike   [   8% ] 001/060 VUs  01m15.8s/15m40s  10.00 iters/s
+
+running (01m17.0s), 001/060 VUs, 767 complete and 0 interrupted iterations
+entry_spike   [   8% ] 001/060 VUs  01m16.8s/15m40s  10.00 iters/s
+
+running (01m18.0s), 001/060 VUs, 777 complete and 0 interrupted iterations
+entry_spike   [   8% ] 001/060 VUs  01m17.8s/15m40s  10.00 iters/s
+
+running (01m19.0s), 001/060 VUs, 787 complete and 0 interrupted iterations
+entry_spike   [   8% ] 001/060 VUs  01m18.8s/15m40s  10.00 iters/s
+
+running (01m20.0s), 001/060 VUs, 797 complete and 0 interrupted iterations
+entry_spike   [   8% ] 001/060 VUs  01m19.8s/15m40s  10.00 iters/s
+
+running (01m21.0s), 001/060 VUs, 807 complete and 0 interrupted iterations
+entry_spike   [   9% ] 001/060 VUs  01m20.8s/15m40s  10.00 iters/s
+
+running (01m22.0s), 001/060 VUs, 817 complete and 0 interrupted iterations
+entry_spike   [   9% ] 001/060 VUs  01m21.8s/15m40s  10.00 iters/s
+
+running (01m23.0s), 001/060 VUs, 827 complete and 0 interrupted iterations
+entry_spike   [   9% ] 001/060 VUs  01m22.8s/15m40s  10.00 iters/s
+
+running (01m24.0s), 001/060 VUs, 837 complete and 0 interrupted iterations
+entry_spike   [   9% ] 001/060 VUs  01m23.8s/15m40s  10.00 iters/s
+
+running (01m25.0s), 001/060 VUs, 847 complete and 0 interrupted iterations
+entry_spike   [   9% ] 001/060 VUs  01m24.8s/15m40s  10.00 iters/s
+
+running (01m26.0s), 001/060 VUs, 857 complete and 0 interrupted iterations
+entry_spike   [   9% ] 001/060 VUs  01m25.8s/15m40s  10.00 iters/s
+
+running (01m27.0s), 001/060 VUs, 867 complete and 0 interrupted iterations
+entry_spike   [   9% ] 001/060 VUs  01m26.8s/15m40s  10.00 iters/s
+
+running (01m28.0s), 001/060 VUs, 877 complete and 0 interrupted iterations
+entry_spike   [   9% ] 001/060 VUs  01m27.8s/15m40s  10.00 iters/s
+
+running (01m29.0s), 001/060 VUs, 887 complete and 0 interrupted iterations
+entry_spike   [   9% ] 001/060 VUs  01m28.8s/15m40s  10.00 iters/s
+
+running (01m30.0s), 001/060 VUs, 897 complete and 0 interrupted iterations
+entry_spike   [  10% ] 001/060 VUs  01m29.8s/15m40s  10.00 iters/s
+
+running (01m31.0s), 001/060 VUs, 907 complete and 0 interrupted iterations
+entry_spike   [  10% ] 001/060 VUs  01m30.8s/15m40s  10.00 iters/s
+
+running (01m32.0s), 001/060 VUs, 917 complete and 0 interrupted iterations
+entry_spike   [  10% ] 001/060 VUs  01m31.8s/15m40s  10.00 iters/s
+
+running (01m33.0s), 001/060 VUs, 927 complete and 0 interrupted iterations
+entry_spike   [  10% ] 001/060 VUs  01m32.8s/15m40s  10.00 iters/s
+
+running (01m34.0s), 001/060 VUs, 937 complete and 0 interrupted iterations
+entry_spike   [  10% ] 001/060 VUs  01m33.8s/15m40s  10.00 iters/s
+
+running (01m35.0s), 001/060 VUs, 947 complete and 0 interrupted iterations
+entry_spike   [  10% ] 001/060 VUs  01m34.8s/15m40s  10.00 iters/s
+
+running (01m36.0s), 001/060 VUs, 957 complete and 0 interrupted iterations
+entry_spike   [  10% ] 001/060 VUs  01m35.8s/15m40s  10.00 iters/s
+
+running (01m37.0s), 001/060 VUs, 967 complete and 0 interrupted iterations
+entry_spike   [  10% ] 001/060 VUs  01m36.8s/15m40s  10.00 iters/s
+
+running (01m38.0s), 001/060 VUs, 977 complete and 0 interrupted iterations
+entry_spike   [  10% ] 001/060 VUs  01m37.8s/15m40s  10.00 iters/s
+
+running (01m39.0s), 001/060 VUs, 987 complete and 0 interrupted iterations
+entry_spike   [  11% ] 001/060 VUs  01m38.8s/15m40s  10.00 iters/s
+
+running (01m40.0s), 001/060 VUs, 997 complete and 0 interrupted iterations
+entry_spike   [  11% ] 001/060 VUs  01m39.8s/15m40s  10.00 iters/s
+
+running (01m41.0s), 001/060 VUs, 1007 complete and 0 interrupted iterations
+entry_spike   [  11% ] 001/060 VUs  01m40.8s/15m40s  10.00 iters/s
+
+running (01m42.0s), 001/060 VUs, 1017 complete and 0 interrupted iterations
+entry_spike   [  11% ] 001/060 VUs  01m41.8s/15m40s  10.00 iters/s
+
+running (01m43.0s), 001/060 VUs, 1027 complete and 0 interrupted iterations
+entry_spike   [  11% ] 001/060 VUs  01m42.8s/15m40s  10.00 iters/s
+
+running (01m44.0s), 001/060 VUs, 1037 complete and 0 interrupted iterations
+entry_spike   [  11% ] 001/060 VUs  01m43.8s/15m40s  10.00 iters/s
+
+running (01m45.0s), 001/060 VUs, 1047 complete and 0 interrupted iterations
+entry_spike   [  11% ] 001/060 VUs  01m44.8s/15m40s  10.00 iters/s
+
+running (01m46.0s), 001/060 VUs, 1057 complete and 0 interrupted iterations
+entry_spike   [  11% ] 001/060 VUs  01m45.8s/15m40s  10.00 iters/s
+
+running (01m47.0s), 001/060 VUs, 1067 complete and 0 interrupted iterations
+entry_spike   [  11% ] 001/060 VUs  01m46.8s/15m40s  10.00 iters/s
+
+running (01m48.0s), 001/060 VUs, 1077 complete and 0 interrupted iterations
+entry_spike   [  11% ] 001/060 VUs  01m47.8s/15m40s  10.00 iters/s
+
+running (01m49.0s), 001/060 VUs, 1087 complete and 0 interrupted iterations
+entry_spike   [  12% ] 001/060 VUs  01m48.8s/15m40s  10.00 iters/s
+
+running (01m50.0s), 001/060 VUs, 1097 complete and 0 interrupted iterations
+entry_spike   [  12% ] 001/060 VUs  01m49.8s/15m40s  10.00 iters/s
+
+running (01m51.0s), 001/060 VUs, 1107 complete and 0 interrupted iterations
+entry_spike   [  12% ] 001/060 VUs  01m50.8s/15m40s  10.00 iters/s
+
+running (01m52.0s), 001/060 VUs, 1117 complete and 0 interrupted iterations
+entry_spike   [  12% ] 001/060 VUs  01m51.8s/15m40s  10.00 iters/s
+
+running (01m53.0s), 001/060 VUs, 1127 complete and 0 interrupted iterations
+entry_spike   [  12% ] 001/060 VUs  01m52.8s/15m40s  10.00 iters/s
+
+running (01m54.0s), 001/060 VUs, 1137 complete and 0 interrupted iterations
+entry_spike   [  12% ] 001/060 VUs  01m53.8s/15m40s  10.00 iters/s
+
+running (01m55.0s), 001/060 VUs, 1147 complete and 0 interrupted iterations
+entry_spike   [  12% ] 001/060 VUs  01m54.8s/15m40s  10.00 iters/s
+
+running (01m56.0s), 001/060 VUs, 1157 complete and 0 interrupted iterations
+entry_spike   [  12% ] 001/060 VUs  01m55.8s/15m40s  10.00 iters/s
+
+running (01m57.0s), 001/060 VUs, 1167 complete and 0 interrupted iterations
+entry_spike   [  12% ] 001/060 VUs  01m56.8s/15m40s  10.00 iters/s
+
+running (01m58.0s), 001/060 VUs, 1177 complete and 0 interrupted iterations
+entry_spike   [  13% ] 001/060 VUs  01m57.8s/15m40s  10.00 iters/s
+
+running (01m59.0s), 001/060 VUs, 1187 complete and 0 interrupted iterations
+entry_spike   [  13% ] 001/060 VUs  01m58.8s/15m40s  10.00 iters/s
+
+running (02m00.0s), 001/060 VUs, 1197 complete and 0 interrupted iterations
+entry_spike   [  13% ] 001/060 VUs  01m59.8s/15m40s  10.00 iters/s
+
+running (02m01.0s), 001/060 VUs, 1207 complete and 0 interrupted iterations
+entry_spike   [  13% ] 001/060 VUs  02m00.8s/15m40s  10.00 iters/s
+
+running (02m02.0s), 001/060 VUs, 1217 complete and 0 interrupted iterations
+entry_spike   [  13% ] 001/060 VUs  02m01.8s/15m40s  10.00 iters/s
+
+running (02m03.0s), 001/060 VUs, 1227 complete and 0 interrupted iterations
+entry_spike   [  13% ] 001/060 VUs  02m02.8s/15m40s  10.00 iters/s
+
+running (02m04.0s), 001/060 VUs, 1237 complete and 0 interrupted iterations
+entry_spike   [  13% ] 001/060 VUs  02m03.8s/15m40s  10.00 iters/s
+
+running (02m05.0s), 001/060 VUs, 1247 complete and 0 interrupted iterations
+entry_spike   [  13% ] 001/060 VUs  02m04.8s/15m40s  10.00 iters/s
+
+running (02m06.0s), 001/060 VUs, 1257 complete and 0 interrupted iterations
+entry_spike   [  13% ] 001/060 VUs  02m05.8s/15m40s  10.00 iters/s
+
+running (02m07.0s), 001/060 VUs, 1267 complete and 0 interrupted iterations
+entry_spike   [  13% ] 001/060 VUs  02m06.8s/15m40s  10.00 iters/s
+
+running (02m08.0s), 001/060 VUs, 1277 complete and 0 interrupted iterations
+entry_spike   [  14% ] 001/060 VUs  02m07.8s/15m40s  10.00 iters/s
+
+running (02m09.0s), 001/060 VUs, 1287 complete and 0 interrupted iterations
+entry_spike   [  14% ] 001/060 VUs  02m08.8s/15m40s  10.00 iters/s
+
+running (02m10.0s), 001/060 VUs, 1297 complete and 0 interrupted iterations
+entry_spike   [  14% ] 001/060 VUs  02m09.8s/15m40s  10.00 iters/s
+
+running (02m11.0s), 001/060 VUs, 1307 complete and 0 interrupted iterations
+entry_spike   [  14% ] 001/060 VUs  02m10.8s/15m40s  10.00 iters/s
+
+running (02m12.0s), 001/060 VUs, 1317 complete and 0 interrupted iterations
+entry_spike   [  14% ] 001/060 VUs  02m11.8s/15m40s  10.00 iters/s
+
+running (02m13.0s), 001/060 VUs, 1327 complete and 0 interrupted iterations
+entry_spike   [  14% ] 001/060 VUs  02m12.8s/15m40s  10.00 iters/s
+
+running (02m14.0s), 001/060 VUs, 1337 complete and 0 interrupted iterations
+entry_spike   [  14% ] 001/060 VUs  02m13.8s/15m40s  10.00 iters/s
+
+running (02m15.0s), 001/060 VUs, 1347 complete and 0 interrupted iterations
+entry_spike   [  14% ] 001/060 VUs  02m14.8s/15m40s  10.00 iters/s
+
+running (02m16.0s), 001/060 VUs, 1357 complete and 0 interrupted iterations
+entry_spike   [  14% ] 001/060 VUs  02m15.8s/15m40s  10.00 iters/s
+
+running (02m17.0s), 001/060 VUs, 1367 complete and 0 interrupted iterations
+entry_spike   [  15% ] 001/060 VUs  02m16.8s/15m40s  10.00 iters/s
+
+running (02m18.0s), 001/060 VUs, 1377 complete and 0 interrupted iterations
+entry_spike   [  15% ] 001/060 VUs  02m17.8s/15m40s  10.00 iters/s
+
+running (02m19.0s), 001/060 VUs, 1387 complete and 0 interrupted iterations
+entry_spike   [  15% ] 001/060 VUs  02m18.8s/15m40s  10.00 iters/s
+
+running (02m20.0s), 001/060 VUs, 1397 complete and 0 interrupted iterations
+entry_spike   [  15% ] 001/060 VUs  02m19.8s/15m40s  10.00 iters/s
+
+running (02m21.0s), 001/060 VUs, 1407 complete and 0 interrupted iterations
+entry_spike   [  15% ] 001/060 VUs  02m20.8s/15m40s  10.00 iters/s
+
+running (02m22.0s), 001/060 VUs, 1417 complete and 0 interrupted iterations
+entry_spike   [  15% ] 001/060 VUs  02m21.8s/15m40s  10.00 iters/s
+
+running (02m23.0s), 001/060 VUs, 1427 complete and 0 interrupted iterations
+entry_spike   [  15% ] 001/060 VUs  02m22.8s/15m40s  10.00 iters/s
+
+running (02m24.0s), 001/060 VUs, 1437 complete and 0 interrupted iterations
+entry_spike   [  15% ] 001/060 VUs  02m23.8s/15m40s  10.00 iters/s
+
+running (02m25.0s), 001/060 VUs, 1447 complete and 0 interrupted iterations
+entry_spike   [  15% ] 001/060 VUs  02m24.8s/15m40s  10.00 iters/s
+
+running (02m26.0s), 001/060 VUs, 1457 complete and 0 interrupted iterations
+entry_spike   [  16% ] 001/060 VUs  02m25.8s/15m40s  10.00 iters/s
+
+running (02m27.0s), 001/060 VUs, 1467 complete and 0 interrupted iterations
+entry_spike   [  16% ] 001/060 VUs  02m26.8s/15m40s  10.00 iters/s
+
+running (02m28.0s), 001/060 VUs, 1477 complete and 0 interrupted iterations
+entry_spike   [  16% ] 001/060 VUs  02m27.8s/15m40s  10.00 iters/s
+
+running (02m29.0s), 001/060 VUs, 1487 complete and 0 interrupted iterations
+entry_spike   [  16% ] 001/060 VUs  02m28.8s/15m40s  10.00 iters/s
+
+running (02m30.0s), 001/060 VUs, 1497 complete and 0 interrupted iterations
+entry_spike   [  16% ] 001/060 VUs  02m29.8s/15m40s  10.00 iters/s
+
+running (02m31.0s), 001/060 VUs, 1507 complete and 0 interrupted iterations
+entry_spike   [  16% ] 001/060 VUs  02m30.8s/15m40s  10.00 iters/s
+
+running (02m32.0s), 001/060 VUs, 1517 complete and 0 interrupted iterations
+entry_spike   [  16% ] 001/060 VUs  02m31.8s/15m40s  10.00 iters/s
+
+running (02m33.0s), 001/060 VUs, 1527 complete and 0 interrupted iterations
+entry_spike   [  16% ] 001/060 VUs  02m32.8s/15m40s  10.00 iters/s
+
+running (02m34.0s), 001/060 VUs, 1537 complete and 0 interrupted iterations
+entry_spike   [  16% ] 001/060 VUs  02m33.8s/15m40s  10.00 iters/s
+
+running (02m35.0s), 001/060 VUs, 1547 complete and 0 interrupted iterations
+entry_spike   [  16% ] 001/060 VUs  02m34.8s/15m40s  10.00 iters/s
+
+running (02m36.0s), 001/060 VUs, 1557 complete and 0 interrupted iterations
+entry_spike   [  17% ] 001/060 VUs  02m35.8s/15m40s  10.00 iters/s
+
+running (02m37.0s), 001/060 VUs, 1567 complete and 0 interrupted iterations
+entry_spike   [  17% ] 001/060 VUs  02m36.8s/15m40s  10.00 iters/s
+
+running (02m38.0s), 001/060 VUs, 1577 complete and 0 interrupted iterations
+entry_spike   [  17% ] 001/060 VUs  02m37.8s/15m40s  10.00 iters/s
+
+running (02m39.0s), 001/060 VUs, 1587 complete and 0 interrupted iterations
+entry_spike   [  17% ] 001/060 VUs  02m38.8s/15m40s  10.00 iters/s
+
+running (02m40.0s), 001/060 VUs, 1597 complete and 0 interrupted iterations
+entry_spike   [  17% ] 001/060 VUs  02m39.8s/15m40s  10.00 iters/s
+
+running (02m41.0s), 001/060 VUs, 1607 complete and 0 interrupted iterations
+entry_spike   [  17% ] 001/060 VUs  02m40.8s/15m40s  10.00 iters/s
+
+running (02m42.0s), 001/060 VUs, 1617 complete and 0 interrupted iterations
+entry_spike   [  17% ] 001/060 VUs  02m41.8s/15m40s  10.00 iters/s
+
+running (02m43.0s), 001/060 VUs, 1627 complete and 0 interrupted iterations
+entry_spike   [  17% ] 001/060 VUs  02m42.8s/15m40s  10.00 iters/s
+
+running (02m44.0s), 001/060 VUs, 1637 complete and 0 interrupted iterations
+entry_spike   [  17% ] 001/060 VUs  02m43.8s/15m40s  10.00 iters/s
+
+running (02m45.0s), 001/060 VUs, 1647 complete and 0 interrupted iterations
+entry_spike   [  18% ] 001/060 VUs  02m44.8s/15m40s  10.00 iters/s
+
+running (02m46.0s), 001/060 VUs, 1657 complete and 0 interrupted iterations
+entry_spike   [  18% ] 001/060 VUs  02m45.8s/15m40s  10.00 iters/s
+
+running (02m47.0s), 001/060 VUs, 1667 complete and 0 interrupted iterations
+entry_spike   [  18% ] 001/060 VUs  02m46.8s/15m40s  10.00 iters/s
+
+running (02m48.0s), 001/060 VUs, 1677 complete and 0 interrupted iterations
+entry_spike   [  18% ] 001/060 VUs  02m47.8s/15m40s  10.00 iters/s
+
+running (02m49.0s), 001/060 VUs, 1687 complete and 0 interrupted iterations
+entry_spike   [  18% ] 001/060 VUs  02m48.8s/15m40s  10.00 iters/s
+
+running (02m50.0s), 001/060 VUs, 1697 complete and 0 interrupted iterations
+entry_spike   [  18% ] 001/060 VUs  02m49.8s/15m40s  10.00 iters/s
+
+running (02m51.0s), 001/060 VUs, 1707 complete and 0 interrupted iterations
+entry_spike   [  18% ] 001/060 VUs  02m50.8s/15m40s  10.00 iters/s
+
+running (02m52.0s), 001/060 VUs, 1717 complete and 0 interrupted iterations
+entry_spike   [  18% ] 001/060 VUs  02m51.8s/15m40s  10.00 iters/s
+
+running (02m53.0s), 001/060 VUs, 1727 complete and 0 interrupted iterations
+entry_spike   [  18% ] 001/060 VUs  02m52.8s/15m40s  10.00 iters/s
+
+running (02m54.0s), 001/060 VUs, 1737 complete and 0 interrupted iterations
+entry_spike   [  18% ] 001/060 VUs  02m53.8s/15m40s  10.00 iters/s
+
+running (02m55.0s), 001/060 VUs, 1747 complete and 0 interrupted iterations
+entry_spike   [  19% ] 001/060 VUs  02m54.8s/15m40s  10.00 iters/s
+
+running (02m56.0s), 001/060 VUs, 1757 complete and 0 interrupted iterations
+entry_spike   [  19% ] 001/060 VUs  02m55.8s/15m40s  10.00 iters/s
+
+running (02m57.0s), 001/060 VUs, 1767 complete and 0 interrupted iterations
+entry_spike   [  19% ] 001/060 VUs  02m56.8s/15m40s  10.00 iters/s
+
+running (02m58.0s), 001/060 VUs, 1777 complete and 0 interrupted iterations
+entry_spike   [  19% ] 001/060 VUs  02m57.8s/15m40s  10.00 iters/s
+
+running (02m59.0s), 001/060 VUs, 1787 complete and 0 interrupted iterations
+entry_spike   [  19% ] 001/060 VUs  02m58.8s/15m40s  10.00 iters/s
+
+running (03m00.0s), 001/060 VUs, 1797 complete and 0 interrupted iterations
+entry_spike   [  19% ] 001/060 VUs  02m59.8s/15m40s  10.00 iters/s
+
+running (03m01.0s), 001/060 VUs, 1807 complete and 0 interrupted iterations
+entry_spike   [  19% ] 001/060 VUs  03m00.8s/15m40s  10.00 iters/s
+
+running (03m02.0s), 001/060 VUs, 1817 complete and 0 interrupted iterations
+entry_spike   [  19% ] 001/060 VUs  03m01.8s/15m40s  10.00 iters/s
+
+running (03m03.0s), 001/060 VUs, 1827 complete and 0 interrupted iterations
+entry_spike   [  19% ] 001/060 VUs  03m02.8s/15m40s  10.00 iters/s
+
+running (03m04.0s), 001/060 VUs, 1837 complete and 0 interrupted iterations
+entry_spike   [  20% ] 001/060 VUs  03m03.8s/15m40s  10.00 iters/s
+
+running (03m05.0s), 001/060 VUs, 1847 complete and 0 interrupted iterations
+entry_spike   [  20% ] 001/060 VUs  03m04.8s/15m40s  10.00 iters/s
+
+running (03m06.0s), 001/060 VUs, 1857 complete and 0 interrupted iterations
+entry_spike   [  20% ] 001/060 VUs  03m05.8s/15m40s  10.00 iters/s
+
+running (03m07.0s), 001/060 VUs, 1867 complete and 0 interrupted iterations
+entry_spike   [  20% ] 001/060 VUs  03m06.8s/15m40s  10.00 iters/s
+
+running (03m08.0s), 001/060 VUs, 1877 complete and 0 interrupted iterations
+entry_spike   [  20% ] 001/060 VUs  03m07.8s/15m40s  10.00 iters/s
+
+running (03m09.0s), 001/060 VUs, 1887 complete and 0 interrupted iterations
+entry_spike   [  20% ] 001/060 VUs  03m08.8s/15m40s  10.00 iters/s
+
+running (03m10.0s), 001/060 VUs, 1897 complete and 0 interrupted iterations
+entry_spike   [  20% ] 001/060 VUs  03m09.8s/15m40s  10.00 iters/s
+
+running (03m11.0s), 001/060 VUs, 1907 complete and 0 interrupted iterations
+entry_spike   [  20% ] 001/060 VUs  03m10.8s/15m40s  10.00 iters/s
+
+running (03m12.0s), 001/060 VUs, 1917 complete and 0 interrupted iterations
+entry_spike   [  20% ] 001/060 VUs  03m11.8s/15m40s  10.00 iters/s
+
+running (03m13.0s), 001/060 VUs, 1927 complete and 0 interrupted iterations
+entry_spike   [  21% ] 001/060 VUs  03m12.8s/15m40s  10.00 iters/s
+
+running (03m14.0s), 001/060 VUs, 1937 complete and 0 interrupted iterations
+entry_spike   [  21% ] 001/060 VUs  03m13.8s/15m40s  10.00 iters/s
+
+running (03m15.0s), 001/060 VUs, 1947 complete and 0 interrupted iterations
+entry_spike   [  21% ] 001/060 VUs  03m14.8s/15m40s  10.00 iters/s
+
+running (03m16.0s), 001/060 VUs, 1957 complete and 0 interrupted iterations
+entry_spike   [  21% ] 001/060 VUs  03m15.8s/15m40s  10.00 iters/s
+
+running (03m17.0s), 001/060 VUs, 1967 complete and 0 interrupted iterations
+entry_spike   [  21% ] 001/060 VUs  03m16.8s/15m40s  10.00 iters/s
+
+running (03m18.0s), 001/060 VUs, 1977 complete and 0 interrupted iterations
+entry_spike   [  21% ] 001/060 VUs  03m17.8s/15m40s  10.00 iters/s
+
+running (03m19.0s), 001/060 VUs, 1987 complete and 0 interrupted iterations
+entry_spike   [  21% ] 001/060 VUs  03m18.8s/15m40s  10.00 iters/s
+
+running (03m20.0s), 001/060 VUs, 1997 complete and 0 interrupted iterations
+entry_spike   [  21% ] 001/060 VUs  03m19.8s/15m40s  10.00 iters/s
+
+running (03m21.0s), 001/060 VUs, 2007 complete and 0 interrupted iterations
+entry_spike   [  21% ] 001/060 VUs  03m20.8s/15m40s  10.00 iters/s
+
+running (03m22.0s), 001/060 VUs, 2017 complete and 0 interrupted iterations
+entry_spike   [  21% ] 001/060 VUs  03m21.8s/15m40s  10.00 iters/s
+
+running (03m23.0s), 001/060 VUs, 2027 complete and 0 interrupted iterations
+entry_spike   [  22% ] 001/060 VUs  03m22.8s/15m40s  10.00 iters/s
+
+running (03m24.0s), 001/060 VUs, 2037 complete and 0 interrupted iterations
+entry_spike   [  22% ] 001/060 VUs  03m23.8s/15m40s  10.00 iters/s
+
+running (03m25.0s), 001/060 VUs, 2047 complete and 0 interrupted iterations
+entry_spike   [  22% ] 001/060 VUs  03m24.8s/15m40s  10.00 iters/s
+
+running (03m26.0s), 001/060 VUs, 2057 complete and 0 interrupted iterations
+entry_spike   [  22% ] 001/060 VUs  03m25.8s/15m40s  10.00 iters/s
+
+running (03m27.0s), 001/060 VUs, 2067 complete and 0 interrupted iterations
+entry_spike   [  22% ] 001/060 VUs  03m26.8s/15m40s  10.00 iters/s
+
+running (03m28.0s), 001/060 VUs, 2077 complete and 0 interrupted iterations
+entry_spike   [  22% ] 001/060 VUs  03m27.8s/15m40s  10.00 iters/s
+
+running (03m29.0s), 001/060 VUs, 2087 complete and 0 interrupted iterations
+entry_spike   [  22% ] 001/060 VUs  03m28.8s/15m40s  10.00 iters/s
+
+running (03m30.0s), 001/060 VUs, 2097 complete and 0 interrupted iterations
+entry_spike   [  22% ] 001/060 VUs  03m29.8s/15m40s  10.00 iters/s
+
+running (03m31.0s), 001/060 VUs, 2107 complete and 0 interrupted iterations
+entry_spike   [  22% ] 001/060 VUs  03m30.8s/15m40s  10.00 iters/s
+
+running (03m32.0s), 001/060 VUs, 2117 complete and 0 interrupted iterations
+entry_spike   [  23% ] 001/060 VUs  03m31.8s/15m40s  10.00 iters/s
+
+running (03m33.0s), 001/060 VUs, 2127 complete and 0 interrupted iterations
+entry_spike   [  23% ] 001/060 VUs  03m32.8s/15m40s  10.00 iters/s
+
+running (03m34.0s), 001/060 VUs, 2137 complete and 0 interrupted iterations
+entry_spike   [  23% ] 001/060 VUs  03m33.8s/15m40s  10.00 iters/s
+
+running (03m35.0s), 001/060 VUs, 2147 complete and 0 interrupted iterations
+entry_spike   [  23% ] 001/060 VUs  03m34.8s/15m40s  10.00 iters/s
+
+running (03m36.0s), 001/060 VUs, 2157 complete and 0 interrupted iterations
+entry_spike   [  23% ] 001/060 VUs  03m35.8s/15m40s  10.00 iters/s
+
+running (03m37.0s), 001/060 VUs, 2167 complete and 0 interrupted iterations
+entry_spike   [  23% ] 001/060 VUs  03m36.8s/15m40s  10.00 iters/s
+
+running (03m38.0s), 001/060 VUs, 2177 complete and 0 interrupted iterations
+entry_spike   [  23% ] 001/060 VUs  03m37.8s/15m40s  10.00 iters/s
+
+running (03m39.0s), 001/060 VUs, 2187 complete and 0 interrupted iterations
+entry_spike   [  23% ] 001/060 VUs  03m38.8s/15m40s  10.00 iters/s
+
+running (03m40.0s), 001/060 VUs, 2197 complete and 0 interrupted iterations
+entry_spike   [  23% ] 001/060 VUs  03m39.8s/15m40s  10.00 iters/s
+
+running (03m41.0s), 001/060 VUs, 2207 complete and 0 interrupted iterations
+entry_spike   [  23% ] 001/060 VUs  03m40.8s/15m40s  10.00 iters/s
+
+running (03m42.0s), 001/060 VUs, 2217 complete and 0 interrupted iterations
+entry_spike   [  24% ] 001/060 VUs  03m41.8s/15m40s  10.00 iters/s
+
+running (03m43.0s), 001/060 VUs, 2227 complete and 0 interrupted iterations
+entry_spike   [  24% ] 001/060 VUs  03m42.8s/15m40s  10.00 iters/s
+
+running (03m44.0s), 001/060 VUs, 2237 complete and 0 interrupted iterations
+entry_spike   [  24% ] 001/060 VUs  03m43.8s/15m40s  10.00 iters/s
+
+running (03m45.0s), 001/060 VUs, 2247 complete and 0 interrupted iterations
+entry_spike   [  24% ] 001/060 VUs  03m44.8s/15m40s  10.00 iters/s
+
+running (03m46.0s), 001/060 VUs, 2257 complete and 0 interrupted iterations
+entry_spike   [  24% ] 001/060 VUs  03m45.8s/15m40s  10.00 iters/s
+
+running (03m47.0s), 001/060 VUs, 2267 complete and 0 interrupted iterations
+entry_spike   [  24% ] 001/060 VUs  03m46.8s/15m40s  10.00 iters/s
+
+running (03m48.0s), 001/060 VUs, 2277 complete and 0 interrupted iterations
+entry_spike   [  24% ] 001/060 VUs  03m47.8s/15m40s  10.00 iters/s
+
+running (03m49.0s), 001/060 VUs, 2287 complete and 0 interrupted iterations
+entry_spike   [  24% ] 001/060 VUs  03m48.8s/15m40s  10.00 iters/s
+
+running (03m50.0s), 001/060 VUs, 2297 complete and 0 interrupted iterations
+entry_spike   [  24% ] 001/060 VUs  03m49.8s/15m40s  10.00 iters/s
+
+running (03m51.0s), 001/060 VUs, 2307 complete and 0 interrupted iterations
+entry_spike   [  25% ] 001/060 VUs  03m50.8s/15m40s  10.00 iters/s
+
+running (03m52.0s), 001/060 VUs, 2317 complete and 0 interrupted iterations
+entry_spike   [  25% ] 001/060 VUs  03m51.8s/15m40s  10.00 iters/s
+
+running (03m53.0s), 001/060 VUs, 2327 complete and 0 interrupted iterations
+entry_spike   [  25% ] 001/060 VUs  03m52.8s/15m40s  10.00 iters/s
+
+running (03m54.0s), 001/060 VUs, 2337 complete and 0 interrupted iterations
+entry_spike   [  25% ] 001/060 VUs  03m53.8s/15m40s  10.00 iters/s
+
+running (03m55.0s), 001/060 VUs, 2347 complete and 0 interrupted iterations
+entry_spike   [  25% ] 001/060 VUs  03m54.8s/15m40s  10.00 iters/s
+
+running (03m56.0s), 001/060 VUs, 2357 complete and 0 interrupted iterations
+entry_spike   [  25% ] 001/060 VUs  03m55.8s/15m40s  10.00 iters/s
+
+running (03m57.0s), 001/060 VUs, 2367 complete and 0 interrupted iterations
+entry_spike   [  25% ] 001/060 VUs  03m56.8s/15m40s  10.00 iters/s
+
+running (03m58.0s), 001/060 VUs, 2377 complete and 0 interrupted iterations
+entry_spike   [  25% ] 001/060 VUs  03m57.8s/15m40s  10.00 iters/s
+
+running (03m59.0s), 001/060 VUs, 2387 complete and 0 interrupted iterations
+entry_spike   [  25% ] 001/060 VUs  03m58.8s/15m40s  10.00 iters/s
+
+running (04m00.0s), 001/060 VUs, 2397 complete and 0 interrupted iterations
+entry_spike   [  26% ] 001/060 VUs  03m59.8s/15m40s  10.00 iters/s
+
+running (04m01.0s), 001/060 VUs, 2407 complete and 0 interrupted iterations
+entry_spike   [  26% ] 001/060 VUs  04m00.8s/15m40s  10.00 iters/s
+
+running (04m02.0s), 001/060 VUs, 2417 complete and 0 interrupted iterations
+entry_spike   [  26% ] 001/060 VUs  04m01.8s/15m40s  10.00 iters/s
+
+running (04m03.0s), 001/060 VUs, 2427 complete and 0 interrupted iterations
+entry_spike   [  26% ] 001/060 VUs  04m02.8s/15m40s  10.00 iters/s
+
+running (04m04.0s), 001/060 VUs, 2437 complete and 0 interrupted iterations
+entry_spike   [  26% ] 001/060 VUs  04m03.8s/15m40s  10.00 iters/s
+
+running (04m05.0s), 001/060 VUs, 2447 complete and 0 interrupted iterations
+entry_spike   [  26% ] 001/060 VUs  04m04.8s/15m40s  10.00 iters/s
+
+running (04m06.0s), 001/060 VUs, 2457 complete and 0 interrupted iterations
+entry_spike   [  26% ] 001/060 VUs  04m05.8s/15m40s  10.00 iters/s
+
+running (04m07.0s), 001/060 VUs, 2467 complete and 0 interrupted iterations
+entry_spike   [  26% ] 001/060 VUs  04m06.8s/15m40s  10.00 iters/s
+
+running (04m08.0s), 001/060 VUs, 2477 complete and 0 interrupted iterations
+entry_spike   [  26% ] 001/060 VUs  04m07.8s/15m40s  10.00 iters/s
+
+running (04m09.0s), 001/060 VUs, 2487 complete and 0 interrupted iterations
+entry_spike   [  26% ] 001/060 VUs  04m08.8s/15m40s  10.00 iters/s
+
+running (04m10.0s), 001/060 VUs, 2497 complete and 0 interrupted iterations
+entry_spike   [  27% ] 001/060 VUs  04m09.8s/15m40s  10.00 iters/s
+
+running (04m11.0s), 001/060 VUs, 2507 complete and 0 interrupted iterations
+entry_spike   [  27% ] 001/060 VUs  04m10.8s/15m40s  10.00 iters/s
+
+running (04m12.0s), 001/060 VUs, 2517 complete and 0 interrupted iterations
+entry_spike   [  27% ] 001/060 VUs  04m11.8s/15m40s  10.00 iters/s
+
+running (04m13.0s), 001/060 VUs, 2527 complete and 0 interrupted iterations
+entry_spike   [  27% ] 001/060 VUs  04m12.8s/15m40s  10.00 iters/s
+
+running (04m14.0s), 001/060 VUs, 2537 complete and 0 interrupted iterations
+entry_spike   [  27% ] 001/060 VUs  04m13.8s/15m40s  10.00 iters/s
+
+running (04m15.0s), 001/060 VUs, 2547 complete and 0 interrupted iterations
+entry_spike   [  27% ] 001/060 VUs  04m14.8s/15m40s  10.00 iters/s
+
+running (04m16.0s), 001/060 VUs, 2557 complete and 0 interrupted iterations
+entry_spike   [  27% ] 001/060 VUs  04m15.8s/15m40s  10.00 iters/s
+
+running (04m17.0s), 001/060 VUs, 2567 complete and 0 interrupted iterations
+entry_spike   [  27% ] 001/060 VUs  04m16.8s/15m40s  10.00 iters/s
+
+running (04m18.0s), 001/060 VUs, 2577 complete and 0 interrupted iterations
+entry_spike   [  27% ] 001/060 VUs  04m17.8s/15m40s  10.00 iters/s
+
+running (04m19.0s), 001/060 VUs, 2587 complete and 0 interrupted iterations
+entry_spike   [  28% ] 001/060 VUs  04m18.8s/15m40s  10.00 iters/s
+
+running (04m20.0s), 001/060 VUs, 2597 complete and 0 interrupted iterations
+entry_spike   [  28% ] 001/060 VUs  04m19.8s/15m40s  10.00 iters/s
+
+running (04m21.0s), 001/060 VUs, 2607 complete and 0 interrupted iterations
+entry_spike   [  28% ] 001/060 VUs  04m20.8s/15m40s  10.00 iters/s
+
+running (04m22.0s), 001/060 VUs, 2617 complete and 0 interrupted iterations
+entry_spike   [  28% ] 001/060 VUs  04m21.8s/15m40s  10.00 iters/s
+
+running (04m23.0s), 001/060 VUs, 2627 complete and 0 interrupted iterations
+entry_spike   [  28% ] 001/060 VUs  04m22.8s/15m40s  10.00 iters/s
+
+running (04m24.0s), 001/060 VUs, 2637 complete and 0 interrupted iterations
+entry_spike   [  28% ] 001/060 VUs  04m23.8s/15m40s  10.00 iters/s
+
+running (04m25.0s), 001/060 VUs, 2647 complete and 0 interrupted iterations
+entry_spike   [  28% ] 001/060 VUs  04m24.8s/15m40s  10.00 iters/s
+
+running (04m26.0s), 001/060 VUs, 2657 complete and 0 interrupted iterations
+entry_spike   [  28% ] 001/060 VUs  04m25.8s/15m40s  10.00 iters/s
+
+running (04m27.0s), 001/060 VUs, 2667 complete and 0 interrupted iterations
+entry_spike   [  28% ] 001/060 VUs  04m26.8s/15m40s  10.00 iters/s
+
+running (04m28.0s), 003/060 VUs, 2675 complete and 0 interrupted iterations
+entry_spike   [  28% ] 003/060 VUs  04m27.8s/15m40s  10.00 iters/s
+
+running (04m29.0s), 012/060 VUs, 2676 complete and 0 interrupted iterations
+entry_spike   [  29% ] 012/060 VUs  04m28.8s/15m40s  10.00 iters/s
+
+running (04m30.0s), 022/060 VUs, 2676 complete and 0 interrupted iterations
+entry_spike   [  29% ] 022/060 VUs  04m29.8s/15m40s  10.00 iters/s
+
+running (04m31.0s), 032/060 VUs, 2676 complete and 0 interrupted iterations
+entry_spike   [  29% ] 032/060 VUs  04m30.8s/15m40s  10.00 iters/s
+
+running (04m32.0s), 042/060 VUs, 2676 complete and 0 interrupted iterations
+entry_spike   [  29% ] 042/060 VUs  04m31.8s/15m40s  10.00 iters/s
+
+running (04m33.0s), 052/060 VUs, 2676 complete and 0 interrupted iterations
+entry_spike   [  29% ] 052/060 VUs  04m32.8s/15m40s  10.00 iters/s
+
+running (04m34.0s), 061/061 VUs, 2676 complete and 0 interrupted iterations
+entry_spike   [  29% ] 061/061 VUs  04m33.8s/15m40s  10.00 iters/s
+
+running (04m35.0s), 066/066 VUs, 2676 complete and 0 interrupted iterations
+entry_spike   [  29% ] 066/066 VUs  04m34.8s/15m40s  10.00 iters/s
+time="2026-07-26T18:13:39Z" level=error msg="Failed to send the time series data to the endpoint" error="HTTP POST request failed: Post \"http://host.docker.internal:9090/api/v1/write\": context deadline exceeded (Client.Timeout exceeded while awaiting headers)" output="Prometheus remote write"
+time="2026-07-26T18:13:39Z" level=warning msg="Successful flushed time series to remote write endpoint but it took 5.002828851s while flush period is 5s. Some samples may be dropped." nts=92 output="Prometheus remote write"
+
+running (04m36.0s), 071/071 VUs, 2676 complete and 0 interrupted iterations
+entry_spike   [  29% ] 071/071 VUs  04m35.8s/15m40s  10.00 iters/s
+
+running (04m37.0s), 076/076 VUs, 2676 complete and 0 interrupted iterations
+entry_spike   [  29% ] 076/076 VUs  04m36.8s/15m40s  10.00 iters/s
+
+running (04m38.0s), 081/081 VUs, 2676 complete and 0 interrupted iterations
+entry_spike   [  30% ] 081/081 VUs  04m37.8s/15m40s  10.00 iters/s
+
+running (04m39.0s), 086/086 VUs, 2676 complete and 0 interrupted iterations
+entry_spike   [  30% ] 086/086 VUs  04m38.8s/15m40s  10.00 iters/s
+
+running (04m40.0s), 091/091 VUs, 2676 complete and 0 interrupted iterations
+entry_spike   [  30% ] 091/091 VUs  04m39.8s/15m40s  10.00 iters/s
+time="2026-07-26T18:13:44Z" level=error msg="Failed to send the time series data to the endpoint" error="HTTP POST request failed: Post \"http://host.docker.internal:9090/api/v1/write\": context deadline exceeded (Client.Timeout exceeded while awaiting headers)" output="Prometheus remote write"
+time="2026-07-26T18:13:44Z" level=warning msg="Successful flushed time series to remote write endpoint but it took 5.000586599s while flush period is 5s. Some samples may be dropped." nts=4 output="Prometheus remote write"
+
+running (04m41.0s), 096/096 VUs, 2676 complete and 0 interrupted iterations
+entry_spike   [  30% ] 096/096 VUs  04m40.8s/15m40s  10.00 iters/s
+
+running (04m42.0s), 101/101 VUs, 2676 complete and 0 interrupted iterations
+entry_spike   [  30% ] 101/101 VUs  04m41.8s/15m40s  10.00 iters/s
+
+running (04m43.0s), 106/106 VUs, 2676 complete and 0 interrupted iterations
+entry_spike   [  30% ] 106/106 VUs  04m42.8s/15m40s  10.00 iters/s
+
+running (04m44.0s), 111/111 VUs, 2676 complete and 0 interrupted iterations
+entry_spike   [  30% ] 111/111 VUs  04m43.8s/15m40s  10.00 iters/s
+
+running (04m45.0s), 116/116 VUs, 2676 complete and 0 interrupted iterations
+entry_spike   [  30% ] 116/116 VUs  04m44.8s/15m40s  10.00 iters/s
+time="2026-07-26T18:13:49Z" level=error msg="Failed to send the time series data to the endpoint" error="HTTP POST request failed: Post \"http://host.docker.internal:9090/api/v1/write\": context deadline exceeded (Client.Timeout exceeded while awaiting headers)" output="Prometheus remote write"
+time="2026-07-26T18:13:49Z" level=warning msg="Successful flushed time series to remote write endpoint but it took 5.000630394s while flush period is 5s. Some samples may be dropped." nts=4 output="Prometheus remote write"
+
+running (04m46.0s), 121/121 VUs, 2676 complete and 0 interrupted iterations
+entry_spike   [  30% ] 121/121 VUs  04m45.8s/15m40s  10.00 iters/s
+
+running (04m47.0s), 126/126 VUs, 2676 complete and 0 interrupted iterations
+entry_spike   [  31% ] 126/126 VUs  04m46.8s/15m40s  10.00 iters/s
+time="2026-07-26T18:13:51Z" level=warning msg="Request Failed" error="Post \"https://api.ticketrush.store/api/v1/entries/verify\": EOF"
+time="2026-07-26T18:13:51Z" level=warning msg="Request Failed" error="Post \"https://api.ticketrush.store/api/v1/entries/verify\": EOF"
+
+running (04m48.0s), 131/131 VUs, 2676 complete and 0 interrupted iterations
+entry_spike   [  31% ] 131/131 VUs  04m47.8s/15m40s  10.00 iters/s
+time="2026-07-26T18:13:53Z" level=error msg="Failed to send the time series data to the endpoint" error="HTTP POST request failed: Post \"http://host.docker.internal:9090/api/v1/write\": EOF" output="Prometheus remote write"
+
+running (04m49.0s), 134/136 VUs, 2678 complete and 0 interrupted iterations
+entry_spike   [  31% ] 134/136 VUs  04m48.8s/15m40s  10.00 iters/s
+
+running (04m50.0s), 094/136 VUs, 2728 complete and 0 interrupted iterations
+entry_spike   [  31% ] 094/136 VUs  04m49.8s/15m40s  10.00 iters/s
+time="2026-07-26T18:13:54Z" level=error msg="Failed to send the time series data to the endpoint" error="HTTP POST request failed: Post \"http://host.docker.internal:9090/api/v1/write\": dial tcp 192.168.65.254:9090: connect: connection refused" output="Prometheus remote write"
+
+running (04m51.0s), 068/136 VUs, 2764 complete and 0 interrupted iterations
+entry_spike   [  31% ] 068/136 VUs  04m50.8s/15m40s  10.00 iters/s
+
+running (04m52.0s), 040/136 VUs, 2802 complete and 0 interrupted iterations
+entry_spike   [  31% ] 040/136 VUs  04m51.8s/15m40s  10.00 iters/s
+
+running (04m53.0s), 021/136 VUs, 2831 complete and 0 interrupted iterations
+entry_spike   [  31% ] 021/136 VUs  04m52.8s/15m40s  10.00 iters/s
+
+running (04m54.0s), 016/136 VUs, 2846 complete and 0 interrupted iterations
+entry_spike   [  31% ] 016/136 VUs  04m53.8s/15m40s  10.00 iters/s
+
+running (04m55.0s), 011/136 VUs, 2861 complete and 0 interrupted iterations
+entry_spike   [  31% ] 011/136 VUs  04m54.8s/15m40s  10.00 iters/s
+time="2026-07-26T18:13:59Z" level=error msg="Failed to send the time series data to the endpoint" error="HTTP POST request failed: Post \"http://host.docker.internal:9090/api/v1/write\": dial tcp 192.168.65.254:9090: connect: connection refused" output="Prometheus remote write"
+
+running (04m56.0s), 006/136 VUs, 2876 complete and 0 interrupted iterations
+entry_spike   [  31% ] 006/136 VUs  04m55.8s/15m40s  10.00 iters/s
+
+running (04m57.0s), 001/136 VUs, 2891 complete and 0 interrupted iterations
+entry_spike   [  32% ] 001/136 VUs  04m56.8s/15m40s  10.00 iters/s
+
+running (04m58.0s), 001/136 VUs, 2901 complete and 0 interrupted iterations
+entry_spike   [  32% ] 001/136 VUs  04m57.8s/15m40s  10.00 iters/s
+
+running (04m59.0s), 001/136 VUs, 2911 complete and 0 interrupted iterations
+entry_spike   [  32% ] 001/136 VUs  04m58.8s/15m40s  10.00 iters/s
+
+running (05m00.0s), 001/136 VUs, 2921 complete and 0 interrupted iterations
+entry_spike   [  32% ] 001/136 VUs  04m59.8s/15m40s  10.00 iters/s
+time="2026-07-26T18:14:04Z" level=error msg="Failed to send the time series data to the endpoint" error="HTTP POST request failed: Post \"http://host.docker.internal:9090/api/v1/write\": dial tcp 192.168.65.254:9090: connect: connection refused" output="Prometheus remote write"
+
+running (05m01.0s), 001/136 VUs, 2931 complete and 0 interrupted iterations
+entry_spike   [  32% ] 001/136 VUs  05m00.8s/15m40s  10.00 iters/s
+
+running (05m02.0s), 001/136 VUs, 2941 complete and 0 interrupted iterations
+entry_spike   [  32% ] 001/136 VUs  05m01.8s/15m40s  10.00 iters/s
+
+running (05m03.0s), 001/136 VUs, 2951 complete and 0 interrupted iterations
+entry_spike   [  32% ] 001/136 VUs  05m02.8s/15m40s  10.00 iters/s
+
+running (05m04.0s), 001/136 VUs, 2961 complete and 0 interrupted iterations
+entry_spike   [  32% ] 001/136 VUs  05m03.8s/15m40s  10.00 iters/s
+
+running (05m05.0s), 001/136 VUs, 2971 complete and 0 interrupted iterations
+entry_spike   [  32% ] 001/136 VUs  05m04.8s/15m40s  10.00 iters/s
+time="2026-07-26T18:14:09Z" level=error msg="Failed to send the time series data to the endpoint" error="HTTP POST request failed: Post \"http://host.docker.internal:9090/api/v1/write\": dial tcp 192.168.65.254:9090: connect: connection refused" output="Prometheus remote write"
+
+running (05m06.0s), 001/136 VUs, 2981 complete and 0 interrupted iterations
+entry_spike   [  33% ] 001/136 VUs  05m05.8s/15m40s  10.00 iters/s
+
+running (05m07.0s), 001/136 VUs, 2991 complete and 0 interrupted iterations
+entry_spike   [  33% ] 001/136 VUs  05m06.8s/15m40s  10.00 iters/s
+
+running (05m08.0s), 001/136 VUs, 3001 complete and 0 interrupted iterations
+entry_spike   [  33% ] 001/136 VUs  05m07.8s/15m40s  10.00 iters/s
+
+running (05m09.0s), 001/136 VUs, 3011 complete and 0 interrupted iterations
+entry_spike   [  33% ] 001/136 VUs  05m08.8s/15m40s  10.00 iters/s
+
+running (05m10.0s), 001/136 VUs, 3021 complete and 0 interrupted iterations
+entry_spike   [  33% ] 001/136 VUs  05m09.8s/15m40s  10.00 iters/s
+time="2026-07-26T18:14:14Z" level=error msg="Failed to send the time series data to the endpoint" error="HTTP POST request failed: Post \"http://host.docker.internal:9090/api/v1/write\": dial tcp 192.168.65.254:9090: connect: connection refused" output="Prometheus remote write"
+
+running (05m11.0s), 001/136 VUs, 3031 complete and 0 interrupted iterations
+entry_spike   [  33% ] 001/136 VUs  05m10.8s/15m40s  10.00 iters/s
+
+running (05m12.0s), 001/136 VUs, 3041 complete and 0 interrupted iterations
+entry_spike   [  33% ] 001/136 VUs  05m11.8s/15m40s  10.00 iters/s
+
+running (05m13.0s), 001/136 VUs, 3051 complete and 0 interrupted iterations
+entry_spike   [  33% ] 001/136 VUs  05m12.8s/15m40s  10.00 iters/s
+
+running (05m14.0s), 001/136 VUs, 3061 complete and 0 interrupted iterations
+entry_spike   [  33% ] 001/136 VUs  05m13.8s/15m40s  10.00 iters/s
+
+running (05m15.0s), 001/136 VUs, 3071 complete and 0 interrupted iterations
+entry_spike   [  33% ] 001/136 VUs  05m14.8s/15m40s  10.00 iters/s
+time="2026-07-26T18:14:19Z" level=error msg="Failed to send the time series data to the endpoint" error="HTTP POST request failed: Post \"http://host.docker.internal:9090/api/v1/write\": dial tcp 192.168.65.254:9090: connect: connection refused" output="Prometheus remote write"
+
+running (05m16.0s), 001/136 VUs, 3081 complete and 0 interrupted iterations
+entry_spike   [  34% ] 001/136 VUs  05m15.8s/15m40s  10.00 iters/s
+
+running (05m17.0s), 002/136 VUs, 3090 complete and 0 interrupted iterations
+entry_spike   [  34% ] 002/136 VUs  05m16.8s/15m40s  10.00 iters/s
+
+running (05m18.0s), 001/136 VUs, 3101 complete and 0 interrupted iterations
+entry_spike   [  34% ] 001/136 VUs  05m17.8s/15m40s  10.00 iters/s
+
+running (05m19.0s), 001/136 VUs, 3111 complete and 0 interrupted iterations
+entry_spike   [  34% ] 001/136 VUs  05m18.8s/15m40s  10.00 iters/s
+
+running (05m20.0s), 001/136 VUs, 3121 complete and 0 interrupted iterations
+entry_spike   [  34% ] 001/136 VUs  05m19.8s/15m40s  10.00 iters/s
+time="2026-07-26T18:14:24Z" level=error msg="Failed to send the time series data to the endpoint" error="HTTP POST request failed: Post \"http://host.docker.internal:9090/api/v1/write\": dial tcp 192.168.65.254:9090: connect: connection refused" output="Prometheus remote write"
+
+running (05m21.0s), 001/136 VUs, 3131 complete and 0 interrupted iterations
+entry_spike   [  34% ] 001/136 VUs  05m20.8s/15m40s  10.00 iters/s
+
+running (05m22.0s), 001/136 VUs, 3141 complete and 0 interrupted iterations
+entry_spike   [  34% ] 001/136 VUs  05m21.8s/15m40s  10.00 iters/s
+
+running (05m23.0s), 001/136 VUs, 3151 complete and 0 interrupted iterations
+entry_spike   [  34% ] 001/136 VUs  05m22.8s/15m40s  10.00 iters/s
+
+running (05m24.0s), 001/136 VUs, 3161 complete and 0 interrupted iterations
+entry_spike   [  34% ] 001/136 VUs  05m23.8s/15m40s  10.00 iters/s
+
+running (05m25.0s), 001/136 VUs, 3171 complete and 0 interrupted iterations
+entry_spike   [  35% ] 001/136 VUs  05m24.8s/15m40s  10.00 iters/s
+time="2026-07-26T18:14:29Z" level=error msg="Failed to send the time series data to the endpoint" error="HTTP POST request failed: Post \"http://host.docker.internal:9090/api/v1/write\": dial tcp 192.168.65.254:9090: connect: connection refused" output="Prometheus remote write"
+
+running (05m26.0s), 001/136 VUs, 3181 complete and 0 interrupted iterations
+entry_spike   [  35% ] 001/136 VUs  05m25.8s/15m40s  10.00 iters/s
+
+running (05m27.0s), 001/136 VUs, 3191 complete and 0 interrupted iterations
+entry_spike   [  35% ] 001/136 VUs  05m26.8s/15m40s  10.00 iters/s
+
+running (05m28.0s), 001/136 VUs, 3201 complete and 0 interrupted iterations
+entry_spike   [  35% ] 001/136 VUs  05m27.8s/15m40s  10.00 iters/s
+
+running (05m29.0s), 001/136 VUs, 3211 complete and 0 interrupted iterations
+entry_spike   [  35% ] 001/136 VUs  05m28.8s/15m40s  10.00 iters/s
+
+running (05m30.0s), 001/136 VUs, 3221 complete and 0 interrupted iterations
+entry_spike   [  35% ] 001/136 VUs  05m29.8s/15m40s  10.00 iters/s
+time="2026-07-26T18:14:34Z" level=error msg="Failed to send the time series data to the endpoint" error="HTTP POST request failed: Post \"http://host.docker.internal:9090/api/v1/write\": dial tcp 192.168.65.254:9090: connect: connection refused" output="Prometheus remote write"
+
+running (05m31.0s), 001/136 VUs, 3231 complete and 0 interrupted iterations
+entry_spike   [  35% ] 001/136 VUs  05m30.8s/15m40s  10.00 iters/s
+
+running (05m32.0s), 001/136 VUs, 3241 complete and 0 interrupted iterations
+entry_spike   [  35% ] 001/136 VUs  05m31.8s/15m40s  10.00 iters/s
+
+running (05m33.0s), 003/136 VUs, 3249 complete and 0 interrupted iterations
+entry_spike   [  35% ] 003/136 VUs  05m32.8s/15m40s  10.00 iters/s
+
+running (05m34.0s), 004/136 VUs, 3258 complete and 0 interrupted iterations
+entry_spike   [  36% ] 004/136 VUs  05m33.8s/15m40s  10.00 iters/s
+
+running (05m35.0s), 001/136 VUs, 3271 complete and 0 interrupted iterations
+entry_spike   [  36% ] 001/136 VUs  05m34.8s/15m40s  10.00 iters/s
+time="2026-07-26T18:14:39Z" level=error msg="Failed to send the time series data to the endpoint" error="HTTP POST request failed: Post \"http://host.docker.internal:9090/api/v1/write\": dial tcp 192.168.65.254:9090: connect: connection refused" output="Prometheus remote write"
+
+running (05m36.0s), 001/136 VUs, 3281 complete and 0 interrupted iterations
+entry_spike   [  36% ] 001/136 VUs  05m35.8s/15m40s  10.00 iters/s
+
+running (05m37.0s), 001/136 VUs, 3291 complete and 0 interrupted iterations
+entry_spike   [  36% ] 001/136 VUs  05m36.8s/15m40s  10.00 iters/s
+
+running (05m38.0s), 001/136 VUs, 3301 complete and 0 interrupted iterations
+entry_spike   [  36% ] 001/136 VUs  05m37.8s/15m40s  10.00 iters/s
+
+running (05m39.0s), 001/136 VUs, 3311 complete and 0 interrupted iterations
+entry_spike   [  36% ] 001/136 VUs  05m38.8s/15m40s  10.00 iters/s
+
+running (05m40.0s), 001/136 VUs, 3321 complete and 0 interrupted iterations
+entry_spike   [  36% ] 001/136 VUs  05m39.8s/15m40s  10.00 iters/s
+time="2026-07-26T18:14:44Z" level=error msg="Failed to send the time series data to the endpoint" error="HTTP POST request failed: Post \"http://host.docker.internal:9090/api/v1/write\": dial tcp 192.168.65.254:9090: connect: connection refused" output="Prometheus remote write"
+
+running (05m41.0s), 001/136 VUs, 3331 complete and 0 interrupted iterations
+entry_spike   [  36% ] 001/136 VUs  05m40.8s/15m40s  10.00 iters/s
+
+running (05m42.0s), 001/136 VUs, 3341 complete and 0 interrupted iterations
+entry_spike   [  36% ] 001/136 VUs  05m41.8s/15m40s  10.00 iters/s
+
+running (05m43.0s), 001/136 VUs, 3351 complete and 0 interrupted iterations
+entry_spike   [  36% ] 001/136 VUs  05m42.8s/15m40s  10.00 iters/s
+
+running (05m44.0s), 001/136 VUs, 3361 complete and 0 interrupted iterations
+entry_spike   [  37% ] 001/136 VUs  05m43.8s/15m40s  10.00 iters/s
+
+running (05m45.0s), 002/136 VUs, 3370 complete and 0 interrupted iterations
+entry_spike   [  37% ] 002/136 VUs  05m44.8s/15m40s  10.00 iters/s
+time="2026-07-26T18:14:49Z" level=error msg="Failed to send the time series data to the endpoint" error="HTTP POST request failed: Post \"http://host.docker.internal:9090/api/v1/write\": dial tcp 192.168.65.254:9090: connect: connection refused" output="Prometheus remote write"
+
+running (05m46.0s), 001/136 VUs, 3381 complete and 0 interrupted iterations
+entry_spike   [  37% ] 001/136 VUs  05m45.8s/15m40s  10.00 iters/s
+
+running (05m47.0s), 001/136 VUs, 3391 complete and 0 interrupted iterations
+entry_spike   [  37% ] 001/136 VUs  05m46.8s/15m40s  10.00 iters/s
+
+running (05m48.0s), 001/136 VUs, 3401 complete and 0 interrupted iterations
+entry_spike   [  37% ] 001/136 VUs  05m47.8s/15m40s  10.00 iters/s
+
+running (05m49.0s), 001/136 VUs, 3411 complete and 0 interrupted iterations
+entry_spike   [  37% ] 001/136 VUs  05m48.8s/15m40s  10.00 iters/s
+
+running (05m50.0s), 001/136 VUs, 3421 complete and 0 interrupted iterations
+entry_spike   [  37% ] 001/136 VUs  05m49.8s/15m40s  10.00 iters/s
+time="2026-07-26T18:14:54Z" level=error msg="Failed to send the time series data to the endpoint" error="HTTP POST request failed: Post \"http://host.docker.internal:9090/api/v1/write\": dial tcp 192.168.65.254:9090: connect: connection refused" output="Prometheus remote write"
+
+running (05m51.0s), 001/136 VUs, 3431 complete and 0 interrupted iterations
+entry_spike   [  37% ] 001/136 VUs  05m50.8s/15m40s  10.00 iters/s
+
+running (05m52.0s), 001/136 VUs, 3441 complete and 0 interrupted iterations
+entry_spike   [  37% ] 001/136 VUs  05m51.8s/15m40s  10.00 iters/s
+
+running (05m53.0s), 001/136 VUs, 3451 complete and 0 interrupted iterations
+entry_spike   [  38% ] 001/136 VUs  05m52.8s/15m40s  10.00 iters/s
+
+running (05m54.0s), 001/136 VUs, 3461 complete and 0 interrupted iterations
+entry_spike   [  38% ] 001/136 VUs  05m53.8s/15m40s  10.00 iters/s
+
+running (05m55.0s), 001/136 VUs, 3471 complete and 0 interrupted iterations
+entry_spike   [  38% ] 001/136 VUs  05m54.8s/15m40s  10.00 iters/s
+time="2026-07-26T18:14:59Z" level=error msg="Failed to send the time series data to the endpoint" error="HTTP POST request failed: Post \"http://host.docker.internal:9090/api/v1/write\": dial tcp 192.168.65.254:9090: connect: connection refused" output="Prometheus remote write"
+
+running (05m56.0s), 001/136 VUs, 3481 complete and 0 interrupted iterations
+entry_spike   [  38% ] 001/136 VUs  05m55.8s/15m40s  10.00 iters/s
+
+running (05m57.0s), 001/136 VUs, 3491 complete and 0 interrupted iterations
+entry_spike   [  38% ] 001/136 VUs  05m56.8s/15m40s  10.00 iters/s
+
+running (05m58.0s), 001/136 VUs, 3501 complete and 0 interrupted iterations
+entry_spike   [  38% ] 001/136 VUs  05m57.8s/15m40s  10.00 iters/s
+
+running (05m59.0s), 001/136 VUs, 3511 complete and 0 interrupted iterations
+entry_spike   [  38% ] 001/136 VUs  05m58.8s/15m40s  10.00 iters/s
+
+running (06m00.0s), 001/136 VUs, 3521 complete and 0 interrupted iterations
+entry_spike   [  38% ] 001/136 VUs  05m59.8s/15m40s  10.00 iters/s
+time="2026-07-26T18:15:04Z" level=error msg="Failed to send the time series data to the endpoint" error="HTTP POST request failed: Post \"http://host.docker.internal:9090/api/v1/write\": dial tcp 192.168.65.254:9090: connect: connection refused" output="Prometheus remote write"
+
+running (06m01.0s), 001/136 VUs, 3532 complete and 0 interrupted iterations
+entry_spike   [  38% ] 001/136 VUs  06m00.8s/15m40s  12.14 iters/s
+
+running (06m02.0s), 001/136 VUs, 3545 complete and 0 interrupted iterations
+entry_spike   [  38% ] 001/136 VUs  06m01.8s/15m40s  14.58 iters/s
+
+running (06m03.0s), 001/136 VUs, 3561 complete and 0 interrupted iterations
+entry_spike   [  39% ] 001/136 VUs  06m02.8s/15m40s  17.10 iters/s
+
+running (06m04.0s), 001/136 VUs, 3579 complete and 0 interrupted iterations
+entry_spike   [  39% ] 001/136 VUs  06m03.8s/15m40s  19.56 iters/s
+
+running (06m05.0s), 001/136 VUs, 3600 complete and 0 interrupted iterations
+entry_spike   [  39% ] 001/136 VUs  06m04.8s/15m40s  22.08 iters/s
+time="2026-07-26T18:15:09Z" level=error msg="Failed to send the time series data to the endpoint" error="HTTP POST request failed: Post \"http://host.docker.internal:9090/api/v1/write\": dial tcp 192.168.65.254:9090: connect: connection refused" output="Prometheus remote write"
+
+running (06m06.0s), 001/136 VUs, 3623 complete and 0 interrupted iterations
+entry_spike   [  39% ] 001/136 VUs  06m05.8s/15m40s  24.55 iters/s
+
+running (06m07.0s), 001/136 VUs, 3649 complete and 0 interrupted iterations
+entry_spike   [  39% ] 001/136 VUs  06m06.8s/15m40s  27.06 iters/s
+
+running (06m08.0s), 001/136 VUs, 3677 complete and 0 interrupted iterations
+entry_spike   [  39% ] 001/136 VUs  06m07.8s/15m40s  29.54 iters/s
+
+running (06m09.0s), 002/136 VUs, 3707 complete and 0 interrupted iterations
+entry_spike   [  39% ] 002/136 VUs  06m08.8s/15m40s  32.05 iters/s
+
+running (06m10.0s), 001/136 VUs, 3741 complete and 0 interrupted iterations
+entry_spike   [  39% ] 001/136 VUs  06m09.8s/15m40s  34.53 iters/s
+time="2026-07-26T18:15:14Z" level=error msg="Failed to send the time series data to the endpoint" error="HTTP POST request failed: Post \"http://host.docker.internal:9090/api/v1/write\": dial tcp 192.168.65.254:9090: connect: connection refused" output="Prometheus remote write"
+
+running (06m11.0s), 001/136 VUs, 3777 complete and 0 interrupted iterations
+entry_spike   [  39% ] 001/136 VUs  06m10.8s/15m40s  37.05 iters/s
+
+running (06m12.0s), 001/136 VUs, 3815 complete and 0 interrupted iterations
+entry_spike   [  40% ] 001/136 VUs  06m11.8s/15m40s  39.53 iters/s
+
+running (06m13.0s), 002/136 VUs, 3855 complete and 0 interrupted iterations
+entry_spike   [  40% ] 002/136 VUs  06m12.8s/15m40s  42.04 iters/s
+
+running (06m14.0s), 002/136 VUs, 3899 complete and 0 interrupted iterations
+entry_spike   [  40% ] 002/136 VUs  06m13.8s/15m40s  44.58 iters/s
+
+running (06m15.0s), 002/136 VUs, 3944 complete and 0 interrupted iterations
+entry_spike   [  40% ] 002/136 VUs  06m14.8s/15m40s  47.04 iters/s
+time="2026-07-26T18:15:19Z" level=error msg="Failed to send the time series data to the endpoint" error="HTTP POST request failed: Post \"http://host.docker.internal:9090/api/v1/write\": dial tcp 192.168.65.254:9090: connect: connection refused" output="Prometheus remote write"
+
+running (06m16.0s), 002/136 VUs, 3993 complete and 0 interrupted iterations
+entry_spike   [  40% ] 002/136 VUs  06m15.8s/15m40s  49.57 iters/s
+
+running (06m17.0s), 003/136 VUs, 4043 complete and 0 interrupted iterations
+entry_spike   [  40% ] 003/136 VUs  06m16.8s/15m40s  52.08 iters/s
+
+running (06m18.0s), 003/136 VUs, 4096 complete and 0 interrupted iterations
+entry_spike   [  40% ] 003/136 VUs  06m17.8s/15m40s  54.57 iters/s
+
+running (06m19.0s), 004/136 VUs, 4151 complete and 0 interrupted iterations
+entry_spike   [  40% ] 004/136 VUs  06m18.8s/15m40s  57.07 iters/s
+
+running (06m20.0s), 003/136 VUs, 4210 complete and 0 interrupted iterations
+entry_spike   [  40% ] 003/136 VUs  06m19.8s/15m40s  59.56 iters/s
+time="2026-07-26T18:15:24Z" level=error msg="Failed to send the time series data to the endpoint" error="HTTP POST request failed: Post \"http://host.docker.internal:9090/api/v1/write\": dial tcp 192.168.65.254:9090: connect: connection refused" output="Prometheus remote write"
+
+running (06m21.0s), 002/136 VUs, 4271 complete and 0 interrupted iterations
+entry_spike   [  41% ] 002/136 VUs  06m20.8s/15m40s  60.00 iters/s
+
+running (06m22.0s), 003/136 VUs, 4330 complete and 0 interrupted iterations
+entry_spike   [  41% ] 003/136 VUs  06m21.8s/15m40s  60.00 iters/s
+
+running (06m23.0s), 003/136 VUs, 4390 complete and 0 interrupted iterations
+entry_spike   [  41% ] 003/136 VUs  06m22.8s/15m40s  60.00 iters/s
+
+running (06m24.0s), 002/136 VUs, 4451 complete and 0 interrupted iterations
+entry_spike   [  41% ] 002/136 VUs  06m23.8s/15m40s  60.00 iters/s
+
+running (06m25.0s), 002/136 VUs, 4511 complete and 0 interrupted iterations
+entry_spike   [  41% ] 002/136 VUs  06m24.8s/15m40s  60.00 iters/s
+time="2026-07-26T18:15:29Z" level=error msg="Failed to send the time series data to the endpoint" error="HTTP POST request failed: Post \"http://host.docker.internal:9090/api/v1/write\": dial tcp 192.168.65.254:9090: connect: connection refused" output="Prometheus remote write"
+
+running (06m26.0s), 003/136 VUs, 4570 complete and 0 interrupted iterations
+entry_spike   [  41% ] 003/136 VUs  06m25.8s/15m40s  60.00 iters/s
+
+running (06m27.0s), 003/136 VUs, 4630 complete and 0 interrupted iterations
+entry_spike   [  41% ] 003/136 VUs  06m26.8s/15m40s  60.00 iters/s
+
+running (06m28.0s), 003/136 VUs, 4690 complete and 0 interrupted iterations
+entry_spike   [  41% ] 003/136 VUs  06m27.8s/15m40s  60.00 iters/s
+
+running (06m29.0s), 004/136 VUs, 4749 complete and 0 interrupted iterations
+entry_spike   [  41% ] 004/136 VUs  06m28.8s/15m40s  60.00 iters/s
+
+running (06m30.0s), 003/136 VUs, 4810 complete and 0 interrupted iterations
+entry_spike   [  41% ] 003/136 VUs  06m29.8s/15m40s  60.00 iters/s
+time="2026-07-26T18:15:34Z" level=error msg="Failed to send the time series data to the endpoint" error="HTTP POST request failed: Post \"http://host.docker.internal:9090/api/v1/write\": dial tcp 192.168.65.254:9090: connect: connection refused" output="Prometheus remote write"
+
+running (06m31.0s), 014/136 VUs, 4859 complete and 0 interrupted iterations
+entry_spike   [  42% ] 014/136 VUs  06m30.8s/15m40s  60.00 iters/s
+
+running (06m32.0s), 067/136 VUs, 4866 complete and 0 interrupted iterations
+entry_spike   [  42% ] 067/136 VUs  06m31.8s/15m40s  60.00 iters/s
+
+running (06m33.0s), 002/136 VUs, 4991 complete and 0 interrupted iterations
+entry_spike   [  42% ] 002/136 VUs  06m32.8s/15m40s  60.00 iters/s
+
+running (06m34.0s), 003/136 VUs, 5050 complete and 0 interrupted iterations
+entry_spike   [  42% ] 003/136 VUs  06m33.8s/15m40s  60.00 iters/s
+
+running (06m35.0s), 002/136 VUs, 5111 complete and 0 interrupted iterations
+entry_spike   [  42% ] 002/136 VUs  06m34.8s/15m40s  60.00 iters/s
+time="2026-07-26T18:15:39Z" level=error msg="Failed to send the time series data to the endpoint" error="HTTP POST request failed: Post \"http://host.docker.internal:9090/api/v1/write\": dial tcp 192.168.65.254:9090: connect: connection refused" output="Prometheus remote write"
+
+running (06m36.0s), 002/136 VUs, 5171 complete and 0 interrupted iterations
+entry_spike   [  42% ] 002/136 VUs  06m35.8s/15m40s  60.00 iters/s
+
+running (06m37.0s), 004/136 VUs, 5229 complete and 0 interrupted iterations
+entry_spike   [  42% ] 004/136 VUs  06m36.8s/15m40s  60.00 iters/s
+
+running (06m38.0s), 003/136 VUs, 5290 complete and 0 interrupted iterations
+entry_spike   [  42% ] 003/136 VUs  06m37.8s/15m40s  60.00 iters/s
+
+running (06m39.0s), 002/136 VUs, 5351 complete and 0 interrupted iterations
+entry_spike   [  42% ] 002/136 VUs  06m38.8s/15m40s  60.00 iters/s
+
+running (06m40.0s), 003/136 VUs, 5410 complete and 0 interrupted iterations
+entry_spike   [  43% ] 003/136 VUs  06m39.8s/15m40s  60.00 iters/s
+time="2026-07-26T18:15:44Z" level=error msg="Failed to send the time series data to the endpoint" error="HTTP POST request failed: Post \"http://host.docker.internal:9090/api/v1/write\": dial tcp 192.168.65.254:9090: connect: connection refused" output="Prometheus remote write"
+
+running (06m41.0s), 002/136 VUs, 5471 complete and 0 interrupted iterations
+entry_spike   [  43% ] 002/136 VUs  06m40.8s/15m40s  60.00 iters/s
+
+running (06m42.0s), 005/136 VUs, 5528 complete and 0 interrupted iterations
+entry_spike   [  43% ] 005/136 VUs  06m41.8s/15m40s  60.00 iters/s
+
+running (06m43.0s), 002/136 VUs, 5591 complete and 0 interrupted iterations
+entry_spike   [  43% ] 002/136 VUs  06m42.8s/15m40s  60.00 iters/s
+
+running (06m44.0s), 003/136 VUs, 5650 complete and 0 interrupted iterations
+entry_spike   [  43% ] 003/136 VUs  06m43.8s/15m40s  60.00 iters/s
+
+running (06m45.0s), 002/136 VUs, 5711 complete and 0 interrupted iterations
+entry_spike   [  43% ] 002/136 VUs  06m44.8s/15m40s  60.00 iters/s
+time="2026-07-26T18:15:49Z" level=error msg="Failed to send the time series data to the endpoint" error="HTTP POST request failed: Post \"http://host.docker.internal:9090/api/v1/write\": dial tcp 192.168.65.254:9090: connect: connection refused" output="Prometheus remote write"
+
+running (06m46.0s), 002/136 VUs, 5771 complete and 0 interrupted iterations
+entry_spike   [  43% ] 002/136 VUs  06m45.8s/15m40s  60.00 iters/s
+
+running (06m47.0s), 003/136 VUs, 5830 complete and 0 interrupted iterations
+entry_spike   [  43% ] 003/136 VUs  06m46.8s/15m40s  60.00 iters/s
+
+running (06m48.0s), 002/136 VUs, 5891 complete and 0 interrupted iterations
+entry_spike   [  43% ] 002/136 VUs  06m47.8s/15m40s  60.00 iters/s
+
+running (06m49.0s), 003/136 VUs, 5950 complete and 0 interrupted iterations
+entry_spike   [  43% ] 003/136 VUs  06m48.8s/15m40s  60.00 iters/s
+
+running (06m50.0s), 002/136 VUs, 6011 complete and 0 interrupted iterations
+entry_spike   [  44% ] 002/136 VUs  06m49.8s/15m40s  60.00 iters/s
+time="2026-07-26T18:15:54Z" level=error msg="Failed to send the time series data to the endpoint" error="HTTP POST request failed: Post \"http://host.docker.internal:9090/api/v1/write\": dial tcp 192.168.65.254:9090: connect: connection refused" output="Prometheus remote write"
+
+running (06m51.0s), 003/136 VUs, 6070 complete and 0 interrupted iterations
+entry_spike   [  44% ] 003/136 VUs  06m50.8s/15m40s  60.00 iters/s
+
+running (06m52.0s), 002/136 VUs, 6131 complete and 0 interrupted iterations
+entry_spike   [  44% ] 002/136 VUs  06m51.8s/15m40s  60.00 iters/s
+
+running (06m53.0s), 003/136 VUs, 6190 complete and 0 interrupted iterations
+entry_spike   [  44% ] 003/136 VUs  06m52.8s/15m40s  60.00 iters/s
+
+running (06m54.0s), 004/136 VUs, 6249 complete and 0 interrupted iterations
+entry_spike   [  44% ] 004/136 VUs  06m53.8s/15m40s  60.00 iters/s
+
+running (06m55.0s), 003/136 VUs, 6310 complete and 0 interrupted iterations
+entry_spike   [  44% ] 003/136 VUs  06m54.8s/15m40s  60.00 iters/s
+time="2026-07-26T18:15:59Z" level=error msg="Failed to send the time series data to the endpoint" error="HTTP POST request failed: Post \"http://host.docker.internal:9090/api/v1/write\": dial tcp 192.168.65.254:9090: connect: connection refused" output="Prometheus remote write"
+
+running (06m56.0s), 002/136 VUs, 6371 complete and 0 interrupted iterations
+entry_spike   [  44% ] 002/136 VUs  06m55.8s/15m40s  60.00 iters/s
+
+running (06m57.0s), 002/136 VUs, 6431 complete and 0 interrupted iterations
+entry_spike   [  44% ] 002/136 VUs  06m56.8s/15m40s  60.00 iters/s
+
+running (06m58.0s), 002/136 VUs, 6491 complete and 0 interrupted iterations
+entry_spike   [  44% ] 002/136 VUs  06m57.8s/15m40s  60.00 iters/s
+
+running (06m59.0s), 002/136 VUs, 6551 complete and 0 interrupted iterations
+entry_spike   [  45% ] 002/136 VUs  06m58.8s/15m40s  60.00 iters/s
+
+running (07m00.0s), 004/136 VUs, 6609 complete and 0 interrupted iterations
+entry_spike   [  45% ] 004/136 VUs  06m59.8s/15m40s  60.00 iters/s
+time="2026-07-26T18:16:04Z" level=error msg="Failed to send the time series data to the endpoint" error="HTTP POST request failed: Post \"http://host.docker.internal:9090/api/v1/write\": dial tcp 192.168.65.254:9090: connect: connection refused" output="Prometheus remote write"
+
+running (07m01.0s), 002/136 VUs, 6671 complete and 0 interrupted iterations
+entry_spike   [  45% ] 002/136 VUs  07m00.8s/15m40s  60.00 iters/s
+
+running (07m02.0s), 003/136 VUs, 6730 complete and 0 interrupted iterations
+entry_spike   [  45% ] 003/136 VUs  07m01.8s/15m40s  60.00 iters/s
+
+running (07m03.0s), 002/136 VUs, 6791 complete and 0 interrupted iterations
+entry_spike   [  45% ] 002/136 VUs  07m02.8s/15m40s  60.00 iters/s
+
+running (07m04.0s), 002/136 VUs, 6851 complete and 0 interrupted iterations
+entry_spike   [  45% ] 002/136 VUs  07m03.8s/15m40s  60.00 iters/s
+
+running (07m05.0s), 005/136 VUs, 6908 complete and 0 interrupted iterations
+entry_spike   [  45% ] 005/136 VUs  07m04.8s/15m40s  60.00 iters/s
+time="2026-07-26T18:16:09Z" level=error msg="Failed to send the time series data to the endpoint" error="HTTP POST request failed: Post \"http://host.docker.internal:9090/api/v1/write\": dial tcp 192.168.65.254:9090: connect: connection refused" output="Prometheus remote write"
+
+running (07m06.0s), 002/136 VUs, 6971 complete and 0 interrupted iterations
+entry_spike   [  45% ] 002/136 VUs  07m05.8s/15m40s  60.00 iters/s
+
+running (07m07.0s), 002/136 VUs, 7031 complete and 0 interrupted iterations
+entry_spike   [  45% ] 002/136 VUs  07m06.8s/15m40s  60.00 iters/s
+
+running (07m08.0s), 002/136 VUs, 7091 complete and 0 interrupted iterations
+entry_spike   [  46% ] 002/136 VUs  07m07.8s/15m40s  60.00 iters/s
+
+running (07m09.0s), 002/136 VUs, 7151 complete and 0 interrupted iterations
+entry_spike   [  46% ] 002/136 VUs  07m08.8s/15m40s  60.00 iters/s
+
+running (07m10.0s), 002/136 VUs, 7211 complete and 0 interrupted iterations
+entry_spike   [  46% ] 002/136 VUs  07m09.8s/15m40s  60.00 iters/s
+time="2026-07-26T18:16:14Z" level=error msg="Failed to send the time series data to the endpoint" error="HTTP POST request failed: Post \"http://host.docker.internal:9090/api/v1/write\": dial tcp 192.168.65.254:9090: connect: connection refused" output="Prometheus remote write"
+
+running (07m11.0s), 002/136 VUs, 7271 complete and 0 interrupted iterations
+entry_spike   [  46% ] 002/136 VUs  07m10.8s/15m40s  60.00 iters/s
+
+running (07m12.0s), 002/136 VUs, 7331 complete and 0 interrupted iterations
+entry_spike   [  46% ] 002/136 VUs  07m11.8s/15m40s  60.00 iters/s
+
+running (07m13.0s), 002/136 VUs, 7391 complete and 0 interrupted iterations
+entry_spike   [  46% ] 002/136 VUs  07m12.8s/15m40s  60.00 iters/s
+
+running (07m14.0s), 002/136 VUs, 7451 complete and 0 interrupted iterations
+entry_spike   [  46% ] 002/136 VUs  07m13.8s/15m40s  60.00 iters/s
+
+running (07m15.0s), 002/136 VUs, 7511 complete and 0 interrupted iterations
+entry_spike   [  46% ] 002/136 VUs  07m14.8s/15m40s  60.00 iters/s
+time="2026-07-26T18:16:19Z" level=error msg="Failed to send the time series data to the endpoint" error="HTTP POST request failed: Post \"http://host.docker.internal:9090/api/v1/write\": dial tcp 192.168.65.254:9090: connect: connection refused" output="Prometheus remote write"
+
+running (07m16.0s), 005/136 VUs, 7568 complete and 0 interrupted iterations
+entry_spike   [  46% ] 005/136 VUs  07m15.8s/15m40s  60.00 iters/s
+
+running (07m17.0s), 006/136 VUs, 7627 complete and 0 interrupted iterations
+entry_spike   [  46% ] 006/136 VUs  07m16.8s/15m40s  60.00 iters/s
+
+running (07m18.0s), 002/136 VUs, 7691 complete and 0 interrupted iterations
+entry_spike   [  47% ] 002/136 VUs  07m17.8s/15m40s  60.00 iters/s
+
+running (07m19.0s), 002/136 VUs, 7751 complete and 0 interrupted iterations
+entry_spike   [  47% ] 002/136 VUs  07m18.8s/15m40s  60.00 iters/s
+
+running (07m20.0s), 002/136 VUs, 7811 complete and 0 interrupted iterations
+entry_spike   [  47% ] 002/136 VUs  07m19.8s/15m40s  60.00 iters/s
+time="2026-07-26T18:16:24Z" level=error msg="Failed to send the time series data to the endpoint" error="HTTP POST request failed: Post \"http://host.docker.internal:9090/api/v1/write\": dial tcp 192.168.65.254:9090: connect: connection refused" output="Prometheus remote write"
+
+running (07m21.0s), 002/136 VUs, 7871 complete and 0 interrupted iterations
+entry_spike   [  47% ] 002/136 VUs  07m20.8s/15m40s  60.00 iters/s
+
+running (07m22.0s), 002/136 VUs, 7931 complete and 0 interrupted iterations
+entry_spike   [  47% ] 002/136 VUs  07m21.8s/15m40s  60.00 iters/s
+
+running (07m23.0s), 002/136 VUs, 7991 complete and 0 interrupted iterations
+entry_spike   [  47% ] 002/136 VUs  07m22.8s/15m40s  60.00 iters/s
+
+running (07m24.0s), 002/136 VUs, 8051 complete and 0 interrupted iterations
+entry_spike   [  47% ] 002/136 VUs  07m23.8s/15m40s  60.00 iters/s
+
+running (07m25.0s), 002/136 VUs, 8111 complete and 0 interrupted iterations
+entry_spike   [  47% ] 002/136 VUs  07m24.8s/15m40s  60.00 iters/s
+time="2026-07-26T18:16:29Z" level=error msg="Failed to send the time series data to the endpoint" error="HTTP POST request failed: Post \"http://host.docker.internal:9090/api/v1/write\": dial tcp 192.168.65.254:9090: connect: connection refused" output="Prometheus remote write"
+
+running (07m26.0s), 002/136 VUs, 8171 complete and 0 interrupted iterations
+entry_spike   [  47% ] 002/136 VUs  07m25.8s/15m40s  60.00 iters/s
+
+running (07m27.0s), 005/136 VUs, 8228 complete and 0 interrupted iterations
+entry_spike   [  48% ] 005/136 VUs  07m26.8s/15m40s  60.00 iters/s
+
+running (07m28.0s), 002/136 VUs, 8291 complete and 0 interrupted iterations
+entry_spike   [  48% ] 002/136 VUs  07m27.8s/15m40s  60.00 iters/s
+
+running (07m29.0s), 004/136 VUs, 8349 complete and 0 interrupted iterations
+entry_spike   [  48% ] 004/136 VUs  07m28.8s/15m40s  60.00 iters/s
+
+running (07m30.0s), 003/136 VUs, 8410 complete and 0 interrupted iterations
+entry_spike   [  48% ] 003/136 VUs  07m29.8s/15m40s  60.00 iters/s
+time="2026-07-26T18:16:34Z" level=error msg="Failed to send the time series data to the endpoint" error="HTTP POST request failed: Post \"http://host.docker.internal:9090/api/v1/write\": dial tcp 192.168.65.254:9090: connect: connection refused" output="Prometheus remote write"
+
+running (07m31.0s), 002/136 VUs, 8471 complete and 0 interrupted iterations
+entry_spike   [  48% ] 002/136 VUs  07m30.8s/15m40s  60.00 iters/s
+
+running (07m32.0s), 002/136 VUs, 8531 complete and 0 interrupted iterations
+entry_spike   [  48% ] 002/136 VUs  07m31.8s/15m40s  60.00 iters/s
+
+running (07m33.0s), 002/136 VUs, 8591 complete and 0 interrupted iterations
+entry_spike   [  48% ] 002/136 VUs  07m32.8s/15m40s  60.00 iters/s
+
+running (07m34.0s), 002/136 VUs, 8651 complete and 0 interrupted iterations
+entry_spike   [  48% ] 002/136 VUs  07m33.8s/15m40s  60.00 iters/s
+
+running (07m35.0s), 002/136 VUs, 8711 complete and 0 interrupted iterations
+entry_spike   [  48% ] 002/136 VUs  07m34.8s/15m40s  60.00 iters/s
+time="2026-07-26T18:16:39Z" level=error msg="Failed to send the time series data to the endpoint" error="HTTP POST request failed: Post \"http://host.docker.internal:9090/api/v1/write\": dial tcp 192.168.65.254:9090: connect: connection refused" output="Prometheus remote write"
+
+running (07m36.0s), 004/136 VUs, 8769 complete and 0 interrupted iterations
+entry_spike   [  48% ] 004/136 VUs  07m35.8s/15m40s  60.00 iters/s
+
+running (07m37.0s), 002/136 VUs, 8831 complete and 0 interrupted iterations
+entry_spike   [  49% ] 002/136 VUs  07m36.8s/15m40s  60.00 iters/s
+
+running (07m38.0s), 006/136 VUs, 8887 complete and 0 interrupted iterations
+entry_spike   [  49% ] 006/136 VUs  07m37.8s/15m40s  60.00 iters/s
+
+running (07m39.0s), 002/136 VUs, 8951 complete and 0 interrupted iterations
+entry_spike   [  49% ] 002/136 VUs  07m38.8s/15m40s  60.00 iters/s
+
+running (07m40.0s), 017/136 VUs, 8996 complete and 0 interrupted iterations
+entry_spike   [  49% ] 017/136 VUs  07m39.8s/15m40s  60.00 iters/s
+time="2026-07-26T18:16:44Z" level=error msg="Failed to send the time series data to the endpoint" error="HTTP POST request failed: Post \"http://host.docker.internal:9090/api/v1/write\": dial tcp 192.168.65.254:9090: connect: connection refused" output="Prometheus remote write"
+
+running (07m41.0s), 002/136 VUs, 9071 complete and 0 interrupted iterations
+entry_spike   [  49% ] 002/136 VUs  07m40.8s/15m40s  60.00 iters/s
+
+running (07m42.0s), 002/136 VUs, 9131 complete and 0 interrupted iterations
+entry_spike   [  49% ] 002/136 VUs  07m41.8s/15m40s  60.00 iters/s
+
+running (07m43.0s), 002/136 VUs, 9191 complete and 0 interrupted iterations
+entry_spike   [  49% ] 002/136 VUs  07m42.8s/15m40s  60.00 iters/s
+
+running (07m44.0s), 002/136 VUs, 9251 complete and 0 interrupted iterations
+entry_spike   [  49% ] 002/136 VUs  07m43.8s/15m40s  60.00 iters/s
+
+running (07m45.0s), 002/136 VUs, 9311 complete and 0 interrupted iterations
+entry_spike   [  49% ] 002/136 VUs  07m44.8s/15m40s  60.00 iters/s
+time="2026-07-26T18:16:49Z" level=error msg="Failed to send the time series data to the endpoint" error="HTTP POST request failed: Post \"http://host.docker.internal:9090/api/v1/write\": dial tcp 192.168.65.254:9090: connect: connection refused" output="Prometheus remote write"
+
+running (07m46.0s), 006/136 VUs, 9367 complete and 0 interrupted iterations
+entry_spike   [  50% ] 006/136 VUs  07m45.8s/15m40s  60.00 iters/s
+
+running (07m47.0s), 002/136 VUs, 9431 complete and 0 interrupted iterations
+entry_spike   [  50% ] 002/136 VUs  07m46.8s/15m40s  60.00 iters/s
+
+running (07m48.0s), 003/136 VUs, 9490 complete and 0 interrupted iterations
+entry_spike   [  50% ] 003/136 VUs  07m47.8s/15m40s  60.00 iters/s
+
+running (07m49.0s), 012/136 VUs, 9541 complete and 0 interrupted iterations
+entry_spike   [  50% ] 012/136 VUs  07m48.8s/15m40s  60.00 iters/s
+
+running (07m50.0s), 067/136 VUs, 9546 complete and 0 interrupted iterations
+entry_spike   [  50% ] 067/136 VUs  07m49.8s/15m40s  60.00 iters/s
+time="2026-07-26T18:16:54Z" level=error msg="Failed to send the time series data to the endpoint" error="HTTP POST request failed: Post \"http://host.docker.internal:9090/api/v1/write\": dial tcp 192.168.65.254:9090: connect: connection refused" output="Prometheus remote write"
+
+running (07m51.0s), 097/136 VUs, 9576 complete and 0 interrupted iterations
+entry_spike   [  50% ] 097/136 VUs  07m50.8s/15m40s  60.00 iters/s
+
+running (07m52.0s), 003/136 VUs, 9730 complete and 0 interrupted iterations
+entry_spike   [  50% ] 003/136 VUs  07m51.8s/15m40s  60.00 iters/s
+
+running (07m53.0s), 002/136 VUs, 9791 complete and 0 interrupted iterations
+entry_spike   [  50% ] 002/136 VUs  07m52.8s/15m40s  60.00 iters/s
+
+running (07m54.0s), 002/136 VUs, 9851 complete and 0 interrupted iterations
+entry_spike   [  50% ] 002/136 VUs  07m53.8s/15m40s  60.00 iters/s
+
+running (07m55.0s), 002/136 VUs, 9911 complete and 0 interrupted iterations
+entry_spike   [  51% ] 002/136 VUs  07m54.8s/15m40s  60.00 iters/s
+time="2026-07-26T18:16:59Z" level=error msg="Failed to send the time series data to the endpoint" error="HTTP POST request failed: Post \"http://host.docker.internal:9090/api/v1/write\": dial tcp 192.168.65.254:9090: connect: connection refused" output="Prometheus remote write"
+
+running (07m56.0s), 002/136 VUs, 9971 complete and 0 interrupted iterations
+entry_spike   [  51% ] 002/136 VUs  07m55.8s/15m40s  60.00 iters/s
+
+running (07m57.0s), 003/136 VUs, 10030 complete and 0 interrupted iterations
+entry_spike   [  51% ] 003/136 VUs  07m56.8s/15m40s  60.00 iters/s
+
+running (07m58.0s), 002/136 VUs, 10091 complete and 0 interrupted iterations
+entry_spike   [  51% ] 002/136 VUs  07m57.8s/15m40s  60.00 iters/s
+
+running (07m59.0s), 002/136 VUs, 10151 complete and 0 interrupted iterations
+entry_spike   [  51% ] 002/136 VUs  07m58.8s/15m40s  60.00 iters/s
+
+running (08m00.0s), 005/136 VUs, 10208 complete and 0 interrupted iterations
+entry_spike   [  51% ] 005/136 VUs  07m59.8s/15m40s  60.00 iters/s
+time="2026-07-26T18:17:04Z" level=error msg="Failed to send the time series data to the endpoint" error="HTTP POST request failed: Post \"http://host.docker.internal:9090/api/v1/write\": dial tcp 192.168.65.254:9090: connect: connection refused" output="Prometheus remote write"
+
+running (08m01.0s), 002/136 VUs, 10271 complete and 0 interrupted iterations
+entry_spike   [  51% ] 002/136 VUs  08m00.8s/15m40s  60.00 iters/s
+
+running (08m02.0s), 003/136 VUs, 10330 complete and 0 interrupted iterations
+entry_spike   [  51% ] 003/136 VUs  08m01.8s/15m40s  60.00 iters/s
+
+running (08m03.0s), 002/136 VUs, 10391 complete and 0 interrupted iterations
+entry_spike   [  51% ] 002/136 VUs  08m02.8s/15m40s  60.00 iters/s
+
+running (08m04.0s), 003/136 VUs, 10450 complete and 0 interrupted iterations
+entry_spike   [  51% ] 003/136 VUs  08m03.8s/15m40s  60.00 iters/s
+
+running (08m05.0s), 002/136 VUs, 10511 complete and 0 interrupted iterations
+entry_spike   [  52% ] 002/136 VUs  08m04.8s/15m40s  60.00 iters/s
+time="2026-07-26T18:17:09Z" level=error msg="Failed to send the time series data to the endpoint" error="HTTP POST request failed: Post \"http://host.docker.internal:9090/api/v1/write\": dial tcp 192.168.65.254:9090: connect: connection refused" output="Prometheus remote write"
+
+running (08m06.0s), 002/136 VUs, 10571 complete and 0 interrupted iterations
+entry_spike   [  52% ] 002/136 VUs  08m05.8s/15m40s  60.00 iters/s
+
+running (08m07.0s), 002/136 VUs, 10631 complete and 0 interrupted iterations
+entry_spike   [  52% ] 002/136 VUs  08m06.8s/15m40s  60.00 iters/s
+
+running (08m08.0s), 002/136 VUs, 10691 complete and 0 interrupted iterations
+entry_spike   [  52% ] 002/136 VUs  08m07.8s/15m40s  60.00 iters/s
+
+running (08m09.0s), 003/136 VUs, 10750 complete and 0 interrupted iterations
+entry_spike   [  52% ] 003/136 VUs  08m08.8s/15m40s  60.00 iters/s
+
+running (08m10.0s), 004/136 VUs, 10809 complete and 0 interrupted iterations
+entry_spike   [  52% ] 004/136 VUs  08m09.8s/15m40s  60.00 iters/s
+time="2026-07-26T18:17:14Z" level=error msg="Failed to send the time series data to the endpoint" error="HTTP POST request failed: Post \"http://host.docker.internal:9090/api/v1/write\": dial tcp 192.168.65.254:9090: connect: connection refused" output="Prometheus remote write"
+
+running (08m11.0s), 004/136 VUs, 10869 complete and 0 interrupted iterations
+entry_spike   [  52% ] 004/136 VUs  08m10.8s/15m40s  60.00 iters/s
+
+running (08m12.0s), 002/136 VUs, 10931 complete and 0 interrupted iterations
+entry_spike   [  52% ] 002/136 VUs  08m11.8s/15m40s  60.00 iters/s
+
+running (08m13.0s), 004/136 VUs, 10989 complete and 0 interrupted iterations
+entry_spike   [  52% ] 004/136 VUs  08m12.8s/15m40s  60.00 iters/s
+
+running (08m14.0s), 002/136 VUs, 11051 complete and 0 interrupted iterations
+entry_spike   [  53% ] 002/136 VUs  08m13.8s/15m40s  60.00 iters/s
+
+running (08m15.0s), 004/136 VUs, 11109 complete and 0 interrupted iterations
+entry_spike   [  53% ] 004/136 VUs  08m14.8s/15m40s  60.00 iters/s
+time="2026-07-26T18:17:19Z" level=error msg="Failed to send the time series data to the endpoint" error="HTTP POST request failed: Post \"http://host.docker.internal:9090/api/v1/write\": dial tcp 192.168.65.254:9090: connect: connection refused" output="Prometheus remote write"
+
+running (08m16.0s), 002/136 VUs, 11171 complete and 0 interrupted iterations
+entry_spike   [  53% ] 002/136 VUs  08m15.8s/15m40s  60.00 iters/s
+
+running (08m17.0s), 002/136 VUs, 11231 complete and 0 interrupted iterations
+entry_spike   [  53% ] 002/136 VUs  08m16.8s/15m40s  60.00 iters/s
+
+running (08m18.0s), 002/136 VUs, 11291 complete and 0 interrupted iterations
+entry_spike   [  53% ] 002/136 VUs  08m17.8s/15m40s  60.00 iters/s
+
+running (08m19.0s), 002/136 VUs, 11351 complete and 0 interrupted iterations
+entry_spike   [  53% ] 002/136 VUs  08m18.8s/15m40s  60.00 iters/s
+
+running (08m20.0s), 002/136 VUs, 11411 complete and 0 interrupted iterations
+entry_spike   [  53% ] 002/136 VUs  08m19.8s/15m40s  60.00 iters/s
+time="2026-07-26T18:17:24Z" level=error msg="Failed to send the time series data to the endpoint" error="HTTP POST request failed: Post \"http://host.docker.internal:9090/api/v1/write\": dial tcp 192.168.65.254:9090: connect: connection refused" output="Prometheus remote write"
+
+running (08m21.0s), 002/136 VUs, 11471 complete and 0 interrupted iterations
+entry_spike   [  53% ] 002/136 VUs  08m20.8s/15m40s  60.00 iters/s
+
+running (08m22.0s), 006/136 VUs, 11527 complete and 0 interrupted iterations
+entry_spike   [  53% ] 006/136 VUs  08m21.8s/15m40s  60.00 iters/s
+
+running (08m23.0s), 002/136 VUs, 11591 complete and 0 interrupted iterations
+entry_spike   [  53% ] 002/136 VUs  08m22.8s/15m40s  60.00 iters/s
+
+running (08m24.0s), 004/136 VUs, 11649 complete and 0 interrupted iterations
+entry_spike   [  54% ] 004/136 VUs  08m23.8s/15m40s  60.00 iters/s
+
+running (08m25.0s), 002/136 VUs, 11711 complete and 0 interrupted iterations
+entry_spike   [  54% ] 002/136 VUs  08m24.8s/15m40s  60.00 iters/s
+time="2026-07-26T18:17:29Z" level=error msg="Failed to send the time series data to the endpoint" error="HTTP POST request failed: Post \"http://host.docker.internal:9090/api/v1/write\": dial tcp 192.168.65.254:9090: connect: connection refused" output="Prometheus remote write"
+
+running (08m26.0s), 002/136 VUs, 11771 complete and 0 interrupted iterations
+entry_spike   [  54% ] 002/136 VUs  08m25.8s/15m40s  60.00 iters/s
+
+running (08m27.0s), 002/136 VUs, 11831 complete and 0 interrupted iterations
+entry_spike   [  54% ] 002/136 VUs  08m26.8s/15m40s  60.00 iters/s
+
+running (08m28.0s), 004/136 VUs, 11889 complete and 0 interrupted iterations
+entry_spike   [  54% ] 004/136 VUs  08m27.8s/15m40s  60.00 iters/s
+
+running (08m29.0s), 002/136 VUs, 11951 complete and 0 interrupted iterations
+entry_spike   [  54% ] 002/136 VUs  08m28.8s/15m40s  60.00 iters/s
+
+running (08m30.0s), 002/136 VUs, 12011 complete and 0 interrupted iterations
+entry_spike   [  54% ] 002/136 VUs  08m29.8s/15m40s  60.00 iters/s
+time="2026-07-26T18:17:34Z" level=error msg="Failed to send the time series data to the endpoint" error="HTTP POST request failed: Post \"http://host.docker.internal:9090/api/v1/write\": dial tcp 192.168.65.254:9090: connect: connection refused" output="Prometheus remote write"
+
+running (08m31.0s), 004/136 VUs, 12069 complete and 0 interrupted iterations
+entry_spike   [  54% ] 004/136 VUs  08m30.8s/15m40s  60.00 iters/s
+
+running (08m32.0s), 002/136 VUs, 12131 complete and 0 interrupted iterations
+entry_spike   [  54% ] 002/136 VUs  08m31.8s/15m40s  60.00 iters/s
+
+running (08m33.0s), 003/136 VUs, 12190 complete and 0 interrupted iterations
+entry_spike   [  55% ] 003/136 VUs  08m32.8s/15m40s  60.00 iters/s
+
+running (08m34.0s), 003/136 VUs, 12250 complete and 0 interrupted iterations
+entry_spike   [  55% ] 003/136 VUs  08m33.8s/15m40s  60.00 iters/s
+
+running (08m35.0s), 004/136 VUs, 12309 complete and 0 interrupted iterations
+entry_spike   [  55% ] 004/136 VUs  08m34.8s/15m40s  60.00 iters/s
+time="2026-07-26T18:17:39Z" level=error msg="Failed to send the time series data to the endpoint" error="HTTP POST request failed: Post \"http://host.docker.internal:9090/api/v1/write\": dial tcp 192.168.65.254:9090: connect: connection refused" output="Prometheus remote write"
+
+running (08m36.0s), 002/136 VUs, 12371 complete and 0 interrupted iterations
+entry_spike   [  55% ] 002/136 VUs  08m35.8s/15m40s  60.00 iters/s
+
+running (08m37.0s), 006/136 VUs, 12427 complete and 0 interrupted iterations
+entry_spike   [  55% ] 006/136 VUs  08m36.8s/15m40s  60.00 iters/s
+
+running (08m38.0s), 003/136 VUs, 12490 complete and 0 interrupted iterations
+entry_spike   [  55% ] 003/136 VUs  08m37.8s/15m40s  60.00 iters/s
+
+running (08m39.0s), 003/136 VUs, 12550 complete and 0 interrupted iterations
+entry_spike   [  55% ] 003/136 VUs  08m38.8s/15m40s  60.00 iters/s
+
+running (08m40.0s), 003/136 VUs, 12610 complete and 0 interrupted iterations
+entry_spike   [  55% ] 003/136 VUs  08m39.8s/15m40s  60.00 iters/s
+time="2026-07-26T18:17:44Z" level=error msg="Failed to send the time series data to the endpoint" error="HTTP POST request failed: Post \"http://host.docker.internal:9090/api/v1/write\": dial tcp 192.168.65.254:9090: connect: connection refused" output="Prometheus remote write"
+
+running (08m41.0s), 003/136 VUs, 12670 complete and 0 interrupted iterations
+entry_spike   [  55% ] 003/136 VUs  08m40.8s/15m40s  60.00 iters/s
+
+running (08m42.0s), 003/136 VUs, 12730 complete and 0 interrupted iterations
+entry_spike   [  56% ] 003/136 VUs  08m41.8s/15m40s  60.00 iters/s
+
+running (08m43.0s), 003/136 VUs, 12790 complete and 0 interrupted iterations
+entry_spike   [  56% ] 003/136 VUs  08m42.8s/15m40s  60.00 iters/s
+
+running (08m44.0s), 004/136 VUs, 12849 complete and 0 interrupted iterations
+entry_spike   [  56% ] 004/136 VUs  08m43.8s/15m40s  60.00 iters/s
+
+running (08m45.0s), 004/136 VUs, 12909 complete and 0 interrupted iterations
+entry_spike   [  56% ] 004/136 VUs  08m44.8s/15m40s  60.00 iters/s
+time="2026-07-26T18:17:49Z" level=error msg="Failed to send the time series data to the endpoint" error="HTTP POST request failed: Post \"http://host.docker.internal:9090/api/v1/write\": dial tcp 192.168.65.254:9090: connect: connection refused" output="Prometheus remote write"
+
+running (08m46.0s), 002/136 VUs, 12971 complete and 0 interrupted iterations
+entry_spike   [  56% ] 002/136 VUs  08m45.8s/15m40s  60.00 iters/s
+
+running (08m47.0s), 002/136 VUs, 13031 complete and 0 interrupted iterations
+entry_spike   [  56% ] 002/136 VUs  08m46.8s/15m40s  60.00 iters/s
+
+running (08m48.0s), 004/136 VUs, 13089 complete and 0 interrupted iterations
+entry_spike   [  56% ] 004/136 VUs  08m47.8s/15m40s  60.00 iters/s
+
+running (08m49.0s), 003/136 VUs, 13150 complete and 0 interrupted iterations
+entry_spike   [  56% ] 003/136 VUs  08m48.8s/15m40s  60.00 iters/s
+
+running (08m50.0s), 005/136 VUs, 13208 complete and 0 interrupted iterations
+entry_spike   [  56% ] 005/136 VUs  08m49.8s/15m40s  60.00 iters/s
+time="2026-07-26T18:17:54Z" level=error msg="Failed to send the time series data to the endpoint" error="HTTP POST request failed: Post \"http://host.docker.internal:9090/api/v1/write\": dial tcp 192.168.65.254:9090: connect: connection refused" output="Prometheus remote write"
+
+running (08m51.0s), 003/136 VUs, 13270 complete and 0 interrupted iterations
+entry_spike   [  56% ] 003/136 VUs  08m50.8s/15m40s  60.00 iters/s
+
+running (08m52.0s), 003/136 VUs, 13330 complete and 0 interrupted iterations
+entry_spike   [  57% ] 003/136 VUs  08m51.8s/15m40s  60.00 iters/s
+
+running (08m53.0s), 003/136 VUs, 13390 complete and 0 interrupted iterations
+entry_spike   [  57% ] 003/136 VUs  08m52.8s/15m40s  60.00 iters/s
+
+running (08m54.0s), 003/136 VUs, 13450 complete and 0 interrupted iterations
+entry_spike   [  57% ] 003/136 VUs  08m53.8s/15m40s  60.00 iters/s
+
+running (08m55.0s), 003/136 VUs, 13510 complete and 0 interrupted iterations
+entry_spike   [  57% ] 003/136 VUs  08m54.8s/15m40s  60.00 iters/s
+time="2026-07-26T18:17:59Z" level=error msg="Failed to send the time series data to the endpoint" error="HTTP POST request failed: Post \"http://host.docker.internal:9090/api/v1/write\": dial tcp 192.168.65.254:9090: connect: connection refused" output="Prometheus remote write"
+
+running (08m56.0s), 004/136 VUs, 13569 complete and 0 interrupted iterations
+entry_spike   [  57% ] 004/136 VUs  08m55.8s/15m40s  60.00 iters/s
+
+running (08m57.0s), 002/136 VUs, 13631 complete and 0 interrupted iterations
+entry_spike   [  57% ] 002/136 VUs  08m56.8s/15m40s  60.00 iters/s
+
+running (08m58.0s), 003/136 VUs, 13690 complete and 0 interrupted iterations
+entry_spike   [  57% ] 003/136 VUs  08m57.8s/15m40s  60.00 iters/s
+
+running (08m59.0s), 002/136 VUs, 13751 complete and 0 interrupted iterations
+entry_spike   [  57% ] 002/136 VUs  08m58.8s/15m40s  60.00 iters/s
+
+running (09m00.0s), 003/136 VUs, 13810 complete and 0 interrupted iterations
+entry_spike   [  57% ] 003/136 VUs  08m59.8s/15m40s  60.00 iters/s
+time="2026-07-26T18:18:04Z" level=error msg="Failed to send the time series data to the endpoint" error="HTTP POST request failed: Post \"http://host.docker.internal:9090/api/v1/write\": dial tcp 192.168.65.254:9090: connect: connection refused" output="Prometheus remote write"
+
+running (09m01.0s), 003/136 VUs, 13870 complete and 0 interrupted iterations
+entry_spike   [  58% ] 003/136 VUs  09m00.8s/15m40s  60.00 iters/s
+
+running (09m02.0s), 003/136 VUs, 13930 complete and 0 interrupted iterations
+entry_spike   [  58% ] 003/136 VUs  09m01.8s/15m40s  60.00 iters/s
+
+running (09m03.0s), 002/136 VUs, 13991 complete and 0 interrupted iterations
+entry_spike   [  58% ] 002/136 VUs  09m02.8s/15m40s  60.00 iters/s
+
+running (09m04.0s), 002/136 VUs, 14051 complete and 0 interrupted iterations
+entry_spike   [  58% ] 002/136 VUs  09m03.8s/15m40s  60.00 iters/s
+
+running (09m05.0s), 003/136 VUs, 14110 complete and 0 interrupted iterations
+entry_spike   [  58% ] 003/136 VUs  09m04.8s/15m40s  60.00 iters/s
+time="2026-07-26T18:18:09Z" level=error msg="Failed to send the time series data to the endpoint" error="HTTP POST request failed: Post \"http://host.docker.internal:9090/api/v1/write\": dial tcp 192.168.65.254:9090: connect: connection refused" output="Prometheus remote write"
+
+running (09m06.0s), 003/136 VUs, 14170 complete and 0 interrupted iterations
+entry_spike   [  58% ] 003/136 VUs  09m05.8s/15m40s  60.00 iters/s
+
+running (09m07.0s), 004/136 VUs, 14229 complete and 0 interrupted iterations
+entry_spike   [  58% ] 004/136 VUs  09m06.8s/15m40s  60.00 iters/s
+
+running (09m08.0s), 003/136 VUs, 14290 complete and 0 interrupted iterations
+entry_spike   [  58% ] 003/136 VUs  09m07.8s/15m40s  60.00 iters/s
+
+running (09m09.0s), 003/136 VUs, 14350 complete and 0 interrupted iterations
+entry_spike   [  58% ] 003/136 VUs  09m08.8s/15m40s  60.00 iters/s
+
+running (09m10.0s), 002/136 VUs, 14411 complete and 0 interrupted iterations
+entry_spike   [  58% ] 002/136 VUs  09m09.8s/15m40s  60.00 iters/s
+time="2026-07-26T18:18:14Z" level=error msg="Failed to send the time series data to the endpoint" error="HTTP POST request failed: Post \"http://host.docker.internal:9090/api/v1/write\": dial tcp 192.168.65.254:9090: connect: connection refused" output="Prometheus remote write"
+
+running (09m11.0s), 004/136 VUs, 14469 complete and 0 interrupted iterations
+entry_spike   [  59% ] 004/136 VUs  09m10.8s/15m40s  60.00 iters/s
+
+running (09m12.0s), 003/136 VUs, 14530 complete and 0 interrupted iterations
+entry_spike   [  59% ] 003/136 VUs  09m11.8s/15m40s  60.00 iters/s
+
+running (09m13.0s), 003/136 VUs, 14590 complete and 0 interrupted iterations
+entry_spike   [  59% ] 003/136 VUs  09m12.8s/15m40s  60.00 iters/s
+
+running (09m14.0s), 003/136 VUs, 14650 complete and 0 interrupted iterations
+entry_spike   [  59% ] 003/136 VUs  09m13.8s/15m40s  60.00 iters/s
+
+running (09m15.0s), 003/136 VUs, 14710 complete and 0 interrupted iterations
+entry_spike   [  59% ] 003/136 VUs  09m14.8s/15m40s  60.00 iters/s
+time="2026-07-26T18:18:19Z" level=error msg="Failed to send the time series data to the endpoint" error="HTTP POST request failed: Post \"http://host.docker.internal:9090/api/v1/write\": dial tcp 192.168.65.254:9090: connect: connection refused" output="Prometheus remote write"
+
+running (09m16.0s), 003/136 VUs, 14770 complete and 0 interrupted iterations
+entry_spike   [  59% ] 003/136 VUs  09m15.8s/15m40s  60.00 iters/s
+
+running (09m17.0s), 003/136 VUs, 14830 complete and 0 interrupted iterations
+entry_spike   [  59% ] 003/136 VUs  09m16.8s/15m40s  60.00 iters/s
+
+running (09m18.0s), 003/136 VUs, 14890 complete and 0 interrupted iterations
+entry_spike   [  59% ] 003/136 VUs  09m17.8s/15m40s  60.00 iters/s
+
+running (09m19.0s), 002/136 VUs, 14951 complete and 0 interrupted iterations
+entry_spike   [  59% ] 002/136 VUs  09m18.8s/15m40s  60.00 iters/s
+
+running (09m20.0s), 002/136 VUs, 15011 complete and 0 interrupted iterations
+entry_spike   [  60% ] 002/136 VUs  09m19.8s/15m40s  60.00 iters/s
+time="2026-07-26T18:18:24Z" level=error msg="Failed to send the time series data to the endpoint" error="HTTP POST request failed: Post \"http://host.docker.internal:9090/api/v1/write\": dial tcp 192.168.65.254:9090: connect: connection refused" output="Prometheus remote write"
+
+running (09m21.0s), 002/136 VUs, 15070 complete and 0 interrupted iterations
+entry_spike   [  60% ] 002/136 VUs  09m20.8s/15m40s  57.94 iters/s
+
+running (09m22.0s), 005/136 VUs, 15124 complete and 0 interrupted iterations
+entry_spike   [  60% ] 005/136 VUs  09m21.8s/15m40s  55.43 iters/s
+
+running (09m23.0s), 002/136 VUs, 15181 complete and 0 interrupted iterations
+entry_spike   [  60% ] 002/136 VUs  09m22.8s/15m40s  52.94 iters/s
+
+running (09m24.0s), 003/136 VUs, 15232 complete and 0 interrupted iterations
+entry_spike   [  60% ] 003/136 VUs  09m23.8s/15m40s  50.42 iters/s
+
+running (09m25.0s), 003/136 VUs, 15281 complete and 0 interrupted iterations
+entry_spike   [  60% ] 003/136 VUs  09m24.8s/15m40s  47.93 iters/s
+time="2026-07-26T18:18:29Z" level=error msg="Failed to send the time series data to the endpoint" error="HTTP POST request failed: Post \"http://host.docker.internal:9090/api/v1/write\": dial tcp 192.168.65.254:9090: connect: connection refused" output="Prometheus remote write"
+
+running (09m26.0s), 001/136 VUs, 15329 complete and 0 interrupted iterations
+entry_spike   [  60% ] 001/136 VUs  09m25.8s/15m40s  45.47 iters/s
+
+running (09m27.0s), 002/136 VUs, 15373 complete and 0 interrupted iterations
+entry_spike   [  60% ] 002/136 VUs  09m26.8s/15m40s  42.92 iters/s
+
+running (09m28.0s), 001/136 VUs, 15415 complete and 0 interrupted iterations
+entry_spike   [  60% ] 001/136 VUs  09m27.8s/15m40s  40.47 iters/s
+
+running (09m29.0s), 002/136 VUs, 15454 complete and 0 interrupted iterations
+entry_spike   [  61% ] 002/136 VUs  09m28.8s/15m40s  37.91 iters/s
+
+running (09m30.0s), 001/136 VUs, 15491 complete and 0 interrupted iterations
+entry_spike   [  61% ] 001/136 VUs  09m29.8s/15m40s  35.46 iters/s
+time="2026-07-26T18:18:34Z" level=error msg="Failed to send the time series data to the endpoint" error="HTTP POST request failed: Post \"http://host.docker.internal:9090/api/v1/write\": dial tcp 192.168.65.254:9090: connect: connection refused" output="Prometheus remote write"
+
+running (09m31.0s), 001/136 VUs, 15525 complete and 0 interrupted iterations
+entry_spike   [  61% ] 001/136 VUs  09m30.8s/15m40s  32.98 iters/s
+
+running (09m32.0s), 001/136 VUs, 15557 complete and 0 interrupted iterations
+entry_spike   [  61% ] 001/136 VUs  09m31.8s/15m40s  30.45 iters/s
+
+running (09m33.0s), 001/136 VUs, 15586 complete and 0 interrupted iterations
+entry_spike   [  61% ] 001/136 VUs  09m32.8s/15m40s  27.97 iters/s
+
+running (09m34.0s), 001/136 VUs, 15613 complete and 0 interrupted iterations
+entry_spike   [  61% ] 001/136 VUs  09m33.8s/15m40s  25.45 iters/s
+
+running (09m35.0s), 001/136 VUs, 15637 complete and 0 interrupted iterations
+entry_spike   [  61% ] 001/136 VUs  09m34.8s/15m40s  22.97 iters/s
+time="2026-07-26T18:18:39Z" level=error msg="Failed to send the time series data to the endpoint" error="HTTP POST request failed: Post \"http://host.docker.internal:9090/api/v1/write\": dial tcp 192.168.65.254:9090: connect: connection refused" output="Prometheus remote write"
+
+running (09m36.0s), 001/136 VUs, 15659 complete and 0 interrupted iterations
+entry_spike   [  61% ] 001/136 VUs  09m35.8s/15m40s  20.43 iters/s
+
+running (09m37.0s), 001/136 VUs, 15678 complete and 0 interrupted iterations
+entry_spike   [  61% ] 001/136 VUs  09m36.8s/15m40s  17.96 iters/s
+
+running (09m38.0s), 001/136 VUs, 15695 complete and 0 interrupted iterations
+entry_spike   [  61% ] 001/136 VUs  09m37.8s/15m40s  15.41 iters/s
+
+running (09m39.0s), 001/136 VUs, 15709 complete and 0 interrupted iterations
+entry_spike   [  62% ] 001/136 VUs  09m38.8s/15m40s  12.94 iters/s
+
+running (09m40.0s), 001/136 VUs, 15721 complete and 0 interrupted iterations
+entry_spike   [  62% ] 001/136 VUs  09m39.8s/15m40s  10.37 iters/s
+time="2026-07-26T18:18:44Z" level=error msg="Failed to send the time series data to the endpoint" error="HTTP POST request failed: Post \"http://host.docker.internal:9090/api/v1/write\": dial tcp 192.168.65.254:9090: connect: connection refused" output="Prometheus remote write"
+
+running (09m41.0s), 001/136 VUs, 15731 complete and 0 interrupted iterations
+entry_spike   [  62% ] 001/136 VUs  09m40.8s/15m40s  10.00 iters/s
+
+running (09m42.0s), 001/136 VUs, 15741 complete and 0 interrupted iterations
+entry_spike   [  62% ] 001/136 VUs  09m41.8s/15m40s  10.00 iters/s
+
+running (09m43.0s), 001/136 VUs, 15751 complete and 0 interrupted iterations
+entry_spike   [  62% ] 001/136 VUs  09m42.8s/15m40s  10.00 iters/s
+
+running (09m44.0s), 001/136 VUs, 15761 complete and 0 interrupted iterations
+entry_spike   [  62% ] 001/136 VUs  09m43.8s/15m40s  10.00 iters/s
+
+running (09m45.0s), 001/136 VUs, 15771 complete and 0 interrupted iterations
+entry_spike   [  62% ] 001/136 VUs  09m44.8s/15m40s  10.00 iters/s
+time="2026-07-26T18:18:49Z" level=error msg="Failed to send the time series data to the endpoint" error="HTTP POST request failed: Post \"http://host.docker.internal:9090/api/v1/write\": dial tcp 192.168.65.254:9090: connect: connection refused" output="Prometheus remote write"
+
+running (09m46.0s), 001/136 VUs, 15781 complete and 0 interrupted iterations
+entry_spike   [  62% ] 001/136 VUs  09m45.8s/15m40s  10.00 iters/s
+
+running (09m47.0s), 001/136 VUs, 15791 complete and 0 interrupted iterations
+entry_spike   [  62% ] 001/136 VUs  09m46.8s/15m40s  10.00 iters/s
+
+running (09m48.0s), 001/136 VUs, 15801 complete and 0 interrupted iterations
+entry_spike   [  63% ] 001/136 VUs  09m47.8s/15m40s  10.00 iters/s
+
+running (09m49.0s), 001/136 VUs, 15811 complete and 0 interrupted iterations
+entry_spike   [  63% ] 001/136 VUs  09m48.8s/15m40s  10.00 iters/s
+
+running (09m50.0s), 001/136 VUs, 15821 complete and 0 interrupted iterations
+entry_spike   [  63% ] 001/136 VUs  09m49.8s/15m40s  10.00 iters/s
+time="2026-07-26T18:18:54Z" level=error msg="Failed to send the time series data to the endpoint" error="HTTP POST request failed: Post \"http://host.docker.internal:9090/api/v1/write\": dial tcp 192.168.65.254:9090: connect: connection refused" output="Prometheus remote write"
+
+running (09m51.0s), 001/136 VUs, 15831 complete and 0 interrupted iterations
+entry_spike   [  63% ] 001/136 VUs  09m50.8s/15m40s  10.00 iters/s
+
+running (09m52.0s), 001/136 VUs, 15841 complete and 0 interrupted iterations
+entry_spike   [  63% ] 001/136 VUs  09m51.8s/15m40s  10.00 iters/s
+
+running (09m53.0s), 001/136 VUs, 15851 complete and 0 interrupted iterations
+entry_spike   [  63% ] 001/136 VUs  09m52.8s/15m40s  10.00 iters/s
+
+running (09m54.0s), 001/136 VUs, 15861 complete and 0 interrupted iterations
+entry_spike   [  63% ] 001/136 VUs  09m53.8s/15m40s  10.00 iters/s
+
+running (09m55.0s), 001/136 VUs, 15871 complete and 0 interrupted iterations
+entry_spike   [  63% ] 001/136 VUs  09m54.8s/15m40s  10.00 iters/s
+time="2026-07-26T18:18:59Z" level=error msg="Failed to send the time series data to the endpoint" error="HTTP POST request failed: Post \"http://host.docker.internal:9090/api/v1/write\": dial tcp 192.168.65.254:9090: connect: connection refused" output="Prometheus remote write"
+
+running (09m56.0s), 001/136 VUs, 15881 complete and 0 interrupted iterations
+entry_spike   [  63% ] 001/136 VUs  09m55.8s/15m40s  10.00 iters/s
+
+running (09m57.0s), 001/136 VUs, 15891 complete and 0 interrupted iterations
+entry_spike   [  63% ] 001/136 VUs  09m56.8s/15m40s  10.00 iters/s
+
+running (09m58.0s), 001/136 VUs, 15901 complete and 0 interrupted iterations
+entry_spike   [  64% ] 001/136 VUs  09m57.8s/15m40s  10.00 iters/s
+
+running (09m59.0s), 001/136 VUs, 15911 complete and 0 interrupted iterations
+entry_spike   [  64% ] 001/136 VUs  09m58.8s/15m40s  10.00 iters/s
+
+running (10m00.0s), 001/136 VUs, 15921 complete and 0 interrupted iterations
+entry_spike   [  64% ] 001/136 VUs  09m59.8s/15m40s  10.00 iters/s
+time="2026-07-26T18:19:04Z" level=error msg="Failed to send the time series data to the endpoint" error="HTTP POST request failed: Post \"http://host.docker.internal:9090/api/v1/write\": dial tcp 192.168.65.254:9090: connect: connection refused" output="Prometheus remote write"
+
+running (10m01.0s), 001/136 VUs, 15931 complete and 0 interrupted iterations
+entry_spike   [  64% ] 001/136 VUs  10m00.8s/15m40s  10.00 iters/s
+
+running (10m02.0s), 001/136 VUs, 15941 complete and 0 interrupted iterations
+entry_spike   [  64% ] 001/136 VUs  10m01.8s/15m40s  10.00 iters/s
+
+running (10m03.0s), 001/136 VUs, 15951 complete and 0 interrupted iterations
+entry_spike   [  64% ] 001/136 VUs  10m02.8s/15m40s  10.00 iters/s
+
+running (10m04.0s), 001/136 VUs, 15961 complete and 0 interrupted iterations
+entry_spike   [  64% ] 001/136 VUs  10m03.8s/15m40s  10.00 iters/s
+
+running (10m05.0s), 001/136 VUs, 15971 complete and 0 interrupted iterations
+entry_spike   [  64% ] 001/136 VUs  10m04.8s/15m40s  10.00 iters/s
+time="2026-07-26T18:19:09Z" level=error msg="Failed to send the time series data to the endpoint" error="HTTP POST request failed: Post \"http://host.docker.internal:9090/api/v1/write\": dial tcp 192.168.65.254:9090: connect: connection refused" output="Prometheus remote write"
+
+running (10m06.0s), 001/136 VUs, 15981 complete and 0 interrupted iterations
+entry_spike   [  64% ] 001/136 VUs  10m05.8s/15m40s  10.00 iters/s
+
+running (10m07.0s), 001/136 VUs, 15991 complete and 0 interrupted iterations
+entry_spike   [  65% ] 001/136 VUs  10m06.8s/15m40s  10.00 iters/s
+
+running (10m08.0s), 001/136 VUs, 16001 complete and 0 interrupted iterations
+entry_spike   [  65% ] 001/136 VUs  10m07.8s/15m40s  10.00 iters/s
+
+running (10m09.0s), 001/136 VUs, 16011 complete and 0 interrupted iterations
+entry_spike   [  65% ] 001/136 VUs  10m08.8s/15m40s  10.00 iters/s
+
+running (10m10.0s), 001/136 VUs, 16021 complete and 0 interrupted iterations
+entry_spike   [  65% ] 001/136 VUs  10m09.8s/15m40s  10.00 iters/s
+time="2026-07-26T18:19:14Z" level=error msg="Failed to send the time series data to the endpoint" error="HTTP POST request failed: Post \"http://host.docker.internal:9090/api/v1/write\": dial tcp 192.168.65.254:9090: connect: connection refused" output="Prometheus remote write"
+
+running (10m11.0s), 001/136 VUs, 16031 complete and 0 interrupted iterations
+entry_spike   [  65% ] 001/136 VUs  10m10.8s/15m40s  10.00 iters/s
+
+running (10m12.0s), 001/136 VUs, 16041 complete and 0 interrupted iterations
+entry_spike   [  65% ] 001/136 VUs  10m11.8s/15m40s  10.00 iters/s
+
+running (10m13.0s), 001/136 VUs, 16051 complete and 0 interrupted iterations
+entry_spike   [  65% ] 001/136 VUs  10m12.8s/15m40s  10.00 iters/s
+
+running (10m14.0s), 001/136 VUs, 16061 complete and 0 interrupted iterations
+entry_spike   [  65% ] 001/136 VUs  10m13.8s/15m40s  10.00 iters/s
+
+running (10m15.0s), 001/136 VUs, 16071 complete and 0 interrupted iterations
+entry_spike   [  65% ] 001/136 VUs  10m14.8s/15m40s  10.00 iters/s
+time="2026-07-26T18:19:19Z" level=error msg="Failed to send the time series data to the endpoint" error="HTTP POST request failed: Post \"http://host.docker.internal:9090/api/v1/write\": dial tcp 192.168.65.254:9090: connect: connection refused" output="Prometheus remote write"
+
+running (10m16.0s), 001/136 VUs, 16081 complete and 0 interrupted iterations
+entry_spike   [  66% ] 001/136 VUs  10m15.8s/15m40s  10.00 iters/s
+
+running (10m17.0s), 001/136 VUs, 16091 complete and 0 interrupted iterations
+entry_spike   [  66% ] 001/136 VUs  10m16.8s/15m40s  10.00 iters/s
+
+running (10m18.0s), 001/136 VUs, 16101 complete and 0 interrupted iterations
+entry_spike   [  66% ] 001/136 VUs  10m17.8s/15m40s  10.00 iters/s
+
+running (10m19.0s), 001/136 VUs, 16111 complete and 0 interrupted iterations
+entry_spike   [  66% ] 001/136 VUs  10m18.8s/15m40s  10.00 iters/s
+
+running (10m20.0s), 003/136 VUs, 16119 complete and 0 interrupted iterations
+entry_spike   [  66% ] 003/136 VUs  10m19.8s/15m40s  10.00 iters/s
+time="2026-07-26T18:19:24Z" level=error msg="Failed to send the time series data to the endpoint" error="HTTP POST request failed: Post \"http://host.docker.internal:9090/api/v1/write\": dial tcp 192.168.65.254:9090: connect: connection refused" output="Prometheus remote write"
+
+running (10m21.0s), 001/136 VUs, 16131 complete and 0 interrupted iterations
+entry_spike   [  66% ] 001/136 VUs  10m20.8s/15m40s  10.00 iters/s
+
+running (10m22.0s), 001/136 VUs, 16141 complete and 0 interrupted iterations
+entry_spike   [  66% ] 001/136 VUs  10m21.8s/15m40s  10.00 iters/s
+
+running (10m23.0s), 001/136 VUs, 16151 complete and 0 interrupted iterations
+entry_spike   [  66% ] 001/136 VUs  10m22.8s/15m40s  10.00 iters/s
+
+running (10m24.0s), 001/136 VUs, 16161 complete and 0 interrupted iterations
+entry_spike   [  66% ] 001/136 VUs  10m23.8s/15m40s  10.00 iters/s
+
+running (10m25.0s), 001/136 VUs, 16171 complete and 0 interrupted iterations
+entry_spike   [  66% ] 001/136 VUs  10m24.8s/15m40s  10.00 iters/s
+time="2026-07-26T18:19:29Z" level=error msg="Failed to send the time series data to the endpoint" error="HTTP POST request failed: Post \"http://host.docker.internal:9090/api/v1/write\": dial tcp 192.168.65.254:9090: connect: connection refused" output="Prometheus remote write"
+
+running (10m26.0s), 001/136 VUs, 16181 complete and 0 interrupted iterations
+entry_spike   [  67% ] 001/136 VUs  10m25.8s/15m40s  10.00 iters/s
+
+running (10m27.0s), 001/136 VUs, 16191 complete and 0 interrupted iterations
+entry_spike   [  67% ] 001/136 VUs  10m26.8s/15m40s  10.00 iters/s
+
+running (10m28.0s), 001/136 VUs, 16201 complete and 0 interrupted iterations
+entry_spike   [  67% ] 001/136 VUs  10m27.8s/15m40s  10.00 iters/s
+
+running (10m29.0s), 001/136 VUs, 16211 complete and 0 interrupted iterations
+entry_spike   [  67% ] 001/136 VUs  10m28.8s/15m40s  10.00 iters/s
+
+running (10m30.0s), 001/136 VUs, 16221 complete and 0 interrupted iterations
+entry_spike   [  67% ] 001/136 VUs  10m29.8s/15m40s  10.00 iters/s
+time="2026-07-26T18:19:34Z" level=error msg="Failed to send the time series data to the endpoint" error="HTTP POST request failed: Post \"http://host.docker.internal:9090/api/v1/write\": dial tcp 192.168.65.254:9090: connect: connection refused" output="Prometheus remote write"
+
+running (10m31.0s), 001/136 VUs, 16231 complete and 0 interrupted iterations
+entry_spike   [  67% ] 001/136 VUs  10m30.8s/15m40s  10.00 iters/s
+
+running (10m32.0s), 001/136 VUs, 16241 complete and 0 interrupted iterations
+entry_spike   [  67% ] 001/136 VUs  10m31.8s/15m40s  10.00 iters/s
+
+running (10m33.0s), 001/136 VUs, 16251 complete and 0 interrupted iterations
+entry_spike   [  67% ] 001/136 VUs  10m32.8s/15m40s  10.00 iters/s
+
+running (10m34.0s), 001/136 VUs, 16261 complete and 0 interrupted iterations
+entry_spike   [  67% ] 001/136 VUs  10m33.8s/15m40s  10.00 iters/s
+
+running (10m35.0s), 002/136 VUs, 16270 complete and 0 interrupted iterations
+entry_spike   [  68% ] 002/136 VUs  10m34.8s/15m40s  10.00 iters/s
+time="2026-07-26T18:19:39Z" level=error msg="Failed to send the time series data to the endpoint" error="HTTP POST request failed: Post \"http://host.docker.internal:9090/api/v1/write\": dial tcp 192.168.65.254:9090: connect: connection refused" output="Prometheus remote write"
+
+running (10m36.0s), 001/136 VUs, 16281 complete and 0 interrupted iterations
+entry_spike   [  68% ] 001/136 VUs  10m35.8s/15m40s  10.00 iters/s
+
+running (10m37.0s), 001/136 VUs, 16291 complete and 0 interrupted iterations
+entry_spike   [  68% ] 001/136 VUs  10m36.8s/15m40s  10.00 iters/s
+
+running (10m38.0s), 001/136 VUs, 16301 complete and 0 interrupted iterations
+entry_spike   [  68% ] 001/136 VUs  10m37.8s/15m40s  10.00 iters/s
+
+running (10m39.0s), 001/136 VUs, 16311 complete and 0 interrupted iterations
+entry_spike   [  68% ] 001/136 VUs  10m38.8s/15m40s  10.00 iters/s
+
+running (10m40.0s), 001/136 VUs, 16321 complete and 0 interrupted iterations
+entry_spike   [  68% ] 001/136 VUs  10m39.8s/15m40s  10.00 iters/s
+time="2026-07-26T18:19:44Z" level=error msg="Failed to send the time series data to the endpoint" error="HTTP POST request failed: Post \"http://host.docker.internal:9090/api/v1/write\": dial tcp 192.168.65.254:9090: connect: connection refused" output="Prometheus remote write"
+
+running (10m41.0s), 001/136 VUs, 16331 complete and 0 interrupted iterations
+entry_spike   [  68% ] 001/136 VUs  10m40.8s/15m40s  10.00 iters/s
+
+running (10m42.0s), 001/136 VUs, 16341 complete and 0 interrupted iterations
+entry_spike   [  68% ] 001/136 VUs  10m41.8s/15m40s  10.00 iters/s
+
+running (10m43.0s), 001/136 VUs, 16351 complete and 0 interrupted iterations
+entry_spike   [  68% ] 001/136 VUs  10m42.8s/15m40s  10.00 iters/s
+
+running (10m44.0s), 001/136 VUs, 16361 complete and 0 interrupted iterations
+entry_spike   [  68% ] 001/136 VUs  10m43.8s/15m40s  10.00 iters/s
+
+running (10m45.0s), 001/136 VUs, 16371 complete and 0 interrupted iterations
+entry_spike   [  69% ] 001/136 VUs  10m44.8s/15m40s  10.00 iters/s
+time="2026-07-26T18:19:49Z" level=error msg="Failed to send the time series data to the endpoint" error="HTTP POST request failed: Post \"http://host.docker.internal:9090/api/v1/write\": dial tcp 192.168.65.254:9090: connect: connection refused" output="Prometheus remote write"
+
+running (10m46.0s), 001/136 VUs, 16381 complete and 0 interrupted iterations
+entry_spike   [  69% ] 001/136 VUs  10m45.8s/15m40s  10.00 iters/s
+
+running (10m47.0s), 001/136 VUs, 16391 complete and 0 interrupted iterations
+entry_spike   [  69% ] 001/136 VUs  10m46.8s/15m40s  10.00 iters/s
+
+running (10m48.0s), 001/136 VUs, 16401 complete and 0 interrupted iterations
+entry_spike   [  69% ] 001/136 VUs  10m47.8s/15m40s  10.00 iters/s
+
+running (10m49.0s), 001/136 VUs, 16411 complete and 0 interrupted iterations
+entry_spike   [  69% ] 001/136 VUs  10m48.8s/15m40s  10.00 iters/s
+
+running (10m50.0s), 001/136 VUs, 16421 complete and 0 interrupted iterations
+entry_spike   [  69% ] 001/136 VUs  10m49.8s/15m40s  10.00 iters/s
+time="2026-07-26T18:19:54Z" level=error msg="Failed to send the time series data to the endpoint" error="HTTP POST request failed: Post \"http://host.docker.internal:9090/api/v1/write\": dial tcp 192.168.65.254:9090: connect: connection refused" output="Prometheus remote write"
+
+running (10m51.0s), 001/136 VUs, 16431 complete and 0 interrupted iterations
+entry_spike   [  69% ] 001/136 VUs  10m50.8s/15m40s  10.00 iters/s
+
+running (10m52.0s), 001/136 VUs, 16441 complete and 0 interrupted iterations
+entry_spike   [  69% ] 001/136 VUs  10m51.8s/15m40s  10.00 iters/s
+
+running (10m53.0s), 001/136 VUs, 16451 complete and 0 interrupted iterations
+entry_spike   [  69% ] 001/136 VUs  10m52.8s/15m40s  10.00 iters/s
+
+running (10m54.0s), 001/136 VUs, 16461 complete and 0 interrupted iterations
+entry_spike   [  70% ] 001/136 VUs  10m53.8s/15m40s  10.00 iters/s
+
+running (10m55.0s), 001/136 VUs, 16471 complete and 0 interrupted iterations
+entry_spike   [  70% ] 001/136 VUs  10m54.8s/15m40s  10.00 iters/s
+time="2026-07-26T18:19:59Z" level=error msg="Failed to send the time series data to the endpoint" error="HTTP POST request failed: Post \"http://host.docker.internal:9090/api/v1/write\": dial tcp 192.168.65.254:9090: connect: connection refused" output="Prometheus remote write"
+
+running (10m56.0s), 001/136 VUs, 16481 complete and 0 interrupted iterations
+entry_spike   [  70% ] 001/136 VUs  10m55.8s/15m40s  10.00 iters/s
+
+running (10m57.0s), 001/136 VUs, 16491 complete and 0 interrupted iterations
+entry_spike   [  70% ] 001/136 VUs  10m56.8s/15m40s  10.00 iters/s
+
+running (10m58.0s), 001/136 VUs, 16501 complete and 0 interrupted iterations
+entry_spike   [  70% ] 001/136 VUs  10m57.8s/15m40s  10.00 iters/s
+
+running (10m59.0s), 001/136 VUs, 16511 complete and 0 interrupted iterations
+entry_spike   [  70% ] 001/136 VUs  10m58.8s/15m40s  10.00 iters/s
+
+running (11m00.0s), 001/136 VUs, 16521 complete and 0 interrupted iterations
+entry_spike   [  70% ] 001/136 VUs  10m59.8s/15m40s  10.00 iters/s
+time="2026-07-26T18:20:04Z" level=error msg="Failed to send the time series data to the endpoint" error="HTTP POST request failed: Post \"http://host.docker.internal:9090/api/v1/write\": dial tcp 192.168.65.254:9090: connect: connection refused" output="Prometheus remote write"
+
+running (11m01.0s), 001/136 VUs, 16531 complete and 0 interrupted iterations
+entry_spike   [  70% ] 001/136 VUs  11m00.8s/15m40s  10.00 iters/s
+
+running (11m02.0s), 001/136 VUs, 16541 complete and 0 interrupted iterations
+entry_spike   [  70% ] 001/136 VUs  11m01.8s/15m40s  10.00 iters/s
+
+running (11m03.0s), 001/136 VUs, 16551 complete and 0 interrupted iterations
+entry_spike   [  71% ] 001/136 VUs  11m02.8s/15m40s  10.00 iters/s
+
+running (11m04.0s), 001/136 VUs, 16561 complete and 0 interrupted iterations
+entry_spike   [  71% ] 001/136 VUs  11m03.8s/15m40s  10.00 iters/s
+
+running (11m05.0s), 001/136 VUs, 16571 complete and 0 interrupted iterations
+entry_spike   [  71% ] 001/136 VUs  11m04.8s/15m40s  10.00 iters/s
+time="2026-07-26T18:20:09Z" level=error msg="Failed to send the time series data to the endpoint" error="HTTP POST request failed: Post \"http://host.docker.internal:9090/api/v1/write\": dial tcp 192.168.65.254:9090: connect: connection refused" output="Prometheus remote write"
+
+running (11m06.0s), 001/136 VUs, 16581 complete and 0 interrupted iterations
+entry_spike   [  71% ] 001/136 VUs  11m05.8s/15m40s  10.00 iters/s
+
+running (11m07.0s), 001/136 VUs, 16591 complete and 0 interrupted iterations
+entry_spike   [  71% ] 001/136 VUs  11m06.8s/15m40s  10.00 iters/s
+
+running (11m08.0s), 001/136 VUs, 16601 complete and 0 interrupted iterations
+entry_spike   [  71% ] 001/136 VUs  11m07.8s/15m40s  10.00 iters/s
+
+running (11m09.0s), 001/136 VUs, 16611 complete and 0 interrupted iterations
+entry_spike   [  71% ] 001/136 VUs  11m08.8s/15m40s  10.00 iters/s
+
+running (11m10.0s), 001/136 VUs, 16621 complete and 0 interrupted iterations
+entry_spike   [  71% ] 001/136 VUs  11m09.8s/15m40s  10.00 iters/s
+time="2026-07-26T18:20:14Z" level=error msg="Failed to send the time series data to the endpoint" error="HTTP POST request failed: Post \"http://host.docker.internal:9090/api/v1/write\": dial tcp 192.168.65.254:9090: connect: connection refused" output="Prometheus remote write"
+
+running (11m11.0s), 001/136 VUs, 16631 complete and 0 interrupted iterations
+entry_spike   [  71% ] 001/136 VUs  11m10.8s/15m40s  10.00 iters/s
+
+running (11m12.0s), 001/136 VUs, 16641 complete and 0 interrupted iterations
+entry_spike   [  71% ] 001/136 VUs  11m11.8s/15m40s  10.00 iters/s
+
+running (11m13.0s), 001/136 VUs, 16651 complete and 0 interrupted iterations
+entry_spike   [  72% ] 001/136 VUs  11m12.8s/15m40s  10.00 iters/s
+
+running (11m14.0s), 001/136 VUs, 16661 complete and 0 interrupted iterations
+entry_spike   [  72% ] 001/136 VUs  11m13.8s/15m40s  10.00 iters/s
+
+running (11m15.0s), 001/136 VUs, 16671 complete and 0 interrupted iterations
+entry_spike   [  72% ] 001/136 VUs  11m14.8s/15m40s  10.00 iters/s
+time="2026-07-26T18:20:19Z" level=error msg="Failed to send the time series data to the endpoint" error="HTTP POST request failed: Post \"http://host.docker.internal:9090/api/v1/write\": dial tcp 192.168.65.254:9090: connect: connection refused" output="Prometheus remote write"
+
+running (11m16.0s), 001/136 VUs, 16681 complete and 0 interrupted iterations
+entry_spike   [  72% ] 001/136 VUs  11m15.8s/15m40s  10.00 iters/s
+
+running (11m17.0s), 001/136 VUs, 16691 complete and 0 interrupted iterations
+entry_spike   [  72% ] 001/136 VUs  11m16.8s/15m40s  10.00 iters/s
+
+running (11m18.0s), 001/136 VUs, 16701 complete and 0 interrupted iterations
+entry_spike   [  72% ] 001/136 VUs  11m17.8s/15m40s  10.00 iters/s
+
+running (11m19.0s), 001/136 VUs, 16711 complete and 0 interrupted iterations
+entry_spike   [  72% ] 001/136 VUs  11m18.8s/15m40s  10.00 iters/s
+
+running (11m20.0s), 001/136 VUs, 16721 complete and 0 interrupted iterations
+entry_spike   [  72% ] 001/136 VUs  11m19.8s/15m40s  10.00 iters/s
+time="2026-07-26T18:20:24Z" level=error msg="Failed to send the time series data to the endpoint" error="HTTP POST request failed: Post \"http://host.docker.internal:9090/api/v1/write\": dial tcp 192.168.65.254:9090: connect: connection refused" output="Prometheus remote write"
+
+running (11m21.0s), 001/136 VUs, 16731 complete and 0 interrupted iterations
+entry_spike   [  72% ] 001/136 VUs  11m20.8s/15m40s  10.00 iters/s
+
+running (11m22.0s), 001/136 VUs, 16741 complete and 0 interrupted iterations
+entry_spike   [  73% ] 001/136 VUs  11m21.8s/15m40s  10.00 iters/s
+
+running (11m23.0s), 001/136 VUs, 16751 complete and 0 interrupted iterations
+entry_spike   [  73% ] 001/136 VUs  11m22.8s/15m40s  10.00 iters/s
+
+running (11m24.0s), 001/136 VUs, 16761 complete and 0 interrupted iterations
+entry_spike   [  73% ] 001/136 VUs  11m23.8s/15m40s  10.00 iters/s
+
+running (11m25.0s), 001/136 VUs, 16771 complete and 0 interrupted iterations
+entry_spike   [  73% ] 001/136 VUs  11m24.8s/15m40s  10.00 iters/s
+time="2026-07-26T18:20:29Z" level=error msg="Failed to send the time series data to the endpoint" error="HTTP POST request failed: Post \"http://host.docker.internal:9090/api/v1/write\": dial tcp 192.168.65.254:9090: connect: connection refused" output="Prometheus remote write"
+
+running (11m26.0s), 001/136 VUs, 16781 complete and 0 interrupted iterations
+entry_spike   [  73% ] 001/136 VUs  11m25.8s/15m40s  10.00 iters/s
+
+running (11m27.0s), 001/136 VUs, 16791 complete and 0 interrupted iterations
+entry_spike   [  73% ] 001/136 VUs  11m26.8s/15m40s  10.00 iters/s
+
+running (11m28.0s), 001/136 VUs, 16801 complete and 0 interrupted iterations
+entry_spike   [  73% ] 001/136 VUs  11m27.8s/15m40s  10.00 iters/s
+
+running (11m29.0s), 001/136 VUs, 16811 complete and 0 interrupted iterations
+entry_spike   [  73% ] 001/136 VUs  11m28.8s/15m40s  10.00 iters/s
+
+running (11m30.0s), 001/136 VUs, 16821 complete and 0 interrupted iterations
+entry_spike   [  73% ] 001/136 VUs  11m29.8s/15m40s  10.00 iters/s
+
+running (11m31.0s), 001/136 VUs, 16831 complete and 0 interrupted iterations
+entry_spike   [  73% ] 001/136 VUs  11m30.8s/15m40s  10.00 iters/s
+
+running (11m32.0s), 001/136 VUs, 16841 complete and 0 interrupted iterations
+entry_spike   [  74% ] 001/136 VUs  11m31.8s/15m40s  10.00 iters/s
+
+running (11m33.0s), 001/136 VUs, 16851 complete and 0 interrupted iterations
+entry_spike   [  74% ] 001/136 VUs  11m32.8s/15m40s  10.00 iters/s
+
+running (11m34.0s), 001/136 VUs, 16861 complete and 0 interrupted iterations
+entry_spike   [  74% ] 001/136 VUs  11m33.8s/15m40s  10.00 iters/s
+
+running (11m35.0s), 001/136 VUs, 16871 complete and 0 interrupted iterations
+entry_spike   [  74% ] 001/136 VUs  11m34.8s/15m40s  10.00 iters/s
+
+running (11m36.0s), 001/136 VUs, 16881 complete and 0 interrupted iterations
+entry_spike   [  74% ] 001/136 VUs  11m35.8s/15m40s  10.00 iters/s
+
+running (11m37.0s), 001/136 VUs, 16891 complete and 0 interrupted iterations
+entry_spike   [  74% ] 001/136 VUs  11m36.8s/15m40s  10.00 iters/s
+
+running (11m38.0s), 001/136 VUs, 16901 complete and 0 interrupted iterations
+entry_spike   [  74% ] 001/136 VUs  11m37.8s/15m40s  10.00 iters/s
+
+running (11m39.0s), 001/136 VUs, 16911 complete and 0 interrupted iterations
+entry_spike   [  74% ] 001/136 VUs  11m38.8s/15m40s  10.00 iters/s
+
+running (11m40.0s), 001/136 VUs, 16921 complete and 0 interrupted iterations
+entry_spike   [  74% ] 001/136 VUs  11m39.8s/15m40s  10.00 iters/s
+
+running (11m41.0s), 001/136 VUs, 16931 complete and 0 interrupted iterations
+entry_spike   [  75% ] 001/136 VUs  11m40.8s/15m40s  10.00 iters/s
+
+running (11m42.0s), 001/136 VUs, 16941 complete and 0 interrupted iterations
+entry_spike   [  75% ] 001/136 VUs  11m41.8s/15m40s  10.00 iters/s
+
+running (11m43.0s), 001/136 VUs, 16951 complete and 0 interrupted iterations
+entry_spike   [  75% ] 001/136 VUs  11m42.8s/15m40s  10.00 iters/s
+
+running (11m44.0s), 001/136 VUs, 16961 complete and 0 interrupted iterations
+entry_spike   [  75% ] 001/136 VUs  11m43.8s/15m40s  10.00 iters/s
+
+running (11m45.0s), 001/136 VUs, 16971 complete and 0 interrupted iterations
+entry_spike   [  75% ] 001/136 VUs  11m44.8s/15m40s  10.00 iters/s
+
+running (11m46.0s), 001/136 VUs, 16981 complete and 0 interrupted iterations
+entry_spike   [  75% ] 001/136 VUs  11m45.8s/15m40s  10.00 iters/s
+
+running (11m47.0s), 003/136 VUs, 16989 complete and 0 interrupted iterations
+entry_spike   [  75% ] 003/136 VUs  11m46.8s/15m40s  10.00 iters/s
+
+running (11m48.0s), 001/136 VUs, 17001 complete and 0 interrupted iterations
+entry_spike   [  75% ] 001/136 VUs  11m47.8s/15m40s  10.00 iters/s
+
+running (11m49.0s), 001/136 VUs, 17011 complete and 0 interrupted iterations
+entry_spike   [  75% ] 001/136 VUs  11m48.8s/15m40s  10.00 iters/s
+
+running (11m50.0s), 001/136 VUs, 17021 complete and 0 interrupted iterations
+entry_spike   [  76% ] 001/136 VUs  11m49.8s/15m40s  10.00 iters/s
+
+running (11m51.0s), 001/136 VUs, 17031 complete and 0 interrupted iterations
+entry_spike   [  76% ] 001/136 VUs  11m50.8s/15m40s  10.00 iters/s
+
+running (11m52.0s), 001/136 VUs, 17041 complete and 0 interrupted iterations
+entry_spike   [  76% ] 001/136 VUs  11m51.8s/15m40s  10.00 iters/s
+
+running (11m53.0s), 001/136 VUs, 17051 complete and 0 interrupted iterations
+entry_spike   [  76% ] 001/136 VUs  11m52.8s/15m40s  10.00 iters/s
+
+running (11m54.0s), 001/136 VUs, 17061 complete and 0 interrupted iterations
+entry_spike   [  76% ] 001/136 VUs  11m53.8s/15m40s  10.00 iters/s
+
+running (11m55.0s), 001/136 VUs, 17071 complete and 0 interrupted iterations
+entry_spike   [  76% ] 001/136 VUs  11m54.8s/15m40s  10.00 iters/s
+
+running (11m56.0s), 001/136 VUs, 17081 complete and 0 interrupted iterations
+entry_spike   [  76% ] 001/136 VUs  11m55.8s/15m40s  10.00 iters/s
+
+running (11m57.0s), 001/136 VUs, 17091 complete and 0 interrupted iterations
+entry_spike   [  76% ] 001/136 VUs  11m56.8s/15m40s  10.00 iters/s
+
+running (11m58.0s), 001/136 VUs, 17101 complete and 0 interrupted iterations
+entry_spike   [  76% ] 001/136 VUs  11m57.8s/15m40s  10.00 iters/s
+
+running (11m59.0s), 001/136 VUs, 17111 complete and 0 interrupted iterations
+entry_spike   [  76% ] 001/136 VUs  11m58.8s/15m40s  10.00 iters/s
+
+running (12m00.0s), 001/136 VUs, 17121 complete and 0 interrupted iterations
+entry_spike   [  77% ] 001/136 VUs  11m59.8s/15m40s  10.00 iters/s
+
+running (12m01.0s), 001/136 VUs, 17131 complete and 0 interrupted iterations
+entry_spike   [  77% ] 001/136 VUs  12m00.8s/15m40s  10.00 iters/s
+
+running (12m02.0s), 001/136 VUs, 17141 complete and 0 interrupted iterations
+entry_spike   [  77% ] 001/136 VUs  12m01.8s/15m40s  10.00 iters/s
+
+running (12m03.0s), 001/136 VUs, 17151 complete and 0 interrupted iterations
+entry_spike   [  77% ] 001/136 VUs  12m02.8s/15m40s  10.00 iters/s
+
+running (12m04.0s), 001/136 VUs, 17161 complete and 0 interrupted iterations
+entry_spike   [  77% ] 001/136 VUs  12m03.8s/15m40s  10.00 iters/s
+
+running (12m05.0s), 001/136 VUs, 17171 complete and 0 interrupted iterations
+entry_spike   [  77% ] 001/136 VUs  12m04.8s/15m40s  10.00 iters/s
+
+running (12m06.0s), 001/136 VUs, 17181 complete and 0 interrupted iterations
+entry_spike   [  77% ] 001/136 VUs  12m05.8s/15m40s  10.00 iters/s
+
+running (12m07.0s), 001/136 VUs, 17191 complete and 0 interrupted iterations
+entry_spike   [  77% ] 001/136 VUs  12m06.8s/15m40s  10.00 iters/s
+
+running (12m08.0s), 001/136 VUs, 17201 complete and 0 interrupted iterations
+entry_spike   [  77% ] 001/136 VUs  12m07.8s/15m40s  10.00 iters/s
+
+running (12m09.0s), 001/136 VUs, 17211 complete and 0 interrupted iterations
+entry_spike   [  78% ] 001/136 VUs  12m08.8s/15m40s  10.00 iters/s
+
+running (12m10.0s), 001/136 VUs, 17221 complete and 0 interrupted iterations
+entry_spike   [  78% ] 001/136 VUs  12m09.8s/15m40s  10.00 iters/s
+
+running (12m11.0s), 001/136 VUs, 17231 complete and 0 interrupted iterations
+entry_spike   [  78% ] 001/136 VUs  12m10.8s/15m40s  10.00 iters/s
+
+running (12m12.0s), 001/136 VUs, 17241 complete and 0 interrupted iterations
+entry_spike   [  78% ] 001/136 VUs  12m11.8s/15m40s  10.00 iters/s
+
+running (12m13.0s), 001/136 VUs, 17251 complete and 0 interrupted iterations
+entry_spike   [  78% ] 001/136 VUs  12m12.8s/15m40s  10.00 iters/s
+
+running (12m14.0s), 001/136 VUs, 17261 complete and 0 interrupted iterations
+entry_spike   [  78% ] 001/136 VUs  12m13.8s/15m40s  10.00 iters/s
+
+running (12m15.0s), 001/136 VUs, 17271 complete and 0 interrupted iterations
+entry_spike   [  78% ] 001/136 VUs  12m14.8s/15m40s  10.00 iters/s
+
+running (12m16.0s), 001/136 VUs, 17281 complete and 0 interrupted iterations
+entry_spike   [  78% ] 001/136 VUs  12m15.8s/15m40s  10.00 iters/s
+
+running (12m17.0s), 001/136 VUs, 17291 complete and 0 interrupted iterations
+entry_spike   [  78% ] 001/136 VUs  12m16.8s/15m40s  10.00 iters/s
+
+running (12m18.0s), 001/136 VUs, 17301 complete and 0 interrupted iterations
+entry_spike   [  78% ] 001/136 VUs  12m17.8s/15m40s  10.00 iters/s
+
+running (12m19.0s), 001/136 VUs, 17311 complete and 0 interrupted iterations
+entry_spike   [  79% ] 001/136 VUs  12m18.8s/15m40s  10.00 iters/s
+
+running (12m20.0s), 001/136 VUs, 17321 complete and 0 interrupted iterations
+entry_spike   [  79% ] 001/136 VUs  12m19.8s/15m40s  10.00 iters/s
+
+running (12m21.0s), 001/136 VUs, 17331 complete and 0 interrupted iterations
+entry_spike   [  79% ] 001/136 VUs  12m20.8s/15m40s  10.00 iters/s
+
+running (12m22.0s), 001/136 VUs, 17341 complete and 0 interrupted iterations
+entry_spike   [  79% ] 001/136 VUs  12m21.8s/15m40s  10.00 iters/s
+
+running (12m23.0s), 001/136 VUs, 17351 complete and 0 interrupted iterations
+entry_spike   [  79% ] 001/136 VUs  12m22.8s/15m40s  10.00 iters/s
+
+running (12m24.0s), 001/136 VUs, 17361 complete and 0 interrupted iterations
+entry_spike   [  79% ] 001/136 VUs  12m23.8s/15m40s  10.00 iters/s
+
+running (12m25.0s), 001/136 VUs, 17371 complete and 0 interrupted iterations
+entry_spike   [  79% ] 001/136 VUs  12m24.8s/15m40s  10.00 iters/s
+
+running (12m26.0s), 001/136 VUs, 17381 complete and 0 interrupted iterations
+entry_spike   [  79% ] 001/136 VUs  12m25.8s/15m40s  10.00 iters/s
+
+running (12m27.0s), 001/136 VUs, 17391 complete and 0 interrupted iterations
+entry_spike   [  79% ] 001/136 VUs  12m26.8s/15m40s  10.00 iters/s
+
+running (12m28.0s), 001/136 VUs, 17401 complete and 0 interrupted iterations
+entry_spike   [  80% ] 001/136 VUs  12m27.8s/15m40s  10.00 iters/s
+
+running (12m29.0s), 001/136 VUs, 17411 complete and 0 interrupted iterations
+entry_spike   [  80% ] 001/136 VUs  12m28.8s/15m40s  10.00 iters/s
+
+running (12m30.0s), 001/136 VUs, 17421 complete and 0 interrupted iterations
+entry_spike   [  80% ] 001/136 VUs  12m29.8s/15m40s  10.00 iters/s
+
+running (12m31.0s), 001/136 VUs, 17431 complete and 0 interrupted iterations
+entry_spike   [  80% ] 001/136 VUs  12m30.8s/15m40s  10.00 iters/s
+
+running (12m32.0s), 001/136 VUs, 17441 complete and 0 interrupted iterations
+entry_spike   [  80% ] 001/136 VUs  12m31.8s/15m40s  10.00 iters/s
+
+running (12m33.0s), 001/136 VUs, 17451 complete and 0 interrupted iterations
+entry_spike   [  80% ] 001/136 VUs  12m32.8s/15m40s  10.00 iters/s
+
+running (12m34.0s), 001/136 VUs, 17461 complete and 0 interrupted iterations
+entry_spike   [  80% ] 001/136 VUs  12m33.8s/15m40s  10.00 iters/s
+
+running (12m35.0s), 001/136 VUs, 17471 complete and 0 interrupted iterations
+entry_spike   [  80% ] 001/136 VUs  12m34.8s/15m40s  10.00 iters/s
+
+running (12m36.0s), 001/136 VUs, 17481 complete and 0 interrupted iterations
+entry_spike   [  80% ] 001/136 VUs  12m35.8s/15m40s  10.00 iters/s
+
+running (12m37.0s), 001/136 VUs, 17491 complete and 0 interrupted iterations
+entry_spike   [  81% ] 001/136 VUs  12m36.8s/15m40s  10.00 iters/s
+
+running (12m38.0s), 001/136 VUs, 17501 complete and 0 interrupted iterations
+entry_spike   [  81% ] 001/136 VUs  12m37.8s/15m40s  10.00 iters/s
+
+running (12m39.0s), 001/136 VUs, 17511 complete and 0 interrupted iterations
+entry_spike   [  81% ] 001/136 VUs  12m38.8s/15m40s  10.00 iters/s
+
+running (12m40.0s), 001/136 VUs, 17521 complete and 0 interrupted iterations
+entry_spike   [  81% ] 001/136 VUs  12m39.8s/15m40s  10.00 iters/s
+
+running (12m41.0s), 001/136 VUs, 17531 complete and 0 interrupted iterations
+entry_spike   [  81% ] 001/136 VUs  12m40.8s/15m40s  10.00 iters/s
+
+running (12m42.0s), 001/136 VUs, 17541 complete and 0 interrupted iterations
+entry_spike   [  81% ] 001/136 VUs  12m41.8s/15m40s  10.00 iters/s
+
+running (12m43.0s), 001/136 VUs, 17551 complete and 0 interrupted iterations
+entry_spike   [  81% ] 001/136 VUs  12m42.8s/15m40s  10.00 iters/s
+
+running (12m44.0s), 001/136 VUs, 17561 complete and 0 interrupted iterations
+entry_spike   [  81% ] 001/136 VUs  12m43.8s/15m40s  10.00 iters/s
+
+running (12m45.0s), 001/136 VUs, 17571 complete and 0 interrupted iterations
+entry_spike   [  81% ] 001/136 VUs  12m44.8s/15m40s  10.00 iters/s
+
+running (12m46.0s), 001/136 VUs, 17581 complete and 0 interrupted iterations
+entry_spike   [  81% ] 001/136 VUs  12m45.8s/15m40s  10.00 iters/s
+
+running (12m47.0s), 001/136 VUs, 17591 complete and 0 interrupted iterations
+entry_spike   [  82% ] 001/136 VUs  12m46.8s/15m40s  10.00 iters/s
+
+running (12m48.0s), 001/136 VUs, 17601 complete and 0 interrupted iterations
+entry_spike   [  82% ] 001/136 VUs  12m47.8s/15m40s  10.00 iters/s
+
+running (12m49.0s), 001/136 VUs, 17611 complete and 0 interrupted iterations
+entry_spike   [  82% ] 001/136 VUs  12m48.8s/15m40s  10.00 iters/s
+
+running (12m50.0s), 001/136 VUs, 17621 complete and 0 interrupted iterations
+entry_spike   [  82% ] 001/136 VUs  12m49.8s/15m40s  10.00 iters/s
+
+running (12m51.0s), 001/136 VUs, 17631 complete and 0 interrupted iterations
+entry_spike   [  82% ] 001/136 VUs  12m50.8s/15m40s  10.00 iters/s
+
+running (12m52.0s), 001/136 VUs, 17641 complete and 0 interrupted iterations
+entry_spike   [  82% ] 001/136 VUs  12m51.8s/15m40s  10.00 iters/s
+
+running (12m53.0s), 001/136 VUs, 17651 complete and 0 interrupted iterations
+entry_spike   [  82% ] 001/136 VUs  12m52.8s/15m40s  10.00 iters/s
+
+running (12m54.0s), 001/136 VUs, 17661 complete and 0 interrupted iterations
+entry_spike   [  82% ] 001/136 VUs  12m53.8s/15m40s  10.00 iters/s
+
+running (12m55.0s), 001/136 VUs, 17671 complete and 0 interrupted iterations
+entry_spike   [  82% ] 001/136 VUs  12m54.8s/15m40s  10.00 iters/s
+
+running (12m56.0s), 001/136 VUs, 17681 complete and 0 interrupted iterations
+entry_spike   [  83% ] 001/136 VUs  12m55.8s/15m40s  10.00 iters/s
+
+running (12m57.0s), 001/136 VUs, 17691 complete and 0 interrupted iterations
+entry_spike   [  83% ] 001/136 VUs  12m56.8s/15m40s  10.00 iters/s
+
+running (12m58.0s), 001/136 VUs, 17701 complete and 0 interrupted iterations
+entry_spike   [  83% ] 001/136 VUs  12m57.8s/15m40s  10.00 iters/s
+
+running (12m59.0s), 001/136 VUs, 17711 complete and 0 interrupted iterations
+entry_spike   [  83% ] 001/136 VUs  12m58.8s/15m40s  10.00 iters/s
+
+running (13m00.0s), 001/136 VUs, 17721 complete and 0 interrupted iterations
+entry_spike   [  83% ] 001/136 VUs  12m59.8s/15m40s  10.00 iters/s
+
+running (13m01.0s), 001/136 VUs, 17731 complete and 0 interrupted iterations
+entry_spike   [  83% ] 001/136 VUs  13m00.8s/15m40s  10.00 iters/s
+
+running (13m02.0s), 001/136 VUs, 17741 complete and 0 interrupted iterations
+entry_spike   [  83% ] 001/136 VUs  13m01.8s/15m40s  10.00 iters/s
+
+running (13m03.0s), 001/136 VUs, 17751 complete and 0 interrupted iterations
+entry_spike   [  83% ] 001/136 VUs  13m02.8s/15m40s  10.00 iters/s
+
+running (13m04.0s), 001/136 VUs, 17761 complete and 0 interrupted iterations
+entry_spike   [  83% ] 001/136 VUs  13m03.8s/15m40s  10.00 iters/s
+
+running (13m05.0s), 001/136 VUs, 17771 complete and 0 interrupted iterations
+entry_spike   [  83% ] 001/136 VUs  13m04.8s/15m40s  10.00 iters/s
+
+running (13m06.0s), 001/136 VUs, 17781 complete and 0 interrupted iterations
+entry_spike   [  84% ] 001/136 VUs  13m05.8s/15m40s  10.00 iters/s
+
+running (13m07.0s), 001/136 VUs, 17791 complete and 0 interrupted iterations
+entry_spike   [  84% ] 001/136 VUs  13m06.8s/15m40s  10.00 iters/s
+
+running (13m08.0s), 001/136 VUs, 17801 complete and 0 interrupted iterations
+entry_spike   [  84% ] 001/136 VUs  13m07.8s/15m40s  10.00 iters/s
+
+running (13m09.0s), 001/136 VUs, 17811 complete and 0 interrupted iterations
+entry_spike   [  84% ] 001/136 VUs  13m08.8s/15m40s  10.00 iters/s
+
+running (13m10.0s), 001/136 VUs, 17821 complete and 0 interrupted iterations
+entry_spike   [  84% ] 001/136 VUs  13m09.8s/15m40s  10.00 iters/s
+
+running (13m11.0s), 001/136 VUs, 17831 complete and 0 interrupted iterations
+entry_spike   [  84% ] 001/136 VUs  13m10.8s/15m40s  10.00 iters/s
+
+running (13m12.0s), 001/136 VUs, 17841 complete and 0 interrupted iterations
+entry_spike   [  84% ] 001/136 VUs  13m11.8s/15m40s  10.00 iters/s
+
+running (13m13.0s), 001/136 VUs, 17851 complete and 0 interrupted iterations
+entry_spike   [  84% ] 001/136 VUs  13m12.8s/15m40s  10.00 iters/s
+
+running (13m14.0s), 001/136 VUs, 17861 complete and 0 interrupted iterations
+entry_spike   [  84% ] 001/136 VUs  13m13.8s/15m40s  10.00 iters/s
+
+running (13m15.0s), 001/136 VUs, 17871 complete and 0 interrupted iterations
+entry_spike   [  85% ] 001/136 VUs  13m14.8s/15m40s  10.00 iters/s
+
+running (13m16.0s), 001/136 VUs, 17881 complete and 0 interrupted iterations
+entry_spike   [  85% ] 001/136 VUs  13m15.8s/15m40s  10.00 iters/s
+
+running (13m17.0s), 001/136 VUs, 17891 complete and 0 interrupted iterations
+entry_spike   [  85% ] 001/136 VUs  13m16.8s/15m40s  10.00 iters/s
+
+running (13m18.0s), 001/136 VUs, 17901 complete and 0 interrupted iterations
+entry_spike   [  85% ] 001/136 VUs  13m17.8s/15m40s  10.00 iters/s
+
+running (13m19.0s), 001/136 VUs, 17911 complete and 0 interrupted iterations
+entry_spike   [  85% ] 001/136 VUs  13m18.8s/15m40s  10.00 iters/s
+
+running (13m20.0s), 001/136 VUs, 17921 complete and 0 interrupted iterations
+entry_spike   [  85% ] 001/136 VUs  13m19.8s/15m40s  10.00 iters/s
+
+running (13m21.0s), 001/136 VUs, 17931 complete and 0 interrupted iterations
+entry_spike   [  85% ] 001/136 VUs  13m20.8s/15m40s  10.00 iters/s
+
+running (13m22.0s), 001/136 VUs, 17941 complete and 0 interrupted iterations
+entry_spike   [  85% ] 001/136 VUs  13m21.8s/15m40s  10.00 iters/s
+
+running (13m23.0s), 001/136 VUs, 17951 complete and 0 interrupted iterations
+entry_spike   [  85% ] 001/136 VUs  13m22.8s/15m40s  10.00 iters/s
+
+running (13m24.0s), 001/136 VUs, 17961 complete and 0 interrupted iterations
+entry_spike   [  86% ] 001/136 VUs  13m23.8s/15m40s  10.00 iters/s
+
+running (13m25.0s), 001/136 VUs, 17971 complete and 0 interrupted iterations
+entry_spike   [  86% ] 001/136 VUs  13m24.8s/15m40s  10.00 iters/s
+
+running (13m26.0s), 001/136 VUs, 17981 complete and 0 interrupted iterations
+entry_spike   [  86% ] 001/136 VUs  13m25.8s/15m40s  10.00 iters/s
+
+running (13m27.0s), 001/136 VUs, 17991 complete and 0 interrupted iterations
+entry_spike   [  86% ] 001/136 VUs  13m26.8s/15m40s  10.00 iters/s
+
+running (13m28.0s), 001/136 VUs, 18001 complete and 0 interrupted iterations
+entry_spike   [  86% ] 001/136 VUs  13m27.8s/15m40s  10.00 iters/s
+
+running (13m29.0s), 001/136 VUs, 18011 complete and 0 interrupted iterations
+entry_spike   [  86% ] 001/136 VUs  13m28.8s/15m40s  10.00 iters/s
+
+running (13m30.0s), 001/136 VUs, 18021 complete and 0 interrupted iterations
+entry_spike   [  86% ] 001/136 VUs  13m29.8s/15m40s  10.00 iters/s
+
+running (13m31.0s), 001/136 VUs, 18031 complete and 0 interrupted iterations
+entry_spike   [  86% ] 001/136 VUs  13m30.8s/15m40s  10.00 iters/s
+
+running (13m32.0s), 001/136 VUs, 18041 complete and 0 interrupted iterations
+entry_spike   [  86% ] 001/136 VUs  13m31.8s/15m40s  10.00 iters/s
+
+running (13m33.0s), 001/136 VUs, 18051 complete and 0 interrupted iterations
+entry_spike   [  86% ] 001/136 VUs  13m32.8s/15m40s  10.00 iters/s
+
+running (13m34.0s), 001/136 VUs, 18061 complete and 0 interrupted iterations
+entry_spike   [  87% ] 001/136 VUs  13m33.8s/15m40s  10.00 iters/s
+
+running (13m35.0s), 001/136 VUs, 18071 complete and 0 interrupted iterations
+entry_spike   [  87% ] 001/136 VUs  13m34.8s/15m40s  10.00 iters/s
+
+running (13m36.0s), 001/136 VUs, 18081 complete and 0 interrupted iterations
+entry_spike   [  87% ] 001/136 VUs  13m35.8s/15m40s  10.00 iters/s
+
+running (13m37.0s), 001/136 VUs, 18091 complete and 0 interrupted iterations
+entry_spike   [  87% ] 001/136 VUs  13m36.8s/15m40s  10.00 iters/s
+
+running (13m38.0s), 001/136 VUs, 18101 complete and 0 interrupted iterations
+entry_spike   [  87% ] 001/136 VUs  13m37.8s/15m40s  10.00 iters/s
+
+running (13m39.0s), 001/136 VUs, 18111 complete and 0 interrupted iterations
+entry_spike   [  87% ] 001/136 VUs  13m38.8s/15m40s  10.00 iters/s
+
+running (13m40.0s), 001/136 VUs, 18121 complete and 0 interrupted iterations
+entry_spike   [  87% ] 001/136 VUs  13m39.8s/15m40s  10.00 iters/s
+
+running (13m41.0s), 001/136 VUs, 18131 complete and 0 interrupted iterations
+entry_spike   [  87% ] 001/136 VUs  13m40.8s/15m40s  10.00 iters/s
+
+running (13m42.0s), 001/136 VUs, 18141 complete and 0 interrupted iterations
+entry_spike   [  87% ] 001/136 VUs  13m41.8s/15m40s  10.00 iters/s
+
+running (13m43.0s), 001/136 VUs, 18151 complete and 0 interrupted iterations
+entry_spike   [  88% ] 001/136 VUs  13m42.8s/15m40s  10.00 iters/s
+
+running (13m44.0s), 001/136 VUs, 18161 complete and 0 interrupted iterations
+entry_spike   [  88% ] 001/136 VUs  13m43.8s/15m40s  10.00 iters/s
+
+running (13m45.0s), 001/136 VUs, 18171 complete and 0 interrupted iterations
+entry_spike   [  88% ] 001/136 VUs  13m44.8s/15m40s  10.00 iters/s
+
+running (13m46.0s), 001/136 VUs, 18181 complete and 0 interrupted iterations
+entry_spike   [  88% ] 001/136 VUs  13m45.8s/15m40s  10.00 iters/s
+
+running (13m47.0s), 001/136 VUs, 18191 complete and 0 interrupted iterations
+entry_spike   [  88% ] 001/136 VUs  13m46.8s/15m40s  10.00 iters/s
+
+running (13m48.0s), 001/136 VUs, 18201 complete and 0 interrupted iterations
+entry_spike   [  88% ] 001/136 VUs  13m47.8s/15m40s  10.00 iters/s
+
+running (13m49.0s), 001/136 VUs, 18211 complete and 0 interrupted iterations
+entry_spike   [  88% ] 001/136 VUs  13m48.8s/15m40s  10.00 iters/s
+
+running (13m50.0s), 001/136 VUs, 18221 complete and 0 interrupted iterations
+entry_spike   [  88% ] 001/136 VUs  13m49.8s/15m40s  10.00 iters/s
+
+running (13m51.0s), 001/136 VUs, 18231 complete and 0 interrupted iterations
+entry_spike   [  88% ] 001/136 VUs  13m50.8s/15m40s  10.00 iters/s
+
+running (13m52.0s), 001/136 VUs, 18241 complete and 0 interrupted iterations
+entry_spike   [  88% ] 001/136 VUs  13m51.8s/15m40s  10.00 iters/s
+
+running (13m53.0s), 001/136 VUs, 18251 complete and 0 interrupted iterations
+entry_spike   [  89% ] 001/136 VUs  13m52.8s/15m40s  10.00 iters/s
+
+running (13m54.0s), 001/136 VUs, 18261 complete and 0 interrupted iterations
+entry_spike   [  89% ] 001/136 VUs  13m53.8s/15m40s  10.00 iters/s
+
+running (13m55.0s), 001/136 VUs, 18271 complete and 0 interrupted iterations
+entry_spike   [  89% ] 001/136 VUs  13m54.8s/15m40s  10.00 iters/s
+
+running (13m56.0s), 001/136 VUs, 18281 complete and 0 interrupted iterations
+entry_spike   [  89% ] 001/136 VUs  13m55.8s/15m40s  10.00 iters/s
+
+running (13m57.0s), 001/136 VUs, 18291 complete and 0 interrupted iterations
+entry_spike   [  89% ] 001/136 VUs  13m56.8s/15m40s  10.00 iters/s
+
+running (13m58.0s), 001/136 VUs, 18301 complete and 0 interrupted iterations
+entry_spike   [  89% ] 001/136 VUs  13m57.8s/15m40s  10.00 iters/s
+
+running (13m59.0s), 001/136 VUs, 18311 complete and 0 interrupted iterations
+entry_spike   [  89% ] 001/136 VUs  13m58.8s/15m40s  10.00 iters/s
+
+running (14m00.0s), 001/136 VUs, 18321 complete and 0 interrupted iterations
+entry_spike   [  89% ] 001/136 VUs  13m59.8s/15m40s  10.00 iters/s
+
+running (14m01.0s), 001/136 VUs, 18331 complete and 0 interrupted iterations
+entry_spike   [  89% ] 001/136 VUs  14m00.8s/15m40s  10.00 iters/s
+
+running (14m02.0s), 001/136 VUs, 18341 complete and 0 interrupted iterations
+entry_spike   [  90% ] 001/136 VUs  14m01.8s/15m40s  10.00 iters/s
+
+running (14m03.0s), 001/136 VUs, 18351 complete and 0 interrupted iterations
+entry_spike   [  90% ] 001/136 VUs  14m02.8s/15m40s  10.00 iters/s
+
+running (14m04.0s), 001/136 VUs, 18361 complete and 0 interrupted iterations
+entry_spike   [  90% ] 001/136 VUs  14m03.8s/15m40s  10.00 iters/s
+
+running (14m05.0s), 001/136 VUs, 18371 complete and 0 interrupted iterations
+entry_spike   [  90% ] 001/136 VUs  14m04.8s/15m40s  10.00 iters/s
+
+running (14m06.0s), 001/136 VUs, 18381 complete and 0 interrupted iterations
+entry_spike   [  90% ] 001/136 VUs  14m05.8s/15m40s  10.00 iters/s
+
+running (14m07.0s), 001/136 VUs, 18391 complete and 0 interrupted iterations
+entry_spike   [  90% ] 001/136 VUs  14m06.8s/15m40s  10.00 iters/s
+
+running (14m08.0s), 001/136 VUs, 18401 complete and 0 interrupted iterations
+entry_spike   [  90% ] 001/136 VUs  14m07.8s/15m40s  10.00 iters/s
+
+running (14m09.0s), 001/136 VUs, 18411 complete and 0 interrupted iterations
+entry_spike   [  90% ] 001/136 VUs  14m08.8s/15m40s  10.00 iters/s
+
+running (14m10.0s), 001/136 VUs, 18421 complete and 0 interrupted iterations
+entry_spike   [  90% ] 001/136 VUs  14m09.8s/15m40s  10.00 iters/s
+
+running (14m11.0s), 001/136 VUs, 18431 complete and 0 interrupted iterations
+entry_spike   [  91% ] 001/136 VUs  14m10.8s/15m40s  10.00 iters/s
+
+running (14m12.0s), 001/136 VUs, 18441 complete and 0 interrupted iterations
+entry_spike   [  91% ] 001/136 VUs  14m11.8s/15m40s  10.00 iters/s
+
+running (14m13.0s), 001/136 VUs, 18451 complete and 0 interrupted iterations
+entry_spike   [  91% ] 001/136 VUs  14m12.8s/15m40s  10.00 iters/s
+
+running (14m14.0s), 001/136 VUs, 18461 complete and 0 interrupted iterations
+entry_spike   [  91% ] 001/136 VUs  14m13.8s/15m40s  10.00 iters/s
+
+running (14m15.0s), 001/136 VUs, 18471 complete and 0 interrupted iterations
+entry_spike   [  91% ] 001/136 VUs  14m14.8s/15m40s  10.00 iters/s
+
+running (14m16.0s), 001/136 VUs, 18481 complete and 0 interrupted iterations
+entry_spike   [  91% ] 001/136 VUs  14m15.8s/15m40s  10.00 iters/s
+
+running (14m17.0s), 001/136 VUs, 18491 complete and 0 interrupted iterations
+entry_spike   [  91% ] 001/136 VUs  14m16.8s/15m40s  10.00 iters/s
+
+running (14m18.0s), 001/136 VUs, 18501 complete and 0 interrupted iterations
+entry_spike   [  91% ] 001/136 VUs  14m17.8s/15m40s  10.00 iters/s
+
+running (14m19.0s), 001/136 VUs, 18511 complete and 0 interrupted iterations
+entry_spike   [  91% ] 001/136 VUs  14m18.8s/15m40s  10.00 iters/s
+
+running (14m20.0s), 001/136 VUs, 18521 complete and 0 interrupted iterations
+entry_spike   [  91% ] 001/136 VUs  14m19.8s/15m40s  10.00 iters/s
+
+running (14m21.0s), 001/136 VUs, 18531 complete and 0 interrupted iterations
+entry_spike   [  92% ] 001/136 VUs  14m20.8s/15m40s  10.00 iters/s
+
+running (14m22.0s), 001/136 VUs, 18541 complete and 0 interrupted iterations
+entry_spike   [  92% ] 001/136 VUs  14m21.8s/15m40s  10.00 iters/s
+
+running (14m23.0s), 001/136 VUs, 18551 complete and 0 interrupted iterations
+entry_spike   [  92% ] 001/136 VUs  14m22.8s/15m40s  10.00 iters/s
+
+running (14m24.0s), 001/136 VUs, 18561 complete and 0 interrupted iterations
+entry_spike   [  92% ] 001/136 VUs  14m23.8s/15m40s  10.00 iters/s
+
+running (14m25.0s), 001/136 VUs, 18571 complete and 0 interrupted iterations
+entry_spike   [  92% ] 001/136 VUs  14m24.8s/15m40s  10.00 iters/s
+
+running (14m26.0s), 001/136 VUs, 18581 complete and 0 interrupted iterations
+entry_spike   [  92% ] 001/136 VUs  14m25.8s/15m40s  10.00 iters/s
+
+running (14m27.0s), 001/136 VUs, 18591 complete and 0 interrupted iterations
+entry_spike   [  92% ] 001/136 VUs  14m26.8s/15m40s  10.00 iters/s
+
+running (14m28.0s), 001/136 VUs, 18601 complete and 0 interrupted iterations
+entry_spike   [  92% ] 001/136 VUs  14m27.8s/15m40s  10.00 iters/s
+
+running (14m29.0s), 001/136 VUs, 18611 complete and 0 interrupted iterations
+entry_spike   [  92% ] 001/136 VUs  14m28.8s/15m40s  10.00 iters/s
+
+running (14m30.0s), 001/136 VUs, 18621 complete and 0 interrupted iterations
+entry_spike   [  93% ] 001/136 VUs  14m29.8s/15m40s  10.00 iters/s
+
+running (14m31.0s), 002/136 VUs, 18630 complete and 0 interrupted iterations
+entry_spike   [  93% ] 002/136 VUs  14m30.8s/15m40s  10.00 iters/s
+
+running (14m32.0s), 001/136 VUs, 18641 complete and 0 interrupted iterations
+entry_spike   [  93% ] 001/136 VUs  14m31.8s/15m40s  10.00 iters/s
+
+running (14m33.0s), 001/136 VUs, 18651 complete and 0 interrupted iterations
+entry_spike   [  93% ] 001/136 VUs  14m32.8s/15m40s  10.00 iters/s
+
+running (14m34.0s), 001/136 VUs, 18661 complete and 0 interrupted iterations
+entry_spike   [  93% ] 001/136 VUs  14m33.8s/15m40s  10.00 iters/s
+
+running (14m35.0s), 001/136 VUs, 18671 complete and 0 interrupted iterations
+entry_spike   [  93% ] 001/136 VUs  14m34.8s/15m40s  10.00 iters/s
+
+running (14m36.0s), 001/136 VUs, 18681 complete and 0 interrupted iterations
+entry_spike   [  93% ] 001/136 VUs  14m35.8s/15m40s  10.00 iters/s
+
+running (14m37.0s), 001/136 VUs, 18691 complete and 0 interrupted iterations
+entry_spike   [  93% ] 001/136 VUs  14m36.8s/15m40s  10.00 iters/s
+
+running (14m38.0s), 004/136 VUs, 18698 complete and 0 interrupted iterations
+entry_spike   [  93% ] 004/136 VUs  14m37.8s/15m40s  10.00 iters/s
+
+running (14m39.0s), 001/136 VUs, 18711 complete and 0 interrupted iterations
+entry_spike   [  93% ] 001/136 VUs  14m38.8s/15m40s  10.00 iters/s
+
+running (14m40.0s), 001/136 VUs, 18721 complete and 0 interrupted iterations
+entry_spike   [  94% ] 001/136 VUs  14m39.8s/15m40s  10.00 iters/s
+
+running (14m41.0s), 001/136 VUs, 18731 complete and 0 interrupted iterations
+entry_spike   [  94% ] 001/136 VUs  14m40.8s/15m40s  10.00 iters/s
+
+running (14m42.0s), 001/136 VUs, 18741 complete and 0 interrupted iterations
+entry_spike   [  94% ] 001/136 VUs  14m41.8s/15m40s  10.00 iters/s
+
+running (14m43.0s), 001/136 VUs, 18751 complete and 0 interrupted iterations
+entry_spike   [  94% ] 001/136 VUs  14m42.8s/15m40s  10.00 iters/s
+
+running (14m44.0s), 001/136 VUs, 18761 complete and 0 interrupted iterations
+entry_spike   [  94% ] 001/136 VUs  14m43.8s/15m40s  10.00 iters/s
+
+running (14m45.0s), 002/136 VUs, 18770 complete and 0 interrupted iterations
+entry_spike   [  94% ] 002/136 VUs  14m44.8s/15m40s  10.00 iters/s
+
+running (14m46.0s), 001/136 VUs, 18781 complete and 0 interrupted iterations
+entry_spike   [  94% ] 001/136 VUs  14m45.8s/15m40s  10.00 iters/s
+
+running (14m47.0s), 001/136 VUs, 18791 complete and 0 interrupted iterations
+entry_spike   [  94% ] 001/136 VUs  14m46.8s/15m40s  10.00 iters/s
+
+running (14m48.0s), 001/136 VUs, 18801 complete and 0 interrupted iterations
+entry_spike   [  94% ] 001/136 VUs  14m47.8s/15m40s  10.00 iters/s
+
+running (14m49.0s), 001/136 VUs, 18811 complete and 0 interrupted iterations
+entry_spike   [  95% ] 001/136 VUs  14m48.8s/15m40s  10.00 iters/s
+
+running (14m50.0s), 001/136 VUs, 18821 complete and 0 interrupted iterations
+entry_spike   [  95% ] 001/136 VUs  14m49.8s/15m40s  10.00 iters/s
+
+running (14m51.0s), 001/136 VUs, 18831 complete and 0 interrupted iterations
+entry_spike   [  95% ] 001/136 VUs  14m50.8s/15m40s  10.00 iters/s
+
+running (14m52.0s), 001/136 VUs, 18841 complete and 0 interrupted iterations
+entry_spike   [  95% ] 001/136 VUs  14m51.8s/15m40s  10.00 iters/s
+
+running (14m53.0s), 001/136 VUs, 18851 complete and 0 interrupted iterations
+entry_spike   [  95% ] 001/136 VUs  14m52.8s/15m40s  10.00 iters/s
+
+running (14m54.0s), 001/136 VUs, 18861 complete and 0 interrupted iterations
+entry_spike   [  95% ] 001/136 VUs  14m53.8s/15m40s  10.00 iters/s
+
+running (14m55.0s), 001/136 VUs, 18871 complete and 0 interrupted iterations
+entry_spike   [  95% ] 001/136 VUs  14m54.8s/15m40s  10.00 iters/s
+
+running (14m56.0s), 001/136 VUs, 18881 complete and 0 interrupted iterations
+entry_spike   [  95% ] 001/136 VUs  14m55.8s/15m40s  10.00 iters/s
+
+running (14m57.0s), 002/136 VUs, 18890 complete and 0 interrupted iterations
+entry_spike   [  95% ] 002/136 VUs  14m56.8s/15m40s  10.00 iters/s
+
+running (14m58.0s), 001/136 VUs, 18901 complete and 0 interrupted iterations
+entry_spike   [  96% ] 001/136 VUs  14m57.8s/15m40s  10.00 iters/s
+
+running (14m59.0s), 001/136 VUs, 18911 complete and 0 interrupted iterations
+entry_spike   [  96% ] 001/136 VUs  14m58.8s/15m40s  10.00 iters/s
+
+running (15m00.0s), 001/136 VUs, 18921 complete and 0 interrupted iterations
+entry_spike   [  96% ] 001/136 VUs  14m59.8s/15m40s  10.00 iters/s
+
+running (15m01.0s), 001/136 VUs, 18931 complete and 0 interrupted iterations
+entry_spike   [  96% ] 001/136 VUs  15m00.8s/15m40s  10.00 iters/s
+
+running (15m02.0s), 001/136 VUs, 18941 complete and 0 interrupted iterations
+entry_spike   [  96% ] 001/136 VUs  15m01.8s/15m40s  10.00 iters/s
+
+running (15m03.0s), 001/136 VUs, 18951 complete and 0 interrupted iterations
+entry_spike   [  96% ] 001/136 VUs  15m02.8s/15m40s  10.00 iters/s
+
+running (15m04.0s), 001/136 VUs, 18961 complete and 0 interrupted iterations
+entry_spike   [  96% ] 001/136 VUs  15m03.8s/15m40s  10.00 iters/s
+
+running (15m05.0s), 001/136 VUs, 18971 complete and 0 interrupted iterations
+entry_spike   [  96% ] 001/136 VUs  15m04.8s/15m40s  10.00 iters/s
+
+running (15m06.0s), 001/136 VUs, 18981 complete and 0 interrupted iterations
+entry_spike   [  96% ] 001/136 VUs  15m05.8s/15m40s  10.00 iters/s
+
+running (15m07.0s), 001/136 VUs, 18991 complete and 0 interrupted iterations
+entry_spike   [  96% ] 001/136 VUs  15m06.8s/15m40s  10.00 iters/s
+
+running (15m08.0s), 001/136 VUs, 19001 complete and 0 interrupted iterations
+entry_spike   [  97% ] 001/136 VUs  15m07.8s/15m40s  10.00 iters/s
+
+running (15m09.0s), 001/136 VUs, 19011 complete and 0 interrupted iterations
+entry_spike   [  97% ] 001/136 VUs  15m08.8s/15m40s  10.00 iters/s
+
+running (15m10.0s), 001/136 VUs, 19021 complete and 0 interrupted iterations
+entry_spike   [  97% ] 001/136 VUs  15m09.8s/15m40s  10.00 iters/s
+
+running (15m11.0s), 001/136 VUs, 19031 complete and 0 interrupted iterations
+entry_spike   [  97% ] 001/136 VUs  15m10.8s/15m40s  10.00 iters/s
+
+running (15m12.0s), 001/136 VUs, 19041 complete and 0 interrupted iterations
+entry_spike   [  97% ] 001/136 VUs  15m11.8s/15m40s  10.00 iters/s
+
+running (15m13.0s), 001/136 VUs, 19051 complete and 0 interrupted iterations
+entry_spike   [  97% ] 001/136 VUs  15m12.8s/15m40s  10.00 iters/s
+
+running (15m14.0s), 001/136 VUs, 19061 complete and 0 interrupted iterations
+entry_spike   [  97% ] 001/136 VUs  15m13.8s/15m40s  10.00 iters/s
+
+running (15m15.0s), 001/136 VUs, 19071 complete and 0 interrupted iterations
+entry_spike   [  97% ] 001/136 VUs  15m14.8s/15m40s  10.00 iters/s
+
+running (15m16.0s), 003/136 VUs, 19079 complete and 0 interrupted iterations
+entry_spike   [  97% ] 003/136 VUs  15m15.8s/15m40s  10.00 iters/s
+
+running (15m17.0s), 001/136 VUs, 19091 complete and 0 interrupted iterations
+entry_spike   [  98% ] 001/136 VUs  15m16.8s/15m40s  10.00 iters/s
+
+running (15m18.0s), 001/136 VUs, 19101 complete and 0 interrupted iterations
+entry_spike   [  98% ] 001/136 VUs  15m17.8s/15m40s  10.00 iters/s
+
+running (15m19.0s), 001/136 VUs, 19111 complete and 0 interrupted iterations
+entry_spike   [  98% ] 001/136 VUs  15m18.8s/15m40s  10.00 iters/s
+
+running (15m20.0s), 001/136 VUs, 19121 complete and 0 interrupted iterations
+entry_spike   [  98% ] 001/136 VUs  15m19.8s/15m40s  10.00 iters/s
+
+running (15m21.0s), 001/136 VUs, 19131 complete and 0 interrupted iterations
+entry_spike   [  98% ] 001/136 VUs  15m20.8s/15m40s  10.00 iters/s
+
+running (15m22.0s), 001/136 VUs, 19141 complete and 0 interrupted iterations
+entry_spike   [  98% ] 001/136 VUs  15m21.8s/15m40s  10.00 iters/s
+
+running (15m23.0s), 001/136 VUs, 19151 complete and 0 interrupted iterations
+entry_spike   [  98% ] 001/136 VUs  15m22.8s/15m40s  10.00 iters/s
+
+running (15m24.0s), 001/136 VUs, 19161 complete and 0 interrupted iterations
+entry_spike   [  98% ] 001/136 VUs  15m23.8s/15m40s  10.00 iters/s
+
+running (15m25.0s), 001/136 VUs, 19171 complete and 0 interrupted iterations
+entry_spike   [  98% ] 001/136 VUs  15m24.8s/15m40s  10.00 iters/s
+
+running (15m26.0s), 001/136 VUs, 19181 complete and 0 interrupted iterations
+entry_spike   [  98% ] 001/136 VUs  15m25.8s/15m40s  10.00 iters/s
+
+running (15m27.0s), 001/136 VUs, 19191 complete and 0 interrupted iterations
+entry_spike   [  99% ] 001/136 VUs  15m26.8s/15m40s  10.00 iters/s
+
+running (15m27.9s), 001/136 VUs, 19201 complete and 0 interrupted iterations
+entry_spike   [  99% ] 001/136 VUs  15m27.8s/15m40s  10.00 iters/s
+
+running (15m28.9s), 001/136 VUs, 19211 complete and 0 interrupted iterations
+entry_spike   [  99% ] 001/136 VUs  15m28.8s/15m40s  10.00 iters/s
+
+running (15m29.9s), 001/136 VUs, 19221 complete and 0 interrupted iterations
+entry_spike   [  99% ] 001/136 VUs  15m29.8s/15m40s  10.00 iters/s
+
+running (15m30.9s), 001/136 VUs, 19231 complete and 0 interrupted iterations
+entry_spike   [  99% ] 001/136 VUs  15m30.8s/15m40s  10.00 iters/s
+
+running (15m31.9s), 002/136 VUs, 19240 complete and 0 interrupted iterations
+entry_spike   [  99% ] 002/136 VUs  15m31.8s/15m40s  10.00 iters/s
+
+running (15m32.9s), 001/136 VUs, 19251 complete and 0 interrupted iterations
+entry_spike   [  99% ] 001/136 VUs  15m32.8s/15m40s  10.00 iters/s
+
+running (15m33.9s), 001/136 VUs, 19261 complete and 0 interrupted iterations
+entry_spike   [  99% ] 001/136 VUs  15m33.8s/15m40s  10.00 iters/s
+
+running (15m34.9s), 001/136 VUs, 19271 complete and 0 interrupted iterations
+entry_spike   [  99% ] 001/136 VUs  15m34.8s/15m40s  10.00 iters/s
+
+running (15m35.9s), 001/136 VUs, 19281 complete and 0 interrupted iterations
+entry_spike   [ 100% ] 001/136 VUs  15m35.8s/15m40s  10.00 iters/s
+
+running (15m36.9s), 001/136 VUs, 19291 complete and 0 interrupted iterations
+entry_spike   [ 100% ] 001/136 VUs  15m36.8s/15m40s  10.00 iters/s
+
+running (15m37.9s), 001/136 VUs, 19301 complete and 0 interrupted iterations
+entry_spike   [ 100% ] 001/136 VUs  15m37.8s/15m40s  10.00 iters/s
+
+running (15m38.9s), 001/136 VUs, 19311 complete and 0 interrupted iterations
+entry_spike   [ 100% ] 001/136 VUs  15m38.8s/15m40s  10.00 iters/s
+
+running (15m39.9s), 001/136 VUs, 19321 complete and 0 interrupted iterations
+entry_spike   [ 100% ] 001/136 VUs  15m39.8s/15m40s  10.00 iters/s
+
+
+  █ THRESHOLDS 
+
+    http_req_duration
+    ✓ 'p(95)<800' p(95)=30.71ms
+
+    http_req_failed
+    ✗ 'rate<0.01' rate=25.14%
+
+
+  █ TOTAL RESULTS 
+
+    checks_total.......: 19324  20.554674/s
+    checks_succeeded...: 62.28% 12035 out of 19324
+    checks_failed......: 37.71% 7289 out of 19324
+
+    ✓ login 200
+    ✗ checked in(200)
+      ↳  62% — ✓ 12034 / ✗ 7289
+
+    CUSTOM
+    entry_already_used.............: 0.00%  0 out of 38646
+    entry_booking_unavailable......: 37.71% 14576 out of 38646
+    entry_checkin_duration.........: avg=22.02ms min=6.79ms  med=18.41ms max=1.03s  p(90)=25.08ms p(95)=32.69ms
+    entry_checkin_ok...............: 62.27% 12034 out of 19323
+    entry_not_usable...............: 0.00%  0 out of 38646
+    entry_qr_duration..............: avg=75.2ms  min=6.49ms  med=10.65ms max=22.61s p(90)=18.38ms p(95)=31.82ms
+    entry_ticket_exhausted.........: 0.00%  0 out of 19323
+    entry_verify_duration..........: avg=23.59ms min=6.82ms  med=12.19ms max=19.2s  p(90)=17.9ms  p(95)=23.87ms
+
+    HTTP
+    http_req_duration..............: avg=40.27ms min=6.49ms  med=12.38ms max=22.61s p(90)=22.41ms p(95)=30.71ms
+      { expected_response:true }...: avg=43.86ms min=6.49ms  med=13.21ms max=22.61s p(90)=23.1ms  p(95)=29.93ms
+    http_req_failed................: 25.14% 14578 out of 57970
+    http_reqs......................: 57970  61.661894/s
+
+    EXECUTION
+    dropped_iterations.............: 76     0.08084/s
+    iteration_duration.............: avg=162ms   min=23.22ms med=42.81ms max=22.79s p(90)=64.72ms p(95)=79.35ms
+    iterations.....................: 19323  20.55361/s
+    vus............................: 1      min=1              max=134
+    vus_max........................: 136    min=60             max=136
+
+    NETWORK
+    data_received..................: 52 MB  56 kB/s
+    data_sent......................: 32 MB  34 kB/s
+
+
+
+
+running (15m40.1s), 000/136 VUs, 19323 complete and 0 interrupted iterations
+entry_spike ✓ [ 100% ] 000/136 VUs  15m40s  10.00 iters/s
+time="2026-07-26T18:24:44Z" level=error msg="thresholds on metrics 'http_req_failed' have been crossed"
+

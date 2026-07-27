@@ -152,6 +152,19 @@
         { "refId": "A", "expr": "ticketrush_outbox_backlog{job=\"ticketrush-services\", instance=~\"$instance\"}", "legendFormat": "backlog {{instance}}" },
         { "refId": "B", "expr": "ticketrush_outbox_in_flight{job=\"ticketrush-services\", instance=~\"$instance\"}", "legendFormat": "in-flight {{instance}}" }
       ]
+    },
+    {
+      "id": 12,
+      "title": "HTTP p95 / p99 (server)",
+      "description": "서버가 본 처리시간의 퍼센타일(#495). 네트워크·TLS·커넥션 수립이 빠져 있어 k6 클라이언트 p95와는 다른 축이다 — 앱이 느린지 회선이 느린지 가를 때 이쪽을 본다. 버킷은 slo로 11개만 깔았으므로(1ms~2s) 값은 경계 사이 선형보간이다. 2s를 넘는 응답은 +Inf에만 세어져 p99가 2s에서 포화된 것처럼 보인다.",
+      "type": "timeseries",
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "gridPos": { "h": 8, "w": 24, "x": 0, "y": 48 },
+      "fieldConfig": { "defaults": { "unit": "s" }, "overrides": [] },
+      "targets": [
+        { "refId": "A", "expr": "histogram_quantile(0.95, sum by (le, instance) (rate(http_server_requests_seconds_bucket{job=\"ticketrush-services\", instance=~\"$instance\"}[5m])))", "legendFormat": "p95 {{instance}}" },
+        { "refId": "B", "expr": "histogram_quantile(0.99, sum by (le, instance) (rate(http_server_requests_seconds_bucket{job=\"ticketrush-services\", instance=~\"$instance\"}[5m])))", "legendFormat": "p99 {{instance}}" }
+      ]
     }
   ]
 }

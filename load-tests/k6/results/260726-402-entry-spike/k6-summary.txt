@@ -1,0 +1,51 @@
+time="2026-07-26T18:56:02+09:00" level=warning msg="C:\\Users\\PC\\Desktop\\TicketRush-backend\\docker-compose.yml: the attribute `version` is obsolete, it will be ignored, please remove it to avoid potential confusion"
+ Container ticketrush-backend-k6-run-7bf2b8a7a538 Creating 
+ Container ticketrush-backend-k6-run-7bf2b8a7a538 Created 
+
+
+  █ THRESHOLDS 
+
+    http_req_duration
+    ✓ 'p(95)<800' p(95)=29.26ms
+
+    http_req_failed
+    ✓ 'rate<0.01' rate=0.00%
+
+
+  █ TOTAL RESULTS 
+
+    checks_total.......: 19400   20.634986/s
+    checks_succeeded...: 100.00% 19400 out of 19400
+    checks_failed......: 0.00%   0 out of 19400
+
+    ✓ login 200
+    ✓ checked in(200)
+
+    CUSTOM
+    entry_already_used.............: 0.00%   0 out of 38798
+    entry_booking_unavailable......: 0.00%   0 out of 38798
+    entry_checkin_duration.........: avg=22.78ms min=15.58ms med=20.48ms max=328.04ms p(90)=27.77ms p(95)=33.41ms
+    entry_checkin_ok...............: 100.00% 19399 out of 19399
+    entry_not_usable...............: 0.00%   0 out of 38798
+    entry_qr_duration..............: avg=13.71ms min=6.82ms  med=10.93ms max=435.48ms p(90)=17.83ms p(95)=27.07ms
+    entry_ticket_exhausted.........: 0.00%   0 out of 19399
+    entry_verify_duration..........: avg=14.83ms min=8.88ms  med=13.08ms max=494.18ms p(90)=18.79ms p(95)=22.11ms
+
+    HTTP
+    http_req_duration..............: avg=17.11ms min=6.82ms  med=14.57ms max=494.18ms p(90)=24.07ms p(95)=29.26ms
+      { expected_response:true }...: avg=17.11ms min=6.82ms  med=14.57ms max=494.18ms p(90)=24.07ms p(95)=29.26ms
+    http_req_failed................: 0.00%   0 out of 58198
+    http_reqs......................: 58198   61.902831/s
+
+    EXECUTION
+    iteration_duration.............: avg=51.74ms min=33.97ms med=46.49ms max=702.55ms p(90)=66.96ms p(95)=76.77ms
+    iterations.....................: 19399   20.633922/s
+    vus............................: 1       min=0              max=6 
+    vus_max........................: 60      min=60             max=60
+
+    NETWORK
+    data_received..................: 52 MB   55 kB/s
+    data_sent......................: 32 MB   34 kB/s
+
+
+
