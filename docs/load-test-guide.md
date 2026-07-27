@@ -967,7 +967,9 @@ sum(rate(http_server_requests_seconds_count{instance="ticket-service:8090",uri=~
 
 > ⚠️ **`resilience4j_*` 시계열은 첫 호출 전에는 존재하지 않는다.** 서킷은 `create()`가 아니라 첫 `run()`에서 레지스트리에 등록되므로, 배포 직후 검표 트래픽이 한 번도 없었으면 쿼리가 조용히 빈 결과를 낸다. §12.4의 버킷 확인과 같은 선에서 **스모크로 한 번 흘린 뒤 시계열 존재를 확인하고 metadata에 적는다.** (#496 실측에서 그대로 밟았다 — 배포 직후 조회 시 시계열이 없었고 스모크 후 생성됐다.)
 >
-> ⚠️ **톰캣 스레드 메트릭은 기본 배포본에 아예 없다.** Spring Boot 2.2부터 `server.tomcat.mbeanregistry.enabled` 기본값이 `false`라 Tomcat ThreadPool MBean이 등록되지 않고, Micrometer의 `tomcat.threads.*`가 통째로 비어 있다(#496 확인 시점에 `tomcat_sessions_*` 6개만 존재). **`load-test/chaos/ticket-tomcat-mbean.override.yml`로 켠 뒤 측정하고, before/after 양쪽에 동일하게 적용한다.** 켜면 `tomcat_threads_busy_threads` / `_config_max_threads` / `_current_threads`가 나온다. 이 override는 컨테이너 재생성이라 **워밍업이 리셋되므로 적용 후 스모크부터 다시 시작한다.**
+> ✅ **톰캣 스레드 메트릭은 #500부터 앱 기본값으로 켜져 있다.** MVC 7개 서비스의 `application.yml`에 `server.tomcat.mbeanregistry.enabled: true`가 들어갔으므로 `tomcat_threads_busy_threads` / `_config_max_threads` / `_current_threads`가 그냥 나온다. **override 적용은 더 이상 필요 없다.**
+>
+> 단, **#500 이전 이미지 태그로 before를 재현하는 경우**에는 여전히 비어 있다. Spring Boot 2.2부터 `server.tomcat.mbeanregistry.enabled` 기본값이 `false`라 Tomcat ThreadPool MBean이 등록되지 않고 Micrometer의 `tomcat.threads.*`가 통째로 빈다(#496 확인 시점에 `tomcat_sessions_*` 6개만 존재). 그때는 `load-test/chaos/ticket-tomcat-mbean.override.yml`로 켜고 **before/after 양쪽에 동일하게 적용한다.** 이 override는 컨테이너 재생성이라 **워밍업이 리셋되므로 적용 후 스모크부터 다시 시작한다.**
 
 > 🚨 **서버 축(ticket-service)만 보면 이 장애가 보이지 않는다.** #496의 `stop` 회차에서 ticket-service의 `http_server_requests`에는 entries 요청이 **전부 200**으로만 잡혔고 평균 지연도 4.96ms로 평상시와 같았다. 503 시계열은 생성조차 되지 않았다. 톰캣이 accept를 거부하고 있었기 때문이며 — **연결이 거부된 요청은 서버 측 메트릭에 기록되지 않는다.** 같은 구간 gateway 축에서는 5xx가 전체의 41%였고 로그에 `Connection refused: ticket-service/...`가 남았다. **주입 회차의 판정은 반드시 gateway 축(`job="gateway"`, `outcome="SERVER_ERROR"`)과 k6 축을 함께 본다.** 서버 축만으로 판정하면 "문제 없음"이라는 정반대 결론이 나온다.
 
