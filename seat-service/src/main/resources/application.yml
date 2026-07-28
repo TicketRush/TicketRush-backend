@@ -19,6 +19,19 @@ server:
   tomcat:
     mbeanregistry:
       enabled: true
+    threads:
+      # 기본값 200 을 낮춘다. 스레드 스택은 힙 밖이라 -Xmx 가 막지 못하고 cgroup 만 잡는다.
+      # 200 × 1 MiB 는 mem_limit 640 MiB 짜리 컨테이너에서 감당할 수 없는 몫이고, #509 의
+      # "힙으로 설명되지 않는 242 MiB" 의 유력한 출처다.
+      #
+      # 50 인 근거: 인스턴스가 2 vCPU 다. #348 실측 서버 응답 82ms 에서 60 req/s 면
+      # Little's law 로 동시 5개 — 50 은 그 10배다. 2 vCPU 에 200 스레드는 메모리를 쓰면서
+      # 컨텍스트 스위칭만 늘린다(같은 구간 호스트 CPU 98%).
+      #
+      # ⚠ 트레이드오프: 포화 시 처리량 상한이 스레드 수로 결정될 수 있다. 큐(accept-count 기본
+      # 100)에 쌓여 지연이 늘겠지만, 프로세스가 통째로 죽는 것보다 낫다(fail-slow > fail-dead).
+      # 이 값은 재측정으로 조정한다 — tomcat_threads_busy_threads 가 50 에 붙어 있으면 올린다.
+      max: 50
 
 spring:
   profiles:
