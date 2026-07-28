@@ -1,0 +1,51 @@
+  █ THRESHOLDS 
+
+    http_req_duration
+    ✓ 'p(95)<800' p(95)=42.1ms
+
+    http_req_failed
+    ✓ 'rate<0.01' rate=0.00%
+
+
+  █ TOTAL RESULTS 
+
+    checks_total.......: 44159   47.90803/s
+    checks_succeeded...: 100.00% 44159 out of 44159
+    checks_failed......: 0.00%   0 out of 44159
+
+    ✓ login 200
+    ✓ browse journey ok(200)
+    ✓ booking created(201)
+
+    CUSTOM
+    e2e_booking_created............: 100.00% 7359 out of 7359
+    e2e_booking_duration...........: avg=28.54ms min=16.22ms med=25.24ms max=288.3ms  p(90)=40.01ms p(95)=47.63ms 
+    e2e_browse_journey_duration....: avg=58.65ms min=30ms    med=47ms    max=680ms    p(90)=83ms    p(95)=108ms   
+    e2e_perf_detail_duration.......: avg=13.55ms min=6.69ms  med=11.47ms max=321.48ms p(90)=18.89ms p(95)=23.24ms 
+    e2e_perf_list_duration.........: avg=14.1ms  min=6.48ms  med=11.63ms max=317.66ms p(90)=20.5ms  p(95)=29.21ms 
+    e2e_seat_conflict..............: 0.00%   0 out of 7359
+    e2e_seat_exhausted.............: 0.00%   0 out of 7359
+    e2e_seat_layouts_duration......: avg=30.63ms min=12.69ms med=21.68ms max=552.53ms p(90)=46.04ms p(95)=67.07ms 
+
+    HTTP
+    http_req_duration..............: avg=20.01ms min=6.48ms  med=15.34ms max=552.53ms p(90)=31.88ms p(95)=42.1ms  
+      { expected_response:true }...: avg=20.01ms min=6.48ms  med=15.34ms max=552.53ms p(90)=31.88ms p(95)=42.1ms  
+    http_req_failed................: 0.00%   0 out of 117767
+    http_reqs......................: 117767  127.765234/s
+
+    EXECUTION
+    iteration_duration.............: avg=53.7ms  min=16.42ms med=44.73ms max=679.54ms p(90)=78.73ms p(95)=100.79ms
+    iterations.....................: 44158   47.906945/s
+    vus............................: 3       min=0            max=29 
+    vus_max........................: 120     min=120          max=120
+
+    NETWORK
+    data_received..................: 493 MB  535 kB/s
+    data_sent......................: 45 MB   49 kB/s
+
+
+
+
+running (15m21.7s), 000/120 VUs, 44158 complete and 0 interrupted iterations
+browse   ✓ [ 100% ] 000/100 VUs  15m20s  60.00 iters/s
+purchase ✓ [ 100% ] 000/020 VUs  15m20s  12.00 iters/s
