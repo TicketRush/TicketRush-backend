@@ -355,20 +355,27 @@ services:
     # .env 에 같은 키가 있어도 이 값이 이긴다. .env 는 저장소에 없어 리뷰도 diff 도 남지 않고,
     # 파일을 다시 만들면 조용히 사라진다 — 힙 상한이 그렇게 관리될 값이 아니다.
     #
-    # 비힙 상한을 명시하는 이유: 이 셋은 기본값이 사실상 열려 있어 -Xmx 로 힙을 묶어도 cgroup
-    # 한계를 넘길 수 있다(#509 는 RSS 626 MiB 로 640 MiB 상한에 걸려 커널에 죽었다).
+    # 비힙 상한을 명시하는 이유: 기본값이 사실상 열려 있어 -Xmx 로 힙을 묶어도 cgroup 한계를
+    # 넘길 수 있다(#509 는 RSS 626 MiB 로 640 MiB 상한에 걸려 커널에 죽었다).
     #   MaxDirectMemorySize 기본값 = -Xmx = 384 MiB. 힙과 같은 크기가 힙 밖에 또 열려 있었다.
-    #   MaxMetaspaceSize 기본 무제한. 클래스 로딩만큼 계속 자란다.
-    #   ReservedCodeCacheSize 기본 240 MiB 예약.
-    # 합계 384(힙) + 128 + 64 + 64 = 640 이라 상한과 같아 보이지만, 이 값들은 '실사용'이 아니라
-    # '상한'이다. 실사용이 동시에 최대가 되는 일은 없고, 여기 없는 스레드 스택은 위 tomcat
-    # max-threads(50)로 따로 묶었다.
+    #     실측 최대 1.5 MiB(gateway)라 64m 은 40배 여유다.
+    #   ReservedCodeCacheSize 기본 240 MiB 예약. 실측 최대 33.3 MiB(booking)라 64m 은 2배 여유다.
+    #
+    # ⚠ MaxMetaspaceSize 는 두지 않는다. 처음에 128m 을 줬다가 배포가 실패했다.
+    #   OutOfMemoryError: Metaspace 로 앱이 좀비가 됐고 — 프로세스는 살아 있는데 요청을 처리하지
+    #   못한다 — Prometheus 스크랩이 타임아웃나 CD 의 up 게이트에서 걸렸다. 이유가 둘이다.
+    #     1) "무제한이라 계속 자란다"는 전제가 틀렸다. 상한 없는 7개 서비스 실측이 106-140 MiB 에서
+    #        수렴한다(performance 139.7 / booking 136.1 / user 106.1). 클래스 로딩은 유한하다.
+    #     2) 실패 모드가 나쁘다. 힙 OOM 과 달리 프로세스가 죽지 않아 재시작도 안 되고, 헬스체크가
+    #        아니라 스크랩 타임아웃으로만 드러난다. 조기 경보가 아니라 조용한 마비다.
+    #   예산 관점에서도 무의미하다 — 실측(140)을 덮을 값이면 힙 384 와 합쳐 이미 640 을 넘는다.
+    #
+    # 여기 없는 스레드 스택은 위 tomcat max-threads(50)로 따로 묶었다.
     environment:
       SERVER_PORT: 8086
       JAVA_TOOL_OPTIONS: >-
         -Xms128m
         -Xmx384m
-        -XX:MaxMetaspaceSize=128m
         -XX:ReservedCodeCacheSize=64m
         -XX:MaxDirectMemorySize=64m
     depends_on:
