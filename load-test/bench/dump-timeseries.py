@@ -104,6 +104,31 @@ QUERIES = [
     # 좌석 도메인
     ("seat-hold-total", 'sum by (result) (ticketrush_seat_hold_total)'),
     ("seat-lock-contention", 'ticketrush_seat_lock_contention_total'),
+    # ── #403 좌석 상태 집계 ────────────────────────────────────────────────
+    # uri 라벨은 템플릿 그대로다("/api/v1/seat/{performanceId}/seat-counts"). 정규식으로 잡는 것은
+    # seat-layouts 와 나란히 두고 차분을 읽기 위해서다 — 두 경로의 DB 접근 행수는 같고 차이는
+    # 응답 크기·직렬화뿐이라 그 차분이 곧 그 비용이다.
+    ("seat-counts-server-rps", 'sum(rate(http_server_requests_seconds_count{instance="seat-service:8090", uri=~".*seat-counts"}[1m]))'),
+    ("seat-counts-server-avg-ms", '1000 * sum(rate(http_server_requests_seconds_sum{instance="seat-service:8090", uri=~".*seat-counts"}[1m])) / sum(rate(http_server_requests_seconds_count{instance="seat-service:8090", uri=~".*seat-counts"}[1m]))'),
+    ("seat-counts-server-p95", 'histogram_quantile(0.95, sum by (le) (rate(http_server_requests_seconds_bucket{instance="seat-service:8090", uri=~".*seat-counts"}[1m])))'),
+    ("k6-seat-counts-p95", 'k6_seat_counts_duration_p95'),
+    ("k6-seat-counts-p99", 'k6_seat_counts_duration_p99'),
+    ("k6-seat-counts-scale-mismatch", 'k6_seat_counts_scale_mismatch_rate'),
+    ("k6-seat-layouts-compare-p95", 'k6_seat_layouts_duration_p95'),
+    # ── #403 SSE 팬아웃 ───────────────────────────────────────────────────
+    # 큐가 1000 에 붙는 시각과 pool_size 가 4 → 16 으로 늘어나는 시각을 함께 본다.
+    # ThreadPoolTaskExecutor 는 큐가 다 찬 뒤에야 스레드를 늘리므로 이 순서가 뒤집히면 오독이다.
+    ("sse-executor-queued", 'executor_queued_tasks{name="seatStatusSseExecutor"}'),
+    ("sse-executor-active", 'executor_active_threads{name="seatStatusSseExecutor"}'),
+    ("sse-executor-pool-size", 'executor_pool_size_threads{name="seatStatusSseExecutor"}'),
+    ("sse-executor-completed-rate", 'rate(executor_completed_tasks_total{name="seatStatusSseExecutor"}[1m])'),
+    ("k6-sse-propagation-p95", 'k6_sse_propagation_ms_p95'),
+    ("k6-sse-propagation-p99", 'k6_sse_propagation_ms_p99'),
+    ("k6-sse-probe-booking-p95", 'k6_sse_probe_booking_duration_p95'),
+    ("k6-sse-events-received-rate", 'rate(k6_sse_events_received_total[1m])'),
+    ("k6-sse-connected-rate", 'rate(k6_sse_connected_total[1m])'),
+    ("k6-sse-connection-closed-rate", 'rate(k6_sse_connection_closed_total[1m])'),
+    ("k6-sse-mutate-created-rate", 'k6_sse_mutate_created_rate'),
 ]
 
 

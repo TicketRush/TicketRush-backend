@@ -1,0 +1,60 @@
+running (30m45.9s), 013/800 VUs, 403921 complete and 0 interrupted iterations
+counts   [ 100% ] 013/800 VUs  30m46.0s/30m50s  480.00 iters/s
+
+running (30m46.9s), 022/800 VUs, 404391 complete and 0 interrupted iterations
+counts   [ 100% ] 022/800 VUs  30m47.0s/30m50s  480.00 iters/s
+
+running (30m47.9s), 005/800 VUs, 404888 complete and 0 interrupted iterations
+counts   [ 100% ] 005/800 VUs  30m48.0s/30m50s  480.00 iters/s
+
+running (30m48.9s), 008/800 VUs, 405366 complete and 0 interrupted iterations
+counts   [ 100% ] 008/800 VUs  30m49.0s/30m50s  480.00 iters/s
+
+running (30m49.9s), 021/800 VUs, 405833 complete and 0 interrupted iterations
+counts   [ 100% ] 021/800 VUs  30m50.0s/30m50s  480.00 iters/s
+
+
+  █ THRESHOLDS 
+
+    http_req_duration
+    ✓ 'p(95)<800' p(95)=89.35ms
+
+    http_req_failed
+    ✓ 'rate<0.01' rate=0.00%
+
+
+  █ TOTAL RESULTS 
+
+    checks_total.......: 405864 219.39149/s
+    checks_succeeded...: 99.99% 405863 out of 405864
+    checks_failed......: 0.00%  1 out of 405864
+
+    ✗ seat-counts 200
+      ↳  99% — ✓ 405863 / ✗ 1
+
+    CUSTOM
+    seat_counts_duration...........: avg=37.49ms min=0s     med=12.64ms max=9.19s p(90)=49.94ms p(95)=89.35ms
+    seat_counts_scale_mismatch.....: 0.00%  0 out of 405863
+
+    HTTP
+    http_req_duration..............: avg=37.49ms min=0s     med=12.64ms max=9.19s p(90)=49.94ms p(95)=89.35ms
+      { expected_response:true }...: avg=37.49ms min=5.85ms med=12.64ms max=9.19s p(90)=49.94ms p(95)=89.35ms
+    http_req_failed................: 0.00%  1 out of 405864
+    http_reqs......................: 405864 219.39149/s
+
+    EXECUTION
+    dropped_iterations.............: 735    0.397307/s
+    iteration_duration.............: avg=39.24ms min=6.19ms med=12.75ms max=30s   p(90)=50.08ms p(95)=89.51ms
+    iterations.....................: 405864 219.39149/s
+    vus............................: 19     min=0           max=796
+    vus_max........................: 800    min=100         max=800
+
+    NETWORK
+    data_received..................: 349 MB 189 kB/s
+    data_sent......................: 62 MB  33 kB/s
+
+
+
+
+running (30m50.0s), 000/800 VUs, 405864 complete and 0 interrupted iterations
+counts ✓ [ 100% ] 000/800 VUs  30m50s  480.00 iters/s

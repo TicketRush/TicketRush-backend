@@ -1,0 +1,115 @@
+SERIES_ID=260728-403-seat-counts-sse
+ISSUE=#403
+PR=(미생성)
+DATE=2026-07-28 (KST)
+TARGET_HOST=EC2 54.116.243.250 (탄력 IP) — https://api.ticketrush.store
+TOPOLOGY=k6 local (docker compose, ADR 0004) --SSH tunnel(9090)--> EC2 deploy stack (Prometheus/Grafana EC2 로컬, ADR 0007)
+IMAGE_TAG=1f2ed5d27ec7dd9cb92d72aba6b2e9b92a6ce110 (전 서비스 동일 — origin/main HEAD)
+APP_CODE_CHANGE=none (이 회차는 배포가 아니라 실행이다 — #512 규약)
+RUNBOOK=docs/load-test-guide.md §14
+SCENARIO_COUNTS=load-test/scenarios/seat-counts.js
+SCENARIO_SSE=load-test/scenarios/seat-sse-fanout.js (k6-sse 이미지 전용)
+SEED=load-test/seed/seed_seat_counts.sql
+PROM_SCRAPE_INTERVAL=15s
+K6_IMAGE_COUNTS=grafana/k6:latest
+K6_IMAGE_SSE=ticketrush/k6-sse:local — k6 v1.2.1 (go1.26.4) + github.com/phymbert/xk6-sse v0.1.12 (k6/x/sse)
+
+# ── 선결 수정 (이 회차에서 함께 고쳤다) ───────────────────────────────────
+# nginx 가 SSE 를 버퍼링해 인터넷에서 도달 불가였다. 인터넷에 열린 포트는 nginx 443 하나뿐이므로
+# 좌석 상태 실시간 구독은 외부에서 쓸 수 없는 상태였다. #402 의 게이트웨이 라우트 누락과 같은 계열.
+NGINX_SSE_FIX=deploy/nginx/api.ticketrush.store.conf (커밋 2c630a15)
+NGINX_SSE_SMOKE_BEFORE=https 8초 무응답 (헤더조차 없음) / 게이트웨이 8080 직결은 event:connected 즉시
+NGINX_SSE_SMOKE_AFTER=https 헤더 즉시 + event:connected 수신
+NGINX_CONF_MD5_BEFORE=7ad7eb2480a7f721fa644e6a99983bc0
+NGINX_CONF_MD5_AFTER=5ef9b5bfcb2cfa8abde007145744c9ae (저장소 파일과 바이트 동일)
+NGINX_REGRESSION_CHECK=seat-counts 200 / seat-layouts 200
+
+# ── 선행 게이트 (§14.2) ───────────────────────────────────────────────────
+G0_SSE_REACHABLE=pass (nginx 수정 후)
+G1_INDEX=pass — idx_seat_performance_id (performance_id) 존재. idx_seat_status_hold_expired_at 도 존재
+G2_EXECUTOR_METRIC=pass — executor_queued_tasks{name="seatStatusSseExecutor"} 노출 확인
+#   ⚠ 사전 우려였던 "@Bean 반환 타입이 Executor 라 TaskExecutorMetricsAutoConfiguration 이 놓칠 수 있다"는
+#     실측에서 기우로 확인됐다. 큐 깊이 시계열을 지표로 확보했으므로 로그 대체 경로는 쓰지 않는다.
+G3_IMAGE_UNIFORM=pass — 8개 앱 서비스 전부 1f2ed5d2...
+G4_BASELINE_RSS=seat-service 475.7 MiB / 640 (74.3%), gateway-service 317.6 MiB / 512
+#   EC2 를 이 세션에서 새로 기동했고(uptime 0분) 캘리브레이션 3회를 돌린 뒤의 값이다.
+
+# ── 시딩 규모 (완료조건 1) ────────────────────────────────────────────────
+# 기존 LOADTEST 코호트(#348/#509 의 20,800석)는 건드리지 않았다. 접두사 LTC 로 분리.
+# hold_expired_at 은 UTC_TIMESTAMP() 기준(앱 JVM 시계와 맞춤). 미만료 HOLD 는 +6시간이라
+# 60초 스케줄러가 회차 도중 해제하지 않는다 = 상태 분포가 고정된다.
+SEED_DB_CLOCK=KST (세션 NOW() 2026-07-28 16:42) / APP_CLOCK=UTC (07:42) — 9시간 차 확인됨
+SEED_A_TITLE=LTC-A
+SEED_A_PERF_ID=14
+SEED_A_SEATS=600 (AVAILABLE 360 / SOLD 120 / HOLD_live 120 / HOLD_expired 0)
+SEED_A_API_CHECK=total_count=600 available_count=360 sold_count=120 hold_count=120 (시딩과 일치)
+SEED_B_TITLE=LTC-B
+SEED_B_PERF_ID=15
+SEED_B_SEATS=3000 (AVAILABLE 1800 / SOLD 600 / HOLD_live 600 / HOLD_expired 0)
+SEED_B_API_CHECK=total_count=3000 available_count=1800 sold_count=600 hold_count=600 (시딩과 일치)
+SEED_SSE_TITLE=LTC-SSE
+SEED_SSE_PERF_ID=16
+SEED_SSE_SEATS=12000 (전부 AVAILABLE — 예매 부하로 HOLD 전이를 유발한다)
+SEED_SSE_API_CHECK=total_count=12000 available_count=12000 sold_count=0 hold_count=0 (시딩과 일치)
+SEED_STATUS_RATIO=SOLD 20% / HOLD 20% / AVAILABLE 60% (A·B 동일 — 두 곡선을 겹치기 위한 전제)
+
+# ── 캘리브레이션 (수치 폐기, 계단 상한 산정용) ────────────────────────────
+# 스케일 B(3,000석)에 320 -> 640/s 를 45초씩 넣어 무릎 위치를 먼저 찾았다.
+CALIB_TARGET_RATE=640/s
+CALIB_ACTUAL_THROUGHPUT=246.8 rps (고원 — 도착률을 2.6배 올려도 여기서 멈춘다)
+CALIB_NODE_CPU_PEAK=99.96%
+CALIB_TOMCAT_BUSY_PEAK=50 / 50 (max-threads 50, #509 에서 낮춘 값)
+CALIB_HIKARI_PENDING_PEAK=41 (풀 10) — 집계 쿼리가 커넥션을 물고 줄을 세운다
+CALIB_K6_P95=3.52s / http_req_failed 5.30% / dropped_iterations 21,863
+CALIB_CONCLUSION=무릎 약 247 rps. 그 아래위를 감싸는 40,80,160,240,320,480 을 본 회차 계단으로 확정
+# 낮은 도착률 스모크(30초 계단, 20/40/80/160)의 서버 측 평균:
+CALIB_SMOKE_A_SERVER_AVG_MS=3.13 (600석)
+CALIB_SMOKE_B_SERVER_AVG_MS=5.25 (3,000석)
+CALIB_SMOKE_A_K6_P95_MS=33.38 / CALIB_SMOKE_B_K6_P95_MS=36.60
+# 좌석 수가 5배인데 서버 평균은 1.68배다 -> 고정 비용이 크고 스캔 몫은 그 위에 얹힌다.
+#   1차 근사: cost ≈ 2.60ms + 0.00088ms x 좌석수 (좌석당 약 0.88 마이크로초)
+#   600석에서 스캔 몫 0.53ms(17%), 3,000석에서 2.65ms(50%). 본 회차 수치로 다시 계산할 것.
+
+# ── 회차 1: seat-counts 스케일 A (600석) ─────────────────────────────────
+R1_PERF_ID=14
+R1_STAGES=40,80,160,240,320,480 iter/s x 5m (전환 램프 10s) — 총 30m40s
+R1_PRE_ALLOCATED_VUS=100 / R1_MAX_VUS=800
+R1_START_UTC=2026-07-28T08:03:09Z (k6 실제 시작 — 종료 시각에서 running 30m50s 를 뺀 값)
+R1_END_UTC=2026-07-28T08:33:59Z
+R1_WINDOW_END_SOURCE=k6 종료 시각. 이 경로에는 outbox·컨슈머 등 비동기 파이프라인이 없어
+#   §10.2 의 "PENDING=0 첫 관측" 규약이 적용되지 않는다(#402 와 같은 판단).
+R1_ITERATIONS=405,864 (dropped 735 = 0.18%)
+R1_HTTP_REQ_FAILED=0.00% (1 / 405,864) — 유일한 실패는 480 계단의 타임아웃
+R1_SCALE_MISMATCH=0.00% (0 / 405,863) — 시딩 규모와 응답이 전 구간 일치
+R1_VUS_MAX_USED=796 / 800 (preAllocated 100)
+R1_K6_P95_MS_OVERALL=89.35 / R1_K6_AVG_MS_OVERALL=37.49 / R1_K6_MAX_MS=9190
+
+# 계단별 (구간평균 / 구간최댓값, 램프 앞뒤 30초 제외). 원자료 stage-stats-countsa.txt
+#   도착률 | k6 rps      | 서버avg ms   | 서버p95 ms   | CPU %        | tomcat busy | hikari pending
+R1_STAGE_40 =39.1/40.0   | 2.46/2.83   | 4.91/5.16   | 14.31/15.77 | 0.0/0  | 0/0
+R1_STAGE_80 =79.8/80.0   | 1.89/1.97   | 4.16/4.54   | 19.65/20.43 | 0.1/1  | 0/0
+R1_STAGE_160=158.5/160.1 | 1.86/1.94   | 4.43/4.70   | 30.79/33.04 | 0.4/2  | 0/0
+R1_STAGE_240=239.1/240.8 | 2.34/2.83   | 6.96/9.46   | 43.43/44.32 | 0.6/1  | 0/0
+R1_STAGE_320=319.6/320.5 | 4.67/12.21  | 20.69/64.40 | 60.03/74.14 | 1.2/5  | 0/0
+R1_STAGE_480=472.8/480.9 | 22.81/28.42 | 85.97/98.69 | 88.76/91.50 | 14.0/50 | 7.7/40
+# 읽는 법
+#  - 480 계단에서도 목표의 98.5% 를 소화했고 에러율 0. 무릎은 320 과 480 사이다.
+#  - 처음 나타난 압박은 커넥션 풀이다(pending 최대 40, 풀 10). tomcat busy 도 같은 계단에서 50(상한).
+#  - 80~160 에서 서버 평균이 오히려 내려간다(2.46 -> 1.86). 부하가 늘어 빨라질 수는 없으므로
+#    40 계단에 JVM 워밍업이 섞인 것으로 읽는다(#402 §6.1). 40 계단 값은 상한으로만 쓴다.
+#  - k6 p95(29~71ms)와 서버 p95(4~86ms)의 자릿수 차이는 가정용 회선의 RTT 다(약 28ms 바닥).
+#    퍼센타일의 SSOT 는 k6 이지만, 이 회차에서 '앱의 비용'은 서버 축으로 읽는다.
+
+# ── 회차 2 이후 (미실시 — 이번 세션에서 중단) ────────────────────────────
+R2_STATUS=미실시 (스케일 B, PERF_ID=15, COUNTS_EXPECTED_SEATS=3000, 계단은 R1 과 동일)
+R3_STATUS=미실시 (SSE 팬아웃 — 구독자 100/300/600 x 10m, SSE_PERF_ID=16)
+R4_STATUS=미실시 (큐 포화 — @mode='expire' @expire_count=2000)
+COMPARE_STATUS=미실시 (COUNTS_COMPARE=1, 스케일 A 에서만)
+
+# ── 다음 회차 재개 절차 ───────────────────────────────────────────────────
+# 1) EC2 기동 후 §14.2 게이트 G0~G4 를 다시 통과시킨다. 특히 G0 — nginx 설정이 되돌아갔는지 본다.
+# 2) 시딩 코호트는 EBS 에 남아 있다(perf 14/15/16). 재시딩하면 performance_id 가 바뀌므로,
+#    바꿀 이유가 없으면 그대로 쓰고 §14.3 의 검증 쿼리로 분포만 확인한다.
+# 3) 회차 사이 seat-service 를 재시작한다(#509 §8 — 부하 후 RSS 가 돌아오지 않는다).
+#    단 재시작하면 JVM 워밍업이 사라지므로 짧은 스모크를 먼저 돌리고 그 수치는 버린다(#402 §6.1).
+# 4) SSE 회차는 LOAD_USER_PASSWORD 평문이 필요하다(예매로 이벤트를 만든다). 저장소·증적에 남기지 않는다.

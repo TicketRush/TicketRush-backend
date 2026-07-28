@@ -1,0 +1,17 @@
+db_now_kst	app_now_utc
+2026-07-28 17:38:00	2026-07-28 08:38:00
+title	performance_id	total_seats	available	sold	hold_live	hold_expired
+LTC-A	14	600	360	120	120	0
+LTC-B	15	3000	1800	600	600	0
+LTC-SSE	16	12000	12000	0	0	0
+title	expect_total_count	expect_available_count	expect_sold_count	expect_hold_count
+LTC-A	600	360	120	120
+LTC-B	3000	1800	600	600
+LTC-SSE	12000	12000	0	0
+loadtest_cohort_seats_untouched
+20800
+Table	Non_unique	Key_name	Seq_in_index	Column_name	Collation	Cardinality	Sub_part	Packed	Null	Index_type	Comment	Index_comment	Visible	Expression
+seat	0	PRIMARY	1	seat_id	A	22592	NULL	NULL		BTREE			YES	NULL
+seat	1	idx_seat_performance_id	1	performance_id	A	11	NULL	NULL		BTREE			YES	NULL
+seat	1	idx_seat_status_hold_expired_at	1	seat_status	A	2	NULL	NULL		BTREE			YES	NULL
+seat	1	idx_seat_status_hold_expired_at	2	hold_expired_at	A	1347	NULL	NULL	YES	BTREE			YES	NULL
