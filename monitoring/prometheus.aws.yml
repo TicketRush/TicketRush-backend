@@ -55,16 +55,6 @@ scrape_configs:
         labels:
           stack: observability
 
-  # 컨테이너별 자원 지표(#509). node job 이 호스트 총량을 재는 데 반해 이쪽은 "어느 컨테이너가
-  # 자기 mem_limit 에 가까운지"를 답한다. seat-service 가 cgroup OOM 으로 죽을 때까지 대시보드에
-  # 신호가 없었던 것이 이 job 이 없었기 때문이다. exporter 는 포트를 publish 하지 않는다(ADR 0007).
-  - job_name: 'cadvisor'
-    static_configs:
-      - targets:
-          - 'cadvisor:8080'
-        labels:
-          stack: observability
-
   # 자기 자신. ADR 0007이 "전환 시점"의 기준으로 삼은 '부하 중 Prometheus의 CPU·메모리 점유'를
   # 재려면 prometheus_* 자기 지표가 필요하다. mem_limit(384m) 재평가 근거도 여기서 나온다.
   - job_name: 'prometheus'
