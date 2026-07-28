@@ -54,6 +54,7 @@ Prometheus 자기 자신(`localhost:9090`)도 스크랩한다. 아래 "전환 �
 | 3000 | Grafana | `127.0.0.1` | **SSH 터널** |
 | 8090 | gateway actuator | `127.0.0.1` | CD 헬스체크(EC2 호스트 내부) |
 | 8090 | 나머지 7개 actuator | publish 안 함 | 컨테이너 네트워크 전용 |
+| 9100 | node-exporter | `172.17.0.1` (docker0) | Prometheus 컨테이너 전용. netdev를 호스트 것으로 읽으려 host netns로 뜨므로(#508) publish가 아니라 리스닝 주소로 노출면을 좁힌다 |
 
 ```bash
 ssh -i <key>.pem -L 3000:localhost:3000 -L 9090:localhost:9090 <user>@<EIP>

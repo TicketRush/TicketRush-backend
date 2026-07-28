@@ -42,12 +42,16 @@ scrape_configs:
         labels:
           stack: observability
 
-  # EC2 호스트 자원(CPU·메모리·디스크) 지표(#465). 부하 테스트(#348)에서 "호스트가 포화라 느린지,
-  # 앱이 느린지"를 가르는 판정 근거다. exporter는 포트를 publish 하지 않는다(ADR 0007).
+  # EC2 호스트 자원(CPU·메모리·디스크·네트워크) 지표(#465). 부하 테스트(#348)에서 "호스트가 포화라
+  # 느린지, 앱이 느린지"를 가르는 판정 근거다.
+  #
+  # 서비스명이 아니라 host.docker.internal 인 이유: node-exporter 는 netdev 를 호스트 것으로 읽으려고
+  # network_mode: host 로 뜬다(#508). 그래서 compose 네트워크의 DNS 에 이름이 없다. exporter 는
+  # docker0 게이트웨이에만 리스닝하므로 여전히 인터넷에서는 닿지 않는다(ADR 0007).
   - job_name: 'node'
     static_configs:
       - targets:
-          - 'node-exporter:9100'
+          - 'host.docker.internal:9100'
         labels:
           stack: observability
 
