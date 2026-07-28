@@ -145,44 +145,6 @@ services:
     # network_mode: host 는 networks: 와 양립하지 않아 서비스명 DNS 가 없다. 스크랩은 prometheus 의
     # extra_hosts(host.docker.internal)로 간다 — monitoring/prometheus.aws.yml 의 node job.
 
-  # 컨테이너별 메모리 시계열이 없어 seat-service 가 cgroup OOM 으로 죽는 것을 사전에 볼 수단이
-  # 없었다(#509). node-exporter 는 호스트 총량만 재므로 "어느 컨테이너가 한계에 가까운지"를
-  # 답하지 못한다. OOM 직전까지 대시보드에 아무 신호가 없었던 이유다.
-  cadvisor:
-    image: gcr.io/cadvisor/cadvisor:v0.49.1
-    container_name: cadvisor
-    # 이 128m 은 공짜가 아니다. mem_limit 합계가 7,232 → 7,360 MiB 가 되고 호스트 실측
-    # 7.6 GiB(약 7,782 MiB) 대비 여유가 550 → 422 MiB 로 준다(ADR 0006 의 예산 관점).
-    # #509 의 처방으로 seat-service 의 mem_limit 을 올리지 않은 이유이기도 하다 — 올릴 여유를
-    # 관측자가 먼저 가져간다. 관측 없이 상한만 올리면 다음 OOM 도 사후에 dmesg 로 알게 된다.
-    mem_limit: 128m
-    restart: unless-stopped
-    # privileged: true 를 쓰지 않는다. cAdvisor 가 그 권한을 요구하는 것은 커널 OOM 이벤트를
-    # 읽기 위해서인데, /dev/kmsg 하나만 주면 된다. 관측용 컨테이너에 호스트 전권을 주는 것은
-    # ADR 0007 이 관측 스택에 대해 세운 최소 노출 원칙과 어긋난다.
-    devices:
-      - /dev/kmsg
-    volumes:
-      - /:/rootfs:ro
-      - /var/run:/var/run:ro
-      - /sys:/sys:ro
-      - /var/lib/docker/:/var/lib/docker:ro
-    command:
-      # 2 vCPU 를 앱 8개와 나눠 쓰므로 관측자가 측정 대상을 흔들지 않게 줄인다.
-      # docker_only: 컨테이너 밖 cgroup 계층을 훑지 않는다.
-      # enable_metrics: 화이트리스트라 disable 목록을 나열하다 빠뜨리는 실수가 없다.
-      #   memory    — 이 이슈가 필요로 하는 축(container_memory_working_set_bytes)
-      #   cpu       — 메모리와 CPU 가 거의 같은 지점에서 함께 한계에 닿는다(#509)
-      #   oom_event — container_oom_events_total. OOM 을 사후에 dmesg 로 찾지 않아도 된다
-      - "--docker_only=true"
-      - "--housekeeping_interval=15s"
-      - "--enable_metrics=cpu,memory,oom_event"
-    # 관측 포트는 인터넷에 열지 않는다(ADR 0007). Prometheus 가 같은 네트워크에서 서비스명으로
-    # 스크랩한다. cAdvisor 의 기본 포트는 8080 이지만 publish 하지 않으므로 게이트웨이의
-    # 호스트 8080 과 충돌하지 않는다.
-    networks:
-      - ticketrush-network
-
   kafka-volume-init:
     image: apache/kafka:3.7.0
     container_name: ticketrush-kafka-volume-init
