@@ -49,11 +49,10 @@ QUERIES = [
     # 실제의 1/6500 이 나왔다. 그래서 #348 회차는 회선 포화를 k6 수치로 역추정해야 했다.
     ("node-net-tx", 'rate(node_network_transmit_bytes_total{job="node", device="ens5"}[1m])'),
     ("node-net-rx", 'rate(node_network_receive_bytes_total{job="node", device="ens5"}[1m])'),
-    # 컨테이너 자원 (cAdvisor, #509). node-* 는 호스트 총량이라 "어느 컨테이너가 자기 상한에
-    # 가까운지"를 답하지 못한다. seat-service 가 cgroup OOM 으로 죽을 때까지 신호가 없던 이유다.
-    ("container-mem-working-set", 'container_memory_working_set_bytes{name!=""}'),
-    ("container-mem-limit-pct", 'container_memory_working_set_bytes{name!=""} / container_spec_memory_limit_bytes{name!=""}'),
-    ("container-oom-events", 'increase(container_oom_events_total{name!=""}[5m])'),
+    # 컨테이너별 메모리는 여기 없다 — 수단이 아직 없다(#515). #509 에서 cAdvisor 로 넣으려 했으나
+    # Docker 29 + cgroup v2 + systemd 조합에서 컨테이너를 열거하지 못해 되돌렸다.
+    # 그때까지 컨테이너 메모리는 부하 중 `docker stats`, OOM 판정은 `dmesg | grep CONSTRAINT_MEMCG`
+    # 로 본다(런북 §13.6). 회차 리포트에는 그 한계를 명시할 것.
     # 유입 축 (k6)
     ("k6-rps", 'sum(rate(k6_http_reqs_total[1m]))'),
     ("k6-rps-by-name", 'sum by (name) (rate(k6_http_reqs_total[1m]))'),
