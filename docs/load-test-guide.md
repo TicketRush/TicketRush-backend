@@ -1371,13 +1371,14 @@ sum(rate(node_disk_read_bytes_total{job="node"}[1m]))
 rate(node_network_transmit_bytes_total{job="node", device="ens5"}[1m])
 rate(node_network_receive_bytes_total{job="node", device="ens5"}[1m])
 
-# ── 컨테이너별 메모리 (cAdvisor, #509) ────────────────────────────────
-# node job 은 호스트 총량이라 "어느 컨테이너가 자기 상한에 가까운지"를 답하지 못한다.
-# seat-service 가 cgroup OOM 으로 죽을 때까지 신호가 없었던 것이 그래서다.
-# 상한 대비 사용률. 1.0 에 가까워지면 커널이 죽인다. 부하 중 상시 띄워 둘 값이다.
-container_memory_working_set_bytes{name!=""} / container_spec_memory_limit_bytes{name!=""}
-# OOM 은 사후에 dmesg 로 찾지 않는다. docker inspect 의 OOMKilled 는 재시작 뒤라 false 다(#509).
-increase(container_oom_events_total{name!=""}[5m])
+# ── 컨테이너별 메모리 — 아직 수단이 없다(#515) ────────────────────────
+# 위 node_* 는 호스트 총량이라 "어느 컨테이너가 자기 mem_limit 에 가까운지"를 답하지 못한다.
+# #509 에서 seat-service 가 cgroup OOM 으로 죽을 때까지 신호가 없었던 것이 그래서다.
+# cAdvisor 로 메우려 했으나 Docker 29 + cgroup v2 + systemd 조합에서 컨테이너를 열거하지
+# 못해 되돌렸다(#515 에 실측 기록). 그때까지 컨테이너 메모리는 이 두 가지로만 본다.
+#   부하 중:   ssh <EC2> 'docker stats --no-stream seat-service'
+#   OOM 판정:  ssh <EC2> 'sudo dmesg -T | grep CONSTRAINT_MEMCG'
+#              ⚠ docker inspect 의 OOMKilled 는 재시작 뒤라 false 로 나온다 — 믿지 말 것
 
 # ── 게이트웨이 축 (연결 거부는 서버 축에 안 잡힌다 — #496 §2.4) ─────────
 sum(rate(http_server_requests_seconds_count{job="gateway", status=~"5.."}[1m]))
