@@ -1,6 +1,19 @@
 server:
   port: 8086
   forward-headers-strategy: framework
+  # 좌석맵 응답이 221KB(2,080석)라 회선이 먼저 찼다 — 서버 82ms 인데 클라이언트 p95 35초였다(#348).
+  # gzip level 6 으로 9,709B(95.66% 절감)가 된다. 게이트웨이(WebFlux 프록시)나 nginx 가 아니라
+  # origin 에서 거는 이유는 load-tests/k6/results/260727-348-openrun-e2e/report.md §3.4 참고(#505).
+  # mime-types 기본값에 application/json 이 있어 별도 지정하지 않는다. SSE(text/event-stream)는
+  # 기본 mime-types 에 없어 압축되지 않는다.
+  #
+  # ⚠ min-response-size(기본 2KB)는 이 서비스에서 사실상 동작하지 않는다. Tomcat 의
+  # CompressionConfig 가 `contentLength != -1 && contentLength < min` 일 때만 걸러내는데,
+  # MVC 컨트롤러 응답은 Transfer-Encoding: chunked 라 길이가 -1 이다. 그래서 작은 응답도
+  # 함께 압축된다(실측: seat-counts 199B → 185B). Content-Length 를 알리려면 응답 전체를
+  # 버퍼링해야 해서 그 비용이 아끼려는 압축 비용보다 크다 — 그대로 둔다.
+  compression:
+    enabled: true
   # Boot 2.2 부터 기본값이 false 라 톰캣 ThreadPool MBean 이 등록되지 않고, Micrometer 의
   # tomcat.threads.* 바인딩이 통째로 빈다(#500). 스레드 포화를 수치로 볼 수단이라 켠다.
   tomcat:
