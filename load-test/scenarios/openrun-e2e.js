@@ -183,7 +183,17 @@ export function setup() {
 // 조회 엔드포인트는 전부 permitAll 이지만 토큰을 붙인다. 실제 사용자는 로그인 상태로 조회하고,
 // 게이트웨이 JwtAuthenticationFilter 의 검증 비용도 여정에 포함되어야 한다.
 export function browse(data) {
-  const auth = { headers: { Authorization: `Bearer ${data.token}` } };
+  const auth = {
+    headers: {
+      Authorization: `Bearer ${data.token}`,
+      // 실제 브라우저는 항상 보낸다. k6 는 Go 의 투명 압축을 끄고 직접 관리하므로, 이 헤더를
+      // 명시하지 않으면 비압축 응답을 받는다 — #505 로 서버 압축을 켠 뒤에도 압축 전 경로를 재게 된다.
+      // 실측(호스트 ens5 TX 델타, 요청당): 헤더 없음 228,390 B / 헤더 있음 11,894 B.
+      // ⚠ 함정: 헤더가 없으면 응답에 Content-Encoding 자체가 안 붙으므로 k6 쪽에서는 "압축이 꺼졌다"가
+      //   아니라 "원래 그런 것"처럼 보인다. 서버에 curl 로 찍으면 gzip 이 잘 나와서 더 헷갈린다.
+      'Accept-Encoding': 'gzip',
+    },
+  };
   const started = Date.now();
 
   const list = http.get(`${BASE_URL}/api/v1/performance`, {

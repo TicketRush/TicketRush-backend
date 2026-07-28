@@ -1,0 +1,128 @@
+SERIES_ID=260728-505-gzip-remeasure
+ISSUE=#505 (재측정 대상) / #348 (원 회차)
+DATE=2026-07-28 (KST)
+TARGET_HOST=EC2 54.116.243.250 (탄력 IP) — https://api.ticketrush.store
+TOPOLOGY=k6 local (docker compose, ADR 0004) --SSH tunnel(9090)--> EC2 deploy stack (Prometheus/Grafana EC2 로컬, ADR 0007)
+IMAGE_TAG=e390bb003532bbb2b311757e08cc3125cbe4d14d (전 서비스 동일 — #505 압축이 나간 첫 배포본)
+RUNBOOK=docs/load-test-guide.md §13
+SCENARIO=load-test/scenarios/openrun-e2e.js
+RESET=load-test/seed/reset_e2e.sql
+SEED=재시딩 없음 — #348 회차의 코호트를 EBS 볼륨에서 그대로 사용
+PROM_SCRAPE_INTERVAL=15s
+
+# ── 인스턴스 (⚠ 결정 기록과 다르다) ────────────────────────────────────────
+INSTANCE_TYPE=m7i-flex.large (IMDSv2 로 확인)
+VCPU=2 / MEM_TOTAL=7.60 GiB (nproc, free 실측)
+# ADR·이슈에 적힌 m7i.xlarge(4 vCPU/16 GiB)가 아니다. 저장소 문서의 "2 vCPU 한 대"가 맞다.
+# m7i-flex 는 베이스라인 40% CPU + 24시간 창의 95%까지 버스트. 이 회차(15분)는 허용량 안이지만,
+# CPU 가 설명 없이 40% 부근에서 천장을 치면 앱이 아니라 flex 스로틀을 의심할 것.
+# T 계열과 달리 CPUCreditBalance 같은 잔량 지표가 없어 사후 확인이 어렵다.
+
+# 측정 대상 코호트 (#348 과 동일)
+LOADTEST_PERF_IDS=4..13 (LOADTEST-000001..000010), 공연당 2,080석
+LOADTEST_SEATS_TOTAL=20800
+SEAT_ID_STEP=10 (등차 — 리셋 출력에서 distinct_steps=1 로 전 공연 확인)
+BROWSE_PERF_ID=4 (조회 집중 = 핫 로우)
+PURCHASE_PERF_IDS=4..13 (전 공연)
+LOAD_USER=loadtest@ticketrush.local — 평문은 저장소·증적에 남기지 않음
+
+# 서비스 설정 (측정 당시)
+SERVER_COMPRESSION=seat-service 만 enabled (#505). mime-types·min-response-size 는 기본값
+HIKARI_MAX_POOL=10 (Spring Boot 기본)
+TOMCAT_MAX_THREADS=200 (Spring Boot 기본)
+SEAT_SERVICE_MEM_LIMIT=640m / JAVA_TOOL_OPTIONS=-Xms128m -Xmx384m
+KAFKA_NUM_PARTITIONS=3 / KAFKA_CONSUMER_CONCURRENCY=1
+OUTBOX_BATCH_SIZE=300 / 릴레이 주기 5s
+
+# ── 압축 적용 확인 (단발 요청, 부하 전) ────────────────────────────────────
+SEAT_LAYOUTS_IDENTITY_BYTES=174615
+SEAT_LAYOUTS_GZIP_BYTES=8405   (절감 95.19% / 20.8배)
+# #348 의 220,990 과 다른 것은 좌석 상태가 달라졌기 때문이다. 비율은 동일한 자릿수.
+CONTENT_ENCODING=gzip 확인 / Vary: accept-encoding 동반
+
+# ── ⚠ 부하 생성기 결함 — 첫 회차를 무효로 만든 원인 ────────────────────────
+# k6 는 Go 의 투명 압축을 끄고 인코딩을 직접 관리한다. 시나리오가 Accept-Encoding 을
+# 명시하지 않으면 비압축 응답을 받는다. 헤더가 없으면 응답에 Content-Encoding 이 안 붙어
+# "압축이 꺼졌다"가 아니라 "원래 그런 것"처럼 보인다 — 조용해서 알아채기 어렵다.
+# 호스트 ens5 TX 델타로 요청당 실측(TLS·TCP 오버헤드 포함):
+K6_NO_HEADER_BYTES_PER_REQ=228390   (curl identity 232724 와 사실상 동일)
+K6_GZIP_HEADER_BYTES_PER_REQ=11894  (curl gzip 16502)
+FIX=load-test/scenarios/openrun-e2e.js browse() 의 auth 헤더에 'Accept-Encoding: gzip' 추가
+
+# ── 무효 스모크 1 (헤더 수정 전 — 수치 폐기) ───────────────────────────────
+SMOKE1_START_UTC=2026-07-28T02:43:54Z
+SMOKE1_END_UTC=2026-07-28T02:47:05Z
+SMOKE1_STAGES=10,30,60 x 1m
+SMOKE1_RESULT=압축 전 경로 측정. data_received 1.2 GB, 좌석맵 p95 14.04s, CPU 91-99%@60/s
+SMOKE1_VERDICT=무효(생성기 결함). 다만 비압축 대조군으로는 유효 — 60 iter/s 에서 CPU 포화
+
+# ── 스모크 2 (캘리브레이션, 수치 폐기 / OOM 발견) ──────────────────────────
+SMOKE2_START_UTC=2026-07-28T02:53:57Z
+SMOKE2_END_UTC=2026-07-28T02:58:28Z
+SMOKE2_STAGES=20,40,60,80 x 1m
+SMOKE2_CPU=20/s 33% / 40/s 52% / 60/s 75% / 80/s 98%
+SMOKE2_RESULT=80 iter/s 에서 seat-service cgroup OOM. HTTP 500 1,073건(전부 좌석맵),
+#             게이트웨이 Connection refused 512 / PrematureClose 400 / Connection reset 384
+SMOKE2_OOM=dmesg "Memory cgroup out of memory: Killed process (java) constraint=CONSTRAINT_MEMCG
+#          anon-rss:641288kB" / docker RestartCount=1
+SMOKE2_VERDICT=본 회차 상한을 60 iter/s 로 확정. 80 은 확정적으로 무효. → #509 생성
+
+# ── 본 회차 (계단식) ───────────────────────────────────────────────────────
+RAMP_START_UTC=2026-07-28T03:24:49Z
+RAMP_END_UTC=2026-07-28T03:40:50Z
+WINDOW_END_SOURCE=outbox PENDING=0 도달 2026-07-28T03:46:14Z (§13.4-(5) 규약)
+RAMP_STAGES=20,40,60 x 5m (전환 램프 10s)
+RAMP_PURCHASE_RATIO=0.2 → 4 / 8 / 12 iter/s
+RAMP_CPU=20/s 30.7% / 40/s 56.5% / 60/s 74.3%  (유지 구간 평균, 전환 램프 제외)
+RAMP_TX=20/s 0.28 / 40/s 0.57 / 60/s 0.78 MB/s (호스트 ens5 직접 측정 — node_network_* 는 #508 로 무의미)
+RAMP_SEAT_LAYOUTS_P95_MS=67.07
+RAMP_BROWSE_JOURNEY_P95_MS=108
+RAMP_HTTP_REQ_P95_MS=42.1
+RAMP_HTTP_REQS=117767 (127.8 rps)
+RAMP_DATA_RECEIVED=493 MB
+RAMP_DROPPED_ITERATIONS=0
+RAMP_FAILED=0.00% (0 / 117767)
+RAMP_VUS_MAX_USED=29 (preAllocated 120)
+RAMP_TOMCAT_BUSY_MAX=seat 19 / booking 1 (max_threads 200)
+RAMP_HIKARI_ACTIVE_MAX=seat 8 (pool max 10) / pending 0 전 서비스
+RAMP_SEAT_HEAP_PEAK=110 MiB (Xmx 384)
+RAMP_SEAT_RSS_AFTER=546 MiB (mem_limit 640 — 85%)
+RAMP_OUTBOX_BACKLOG_MAX=booking 272 / seat 55  (#348 은 868)
+RAMP_KAFKA_LAG_MAX=16
+RAMP_SATURATION=미도달 — §13.5 판정 3요소 중 어느 것도 서지 않음
+RAMP_VERDICT=유효
+
+# 정합성 검증 (§13.4-(7))
+OVERSELL=0행 / GHOST_HOLD=0행
+APP_BOOKINGS=7359 = k6 e2e_booking_created 7359 (정확히 일치)
+SEAT_EXHAUSTED=0 / SEAT_CONFLICT=0 / SEAT_LOCK_CONTENTION=증가 없음
+SEAT_SERVICE_RESTART=0
+BOOKING_STATUS=전량 EXPIRED (결제 경로 차단 — #348 §2.2)
+
+# ── 이 회차의 결함 (다음 회차에서 고칠 것) ─────────────────────────────────
+# 호스트 샘플러의 RSS 수집이 중첩 따옴표 이스케이핑 오류로 전 구간 실패했다.
+# 출력의 DEAD 는 서비스가 아니라 '측정'이 죽은 것이다(실패율 0%·RestartCount=0 으로 확인).
+# 구간별 RSS 궤적이 이 회차에 없다. 다음 회차는 샘플러를 먼저 단발로 검증하고 시작할 것.
+
+# ── 다음 회차 재개 절차 ────────────────────────────────────────────────────
+# 이 회차로 답한 것: 회선 제약 해소 확인, 60 iter/s 까지의 포화 곡선, 다음 병목 식별.
+# 답하지 못한 것: 조회 축의 실제 포화점(60-80 사이), 릴레이 상한.
+#
+# ⚠ 선결 조건: #509(seat-service OOM). 해소 전에는 60 iter/s 를 넘길 수 없다.
+#
+# 1) EC2 기동 후 컨테이너 15개 확인 (gateway 는 부팅 후 약 30초)
+# 2) SSH 터널: ssh -i <key> -N -L 3000:localhost:3000 -L 9090:localhost:9090 ubuntu@54.116.243.250
+#    k6 컨테이너에서 host.docker.internal:9090 도달을 반드시 확인하고 시작한다
+# 3) 압축 확인 — curl -D - -H 'Accept-Encoding: gzip' .../seat/4/seat-layouts
+#    Content-Encoding: gzip 이 있어야 하고 size_download 가 10KB 수준이어야 한다
+# 4) ⚠ 시나리오가 Accept-Encoding 을 보내는지 확인한다. 안 보내면 압축 전 경로를 재게 된다.
+#    검증: 호스트 ens5 TX 델타 / 요청 수 ≈ 12KB 면 정상, 228KB 면 헤더가 빠진 것이다
+# 5) 리셋: reset_e2e.sql + Redis seat:lock:* 삭제, 삭제 후 키 수 0 확인
+# 6) 호스트 샘플러를 단발로 먼저 검증한다(이 회차에서 RSS 수집이 조용히 실패했다)
+# 7) 계단 설계: 필요 좌석 = Σ(rate x ratio x 구간길이). 확보 20,800석을 넘기지 않는다
+# 8) 증적: python load-test/bench/dump-timeseries.py <START> <END> <OUTDIR> <회차이름>
+#    회차 이름을 반드시 넘긴다 — 안 주면 앞 회차 파일을 덮어쓴다
+#
+# 시딩 자산은 EBS 볼륨에 남아 있다(재시딩 불필요):
+#   LOADTEST 공연 10건 x 2,080석 = 20,800석, 공연 ID 4..13, seat_id 등차 step=10
+#   검표 코호트: booking_id 1000001..1002000 — 재실행하려면 seed_entry.sql (리셋 내장)
