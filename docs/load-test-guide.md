@@ -1402,3 +1402,245 @@ resilience4j_circuitbreaker_failure_rate
 - **결제를 안 하므로 예매가 전부 5-6분 뒤 만료되고, 그 만료가 outbox 부하를 사실상 2배로 만든다**(§13.1-(e)). `ticketrush_outbox_backlog`와 릴레이 처리량 수치에는 생성 트래픽과 만료 트래픽이 섞여 있다. 결제까지 도는 실제 운영과 이벤트 구성이 다르다는 뜻이므로, 이 회차의 outbox 수치를 운영 예측에 그대로 쓰면 안 된다.
 - **k6 생성기가 가정용 회선을 탄다.** 좌석맵 응답이 공연당 200KB대라 조회 도착률이 높으면 다운로드 대역이 먼저 찰 수 있다. k6 축과 서버 축의 차이가 곧 네트워크 왕복이므로 그 간격이 벌어지는지 함께 본다([ADR 0004](adr/0004-load-test-execution-topology.md) §한계).
 - **좌석을 유일 배정하므로 경합은 재지 않는다.** 경합 하의 거동은 §10(#344)이 SSOT다.
+
+---
+
+## 14. 좌석 상태 집계·SSE 대량 구독 측정 (#403)
+
+좌석 조회 경로에서 마지막으로 남은 두 공백을 잰다 — **상태별 집계**(`GET /api/v1/seat/{performanceId}/seat-counts`)와 **실시간 구독**(`GET /api/v1/seat/{performanceId}/seat-status/stream`). 기존 실측은 전부 `seat-layouts`였다(§13, ADR 0006).
+
+**이 회차는 배포가 아니라 실행이다.** 앱 코드 변경 0줄로 현 배포본에서 측정한다(#512의 "`test` 라벨은 배포 묶음에 넣지 않는다" 규약).
+
+### 14.1 이슈 서사와 실측의 차이 — 먼저 읽을 것
+
+**(a) "전송 스레드풀 포화"의 기전이 이슈 서술과 다르다.**
+
+이슈 본문은 `queue(1000) 적체 → max(16)까지 스레드 증가`로 포화를 서술한다. 그런데 큐에 쌓이는 것은 *구독자*가 아니라 **이벤트**다. `SeatStatusSseEventSender.send()`는 이벤트 1건당 executor 태스크 1개를 던지고, **그 태스크 하나가 구독자 전원에게 순차로 `emitter.send()`** 한다(`SeatStatusSseEventSender.java:40-54`).
+
+즉 구독자 N명은 스레드 수요를 N배로 만드는 것이 아니라 **태스크 1개의 길이를 N배로** 만든다. 포화 조건은 `이벤트 발생률 × (N × send 시간) > core 4` 다. 그래서 이 회차는 **이벤트율을 고정하고 구독자 수만 계단으로 올린다**.
+
+> ⚠️ 이슈가 경고한 대로 `ThreadPoolTaskExecutor`는 **큐가 가득 차야** max(16)까지 늘어난다. 큐 1000이 차기 전까지 실질 동시성은 **4**다. 포화 곡선에서 "스레드가 왜 안 느는가"를 오독하지 않으려면 이 순서를 전제로 읽는다.
+
+**(b) 큐가 차면 지연이 아니라 유실이다.**
+
+거부 핸들러가 기본값(`AbortPolicy`)이라 `RejectedExecutionException`이 나고, sender는 `log.warn`만 남기고 **이벤트를 조용히 드롭한다**(`:35-37`). 따라서 포화의 증상은 "느려짐"이 아니라 **수신 누락**이다. §14.6의 두 축(거부 로그 / 수신 누락률)이 같은 시각에 함께 튀어야 확정된다.
+
+**(c) 전파 지연은 서버·클라이언트 시계 차로 잴 수 없다.**
+
+`SeatStatusChangedResponse`에 발생 시각 필드가 없고(`performance_id, seat_id, seat_layout_id, seat_number, seat_status, hold_expired_at`), EC2와 로컬 k6는 다른 호스트다. 서버가 찍은 시각과 클라이언트 수신 시각을 빼면 두 호스트의 시계 차가 그대로 섞인다.
+
+그래서 **probe VU**가 자기가 구독하고 자기가 예매를 걸어, **자기 `seat_id` 이벤트가 돌아오는 시각차**를 잰다. 시작과 끝이 같은 k6 프로세스의 같은 시계라 시계 차를 타지 않는다. probe는 매 iteration마다 새로 구독하므로 `CopyOnWriteArrayList`의 **뒤쪽**에 등록된다 — 팬아웃 전 구간을 통과한 뒤 받는 **최악값**이다.
+
+측정값에는 booking API + Kafka + HOLD 트랜잭션 + SSE 팬아웃이 전부 들어 있다. 팬아웃 몫만 떼려면 같은 iteration의 `sse_probe_booking_duration`을 뺀다(그래도 Kafka 구간은 남는다 — 클라이언트에서 더 잘게 가를 방법이 없다).
+
+**(d) HOLD 비율의 영향은 "만료 여부"가 아니라 "HOLD 행의 존재"다.**
+
+집계는 만료 HOLD(`holdExpiredAt <= now`)를 AVAILABLE로 선반영한다(`SeatRepository.java:21-22`). 좌석이 전부 AVAILABLE이면 `hold_expired_at`이 NULL이라 datetime 비교가 사실상 생략되어 실제보다 낙관적인 값이 나온다. 그래서 시딩에 SOLD/HOLD를 섞는다.
+
+단, **만료된 HOLD를 넣으면 안 된다** — 60초 주기 `SeatStatusScheduler`가 측정 도중 해제해 **상태 분포가 회차 중간에 변한다**(tick당 최대 2,000건). 미만료 HOLD(만료시각 +6시간)로 넣어 분포를 고정한다. 만료 HOLD가 필요한 것은 §14.6의 큐 포화 회차뿐이고, 그건 `@mode='expire'`로 따로 만든다.
+
+**(e) `now`는 DB 시계가 아니라 앱 JVM 시계다.**
+
+`SeatGetStatusCountsUseCase.java:18`이 `LocalDateTime.now()`를 만들어 파라미터로 넘긴다(쿼리 안에 `CURRENT_TIMESTAMP`가 없다). 배포본 앱은 UTC, MySQL 컨테이너는 `system_time_zone=KST`라 세션 `NOW()`가 9시간 앞선다(§11의 함정). 세션 `NOW()`로 `hold_expired_at`을 박으면 상태 분포가 통째로 어긋나므로 시드가 `UTC_TIMESTAMP()`를 쓴다.
+
+**(f) 선결 문제 — SSE가 외부에서 도달 불가였다(nginx 버퍼링).**
+
+게이트웨이 라우트는 이미 있었다 — `gateway-service/.../application.yml:50-56`의 `id: seat-sse-service`가 일반 seat 라우트보다 **앞에** 선언돼 있고 `response-timeout: -1`이다. 막힌 곳은 그 앞단인 **nginx**였다.
+
+기본값 `proxy_buffering on`이 업스트림 응답을 버퍼에 모았다가 내보내는데, SSE는 커넥션을 열어둔 채 이벤트를 조금씩 흘리므로 버퍼가 차거나 커넥션이 끊길 때까지 아무것도 도달하지 않는다. 인터넷에 열린 포트는 nginx 443 하나뿐이므로 이 기능은 **외부에서 쓸 수 없는 상태**였다. #402의 검표 라우트 누락과 같은 계열이고, 이번에도 측정을 붙이는 과정에서 드러났다.
+
+**실증:** 게이트웨이 8080 직결 → `event:connected` 즉시 / 같은 시각 https → 8초 동안 헤더조차 없음. 수정 후 https → 헤더 즉시 + `event:connected` 수신.
+
+수정은 정규식 location 하나다(`deploy/nginx/api.ticketrush.store.conf`). `proxy_read_timeout`을 3600s로 올린 것은 기본값 60s가 SseEmitter 타임아웃(30분)보다 짧아 서버가 정상으로 여기는 커넥션을 nginx가 1분마다 끊기 때문이다.
+
+> **nginx 설정은 이번에 저장소로 편입했다.** 그전까지 EC2 호스트에만 있어서 저장소를 아무리 읽어도 이 결함을 알 수 없었다. **호스트를 손으로 고치지 말고 `deploy/nginx/`를 고쳐 배포한다** — 두 곳이 갈라지면 다음 사람이 같은 함정을 다시 밟는다.
+> ```bash
+> tr -d '\r' < deploy/nginx/api.ticketrush.store.conf | ssh <EC2> \
+>   'sudo tee /etc/nginx/sites-available/api.ticketrush.store > /dev/null \
+>    && sudo nginx -t && sudo systemctl reload nginx'
+> ```
+
+**(g) 두 엔드포인트 모두 인증이 필요 없다.** seat-service `SecurityConfig`가 `/api/v1/seat/**`를 `anyRequest().permitAll()`로 둔다. 토큰은 이벤트를 만드는 예매 축(`POST /api/v1/booking`)에만 필요하다.
+
+### 14.2 사전 게이트 — 하나라도 어긋나면 회차를 시작하지 않는다
+
+```bash
+ssh -i ~/ticket_rush_ssh.pem ubuntu@<EC2>
+```
+
+| # | 확인 | 명령 | 기대 |
+|---|---|---|---|
+| G0 | SSE가 인터넷에서 도달 | `timeout 6 curl -sN -H 'Accept: text/event-stream' https://api.ticketrush.store/api/v1/seat/<SSE공연>/seat-status/stream` | `event:connected` 즉시 수신. 무응답이면 §14.1-(f) — nginx 설정이 되돌아간 것이다 |
+| G1 | `performance_id` 인덱스 실존 | `docker exec -i ticketrush-mysql sh -c 'mysql -uroot -p"$MYSQL_ROOT_PASSWORD" ticket_rush -e "SHOW INDEX FROM seat"'` | `idx_seat_performance_id` 존재 |
+| G2 | executor 메트릭 노출 | `docker exec seat-service wget -qO- localhost:8090/actuator/prometheus \| grep executor_` | `executor_queued_tasks{name="seatStatusSseExecutor"}` 존재 |
+| G3 | 배포본 = 저장소 | `docker inspect --format '{{.Config.Image}}' $(docker ps -q)` | 전 서비스 `IMAGE_TAG` 동일 |
+| G4 | seat-service 기준선 | `docker stats --no-stream seat-service` | 400 MiB 내외. 550 MiB면 **재시작 후 시작**(§14.8) |
+
+> **G1이 실패하면 측정 자체가 무의미하다.** 인덱스가 없으면 집계가 풀스캔이 되어 "앱의 특성"이 아니라 "인덱스 부재"를 재게 된다. `@Index`는 `ddl-auto=update`인 로컬/신규 초기화 DB에서만 생성되고 prod(`validate`)는 부재를 검출하지 못한다(`Seat.java:35-51`). 없으면 먼저 수동 DDL을 넣는다.
+
+> **G2가 실패해도 배포하지 않는다.** `SeatStatusSseConfig.java:12`의 `@Bean` 선언 반환 타입이 `Executor`라 Boot의 `TaskExecutorMetricsAutoConfiguration`이 `TaskExecutor` 타입으로 후보를 모으는 단계에서 이 빈을 놓칠 수 있다. 그 경우 큐 적체·거부는 **로그 타임스탬프**로 기록하고(§14.6), 반환 타입을 `ThreadPoolTaskExecutor`로 좁히는 1줄 변경은 **후속 이슈로 분리**한다. 리포트 한계에 "큐 깊이 시계열 부재"를 명시한다.
+
+### 14.3 시딩
+
+`seed_seat_counts.sql`은 **기존 `LOADTEST` 코호트(§13의 20,800석)를 건드리지 않는다.** 타이틀 접두사가 `LTC-`라 `cleanup_load.sql`의 `LOADTEST-%` 패턴에 걸리지 않는다.
+
+**로컬 저장소에서** stdin 으로 흘려보낸다. 파라미터를 `--init-command` 로 넘기지 않는 것은 `seed_entry.sql` 이 기록한 함정 때문이다 — 셸을 한 겹 더 지나면서 값이 조용히 잘린다. SET 문을 파일 앞에 붙이면 값이 데이터로만 지나간다. `tr -d '\r'` 은 Windows 체크아웃의 CRLF 제거용이다.
+
+```bash
+run_seed() {
+  { printf "SET %s;\n" "$1"; cat load-test/seed/seed_seat_counts.sql; } | tr -d '\r' \
+  | ssh -i ~/ticket_rush_ssh.pem ubuntu@<EC2> \
+      'docker exec -i ticketrush-mysql sh -c '"'"'exec mysql -uroot -p"$MYSQL_ROOT_PASSWORD" ticket_rush'"'"''
+}
+
+# 스케일 A — 600석
+run_seed "@i_confirm_loadtest_db=1, @perf_tag='A', @seats=600, @sold_pct=20, @hold_pct=20"
+# 스케일 B — 3,000석 (상태 비율은 A 와 같아야 두 곡선을 겹칠 수 있다)
+run_seed "@i_confirm_loadtest_db=1, @perf_tag='B', @seats=3000, @sold_pct=20, @hold_pct=20"
+# SSE 대상 — 예매 부하로 HOLD 전이를 유발하므로 전부 AVAILABLE
+run_seed "@i_confirm_loadtest_db=1, @perf_tag='SSE', @seats=12000, @sold_pct=0, @hold_pct=0"
+```
+
+- **재실행마다 `performance_id`가 바뀐다.** 이 시드는 NOT EXISTS idempotency 대신 삭제+재삽입을 한다 — 규모를 바꿔 재실행하는 것이 정상 사용법인데 NOT EXISTS로는 이전 규모의 잔여 좌석이 남아 분포가 파라미터와 달라지기 때문이다. 검증 쿼리 출력을 매번 다시 읽는다.
+- 검증 쿼리의 **두 번째 SELECT(`expect_*`)가 `/seat-counts` 응답과 일치해야 한다.** 시딩 직후 `curl`로 한 번 대조한다. 이 출력이 리포트 "시딩 규모" 절의 원자료다(완료조건 1).
+- SSE 코호트의 `@seats`는 `SSE_MUTATE_RATE × 회차 길이(초)` 이상이어야 한다. 예매는 좌석 1개를 비가역 소모하고, 부족하면 회차 후반이 통째로 이벤트 0이 된다. 시나리오 `setup()`이 시작 전에 이걸 검증하고 부족하면 죽는다.
+
+### 14.4 회차 1·2 — seat-counts 좌석 수 대비 곡선
+
+```bash
+# 로컬에서. -e 위치 규칙과 --no-deps 는 §7.2 와 동일하다.
+docker compose --profile loadtest run --rm --no-deps \
+  -e K6_PROMETHEUS_RW_SERVER_URL=http://host.docker.internal:9090/api/v1/write \
+  k6 run /scripts/scenarios/seat-counts.js \
+  -e BASE_URL=https://api.ticketrush.store \
+  -e PERF_ID=<스케일A 의 performance_id> \
+  -e COUNTS_EXPECTED_SEATS=600 \
+  -e COUNTS_STAGE_RATES=40,80,160,240,320,480 \
+  -e COUNTS_STAGE_DURATION=5m \
+  -e COUNTS_PRE_ALLOCATED_VUS=100 -e COUNTS_MAX_VUS=800
+```
+
+회차 2는 `PERF_ID`와 `COUNTS_EXPECTED_SEATS`만 바꾼다. **계단·유지시간은 같아야 두 곡선을 겹칠 수 있다.**
+
+- 단계당 **5분**은 완료조건이자 관측 하한이다(Prometheus 스크랩 15초 → 단계당 20표본).
+- **포화 판정**: 도착률을 올려도 실제 RPS가 늘지 않음 + `dropped_iterations` 발생 + 호스트 CPU 수렴.
+- `seat_counts_scale_mismatch`가 0이 아니면 **그 회차는 폐기한다** — 엉뚱한 공연을 쟀거나 시딩이 덜 된 것이다.
+- `preAllocatedVUs`/`maxVUs`를 넉넉히 준다. 그래야 `dropped_iterations`를 **VU 부족이 아니라 포화 신호로** 읽을 수 있다(§13.5와 같은 선).
+
+**계단 근거 — 캘리브레이션 실측(2026-07-28).** 스케일 B(3,000석)에 320 → 640/s를 45초씩 넣어 무릎 위치를 먼저 찾았다.
+
+| 축 | 값 | 읽는 법 |
+|---|---|---|
+| 목표 도착률 | 640/s | |
+| 실제 처리량 | **246.8 rps 고원** | 도착률을 2.6배 올려도 여기서 멈춘다 |
+| 호스트 CPU | **99.96%** | 이것이 상한이다(#509와 같은 결론) |
+| tomcat busy | **50 / 50** | 상한 도달 |
+| **HikariCP pending** | **41** (풀 10) | 집계 쿼리가 커넥션을 물고 줄을 세운다 |
+| p95 | 3.52s / 실패 5.30% / dropped 21,863 | 무너진 구간 |
+
+무릎이 **약 247 rps**이므로 그 아래위를 감싸는 `40,80,160,240,320,480`을 쓴다. 240은 무릎 바로 위, 480은 확실히 무너지는 지점이다. 회차 길이는 30분 40초다.
+
+> `seat-counts` 응답은 203 B로 `seat-layouts`(2,080석 기준 약 230 KB)보다 3자리 작다. 회선·직렬화가 빠지고 집계 스캔만 남으므로 §13의 좌석맵 계단(10~80)보다 한 자리 위를 본다.
+
+### 14.5 비교 회차 — seat-layouts 대비 비용
+
+```bash
+docker compose --profile loadtest run --rm --no-deps ... k6 run /scripts/scenarios/seat-counts.js \
+  -e PERF_ID=<스케일A> -e COUNTS_EXPECTED_SEATS=600 -e COUNTS_COMPARE=1 \
+  -e COUNTS_STAGE_RATES=20 -e COUNTS_STAGE_DURATION=3m
+```
+
+같은 공연·같은 부하·같은 iteration에서 두 엔드포인트를 잰다. DB 접근 행수는 같고(둘 다 `performance_id`로 전 행 스캔) 차이는 응답 크기와 직렬화뿐이라, 차분이 곧 그 비용이다.
+
+> ⚠️ **스케일 B(3,000석)에서는 하지 않는다.** 3,000석 `seat-layouts` 응답이 CPU·메모리를 삼켜 비교 자체를 오염시킨다 — #509가 2,080석 좌석맵으로 seat-service를 cgroup OOM까지 몰고 간 경로가 정확히 이것이다.
+
+### 14.6 회차 3·4 — SSE 팬아웃과 큐 포화
+
+**이 시나리오는 `k6-sse` 이미지에서만 돈다.** k6 기본 바이너리에는 SSE 클라이언트가 없다(근거는 `load-test/Dockerfile.k6-sse` 주석).
+
+```bash
+docker compose --profile loadtest build k6-sse      # 최초 1회
+
+# 회차 3 — 팬아웃 곡선
+docker compose --profile loadtest run --rm --no-deps \
+  -e K6_PROMETHEUS_RW_SERVER_URL=http://host.docker.internal:9090/api/v1/write \
+  k6-sse run /scripts/scenarios/seat-sse-fanout.js \
+  -e BASE_URL=https://api.ticketrush.store \
+  -e SSE_PERF_ID=<SSE 코호트의 performance_id> \
+  -e LOAD_USER_PASSWORD='<평문>' \
+  -e SSE_SUBSCRIBER_STEPS=100,300,600 \
+  -e SSE_STEP_DURATION=10m \
+  -e SSE_MUTATE_RATE=5
+```
+
+- 구독자 단계당 **10분**은 완료조건이다 — 장기 커넥션의 누수·타임아웃 전 구간을 본다. 기본값 기준 총 31분 30초이고, 서버 emitter 타임아웃이 30분이라 **가장 먼저 붙은 커넥션은 회차 끝에서 타임아웃에 닿는다.** `sse_connection_closed`가 그 시각에 오르는 것은 정상이다(그 전에 오르면 다른 원인이다).
+- **VU 1개 = 커넥션 1개**다(`sse.open`이 커넥션이 닫힐 때까지 블로킹한다). VU 수가 곧 동시 구독자 수다.
+- **수신 누락률** = `1 − (sse_events_received / (구독자 수 × 발생 이벤트 수))`. 발생 이벤트 수는 `sse_mutate_created` 성공 건수이며, **권위는 k6가 아니라 SQL**이다(§10.2 oversell 검증과 같은 선):
+  ```sql
+  SELECT COUNT(*) FROM seat WHERE performance_id = <SSE 공연> AND seat_status = 'HOLD';
+  ```
+- 병행 관측: seat-service RSS(여유가 10%뿐이다 — **OOM은 실패가 아니라 결과로 기록한다**), gateway 메모리(512 MiB), `tomcat_threads_current`.
+
+**회차 4 — 큐 포화·거부.** 큐 1000을 채우는 가장 확실한 경로는 예매 부하가 아니라 **스케줄러 fallback 버스트**다. tick당 최대 2,000 이벤트(`chunk-size 25 × max-chunks 80`)가 한 번에 executor로 투입되고, 이는 큐 용량의 2배다.
+
+구독자 600명이 붙어 있는 상태에서 EC2에 아래를 넣고 다음 60초 tick을 기다린다. `@mode='expire'`는 **공연을 지우지 않으므로 `performance_id`가 보존된다** — 붙어 있는 구독자가 그대로 유효하다.
+
+```bash
+run_seed "@i_confirm_loadtest_db=1, @perf_tag='SSE', @mode='expire', @expire_count=2000"
+```
+
+관측할 것:
+- `executor_queued_tasks`가 1000에 붙는 시각
+- `executor_pool_size_threads`가 4 → 16으로 늘어나는 시각 (**큐가 다 찬 뒤에만 늘어난다**)
+- 거부 로그: `docker logs --since 5m seat-service | grep -c "전송 작업이 거부"` (G2 실패 시 이것이 유일한 증적)
+- 같은 시각에 §14.6의 수신 누락률이 튀는가 — **두 축이 일치하면 확정**
+
+### 14.7 PromQL
+
+```promql
+# ── 집계 쿼리 (서버 관점) ─────────────────────────────────────────────
+# #495 의 slo 버킷이 있어 이 회차는 서버 p95/p99 산출이 가능하다(#402 와 다르다).
+histogram_quantile(0.95, sum(rate(http_server_requests_seconds_bucket{
+  instance="seat-service:8090", uri="/api/v1/seat/{performanceId}/seat-counts"}[1m])) by (le))
+
+# seat-layouts 대비 비용 — uri 만 다른 같은 축이라 나란히 읽으면 그대로 비교가 된다
+sum(rate(http_server_requests_seconds_sum{instance="seat-service:8090"}[1m])) by (uri)
+  / sum(rate(http_server_requests_seconds_count{instance="seat-service:8090"}[1m])) by (uri)
+
+# ── SSE 전송 스레드풀 (G2 통과 시에만) ────────────────────────────────
+executor_queued_tasks{name="seatStatusSseExecutor"}        # 1000 이 상한
+executor_active_threads{name="seatStatusSseExecutor"}
+executor_pool_size_threads{name="seatStatusSseExecutor"}   # 4 -> 16 은 큐 포화 뒤에만
+
+# ── 커넥션 유지 축 ────────────────────────────────────────────────────
+tomcat_threads_current_threads{instance="seat-service:8090"}   # SSE 는 async 라 요청당 스레드를 안 문다
+jvm_threads_live_threads{instance="seat-service:8090"}
+
+# ── k6 축 (퍼센타일 SSOT) ─────────────────────────────────────────────
+# k6 는 quantile 라벨을 만들지 않는다 — _p95/_p99 접미사 게이지다(§5).
+k6_sse_propagation_ms_p95
+k6_seat_counts_duration_p95
+rate(k6_sse_events_received_total[1m])
+rate(k6_sse_connection_closed_total[1m])
+
+# ── 압박 축 ───────────────────────────────────────────────────────────
+hikaricp_connections_pending{instance="seat-service:8090"}
+rate(node_network_transmit_bytes_total{job="node", device="ens5"}[1m])
+```
+
+라벨은 `job`이 아니라 **`instance`** 다(#489에서 확인 — `application` 라벨은 이 스택에 없다).
+
+### 14.8 주의 · 무효 판정
+
+- **회차 사이 seat-service를 재시작한다.** 부하가 끝나도 RSS가 돌아오지 않아(#509 §8: 종료 5분 뒤에도 88%) 다음 회차 기준선이 88%에서 시작한다. `IMAGE_TAG` export를 잊지 않는다.
+- **배포 직후 회차는 폐기한다.** JIT 컴파일·클래스 로딩이 섞인다 — #402가 같은 부하에서 CPU 97.9% vs 73.9%, p95 234ms vs 33ms를 봤다. 워밍업 후 재측정한다.
+- **호스트 CPU가 먼저 포화한다.** #509가 CPU 99% 도달이 seat-service 스레드 상한보다 2분 30초 앞선다는 것을 확정했다. 이 회차의 포화점은 "seat-counts의 한계"가 아니라 **"이 구성에서 도달한 지점"** 이다.
+- **SSE는 압축되지 않는다.** `server.compression`의 기본 mime-types에 `text/event-stream`이 없다(seat-service `application.yml:15-16` 주석). #505의 압축 효과가 이 경로에는 적용되지 않는다.
+- **무효 판정** — 하나라도 걸리면 그 회차를 버린다:
+  - `seat_counts_scale_mismatch > 0` (엉뚱한 공연 / 시딩 미완)
+  - `sse_mutate_exhausted > 0` (좌석 고갈 — 후반 구간에 이벤트가 없다)
+  - `sse_mutate_conflict > 0` (유일 배정이 깨졌다 — 다른 코호트와 겹쳤다)
+  - `dropped_iterations > 0`인데 원인이 포화가 아니라 `preAllocatedVUs` 부족인 경우
+  - 회차 전후로 시딩 상태 분포가 달라진 경우(스케줄러가 HOLD를 해제)
+  - 서비스별 `IMAGE_TAG`가 다른 경우
+- **단일 인스턴스 기준이다.** emitter가 인스턴스 로컬(`ConcurrentHashMap`)이라 다중 인스턴스로 확장하면 크로스 인스턴스 브로드캐스트가 없다. 이 회차는 그 문제를 다루지 않는다.
