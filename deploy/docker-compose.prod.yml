@@ -110,8 +110,17 @@ services:
     # 컨테이너 안에서 돌지만 재는 대상은 '호스트'다. /proc·/sys를 마운트하고
     # --path.rootfs로 가리켜야 컨테이너 네임스페이스가 아닌 EC2 실제 자원을 읽는다.
     # 이 마운트를 빠뜨리면 지표가 나오긴 하는데 전부 컨테이너 것이라 병목 판단에 못 쓴다.
-    # 적용 확인: node_memory_MemTotal_bytes ≈ 7.6 GiB(ADR 0007 인스턴스 실측치)면 정상.
+    #
+    # 적용 확인은 두 축을 함께 본다 — 메모리만 보면 네트워크 결함을 놓친다(#508).
+    #   node_memory_MemTotal_bytes ≈ 7.6 GiB (ADR 0007 인스턴스 실측치)
+    #   node_network_* 의 device 에 ens5 가 있고 eth0 가 없다
     pid: host
+    # netns까지 호스트여야 하는 이유: /proc/net 은 일반 파일이 아니라 network namespace 에 묶인
+    # 경로다. 커널이 /proc/net/dev 내용을 '읽는 프로세스의 netns' 기준으로 만들기 때문에, 위
+    # /proc 마운트와 --path.procfs 로는 넘어오지 않는다. 브리지 컨테이너로 두면 호스트 ens5 가
+    # 아니라 자기 veth(eth0)만 나온다 — #348 이 지목한 회선 축을 재는 수단이 통째로 막혔었다(#508).
+    # CPU·메모리는 같은 마운트로 정상이라 이 결함은 조용했다. pid: host 는 PID namespace 라 별개다.
+    network_mode: host
     volumes:
       - /proc:/host/proc:ro
       - /sys:/host/sys:ro
@@ -120,7 +129,57 @@ services:
       - "--path.procfs=/host/proc"
       - "--path.sysfs=/host/sys"
       - "--path.rootfs=/rootfs"
-    # 관측 포트는 인터넷에 열지 않는다(ADR 0007). Prometheus가 같은 네트워크에서 서비스명으로 스크랩한다.
+      # 관측 포트는 인터넷에 열지 않는다(ADR 0007). host netns 라 기본값 0.0.0.0 이면 공인 IP가
+      # 붙은 ens5 에도 열려, 방어선이 수동 관리하는 보안그룹 규칙 하나가 된다 — ADR 0007 이 9090 에
+      # 대해 기각한 바로 그 구조다. docker0 게이트웨이에만 묶으면 소켓이 ens5 에 아예 없다.
+      # 127.0.0.1 은 쓸 수 없다. Prometheus 는 브리지 컨테이너라 호스트 루프백에 닿지 못한다.
+      - "--web.listen-address=172.17.0.1:9100"
+      # host netns 라 veth(컨테이너 수만큼)·compose 브리지가 전부 딸려 온다. 회선 판정에 쓰는 건
+      # ens5 하나이고, 나머지는 컨테이너가 늘 때마다 불어나는 시리즈다.
+      #
+      # 두 벌인 이유: device 라벨을 붙이는 collector 가 둘이고 필터 플래그가 서로 다르다.
+      # netdev  = 트래픽 카운터(node_network_*_bytes_total) — 회선 병목을 재는 축
+      # netclass = 인터페이스 메타데이터(node_network_up·mtu·speed) — 한쪽만 걸면 veth 가 남는다
+      - "--collector.netdev.device-exclude=^(veth.*|br-.*|docker0)$"
+      - "--collector.netclass.ignored-devices=^(veth.*|br-.*|docker0)$"
+    # network_mode: host 는 networks: 와 양립하지 않아 서비스명 DNS 가 없다. 스크랩은 prometheus 의
+    # extra_hosts(host.docker.internal)로 간다 — monitoring/prometheus.aws.yml 의 node job.
+
+  # 컨테이너별 메모리 시계열이 없어 seat-service 가 cgroup OOM 으로 죽는 것을 사전에 볼 수단이
+  # 없었다(#509). node-exporter 는 호스트 총량만 재므로 "어느 컨테이너가 한계에 가까운지"를
+  # 답하지 못한다. OOM 직전까지 대시보드에 아무 신호가 없었던 이유다.
+  cadvisor:
+    image: gcr.io/cadvisor/cadvisor:v0.49.1
+    container_name: cadvisor
+    # 이 128m 은 공짜가 아니다. mem_limit 합계가 7,232 → 7,360 MiB 가 되고 호스트 실측
+    # 7.6 GiB(약 7,782 MiB) 대비 여유가 550 → 422 MiB 로 준다(ADR 0006 의 예산 관점).
+    # #509 의 처방으로 seat-service 의 mem_limit 을 올리지 않은 이유이기도 하다 — 올릴 여유를
+    # 관측자가 먼저 가져간다. 관측 없이 상한만 올리면 다음 OOM 도 사후에 dmesg 로 알게 된다.
+    mem_limit: 128m
+    restart: unless-stopped
+    # privileged: true 를 쓰지 않는다. cAdvisor 가 그 권한을 요구하는 것은 커널 OOM 이벤트를
+    # 읽기 위해서인데, /dev/kmsg 하나만 주면 된다. 관측용 컨테이너에 호스트 전권을 주는 것은
+    # ADR 0007 이 관측 스택에 대해 세운 최소 노출 원칙과 어긋난다.
+    devices:
+      - /dev/kmsg
+    volumes:
+      - /:/rootfs:ro
+      - /var/run:/var/run:ro
+      - /sys:/sys:ro
+      - /var/lib/docker/:/var/lib/docker:ro
+    command:
+      # 2 vCPU 를 앱 8개와 나눠 쓰므로 관측자가 측정 대상을 흔들지 않게 줄인다.
+      # docker_only: 컨테이너 밖 cgroup 계층을 훑지 않는다.
+      # enable_metrics: 화이트리스트라 disable 목록을 나열하다 빠뜨리는 실수가 없다.
+      #   memory    — 이 이슈가 필요로 하는 축(container_memory_working_set_bytes)
+      #   cpu       — 메모리와 CPU 가 거의 같은 지점에서 함께 한계에 닿는다(#509)
+      #   oom_event — container_oom_events_total. OOM 을 사후에 dmesg 로 찾지 않아도 된다
+      - "--docker_only=true"
+      - "--housekeeping_interval=15s"
+      - "--enable_metrics=cpu,memory,oom_event"
+    # 관측 포트는 인터넷에 열지 않는다(ADR 0007). Prometheus 가 같은 네트워크에서 서비스명으로
+    # 스크랩한다. cAdvisor 의 기본 포트는 8080 이지만 publish 하지 않으므로 게이트웨이의
+    # 호스트 8080 과 충돌하지 않는다.
     networks:
       - ticketrush-network
 
@@ -292,8 +351,26 @@ services:
     restart: unless-stopped
     env_file:
       - .env
+    # JVM 옵션은 .env 가 아니라 여기 둔다(#509). environment 가 env_file 보다 우선하므로 EC2 의
+    # .env 에 같은 키가 있어도 이 값이 이긴다. .env 는 저장소에 없어 리뷰도 diff 도 남지 않고,
+    # 파일을 다시 만들면 조용히 사라진다 — 힙 상한이 그렇게 관리될 값이 아니다.
+    #
+    # 비힙 상한을 명시하는 이유: 이 셋은 기본값이 사실상 열려 있어 -Xmx 로 힙을 묶어도 cgroup
+    # 한계를 넘길 수 있다(#509 는 RSS 626 MiB 로 640 MiB 상한에 걸려 커널에 죽었다).
+    #   MaxDirectMemorySize 기본값 = -Xmx = 384 MiB. 힙과 같은 크기가 힙 밖에 또 열려 있었다.
+    #   MaxMetaspaceSize 기본 무제한. 클래스 로딩만큼 계속 자란다.
+    #   ReservedCodeCacheSize 기본 240 MiB 예약.
+    # 합계 384(힙) + 128 + 64 + 64 = 640 이라 상한과 같아 보이지만, 이 값들은 '실사용'이 아니라
+    # '상한'이다. 실사용이 동시에 최대가 되는 일은 없고, 여기 없는 스레드 스택은 위 tomcat
+    # max-threads(50)로 따로 묶었다.
     environment:
       SERVER_PORT: 8086
+      JAVA_TOOL_OPTIONS: >-
+        -Xms128m
+        -Xmx384m
+        -XX:MaxMetaspaceSize=128m
+        -XX:ReservedCodeCacheSize=64m
+        -XX:MaxDirectMemorySize=64m
     depends_on:
       mysql:
         condition: service_healthy
@@ -385,6 +462,10 @@ services:
     #   ssh -L 9090:localhost:9090 <user>@<EIP>
     ports:
       - "127.0.0.1:9090:9090"
+    # node-exporter 는 host netns 라(#508) compose 네트워크의 DNS 에 이름이 없다. docker0
+    # 게이트웨이로 나가 거기 리스닝 중인 exporter 를 긁는다. 주소는 도커가 컨테이너별로 채워 넣는다.
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
     volumes:
       # 배포본은 앱이 같은 네트워크의 컨테이너이므로 서비스명 기반 scrape 설정을 쓴다.
       - ./monitoring/prometheus.aws.yml:/etc/prometheus/prometheus.yml:ro

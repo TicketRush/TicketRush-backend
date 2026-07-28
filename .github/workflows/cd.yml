@@ -265,6 +265,7 @@ jobs:
             redis
             redis-exporter
             node-exporter
+            cadvisor
             kafka
             gateway-service
             auth-service
@@ -553,8 +554,9 @@ jobs:
 
           # 컨테이너가 떴다고 지표가 수집되는 것은 아니다. 타깃 주소가 틀리면 up=0인 채로
           # 배포가 초록불로 끝난다. 실제로 스크랩되는지 확인한다(이슈 #380 완료 조건).
-          # 앱 8 + redis + node + prometheus. node job(#465) 추가로 10→11.
-          EXPECTED_TARGETS=11
+          # 앱 8 + redis + node + cadvisor + prometheus. node job(#465) 추가로 10→11,
+          # cadvisor job(#509) 추가로 11→12.
+          EXPECTED_TARGETS=12
           PROMETHEUS_READY=false
 
           for ATTEMPT in $(seq 1 12); do

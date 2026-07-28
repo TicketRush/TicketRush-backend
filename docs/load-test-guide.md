@@ -1366,6 +1366,18 @@ sum by (instance) (rate(jvm_gc_pause_seconds_sum{job="ticketrush-services"}[5m])
 100 * avg(rate(node_cpu_seconds_total{job="node", mode="iowait"}[1m]))
 node_memory_MemTotal_bytes{job="node"} - node_memory_MemAvailable_bytes{job="node"}
 sum(rate(node_disk_read_bytes_total{job="node"}[1m]))
+# 회선 축. device 를 ens5(호스트 NIC)로 고정한다 — #508 이전에는 여기가 컨테이너 veth 라
+# 실제의 1/6500 인 값이 나왔고, 대시보드는 "회선 한가함"으로 읽혔다.
+rate(node_network_transmit_bytes_total{job="node", device="ens5"}[1m])
+rate(node_network_receive_bytes_total{job="node", device="ens5"}[1m])
+
+# ── 컨테이너별 메모리 (cAdvisor, #509) ────────────────────────────────
+# node job 은 호스트 총량이라 "어느 컨테이너가 자기 상한에 가까운지"를 답하지 못한다.
+# seat-service 가 cgroup OOM 으로 죽을 때까지 신호가 없었던 것이 그래서다.
+# 상한 대비 사용률. 1.0 에 가까워지면 커널이 죽인다. 부하 중 상시 띄워 둘 값이다.
+container_memory_working_set_bytes{name!=""} / container_spec_memory_limit_bytes{name!=""}
+# OOM 은 사후에 dmesg 로 찾지 않는다. docker inspect 의 OOMKilled 는 재시작 뒤라 false 다(#509).
+increase(container_oom_events_total{name!=""}[5m])
 
 # ── 게이트웨이 축 (연결 거부는 서버 축에 안 잡힌다 — #496 §2.4) ─────────
 sum(rate(http_server_requests_seconds_count{job="gateway", status=~"5.."}[1m]))
