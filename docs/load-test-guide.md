@@ -1080,10 +1080,16 @@ Nginx는 부하 경로에 있으면서(443 → `127.0.0.1:8080`) 자체 지표�
 |---|---|
 | 좌석맵 응답(공연당 2,080석) | **221KB** (좌석당 107.6 bytes) |
 | 조회 여정 1회 중 좌석맵 비중 | **99.05%** (목록 1,775B + 상세 367B + 좌석맵 223,720B) |
-| gzip | **미적용** — `Accept-Encoding: gzip` 을 보내도 크기 동일, `Content-Encoding` 없음 |
+| gzip | 측정 당시 **미적용** — `Accept-Encoding: gzip` 을 보내도 크기 동일, `Content-Encoding` 없음 |
 | gzip level 6 적용 시 | **9,709B (95.66% 절감)** |
 
-원인은 두 겹이다. Spring Boot 의 `server.compression.enabled` 기본값이 false 이고 어느 서비스 yml 에도 설정이 없으며, 호스트 Nginx 에도 gzip 지시어가 없다(`docs/production-domain-https.md` §7).
+원인은 두 겹이었다. Spring Boot 의 `server.compression.enabled` 기본값이 false 이고 어느 서비스 yml 에도 설정이 없으며, 호스트 Nginx 에도 gzip 지시어가 없다(`docs/production-domain-https.md` §7).
+
+> **✅ 해소됨 — `#505`.** seat-service 의 `application.yml` 에 `server.compression.enabled: true` 를 켰다(앱 origin 압축, 선택 근거는 `load-tests/k6/results/260727-348-openrun-e2e/report.md` §3.4). 로컬 실측으로 `Content-Encoding: gzip` 과 11.8배 축소를 확인했다(9,771B → 830B).
+>
+> **`min-response-size`(기본 2KB)가 걸러 줄 것이라는 예상은 틀렸다.** Tomcat 의 `CompressionConfig` 는 `contentLength != -1 && contentLength < min` 일 때만 제외하는데, MVC 컨트롤러 응답은 `Transfer-Encoding: chunked` 라 길이가 -1 이라서 크기 판정을 건너뛴다. 결과적으로 **seat-service 의 작은 JSON 응답도 함께 압축된다**(실측: `seat-counts` 199B → 185B). 길이를 알리는 actuator 응답(49B)은 예상대로 제외됐다. 압축 CPU 를 측정할 때 "좌석맵 하나만 압축된다"고 가정하지 말 것.
+>
+> **아래 캘리브레이션 값(조회 ≤ 10 iter/s)은 221KB 응답 기준이라 압축 적용 후에는 무의미하다** — 스모크로 새 무릎을 다시 잡아야 한다.
 
 **측정 관점에서 이것이 뜻하는 바:**
 
