@@ -110,8 +110,17 @@ services:
     # 컨테이너 안에서 돌지만 재는 대상은 '호스트'다. /proc·/sys를 마운트하고
     # --path.rootfs로 가리켜야 컨테이너 네임스페이스가 아닌 EC2 실제 자원을 읽는다.
     # 이 마운트를 빠뜨리면 지표가 나오긴 하는데 전부 컨테이너 것이라 병목 판단에 못 쓴다.
-    # 적용 확인: node_memory_MemTotal_bytes ≈ 7.6 GiB(ADR 0007 인스턴스 실측치)면 정상.
+    #
+    # 적용 확인은 두 축을 함께 본다 — 메모리만 보면 네트워크 결함을 놓친다(#508).
+    #   node_memory_MemTotal_bytes ≈ 7.6 GiB (ADR 0007 인스턴스 실측치)
+    #   node_network_* 의 device 에 ens5 가 있고 eth0 가 없다
     pid: host
+    # netns까지 호스트여야 하는 이유: /proc/net 은 일반 파일이 아니라 network namespace 에 묶인
+    # 경로다. 커널이 /proc/net/dev 내용을 '읽는 프로세스의 netns' 기준으로 만들기 때문에, 위
+    # /proc 마운트와 --path.procfs 로는 넘어오지 않는다. 브리지 컨테이너로 두면 호스트 ens5 가
+    # 아니라 자기 veth(eth0)만 나온다 — #348 이 지목한 회선 축을 재는 수단이 통째로 막혔었다(#508).
+    # CPU·메모리는 같은 마운트로 정상이라 이 결함은 조용했다. pid: host 는 PID namespace 라 별개다.
+    network_mode: host
     volumes:
       - /proc:/host/proc:ro
       - /sys:/host/sys:ro
@@ -120,9 +129,21 @@ services:
       - "--path.procfs=/host/proc"
       - "--path.sysfs=/host/sys"
       - "--path.rootfs=/rootfs"
-    # 관측 포트는 인터넷에 열지 않는다(ADR 0007). Prometheus가 같은 네트워크에서 서비스명으로 스크랩한다.
-    networks:
-      - ticketrush-network
+      # 관측 포트는 인터넷에 열지 않는다(ADR 0007). host netns 라 기본값 0.0.0.0 이면 공인 IP가
+      # 붙은 ens5 에도 열려, 방어선이 수동 관리하는 보안그룹 규칙 하나가 된다 — ADR 0007 이 9090 에
+      # 대해 기각한 바로 그 구조다. docker0 게이트웨이에만 묶으면 소켓이 ens5 에 아예 없다.
+      # 127.0.0.1 은 쓸 수 없다. Prometheus 는 브리지 컨테이너라 호스트 루프백에 닿지 못한다.
+      - "--web.listen-address=172.17.0.1:9100"
+      # host netns 라 veth(컨테이너 수만큼)·compose 브리지가 전부 딸려 온다. 회선 판정에 쓰는 건
+      # ens5 하나이고, 나머지는 컨테이너가 늘 때마다 불어나는 시리즈다.
+      #
+      # 두 벌인 이유: device 라벨을 붙이는 collector 가 둘이고 필터 플래그가 서로 다르다.
+      # netdev  = 트래픽 카운터(node_network_*_bytes_total) — 회선 병목을 재는 축
+      # netclass = 인터페이스 메타데이터(node_network_up·mtu·speed) — 한쪽만 걸면 veth 가 남는다
+      - "--collector.netdev.device-exclude=^(veth.*|br-.*|docker0)$"
+      - "--collector.netclass.ignored-devices=^(veth.*|br-.*|docker0)$"
+    # network_mode: host 는 networks: 와 양립하지 않아 서비스명 DNS 가 없다. 스크랩은 prometheus 의
+    # extra_hosts(host.docker.internal)로 간다 — monitoring/prometheus.aws.yml 의 node job.
 
   kafka-volume-init:
     image: apache/kafka:3.7.0
@@ -385,6 +406,10 @@ services:
     #   ssh -L 9090:localhost:9090 <user>@<EIP>
     ports:
       - "127.0.0.1:9090:9090"
+    # node-exporter 는 host netns 라(#508) compose 네트워크의 DNS 에 이름이 없다. docker0
+    # 게이트웨이로 나가 거기 리스닝 중인 exporter 를 긁는다. 주소는 도커가 컨테이너별로 채워 넣는다.
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
     volumes:
       # 배포본은 앱이 같은 네트워크의 컨테이너이므로 서비스명 기반 scrape 설정을 쓴다.
       - ./monitoring/prometheus.aws.yml:/etc/prometheus/prometheus.yml:ro

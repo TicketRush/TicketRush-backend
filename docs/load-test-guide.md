@@ -1366,6 +1366,10 @@ sum by (instance) (rate(jvm_gc_pause_seconds_sum{job="ticketrush-services"}[5m])
 100 * avg(rate(node_cpu_seconds_total{job="node", mode="iowait"}[1m]))
 node_memory_MemTotal_bytes{job="node"} - node_memory_MemAvailable_bytes{job="node"}
 sum(rate(node_disk_read_bytes_total{job="node"}[1m]))
+# 회선 축. device 를 ens5(호스트 NIC)로 고정한다 — #508 이전에는 여기가 컨테이너 veth 라
+# 실제의 1/6500 인 값이 나왔고, 대시보드는 "회선 한가함"으로 읽혔다.
+rate(node_network_transmit_bytes_total{job="node", device="ens5"}[1m])
+rate(node_network_receive_bytes_total{job="node", device="ens5"}[1m])
 
 # ── 게이트웨이 축 (연결 거부는 서버 축에 안 잡힌다 — #496 §2.4) ─────────
 sum(rate(http_server_requests_seconds_count{job="gateway", status=~"5.."}[1m]))
