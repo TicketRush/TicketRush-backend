@@ -45,6 +45,14 @@ QUERIES = [
     ("node-cpu", '100 * (1 - avg(rate(node_cpu_seconds_total{job="node", mode="idle"}[1m])))'),
     ("node-iowait", '100 * avg(rate(node_cpu_seconds_total{job="node", mode="iowait"}[1m]))'),
     ("node-mem-used-bytes", 'node_memory_MemTotal_bytes{job="node"} - node_memory_MemAvailable_bytes{job="node"}'),
+    # 회선 축. device 를 ens5 로 고정한다 — #508 이전에는 이 지표가 컨테이너 veth 를 재서
+    # 실제의 1/6500 이 나왔다. 그래서 #348 회차는 회선 포화를 k6 수치로 역추정해야 했다.
+    ("node-net-tx", 'rate(node_network_transmit_bytes_total{job="node", device="ens5"}[1m])'),
+    ("node-net-rx", 'rate(node_network_receive_bytes_total{job="node", device="ens5"}[1m])'),
+    # 컨테이너별 메모리는 여기 없다 — 수단이 아직 없다(#515). #509 에서 cAdvisor 로 넣으려 했으나
+    # Docker 29 + cgroup v2 + systemd 조합에서 컨테이너를 열거하지 못해 되돌렸다.
+    # 그때까지 컨테이너 메모리는 부하 중 `docker stats`, OOM 판정은 `dmesg | grep CONSTRAINT_MEMCG`
+    # 로 본다(런북 §13.6). 회차 리포트에는 그 한계를 명시할 것.
     # 유입 축 (k6)
     ("k6-rps", 'sum(rate(k6_http_reqs_total[1m]))'),
     ("k6-rps-by-name", 'sum by (name) (rate(k6_http_reqs_total[1m]))'),
@@ -84,6 +92,15 @@ QUERIES = [
     ("kafka-consumer-lag", 'max by (instance, topic) (kafka_consumer_fetch_manager_records_lag{job="ticketrush-services"})'),
     ("gc-pause-rate", 'sum by (instance) (rate(jvm_gc_pause_seconds_sum{job="ticketrush-services"}[5m]))'),
     ("jvm-heap-used", 'sum by (instance) (jvm_memory_used_bytes{job="ticketrush-services", area="heap"})'),
+    # #509 가설 검증용. OOM 시점 RSS 626 MiB 중 힙으로 설명되지 않는 몫이 242 MiB 였고,
+    # 그 유력한 출처로 스레드 스택을 지목해 tomcat max-threads 를 200 → 50 으로 낮췄다.
+    # 아래 셋이 그 가설의 증거다 — 스레드 수가 줄었는데도 RSS 가 안 내려가면 가설이 틀린 것이고,
+    # 그때는 NMT 로 비힙 내역을 직접 떠야 한다.
+    #   ⚠ nonheap 은 metaspace·코드캐시만 잡는다. 스레드 스택과 다이렉트 버퍼는 여기 없다 —
+    #     그 몫은 container-mem-working-set 에서 힙·nonheap 을 뺀 잔차로만 추정된다.
+    ("jvm-nonheap-used", 'sum by (instance) (jvm_memory_used_bytes{job="ticketrush-services", area="nonheap"})'),
+    ("jvm-threads-live", 'jvm_threads_live_threads{job="ticketrush-services"}'),
+    ("tomcat-threads-current", 'tomcat_threads_current_threads{job="ticketrush-services"}'),
     # 좌석 도메인
     ("seat-hold-total", 'sum by (result) (ticketrush_seat_hold_total)'),
     ("seat-lock-contention", 'ticketrush_seat_lock_contention_total'),
