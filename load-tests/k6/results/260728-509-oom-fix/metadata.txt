@@ -1,0 +1,52 @@
+SERIES_ID=260728-509-oom-fix
+ISSUE=#509 (주 검증 — seat-service cgroup OOM) / #508 (함께 검증 — 회선 지표)
+DATE=2026-07-28 (KST)
+TARGET_HOST=EC2 54.116.243.250 (탄력 IP) — https://api.ticketrush.store
+TOPOLOGY=k6 local (docker compose, ADR 0004) --SSH tunnel(9090)--> EC2 deploy stack (Prometheus/Grafana EC2 로컬, ADR 0007)
+IMAGE_TAG=1f2ed5d27ec7dd9cb92d72aba6b2e9b92a6ce110 (전 서비스 동일 확인)
+# 이 태그는 PR #517(재배포)의 산출물이다. 1차 배포(PR #514)는 MaxMetaspaceSize=128m 으로
+# CD 게이트에서 실패했고, 그 사이 EC2 compose 를 손으로 고친 구간이 있었다. 이 회차는
+# 저장소와 배포본이 다시 일치한 뒤의 측정이다 — EC2 의 compose 에 MaxMetaspaceSize·cadvisor
+# 잔여 0건으로 확인했다.
+RUNBOOK=docs/load-test-guide.md §13
+SCENARIO=load-test/scenarios/openrun-e2e.js
+RESET=재시딩·리셋 없음 — 회차 직전 20,800 / 20,800 전부 AVAILABLE 확인, distinct_steps=1 (step=10)
+PROM_SCRAPE_INTERVAL=15s
+
+# ── 인스턴스 ───────────────────────────────────────────────────────────────
+INSTANCE_TYPE=m7i-flex.large
+VCPU=2 / MEM_TOTAL=7,778 MiB (free -m 실측)
+DOCKER=29.1.3 / cgroup v2 / driver=systemd
+# m7i-flex 는 베이스라인 40% CPU + 버스트. 이 회차(약 5분)는 허용량 안이지만, CPU 가 설명 없이
+# 40% 부근에서 천장을 치면 앱이 아니라 flex 스로틀을 의심할 것. 잔량 지표가 없어 사후 확인이 어렵다.
+
+# ── 측정 대상 코호트 (#348·#505 와 동일) ──────────────────────────────────
+LOADTEST_PERF_IDS=4..13 (LOADTEST-000001..000010), 공연당 2,080석
+LOADTEST_SEATS_TOTAL=20800
+SEAT_ID_STEP=10 (전 공연 distinct_steps=1 확인)
+BROWSE_PERF_ID=4 (조회 집중 = 핫 로우)
+PURCHASE_PERF_IDS=4..13
+LOAD_USER=loadtest@ticketrush.local — 평문은 저장소·증적에 남기지 않음
+
+# ── 부하 프로파일 ─────────────────────────────────────────────────────────
+E2E_STAGE_RATES=20,40,60,80
+E2E_STAGE_DURATION=1m
+# #509 의 재현 절차를 그대로 쓴다. 1차 발견 때 80 iter/s 구간(마지막 1분)에서 OOM 이 났다.
+# #505 회차가 20/40/60 에서 멈춘 것이 이 OOM 때문이었다 — 그 위를 처음 재는 회차다.
+
+# ── 이 회차의 변경 사항 (직전 회차 260728-505-gzip-remeasure 대비) ─────────
+SEAT_TOMCAT_MAX_THREADS=50 (기본 200 → 50, #509)
+SEAT_JAVA_TOOL_OPTIONS=-Xms128m -Xmx384m -XX:ReservedCodeCacheSize=64m -XX:MaxDirectMemorySize=64m
+#   JVM 옵션이 .env 가 아니라 compose 에 있다(#509). MaxMetaspaceSize 는 두지 않는다 —
+#   128m 을 줬다가 OutOfMemoryError: Metaspace 로 배포가 실패했다(PR #516).
+NODE_EXPORTER=network_mode: host, --web.listen-address=172.17.0.1:9100 (#508)
+#   netdev·netclass 에 veth·br-*·docker0 제외 필터. 이 회차부터 node_network_* 가 호스트 ens5 다.
+SEAT_MEM_LIMIT=640m (변경 없음 — 상향하지 않았다)
+SERVER_COMPRESSION=seat-service 만 enabled (#505, 변경 없음)
+
+# ── 관측 공백 (리포트 §한계에 그대로 옮길 것) ─────────────────────────────
+# 1. 컨테이너별 메모리 시계열이 없다(#515). cAdvisor 를 넣었으나 이 호스트에서 컨테이너를
+#    열거하지 못해 되돌렸다. RSS 는 docker stats 단발·주기 샘플로만 남는다.
+# 2. OOM 판정은 dmesg 의 CONSTRAINT_MEMCG 로 한다. docker inspect 의 OOMKilled 는
+#    재시작 뒤라 false 로 나온다 — 믿으면 오독한다.
+# 3. Nginx 는 부하 경로에 있으면서 전용 지표가 없다(#348 §13.1-(d) 와 동일).
