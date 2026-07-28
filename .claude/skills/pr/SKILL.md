@@ -20,6 +20,7 @@ argument-hint: '[라벨/리뷰요청 힌트 또는 비움]'
 - **로컬 수동 시연·스크린샷 등 사람만 아는 검증은 비워 두고 사람이 직접** 추가하도록 둔다.
 - **PR 제목은 CI 검증(`.github/workflows/pr-title.yml`)을 통과**해야 한다. 형식 `[라벨] #{이슈번호} {내용}`, 라벨 7종(`Feat` / `Fix` / `Refactor` / `Docs` / `Test` / `Chore` / `Infra`)만 허용. 다중 이슈는 `[Chore] #1, 2 ...`처럼 쉼표 구분.
 - **base 브랜치는 항상 `develop`**, PR은 **바로 리뷰 가능한 상태**로 생성한다(Draft 아님 — `--draft` 사용 금지).
+- **범위 표기는 `~`가 아니라 `-`를 쓴다**(`5-6분`, `40-70%`, `00:22:19-00:27:19`). GitHub 이 `~텍스트~`를 취소선으로 렌더링해, 한 문단에 둘 이상이면 그 사이가 통째로 줄이 그어진다. 상세는 [`docs/backend-convention.md`](../../../docs/backend-convention.md) §1 "GitHub 마크다운 표기".
 
 ## 작업 순서
 

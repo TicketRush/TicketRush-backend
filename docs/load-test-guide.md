@@ -247,7 +247,7 @@ increase(ticketrush_kafka_dlt_total[<구간>])                    # DLT 유입(�
 
 ### 8.4 주의
 
-- **DEAD 전이**: `app.outbox.max-retries=3` 초과 시 `DEAD`가 되고 relay가 더는 집지 않는다. 정지 180초에서는 시도당 실패 판정에 delivery.timeout(120초)이 걸려 보통 1~2회 실패로 끝나지만, 정지를 길게 잡으면 나올 수 있다. `verify-loss.sql` ③에서 DEAD가 보이면 유실이 아니라 **"수동 개입 필요"로 분리 기록**하고, `status='PENDING'`으로 되돌려 소진을 재확인한다.
+- **DEAD 전이**: `app.outbox.max-retries=3` 초과 시 `DEAD`가 되고 relay가 더는 집지 않는다. 정지 180초에서는 시도당 실패 판정에 delivery.timeout(120초)이 걸려 보통 1-2회 실패로 끝나지만, 정지를 길게 잡으면 나올 수 있다. `verify-loss.sql` ③에서 DEAD가 보이면 유실이 아니라 **"수동 개입 필요"로 분리 기록**하고, `status='PENDING'`으로 되돌려 소진을 재확인한다.
 - **구간 분리**: Phase A/B 측정 구간이 시간상 겹치면 inbox 대조가 오염된다. `verify-loss.sql`은 드레인 지연 때문에 inbox를 실행 시점까지 세므로, 반드시 backlog 소진 후 실행한다.
 - **타임존**: `verify-loss.sql`의 `@from/@to`는 **앱이 기록하는 `created_at` 기준(프로드 컨테이너는 UTC)**으로 준다. DB 세션 `NOW()`는 KST라 그대로 쓰면 구간이 안 맞아 조용히 0이 나온다.
 - **IMAGE_TAG 명시**: EC2 `deploy/.env`의 `IMAGE_TAG`는 CD가 배포 시점에만 주입하고 갱신하지 않아 실행 중 컨테이너보다 **뒤처져 있을 수 있다**. override 적용/원복의 `docker compose up`은 booking의 의존 서비스(seat·performance)까지 재생성하므로, 스테일 태그면 그 서비스들이 조용히 구버전으로 다운그레이드된다(실측 중 actuator 8090 분리 이전 이미지로 내려간 사례 있음). 반드시 현재 컨테이너 태그를 확인(`docker inspect gateway-service --format '{{.Config.Image}}'`)하고 `IMAGE_TAG=<그 태그> docker compose ... up -d booking-service`로 명시한다.
@@ -327,7 +327,7 @@ sum(rate(ticketrush_kafka_inbox_total{result="duplicate",consumer_group="seat-gr
 1. `SeatHoldUseCase`의 `isAvailable()` 체크 → `ticketrush_seat_hold_total{result="unavailable"}`
 2. `Seat.version` 낙관적 락(#427) → 커밋 시점 충돌 → 롤백 → Kafka 재시도로 수렴
 
-**"차단율"은 §10.3의 `unavailable` 비율로 산출한다.** 락 경합률로 산출하면 항상 0%가 나와 방어선이 없다는 뜻으로 오독된다. 락은 정합성 장치가 아니라 경쟁을 앞단에서 걸러내는 **성능 최적화**이며, 정합성의 최종 방어선은 DB다 — 이 구분의 SSOT는 [ADR 0008](adr/0008-redis-spof-acceptance.md)과 `Seat.version` javadoc이다.
+**"차단율"은 §10.3의 `unavailable` 비율로 산출한다.** 락 경합률로 산출하면 항상 0%가 나와 방어선이 없다는 뜻으로 오독된다. 락은 정합성 장치가 아니라 경쟁을 앞단에서 걸러내는 **성능 최적화**이며, 정합성의 최종 방어선은 DB다 — 이 구분의 SSOT는 [ADR 0008](adr/0008-accept-redis-spof-with-fail-closed.md)과 `Seat.version` javadoc이다.
 
 > 컨슈머 동시성을 올리면(`setConcurrency > 1`) 이 수치는 달라진다. 그때 락 경합이 실제로 설계대로 작동하는지는 `SeatHoldConcurrencyTest`(seat-service)가 스레드를 갈라 검증해 둔 상태다. oversell 0 자체의 증명도 같은 테스트가 실 MySQL로 수행한다(Redis 락을 제거한 두 번째 케이스).
 >
@@ -392,6 +392,16 @@ echo "SELECT COUNT(*) FROM seat WHERE seat_id=$SEAT AND seat_status='HOLD';" | S
 ```
 
 > Windows Git Bash 에서는 `/scripts/...` 가 `C:/Program Files/Git/scripts/...` 로 치환된다. 경로 앞에 `//` 를 붙이거나(`//scripts/scenarios/seat-contention.js`) `MSYS_NO_PATHCONV=1` 을 준다. PowerShell 은 그대로 쓴다.
+>
+> ⚠️ **Windows 에서 `bench/`·`chaos/` 스크립트를 EC2 로 흘려보낼 때는 CRLF 를 벗겨야 한다.** 워킹트리 파일이 CRLF 라(`core.autocrlf=true`) `ssh ... 'bash -s' < script.sh` 나 `cat > /tmp/x.sh` 로 넘기면 `set -euo pipefail\r` 이 되어 **`set: pipefail: invalid option name` 으로 첫 줄부터 죽는다.** 에러 메시지가 bash 버전 문제처럼 보여서 헤매기 쉽다(2026-07-27 #348 측정에서 샘플러가 두 번 이렇게 실패했다).
+>
+> ```bash
+> tr -d '\r' < load-test/bench/outbox-sampler.sh \
+>   | ssh -i <key> ubuntu@<EC2_IP> 'cat > /tmp/outbox-sampler.sh'
+> ssh -i <key> ubuntu@<EC2_IP> 'DURATION=1200 INTERVAL=5 bash /tmp/outbox-sampler.sh' > samples.csv
+> ```
+>
+> 넘긴 뒤 `bash -n /tmp/x.sh` 로 문법을 확인하면 실행 전에 걸러진다. `/bin/sh` 가 dash 인 것도 함께 주의한다 — 반드시 `bash` 로 실행한다.
 
 ### 10.3 PromQL
 
@@ -573,7 +583,7 @@ SQL() { $SSH "docker exec -i ticketrush-mysql sh -c 'mysql -u root -p\"\$MYSQL_R
    DURATION=660 ./trx-sampler.sh > trx-samples-b1.csv   # load-test/bench/
    ```
 
-   **(c) HikariCP 는 1초로 따로 떠야 한다.** Prometheus 스크랩이 15초라 2~6초짜리 tick 을 통째로 놓친다. actuator 를 직접 1초로 긁는다.
+   **(c) HikariCP 는 1초로 따로 떠야 한다.** Prometheus 스크랩이 15초라 2-6초짜리 tick 을 통째로 놓친다. actuator 를 직접 1초로 긁는다.
    ```bash
    while :; do
      printf '%s,' "$(date -u +%Y-%m-%dT%H:%M:%SZ)"
@@ -661,7 +671,7 @@ DURATION=900 INTERVAL=5 ./outbox-sampler.sh > outbox-b1.csv   # load-test/bench/
 
 **함께 확인할 트레이드오프**(이슈가 "측정으로 확인한다"고 적은 부분)
 
-- **in-flight 슬롯 동작** — §10.3 판별표로 읽되 **임계값이 `batch-size`이므로 이제 300 기준**이다. in-flight가 0~300 사이에서 출렁이면 정상, 300에 붙어 정체하면 슬롯 고갈이다.
+- **in-flight 슬롯 동작** — §10.3 판별표로 읽되 **임계값이 `batch-size`이므로 이제 300 기준**이다. in-flight가 0-300 사이에서 출렁이면 정상, 300에 붙어 정체하면 슬롯 고갈이다.
 - **커넥션** — §11.5(c)의 HikariCP 1초 루프 그대로. 한 배치가 커졌으니 `active`가 이전(피크 1)보다 오르는지 본다.
 - **프로듀서 버퍼** — 앱이 노출하면 `kafka_producer_buffer_available_bytes`로 본다. 없으면 발행 실패(`ticketrush_outbox_relay_total{result="fail"}`)가 0인지로 갈음하고, 추정을 수치로 쓰지 않는다.
 - **⚠️ 폴링 소요시간 대 `lockAtMostFor="1m"`** — 이 상향에서 가장 위험한 축이다. `dispatch()`는 배치를 순차로 `send()` 하는데 그 호출이 `MAX_BLOCK_MS`(5초)까지 동기 블로킹될 수 있어(브로커 메타데이터·버퍼 대기), 최악 소요가 배치 크기에 비례해 3배가 된다. **`lockAtMostFor`를 넘겨 도는 폴링이 있으면 다른 인스턴스가 동시에 들어와 in-flight 가드가 무력해지고 중복 발행이 돌아온다**(`OutboxRelayService`의 `inFlight` javadoc이 자기고백한 한계). 릴레이 로그의 폴링 간 간격이 60초를 넘는 구간이 있는지 보고, `relay_total{result="success"}` 증가분과 실제 outbox 행 수를 대조해 증폭이 없는지 확인한다.
@@ -789,7 +799,7 @@ echo "SELECT ticket_status, COUNT(*) FROM ticket
 
 > **이 시나리오의 측정 창 종점은 k6 종료 시각이다.** 검표 경로에는 outbox·컨슈머 같은 비동기 파이프라인이 없어 §10.2의 "PENDING=0 첫 관측" 규약이 적용되지 않는다. `metadata.txt`의 `WINDOW_END_SOURCE`에 그렇게 적는다.
 
-회차는 2~3회 반복하고 회차 간 60초 이상 띄운다.
+회차는 2-3회 반복하고 회차 간 60초 이상 띄운다.
 
 **5. 동일 QR 동시 다중 스캔 (3라운드).** 대상은 코호트 뒤쪽(스파이크가 도달하지 않는 구간)에서 고른다.
 ```bash
@@ -827,7 +837,7 @@ $SSH "docker exec -i ticketrush-mysql sh -c 'mysql -u root -p\"\$MYSQL_ROOT_PASS
 >
 > 읽을 때 주의할 것 셋:
 > - **`slo` 기반이라 `histogram_quantile()`은 경계 사이 선형보간이다.** 경계가 촘촘한 하단
->   (1~25ms)에서는 쓸 만하고, **2s를 넘는 지연은 `+Inf`에만 세어져 p99가 2s에서 포화된 것처럼 보인다.**
+>   (1-25ms)에서는 쓸 만하고, **2s를 넘는 지연은 `+Inf`에만 세어져 p99가 2s에서 포화된 것처럼 보인다.**
 >   그 구간의 꼬리는 `_max`로 함께 읽는다.
 > - **#402 이전 회차의 측정분에는 버킷이 없다.** 그 회차들의 퍼센타일 SSOT는 k6 클라이언트
 >   측정(`k6_entry_*_p95/p99`)이고, 서버 축은 평균으로만 읽어야 한다.
@@ -917,7 +927,7 @@ hikaricp_connections_pending{instance=~"ticket-service:8090|booking-service:8090
 
 ### 12.6 booking 장애 주입 회차 (#496)
 
-§12.1~12.5는 **booking이 정상일 때** 검표 경로가 버티는지를 쟀다. 이 절은 그 반대 — **booking이 죽거나 느려졌을 때 검표 경로가 함께 죽는가**를 잰다. #402가 (선택) 항목으로 남긴 질문이고, #496이 서킷브레이커·타임아웃 단축으로 답을 바꾸려 한 대상이다.
+§12.1-12.5는 **booking이 정상일 때** 검표 경로가 버티는지를 쟀다. 이 절은 그 반대 — **booking이 죽거나 느려졌을 때 검표 경로가 함께 죽는가**를 잰다. #402가 (선택) 항목으로 남긴 질문이고, #496이 서킷브레이커·타임아웃 단축으로 답을 바꾸려 한 대상이다.
 
 측정 대상 코드는 `ticket-service/.../out/apiclient/BookingRestClient.java`와 `.../global/config/BookingCircuitBreakerConfig.java`다. 서킷은 `booking` 인스턴스 하나이며 임계값은 실패율 50% / 느린호출 300ms 초과 50% / 윈도우 20(최소 10) / open 유지 10s / 반열림 3건이다.
 
@@ -928,7 +938,7 @@ hikaricp_connections_pending{instance=~"ticket-service:8090|booking-service:8090
 | read-timeout | 10s | 1s |
 | 서킷브레이커 | 없음 | `booking` |
 
-before는 배포본을 되돌리지 않고 **환경변수 오버라이드로 재현**한다. 서킷은 코드에 박혀 있어 env로 끌 수 없으므로, before 회차는 `SERVICE_HTTP_READ_TIMEOUT_MS=10000`으로 타임아웃만 되돌리고 **서킷 임계에 닿기 전 구간(주입 직후 10~20초)** 을 비교 구간으로 쓴다. 두 축을 완전히 분리하려면 #402 배포본 이미지 태그(`91fa085…`)로 한 회차를 더 돌려야 하는데, 그 배포본에는 §12.4의 `slo` 버킷(#495)이 없어 서버 축 퍼센타일이 나오지 않는다 — **before/after를 같은 관측 해상도로 놓으려면 env 오버라이드 쪽이 맞다.** 이 선택을 metadata에 적는다.
+before는 배포본을 되돌리지 않고 **환경변수 오버라이드로 재현**한다. 서킷은 코드에 박혀 있어 env로 끌 수 없으므로, before 회차는 `SERVICE_HTTP_READ_TIMEOUT_MS=10000`으로 타임아웃만 되돌리고 **서킷 임계에 닿기 전 구간(주입 직후 10-20초)** 을 비교 구간으로 쓴다. 두 축을 완전히 분리하려면 #402 배포본 이미지 태그(`91fa085…`)로 한 회차를 더 돌려야 하는데, 그 배포본에는 §12.4의 `slo` 버킷(#495)이 없어 서버 축 퍼센타일이 나오지 않는다 — **before/after를 같은 관측 해상도로 놓으려면 env 오버라이드 쪽이 맞다.** 이 선택을 metadata에 적는다.
 
 **(b) 주입**
 
@@ -998,3 +1008,384 @@ sum(rate(http_server_requests_seconds_count{instance="ticket-service:8090",uri=~
 **(f) 폴백 정책 — 측정으로 바뀌지 않는 것**
 
 서킷 open 구간의 검표 요청은 **전부 503(`TICKET_503_001`)이 되는 것이 정상이다.** 검표는 권위 있는 `bookingStatus` 확인이 목적이라(#364) 조회 불가 상태에서 입장을 통과시킬 수 없다 — 통과시키면 환불 진행 중(REFUNDING)인 예매가 그대로 입장한다. 따라서 이 회차의 성공 기준은 "503이 줄었다"가 아니라 **"503이 검표 경로에 갇혔고, 스레드 고갈로 번지지 않았다"** 이다. 가용성을 잃되 정합성을 지키는 이 비대칭은 Redis SPOF에 대한 [ADR 0008](adr/0008-accept-redis-spof-with-fail-closed.md)의 fail-closed와 같은 선택이다.
+
+## 13. 오픈런 스파이크 e2e 종합 부하 측정 (#348)
+
+개별 핫패스 측정(§10~§12)과 달리 **사용자 여정 전체를 게이트웨이를 통해** 부하 걸어 현재 구성의 최대 처리량(포화점)과 1차 병목을 찾는다. 시나리오는 `load-test/scenarios/openrun-e2e.js`.
+
+### 13.1 이슈 서사와 실측의 차이 — 먼저 읽을 것
+
+이슈 #348 본문의 여정은 `로그인 → 공연 조회 → 좌석맵 조회 → 좌석 선점(HOLD) → 예매 생성 → 결제 → 티켓 발급`이지만, **코드로 확인한 결과 이 중 셋이 실제와 다르다.**
+
+**(a) 좌석 선점(HOLD)은 HTTP API가 아니다 — 여정 순서가 역순이다**
+
+`SeatController`는 GET만 있고 HOLD를 여는 공개 엔드포인트가 없다. 실제 경로는 §10.1이 서술한 그대로다.
+
+```
+POST /api/v1/booking → booking + outbox 한 트랜잭션 커밋
+  → OutboxRelayScheduler (fixedDelay 5s, batch-size 300)
+    → booking-created-topic
+      → seat-service BookingCreatedEventListener (groupId=seat-group, concurrency 1)
+        → SeatFacade.tryLockSeat
+```
+
+즉 **예매 생성이 좌석 선점을 유발한다.** k6가 칠 수 있는 것은 예매 생성까지이고, HOLD는 유입 축이 아니라 처리 축(`ticketrush_outbox_backlog` + consumer lag)에서 본다. 유입 RPS와 HOLD 처리율은 애초에 같은 값이 될 수 없다.
+
+**(b) 결제·티켓 발급은 이 구성에서 실행할 수 없다**
+
+`StubPaymentApprovalClient`는 `@Profile("!prod")`이고, javadoc이 "운영(prod) 프로파일에서는 환경변수 설정과 무관하게 절대 활성화되지 않는다"고 못박는다. [ADR 0004](adr/0004-load-test-execution-topology.md)가 정한 측정 대상은 `SPRING_PROFILES_ACTIVE=prod` 단독 배포본이므로 **`PAYMENT_PG_STUB_ENABLED=true`를 줘도 stub은 뜨지 않는다.**
+
+남는 것은 실 Toss 호출뿐인데 `paymentKey`는 PG가 발급하는 값이라 k6가 만들 수 없고, 웹훅(`POST /api/v1/payment/webhook`)도 paymentKey로 PG에 재조회해 진위를 검증한다. **우회 경로가 없다.**
+
+→ **여정은 예매 생성까지로 한정한다.** 이슈 완료조건의 "예매확정→티켓발급 파이프라인 backlog 회복시간"은 이 회차에서 측정 불가이며, 리포트에 사유와 함께 남긴다. prod에서 stub을 허용하는 변경은 #348 범위 밖이다(보안 판단이 필요한 별건).
+
+**(c) 목표 SLO는 이 하드웨어에서 달성 불가능하다 — 포화점이 앱이 아니라 호스트에서 온다**
+
+[ADR 0007](adr/0007-observability-stack-colocation.md)의 배치는 **단일 EC2 `m7i-flex.large`(2 vCPU / 7.6 GiB)** 에 앱 8개 + MySQL·Redis·Kafka·Prometheus·Grafana다. 이미 실측된 값이 둘 있다.
+
+| 회차 | 부하 | 호스트 CPU |
+|---|---|---|
+| #344 | `POST /api/v1/booking` 단독 258 RPS | **99.87%** (§10.5) |
+| #402 | 검표 180 req/s | 73.93% (스모크 피크 97.91%) |
+
+이슈가 세운 "조회 경로 목표 1,000+ RPS"는 이 구성에서 성립하지 않는다. 본문도 "실측으로 검증·조정"이라 열어뒀으므로, **결과는 SLO 달성 여부가 아니라 "현재 구성의 최대치와 그 상한을 만드는 자원"으로 읽는다.** 후속 이슈(#469 좌석 조회 캐싱, #470 대기열, #423 Rate Limit)의 근거가 이 수치다.
+
+**(d) 구조적 상한 3개 — 앱을 아무리 밀어도 넘지 못한다**
+
+| 상한 | 값 | 근거 |
+|---|---|---|
+| outbox 릴레이 실효 발행률 | 중위 **53.2/s** (이론 상한 60/s) | §11.8 (#489) |
+| Kafka 소비 병렬도 | **1** (파티션은 3인데도) | `setConcurrency` 부재 — §10.1 |
+| Nginx 리버스 프록시 | Ubuntu 기본값, 튜닝·전용 지표 없음 | `docs/production-domain-https.md` §7 |
+
+Nginx는 부하 경로에 있으면서(443 → `127.0.0.1:8080`) 자체 지표가 없다. node-exporter의 호스트 CPU로만 간접 관측되므로 **"게이트웨이 앞단이 상한인지"는 이 회차로 가릴 수 없다.** 리포트 §한계에 명시한다.
+
+**(e) 예매가 5-6분 뒤 만료되면서 배경 부하를 만든다 — 유입의 2배가 outbox로 간다**
+
+`BookingExpireUseCase`의 `PAYMENT_WAIT_MINUTES = 5`, `BookingExpirationScheduler`는 `@Scheduled(fixedDelay = 60000)`이다. **이 회차는 결제를 하지 않으므로(§13.1-(b)) 생성한 예매가 예외 없이 5-6분 뒤 EXPIRED로 전이**하며, booking당 `BookingExpiredEvent`를 outbox에 한 행 더 쓴다. 좌석도 `SeatHoldExpiredEvent` 경로로 풀린다.
+
+계단식 회차는 20m30s 동안 9,210건을 만드는데 **마지막 5-6분 치를 뺀 대부분이 측정 창 안에서 만료된다.** 그 결과:
+
+- outbox로 나가는 이벤트 총량이 생성분의 **사실상 2배** — (d)가 상한으로 제시한 릴레이 53.2/s에 대한 유효 여유가 절반이 된다
+- `ticketrush_outbox_backlog`를 병목 신호로 읽을 때 **생성 트래픽과 만료 트래픽이 섞인다**
+- (a)가 그린 `booking → seat` 단일 경로 외에 만료 계열이 함께 돌아, 처리 축이 그림보다 복잡하다
+
+**이것은 결함이 아니라 이 회차의 조건이다.** 실제 오픈런에서도 결제하지 않은 예매는 만료되므로 현실적이기까지 하다. 다만 **수치를 해석할 때 반드시 감안해야 하고**, 측정 창의 종점도 만료 계열까지 드레인된 시점으로 잡는다(§13.4-(5)).
+
+**(f) ⚠️ 조회 축은 앱이 아니라 응답 크기에서 막힌다 — 2026-07-27 실측**
+
+첫 스모크에서 **좌석맵 조회의 서버 처리 시간이 81.96ms 인데 클라이언트 p95 는 34.97초**로 나왔다. 400배 차이이고, 같은 구간 호스트 CPU 는 58.86%(피크 82.83%)에 gateway 5xx 는 0건이었다. **앱이 느린 게 아니라 응답을 전달하는 데 걸린 시간이다.**
+
+| | 값 |
+|---|---|
+| 좌석맵 응답(공연당 2,080석) | **221KB** (좌석당 107.6 bytes) |
+| 조회 여정 1회 중 좌석맵 비중 | **99.05%** (목록 1,775B + 상세 367B + 좌석맵 223,720B) |
+| gzip | 측정 당시 **미적용** — `Accept-Encoding: gzip` 을 보내도 크기 동일, `Content-Encoding` 없음 |
+| gzip level 6 적용 시 | **9,709B (95.66% 절감)** |
+
+원인은 두 겹이었다. Spring Boot 의 `server.compression.enabled` 기본값이 false 이고 어느 서비스 yml 에도 설정이 없으며, 호스트 Nginx 에도 gzip 지시어가 없다(`docs/production-domain-https.md` §7).
+
+> **✅ 해소됨 — `#505`.** seat-service 의 `application.yml` 에 `server.compression.enabled: true` 를 켰다(앱 origin 압축, 선택 근거는 `load-tests/k6/results/260727-348-openrun-e2e/report.md` §3.4). 로컬 실측으로 `Content-Encoding: gzip` 과 11.8배 축소를 확인했다(9,771B → 830B).
+>
+> **`min-response-size`(기본 2KB)가 걸러 줄 것이라는 예상은 틀렸다.** Tomcat 의 `CompressionConfig` 는 `contentLength != -1 && contentLength < min` 일 때만 제외하는데, MVC 컨트롤러 응답은 `Transfer-Encoding: chunked` 라 길이가 -1 이라서 크기 판정을 건너뛴다. 결과적으로 **seat-service 의 작은 JSON 응답도 함께 압축된다**(실측: `seat-counts` 199B → 185B). 길이를 알리는 actuator 응답(49B)은 예상대로 제외됐다. 압축 CPU 를 측정할 때 "좌석맵 하나만 압축된다"고 가정하지 말 것.
+>
+> **아래 캘리브레이션 값(조회 ≤ 10 iter/s)은 221KB 응답 기준이라 압축 적용 후에는 무의미하다** — 스모크로 새 무릎을 다시 잡아야 한다.
+
+**측정 관점에서 이것이 뜻하는 바:**
+
+- 조회 도착률을 계속 올리면 **앱이 아니라 k6 를 돌리는 회선의 다운로드 대역을 재게 된다.** 실측 수신은 4.5 MB/s 였고, 221KB 응답 기준 약 20 iter/s 가 상한이다.
+- 그래서 이 회차는 **조회 축을 회선이 감당하는 범위(≤ 10 iter/s ≈ 2.2 MB/s)로 묶어 배경 부하로 두고, 응답이 작아 회선 영향을 받지 않는 예매 축을 계단으로 올려** 앱의 포화점을 잰다.
+- 판정은 **`k6_http_req_waiting_p95`(TTFB) 대비 `k6_http_req_receiving_p95`(본문 수신)** 로 한다. receiving 이 지배적이면 전송이 병목이다(§13.6).
+
+**동시에 이것은 측정 환경만의 문제가 아니다.** 실제 사용자도 오픈런 순간 모바일 회선으로 같은 221KB 를 받는다. 서버가 82ms 에 응답을 만들어도 화면은 그만큼 늦게 뜬다. `#469`(좌석 조회 Redis 캐싱)는 **서버 조회 부하를 줄일 뿐 응답 크기는 그대로**이므로 이 축과는 별개다.
+
+### 13.2 부하 모델 — 조회 축과 예매 축을 나눈다
+
+예매는 iteration당 좌석 1개를 **비가역 소모**한다. 여정 전체를 같은 도착률로 돌리면 좌석 수가 곧 부하 총량의 상한이 되어 계단을 끝까지 올릴 수 없다. 그래서 scenario를 둘로 나누고 예매 축만 `E2E_PURCHASE_RATIO`(기본 0.2)로 낮춘다. 실제 티켓팅도 조회:예매가 크게 기운다.
+
+| scenario | 여정 | 좌석 소모 | executor |
+|---|---|---|---|
+| `browse` | 공연 목록 → 인기 공연 상세 → 인기 공연 좌석맵 | 없음 | `ramping-arrival-rate` |
+| `purchase` | 예매 생성 | iteration당 1석 | `ramping-arrival-rate` |
+
+`ramping-arrival-rate`를 쓰는 이유는 §12.2와 같다 — VU 수를 통제하면 소요 좌석이 응답 지연에 반비례해 변해서 시딩 규모를 미리 정할 수 없다.
+
+**좌석 배정.** `setup()`이 대상 공연들의 좌석맵을 한 번씩 읽어 AVAILABLE 좌석의 `(perfId, min, step, count)`를 만들고, iteration 인덱스를 거기에 누적 매핑한다(`seatId = min + step × offset`). 배열 전체를 setup 데이터로 넘기지 않는 것은 k6가 그 값을 **VU마다 복사**하기 때문이다.
+
+> ⚠️ **seat_id는 공연 안에서 연속이 아니라 등차다.** `seed_load.sql`의 `seat_layout CROSS JOIN r CROSS JOIN c`를 MySQL이 `(r, c)` 바깥 루프로 실행해 **공연들이 인터리브로 삽입**되기 때문이고, 그래서 step이 보통 공연 수와 같다. 로컬 6,120석(공연 10건) 실측에서 `LOADTEST-000001`의 seat_id는 `121, 131, 141, …, 6111`로 `distinct_steps=1, step=10`이었다.
+>
+> 간격을 가정하지 않고 **응답에서 읽어 검증**한다 — 간격이 일정하지 않으면 중간 좌석을 다른 코호트가 점유한 것이므로 setup에서 중단한다.
+
+좌석 경합 자체는 §10(#344)이 이미 쟀다. 이 회차는 포화점이 목적이므로 **유일 배정으로 409를 배제하고 순수 처리량을 본다.** 그래도 409가 나오면 리셋 누락이거나 다른 코호트와 겹친 것이다.
+
+**필요 좌석 = Σ(rate × ratio × stage 길이)**, 전환 램프 구간 포함. 기본값 기준(`k6 inspect`로 확정):
+
+| 회차 | 프로파일 | 총 길이 | 필요 좌석 |
+|---|---|---|---|
+| 계단식 | `10,20,40,80` × 5분 | 20m30s | **9,210** |
+| 스파이크 | baseline 10 → peak 80 (6m/5m/6m) | 17m20s | **6,420** |
+
+두 회차를 이어 돌리면 15,630석이 필요하지만, **회차 사이에 `reset_e2e.sql`을 돌리므로 한 회차 최대치(9,210석)만 확보하면 된다.**
+
+### 13.3 시딩 — 좌석 규모와 공연 ID 확인
+
+`seed_load.sql`을 규모만 바꿔 재사용한다(전용 시드 파일 없음). **공연당 좌석은 실제 공연장 규모(2천석대)로 두고 공연 수로 총량을 채운다.** 좌석맵 조회는 페이지네이션 없이 전 좌석을 반환하므로, 공연 하나에 2만석을 몰면 응답이 수 MB가 되어 가정용 회선이 병목이 된다([ADR 0004](adr/0004-load-test-execution-topology.md) §한계).
+
+```sql
+-- seed_load.sql 상단 @vars
+SET @perf_count  = 10;   -- 공연 수
+SET @rows_per    = 26;   -- 'A'~'Z' 라 26 이하
+SET @cols_per    = 80;   -- 공연당 2,080석 -> 총 20,800석
+```
+
+시딩 후 **실제 공연 ID와 좌석 범위를 확인해 `-e`로 넘긴다.** `seed_load.sql`은 seat_id를 AUTO_INCREMENT에 맡기므로 실행마다 값이 다르다.
+
+```bash
+SSH="ssh -i <key>.pem ubuntu@<EC2_IP>"
+SQL() { $SSH "docker exec -i ticketrush-mysql sh -c 'mysql -u root -p\"\$MYSQL_ROOT_PASSWORD\" -N ticket_rush'"; }
+
+# 공연 ID 목록 + 공연별 AVAILABLE 좌석 규모·간격
+# reset_e2e.sql 의 두 번째 검증 쿼리가 같은 값을 내므로, 리셋을 돌렸다면 그 출력을 그대로 쓴다.
+echo "SELECT performance_id, COUNT(DISTINCT gap) AS distinct_steps, MIN(gap) AS step
+        FROM (SELECT s.performance_id,
+                     s.seat_id - LAG(s.seat_id) OVER (PARTITION BY s.performance_id
+                                                      ORDER BY s.seat_id) AS gap
+                FROM seat s JOIN performance p ON p.performance_id = s.performance_id
+                                              AND p.title LIKE 'LOADTEST-%'
+               WHERE s.seat_status='AVAILABLE') x
+       WHERE gap IS NOT NULL GROUP BY performance_id;" | SQL
+```
+
+- `PERF_ID` = 조회 축이 집중할 **인기 공연 1건**(핫 로우 재현)
+- `E2E_PURCHASE_PERF_IDS` = 예매 대상 공연 ID 목록(콤마 구분). 필요 좌석을 채울 만큼 넣는다
+- **`distinct_steps`가 1이 아닌 공연은 예매 대상에서 뺀다** — setup이 어차피 거부한다
+
+> ⚠️ **검표 코호트와 좌석이 겹친다.** `seed_entry.sql`(#402)은 LOADTEST **첫 공연의 MIN seat_id**에 booking 25,000건을 심는다(좌석 상태는 AVAILABLE로 남긴다). e2e가 같은 좌석을 예매해도 앱은 seat 상태만 보므로 통과하지만, 두 코호트를 함께 쓸 때는 **`seed_entry.sql`을 먼저 돌리고 그 공연을 `E2E_PURCHASE_PERF_IDS`에서 빼는 것**이 깔끔하다.
+
+### 13.4 절차 (회차마다 반복)
+
+토폴로지·사전조건은 §7과 같다 — k6는 로컬, 대상은 AWS 배포본, SSH 터널 선행. `IMAGE_TAG` 확인(§8.4)도 그대로다.
+
+**(1) 리셋 — DB와 Redis를 함께 되돌린다**
+
+```bash
+# DB: 앱이 만든 booking/HOLD 만 되돌린다(시드 코호트 LT-* 는 보존)
+$SSH "docker exec -i ticketrush-mysql sh -c \
+  'mysql -u root -p\"\$MYSQL_ROOT_PASSWORD\" --init-command=\"SET @i_confirm_loadtest_db=1\" ticket_rush'" \
+  < load-test/seed/reset_e2e.sql
+```
+
+`leftover_app_bookings = 0`과 예매 대상 공연의 `distinct_steps = 1`을 눈으로 확인한다.
+
+`non_available_seats`는 **0이 아닐 수 있고, 그것이 정상이다.** `reset_e2e.sql`이 일부러 보존하는 시드 코호트가 좌석을 잡고 있기 때문인데, 그 주체는 `seed_load.sql`의 `@booking_pct` 코호트(`LT-`)와 `seed_expired_holds.sql`의 `LT-X` 코호트다. **검표 코호트(`seed_entry.sql`)는 여기 해당하지 않는다** — 좌석을 SOLD로 전이시키면 #344/#345 코호트를 오염시키므로 일부러 AVAILABLE로 남긴다(`seed_entry.sql:120-124`).
+
+```bash
+# Redis: 좌석 락 키는 성공 경로에 unlock 이 없어 TTL 5분간 살아남는다. DB만 되돌리면
+#        다음 회차의 홀드가 락 획득에 실패해 전부 보상 처리되고 측정이 무의미해진다(§10.2).
+#        좌석이 수만 개라 단일 DEL 이 아니라 스캔으로 지운다. KEYS 는 쓰지 않는다(블로킹).
+#
+# ⚠ `-a <비밀번호>` 를 쓰지 않는다. redis 컨테이너에 있는 것은 REDISCLI_AUTH 뿐이고
+#   ($REDIS_PASSWORD 는 호스트 .env 변수라 컨테이너 안에서 빈 문자열로 펼쳐진다),
+#   redis-cli 가 REDISCLI_AUTH 를 자동으로 읽는다(deploy/docker-compose.prod.yml 의 redis 주석).
+#   §10.2 의 기존 관용구와 같은 형태다. -a 를 붙이면 인증이 깨져 키가 하나도 안 지워지는데,
+#   그 실패는 조용해서 다음 회차가 통째로 무효가 된다.
+$SSH "docker exec ticketrush-redis sh -c \
+  'redis-cli --scan --pattern \"seat:lock:*\" | xargs -r redis-cli DEL'"
+
+# 지워졌는지 반드시 확인한다 — 0 이어야 한다.
+$SSH "docker exec ticketrush-redis sh -c \
+  'redis-cli --scan --pattern \"seat:lock:*\" | wc -l'"
+```
+
+**(2) 스모크 회차 — 캘리브레이션 (수치는 폐기)**
+
+본 회차의 피크를 실측으로 정한다. #402가 스모크에서 호스트 CPU 97.91%를 보고 피크를 60/s로 확정한 것과 같은 절차다. 짧게 돌려 **무릎이 어디인지**만 본다.
+
+```bash
+docker compose run --rm --no-deps \
+  -e K6_PROMETHEUS_RW_SERVER_URL=http://<PROM_HOST>:9090/api/v1/write \
+  k6 run \
+  -e BASE_URL=https://<aws-gateway> \
+  -e LOAD_USER_PASSWORD='<평문>' \
+  -e PERF_ID=<인기공연> -e E2E_PURCHASE_PERF_IDS=<id,id,...> \
+  -e E2E_STAGE_RATES=10,30,60 -e E2E_STAGE_DURATION=1m \
+  //scripts/scenarios/openrun-e2e.js
+```
+
+**(3) 계단식 본 회차 — 포화점 탐색**
+
+각 단계를 **최소 5분 유지**한다. Prometheus 스크랩이 15초라 단계당 20표본이 확보되고, 이슈 완료조건("각 부하 단계가 최소 5분 유지된 상태의 값으로 포화점 판정")도 이 조건이다.
+
+```bash
+docker compose run --rm --no-deps \
+  -e K6_PROMETHEUS_RW_SERVER_URL=http://<PROM_HOST>:9090/api/v1/write \
+  k6 run \
+  -e BASE_URL=https://<aws-gateway> -e LOAD_USER_PASSWORD='<평문>' \
+  -e PERF_ID=<인기공연> -e E2E_PURCHASE_PERF_IDS=<id,id,...> \
+  -e E2E_PROFILE=ramp -e E2E_STAGE_RATES=<스모크로 정한 계단> -e E2E_STAGE_DURATION=5m \
+  //scripts/scenarios/openrun-e2e.js
+```
+
+**(4) 리셋 후 오픈런 스파이크 회차**
+
+(1)을 다시 돌린 뒤 프로파일만 바꾼다. 오픈런은 "수 초 내 급증"이므로 램프가 10초다(검표 스파이크의 20초보다 짧다).
+
+```bash
+  -e E2E_PROFILE=spike -e E2E_BASELINE_RATE=<baseline> -e E2E_PEAK_RATE=<피크> \
+  -e E2E_BASELINE_DURATION=6m -e E2E_PEAK_DURATION=5m
+```
+
+**(5) 릴레이 소진 대기 — 측정 창의 종점**
+
+k6 종료 시점에는 outbox에 미발행분이 남아 있다. **PENDING이 0이 된 뒤**에 검증해야 "처리가 끝난 상태"의 수치를 본다. 이 시각이 측정 창의 종점이므로 UTC로 기록한다(§10.2·metadata의 `WINDOW_END_SOURCE` 규약).
+
+**생성 계열만 기다리면 안 된다.** §13.1-(e)대로 예매가 5-6분 뒤 만료되면서 만료 계열 이벤트가 뒤따라 나온다. `BookingCreatedEvent`만 0을 확인하고 종점을 찍으면 **만료 계열이 아직 드레인 중인 시점을 "처리가 끝난 상태"로 기록**하게 된다.
+
+```bash
+echo "SELECT event_type, status, COUNT(*) FROM outbox
+       WHERE event_type IN ('BookingCreatedEvent','SeatHoldFailedEvent',
+                            'SeatHoldExpiredEvent','BookingExpiredEvent')
+       GROUP BY event_type, status ORDER BY event_type, status;" | SQL
+```
+
+네 계열 전부 `PENDING`이 0이어야 한다. 마지막 예매가 만료되기까지 k6 종료 후 **최대 6분 + 릴레이 주기**를 기다려야 하므로, 종점은 그보다 늦다.
+
+**(6) 검표 스모크 — #500에서 이관된 완료조건**
+
+#496이 `slowCallDurationThreshold`를 300ms → 500ms로 완화한 것이 2026-07-27 배포(`d5571697`)로 처음 나갔는데, **그 오탐은 배포 후 첫 검표 트래픽에서만 드러난다.** 검표 경로가 콜드로 남아 있는 한 판정 조건이 유지되므로 이 회차의 스모크가 그 첫 트래픽이 된다.
+
+`seed_entry.sql` 시딩 후 `entry-spike.js`를 스모크 규모로 1회 돌리고, **`resilience4j_circuitbreaker_not_permitted_calls_total` 증가분이 0인지** 확인한다. 판정 기준은 `slidingWindowSize=20` · `minimumNumberOfCalls=10`이라 검표 요청 10건이면 평가된다. 결과는 #348과 #500 양쪽 완료조건에 기록한다.
+
+**(7) 정합성 검증 — oversell 0**
+
+```bash
+# (a) 한 좌석에 활성 예매가 둘 이상이면 oversell. 0행이어야 한다.
+echo "SELECT b.seat_id, COUNT(*) c FROM booking b
+        JOIN performance p ON p.performance_id=b.performance_id AND p.title LIKE 'LOADTEST-%'
+       WHERE b.booking_number NOT LIKE 'LT-%'
+         AND b.booking_status IN ('PENDING','CONFIRMED')
+       GROUP BY b.seat_id HAVING c > 1;" | SQL
+
+# (b) 유령 HOLD — 좌석은 HOLD 인데 대응 booking 이 없거나 이미 PENDING 을 벗어났다. 0행이어야 한다.
+#     "HOLD 좌석 수 <= 예매 수" 로 재면 안 된다. §13.1-(e) 대로 예매가 5-6분이면 만료돼
+#     좌석이 풀리므로 종료 시점 HOLD 는 예매 수보다 훨씬 작고, 그 부등식은 항상 참이라 검출력이 0 이다.
+#     시드 코호트(LT-*)는 reset_e2e.sql 이 일부러 보존하므로 (a) 와 같은 필터로 제외한다.
+echo "SELECT s.seat_id, s.booking_number, b.booking_status
+        FROM seat s
+        JOIN performance p ON p.performance_id=s.performance_id AND p.title LIKE 'LOADTEST-%'
+        LEFT JOIN booking b ON b.booking_number = s.booking_number
+       WHERE s.seat_status='HOLD'
+         AND s.booking_number NOT LIKE 'LT-%'
+         AND (b.booking_id IS NULL OR b.booking_status <> 'PENDING');" | SQL
+
+# (c) 앱이 만든 예매 총수 — k6 요약의 e2e_booking_created 성공 건수와 일치해야 한다.
+echo "SELECT COUNT(*) AS app_bookings FROM booking b
+        JOIN performance p ON p.performance_id=b.performance_id AND p.title LIKE 'LOADTEST-%'
+       WHERE b.booking_number NOT LIKE 'LT-%';" | SQL
+```
+
+티켓 이중 발급·이벤트 유실은 `load-test/chaos/verify-inbox.sql`·`verify-loss.sql`을 그대로 쓴다.
+
+### 13.5 포화점 판정과 무효 판정
+
+**포화점**은 세 신호가 동시에 서는 지점이다. 하나만으로는 판정하지 않는다.
+
+1. 도착률(`E2E_STAGE_RATES`)을 올려도 **실제 RPS가 더 이상 증가하지 않는다** — 5분 유지 구간의 값으로만 본다
+2. `dropped_iterations`가 발생한다 (k6가 목표 도착률을 못 채운다)
+3. 호스트 CPU가 수렴한다 (100% 부근에서 평평해진다)
+
+> ⚠️ **`dropped_iterations`는 두 가지 원인이 겹친다.** VU 부족이면 생성기 문제이고, VU에 여유가 있는데도 나면 대상 포화다. `E2E_PRE_ALLOCATED_VUS`를 넉넉히 잡아 두고, k6 요약의 `vus_max` 대비 실제 사용량으로 가른다. #402가 스모크에서 `preAllocatedVUs=20`이 부족해 20건을 흘린 전례가 있다.
+
+**무효 판정 — 아래 중 하나라도 걸리면 그 회차는 버린다.**
+
+| 조건 | 뜻 |
+|---|---|
+| `e2e_seat_exhausted > 0` | 좌석 고갈. 시딩 규모나 `E2E_PURCHASE_PERF_IDS`가 부족하다 |
+| `e2e_seat_conflict > 0` | 유일 배정이 깨졌다. 리셋 누락이거나 코호트가 겹쳤다 |
+| setup 단계 `fail` | 좌석 간격이 일정하지 않다(다른 코호트가 중간을 점유). `reset_e2e.sql` 후 재시도 |
+| `ticketrush_seat_lock_contention_total` 증가 | **이전 회차의 좌석 락이 Redis에 남아 있다.** §10.1대로 이 카운터는 컨슈머 스레드가 1개라 구조적으로 0이므로, 0이 아니면 리셋의 Redis 단계가 실패한 것이다. 이 경우 홀드가 전부 보상 처리되는데 409가 아니라 `SeatHoldFailedEvent`로 나가므로 `e2e_seat_conflict`에는 잡히지 않는다 |
+| k6 → Prometheus remote-write 터널 끊김 | 클라이언트 시계열 소실. 서버 축만으로 판정할지 리포트에 명시(#496 §6 전례) |
+| 측정 중 인스턴스 중지 | 2026-07-23에 공유 IAM 사용자의 수동 `StopInstances`로 측정이 날아간 사례가 있다. 시간대를 공지한다 |
+
+### 13.6 PromQL
+
+부하 종료 후 Grafana Explore(§5)에서 실행한다. **부하 중에는 대시보드를 열지 않는다**(패널 쿼리가 측정 대상 CPU를 먹는다, [ADR 0004](adr/0004-load-test-execution-topology.md)).
+
+`job` 라벨은 MVC 7개가 전부 `ticketrush-services`다. **서비스 구분은 `instance`**(`booking-service:8090`, `seat-service:8090` …).
+
+```promql
+# ── 유입 축 (k6 클라이언트, 퍼센타일 SSOT) ──────────────────────────────
+# ⚠ k6 는 quantile 라벨을 만들지 않는다. docker-compose.yml 의
+#   K6_PROMETHEUS_RW_TREND_STATS="p(95),p(99),avg" 대로 _p95/_p99/_avg 접미사 게이지가 된다.
+#   값은 '초' 단위라 ms 로 보려면 1000 을 곱한다(§12 캡처 링크와 같은 관용구).
+sum(rate(k6_http_reqs_total[1m]))
+sum by (name) (rate(k6_http_reqs_total[1m]))          # 엔드포인트별 (tags.name)
+1000 * k6_http_req_duration_p95
+1000 * k6_http_req_duration_p99
+k6_dropped_iterations_total                            # 포화 신호
+
+# 여정 단계별 지연 — 어느 단계가 먼저 무너지는지 가른다(시나리오가 만드는 커스텀 Trend)
+1000 * k6_e2e_perf_list_duration_p95
+1000 * k6_e2e_perf_detail_duration_p95
+1000 * k6_e2e_seat_layouts_duration_p95               # 응답이 가장 큰 경로 (#469 근거)
+1000 * k6_e2e_booking_duration_p95
+1000 * k6_e2e_browse_journey_duration_p95             # 조회 여정 3요청 합
+
+# 지연을 단계별로 쪼갠다 — 이 회차에서 가장 중요한 대조다.
+# waiting(TTFB, 서버가 첫 바이트를 줄 때까지) 대비 receiving(본문 수신)이 크면
+# 병목은 처리가 아니라 전송이다(= 응답 크기·압축 부재). §13.1-(f) 참조.
+1000 * k6_http_req_waiting_p95
+1000 * k6_http_req_receiving_p95
+rate(k6_data_received_total[1m])                       # 실효 수신 대역
+
+# 좌석 배정 건전성 — Rate 메트릭은 _rate 접미사를 받는다(2026-07-27 실측으로 확인).
+k6_e2e_seat_conflict_rate                              # 0 이어야 한다
+k6_e2e_seat_exhausted_rate                             # 0 이어야 한다
+k6_e2e_booking_created_rate
+
+# ── 처리 축 (서버 관점) ────────────────────────────────────────────────
+sum by (instance) (rate(http_server_requests_seconds_count{job="ticketrush-services"}[1m]))
+histogram_quantile(0.95, sum by (le, instance) (
+  rate(http_server_requests_seconds_bucket{job="ticketrush-services"}[5m])))
+histogram_quantile(0.99, sum by (le, instance) (
+  rate(http_server_requests_seconds_bucket{job="ticketrush-services"}[5m])))
+
+# ── 병목 후보 ──────────────────────────────────────────────────────────
+hikaricp_connections_pending{job="ticketrush-services"}          # 풀 10/서비스
+hikaricp_connections_active{job="ticketrush-services"}
+tomcat_threads_busy_threads{job="ticketrush-services"}           # 상한 200 (#500 으로 노출됨)
+max by (instance, topic) (kafka_consumer_fetch_manager_records_lag{job="ticketrush-services"})
+ticketrush_outbox_backlog{job="ticketrush-services"}              # 릴레이가 못 따라가면 여기 쌓인다
+                                                                  # ⚠ 생성분과 만료분이 섞인다(§13.1-(e))
+ticketrush_outbox_in_flight{job="ticketrush-services"}
+increase(ticketrush_seat_lock_contention_total[5m])                # 0 이어야 한다 — >0 이면 락 잔존(§13.5)
+sum by (instance) (rate(jvm_gc_pause_seconds_sum{job="ticketrush-services"}[5m]))
+
+# ── 호스트 자원 (node-exporter, #465) ──────────────────────────────────
+100 * (1 - avg(rate(node_cpu_seconds_total{job="node", mode="idle"}[1m])))
+100 * avg(rate(node_cpu_seconds_total{job="node", mode="iowait"}[1m]))
+node_memory_MemTotal_bytes{job="node"} - node_memory_MemAvailable_bytes{job="node"}
+sum(rate(node_disk_read_bytes_total{job="node"}[1m]))
+
+# ── 게이트웨이 축 (연결 거부는 서버 축에 안 잡힌다 — #496 §2.4) ─────────
+sum(rate(http_server_requests_seconds_count{job="gateway", status=~"5.."}[1m]))
+sum(rate(http_server_requests_seconds_count{job="gateway"}[1m]))
+
+# ── 검표 스모크 (#500 이관 항목) ───────────────────────────────────────
+increase(resilience4j_circuitbreaker_not_permitted_calls_total[10m])   # 0 이어야 한다
+resilience4j_circuitbreaker_slow_call_rate
+resilience4j_circuitbreaker_failure_rate
+```
+
+> ⚠️ **서버 축 퍼센타일은 2s에서 포화돼 보인다.** #495가 넣은 `slo` 버킷의 최대 경계가 2s이고 그 위는 `+Inf`에만 세어진다([ADR 0007](adr/0007-observability-stack-colocation.md) §히스토그램). 포화 구간에서 서버 p99가 2s에 붙으면 "2s 이상"으로만 읽고, 실제 값은 k6 축에서 본다.
+>
+> ⚠️ **게이트웨이의 `uri` 라벨은 `/**`·`UNKNOWN`으로 뭉개진다.** 엔드포인트별 퍼센타일은 MVC job에서만 얻는다.
+
+### 13.7 한계 — 리포트에 그대로 옮길 것
+
+- **단일 EC2에 앱 8개 + Kafka·MySQL·Redis·관측 스택이 동거한다.** 절대 수치에 포화가 섞인다(§10.5·§12와 동일한 단서). 이 회차의 산출물은 "앱의 성능"이 아니라 **"이 구성의 최대치"** 다.
+- **Nginx가 부하 경로에 있는데 전용 지표가 없다.** 게이트웨이 앞단이 상한인지 가릴 수 없다(§13.1-(d)).
+- **결제·티켓 발급이 여정에서 빠져 있다.** 파이프라인 backlog 회복시간은 이 회차로 답하지 못한다(§13.1-(b)).
+- **결제를 안 하므로 예매가 전부 5-6분 뒤 만료되고, 그 만료가 outbox 부하를 사실상 2배로 만든다**(§13.1-(e)). `ticketrush_outbox_backlog`와 릴레이 처리량 수치에는 생성 트래픽과 만료 트래픽이 섞여 있다. 결제까지 도는 실제 운영과 이벤트 구성이 다르다는 뜻이므로, 이 회차의 outbox 수치를 운영 예측에 그대로 쓰면 안 된다.
+- **k6 생성기가 가정용 회선을 탄다.** 좌석맵 응답이 공연당 200KB대라 조회 도착률이 높으면 다운로드 대역이 먼저 찰 수 있다. k6 축과 서버 축의 차이가 곧 네트워크 왕복이므로 그 간격이 벌어지는지 함께 본다([ADR 0004](adr/0004-load-test-execution-topology.md) §한계).
+- **좌석을 유일 배정하므로 경합은 재지 않는다.** 경합 하의 거동은 §10(#344)이 SSOT다.

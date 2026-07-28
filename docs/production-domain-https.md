@@ -215,6 +215,8 @@ server {
 }
 ```
 
+> **gzip 지시어가 없는 것은 의도적이다(`#505`).** 응답 압축은 nginx 가 아니라 **각 앱 origin** 에서 건다(현재 seat-service). 앱 8개와 관측 스택이 2 vCPU 한 대에 동거하는 구성이라(ADR 0007) 압축 CPU 를 nginx 한 곳에 몰면 그 자체가 새 병목이 되고, origin 압축은 내부 홉(서비스→게이트웨이) 전송량까지 함께 줄인다. 비교표는 `load-tests/k6/results/260727-348-openrun-e2e/report.md` §3.4 참고. 위 설정은 클라이언트의 `Accept-Encoding` 을 지우지 않으므로(`proxy_set_header Accept-Encoding ""` 없음) 헤더가 상류로 그대로 전달되고, 앱이 붙인 `Content-Encoding: gzip` 도 그대로 내려온다.
+
 설정 활성화:
 
 ```bash

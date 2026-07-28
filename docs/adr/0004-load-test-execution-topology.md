@@ -34,7 +34,7 @@
 - 비테스트 시간엔 AWS 리소스를 중지하는 **온디맨드 운용**을 전제한다. 상시 기동 시 24/7 과금된다.
 - **k6 클라이언트 지표(`k6_*`)와 앱 계측(`ticketrush_*`, `http_server_requests_seconds`)은 같은 TSDB에 모은다.** Prometheus에는 이미 `--web.enable-remote-write-receiver`가 켜져 있으므로(`docker-compose.yml`), 로컬 k6의 remote-write 대상(`K6_PROMETHEUS_RW_SERVER_URL`)을 앱 지표를 스크랩하는 Prometheus로 돌리면 된다. 대시보드 JSON은 datasource uid `prometheus`를 참조하므로 수정이 필요 없다.
 
-  다만 Prometheus를 **로컬**에 두는 구성은 불가하다. Prometheus는 pull 방식이라 AWS 쪽 앱 7개(8081~8087)의 포트를 인터넷에 열어야 하는데, 이는 위에서 대안 3을 기각한 **"노출면 악화"와 같은 문제**다. 관측 스택을 실제로 어디에 배치할지(대상 인스턴스에 함께 올릴지)는 **AWS 배포 토폴로지를 정하는 후속 ADR에서 다룬다.**
+  다만 Prometheus를 **로컬**에 두는 구성은 불가하다. Prometheus는 pull 방식이라 AWS 쪽 앱 7개(8081-8087)의 포트를 인터넷에 열어야 하는데, 이는 위에서 대안 3을 기각한 **"노출면 악화"와 같은 문제**다. 관측 스택을 실제로 어디에 배치할지(대상 인스턴스에 함께 올릴지)는 **AWS 배포 토폴로지를 정하는 후속 ADR에서 다룬다.**
 - write 시나리오(`booking-create`)는 정상 로그인으로 인증하므로 **배포 프로파일과 무관하다**. read 시나리오(`seat-layouts`)는 인증 자체가 필요 없다. AWS 배포본은 `SPRING_PROFILES_ACTIVE=prod` 단독으로 띄운다(#378).
 
 Oracle 기반 무료 분리(대안 2)는 폐기하고 관련 자산(GitHub Actions 워크플로우, Prometheus 공인 노출 오버레이)을 제거한다.

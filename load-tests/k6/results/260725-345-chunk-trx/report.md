@@ -31,7 +31,7 @@ select count(s) from Seat s where s.seatStatus = :hold and s.holdExpiredAt > :no
 
 ### 2.1.1 같은 좌석 2,000건이 2,000으로도, 0으로도 읽힌다
 
-`graph-seat-held-semantics.png`(13:20~14:56 KST)에는 **04:26~04:33Z 구간에만 2,000짜리 사각 펄스**가 있고 앞뒤는 0이다. 우연이 아니라 이 게이지의 의미를 그대로 드러낸 구간이다.
+`graph-seat-held-semantics.png`(13:20-14:56 KST)에는 **04:26-04:33Z 구간에만 2,000짜리 사각 펄스**가 있고 앞뒤는 0이다. 우연이 아니라 이 게이지의 의미를 그대로 드러낸 구간이다.
 
 | 시각 (UTC) | 코호트 상태 | `seat_held` |
 |---|---|---|
@@ -91,7 +91,7 @@ ALTER TABLE seat ADD INDEX idx_seat_status_hold_expired_at (seat_status, hold_ex
 
 **계측 정합 확인**: A2의 `max_ms`는 매 회차 tick 총 소요와 거의 같다(예: 5513.1 ms vs 5.528 s). 단일 트랜잭션이 tick을 통째로 차지한다는 뜻이고, P_S 측정이 실제로 그 트랜잭션을 잡았다는 증거다.
 
-**tick 총 소요는 두 arm이 겹친다**(A1 2.27~5.80 s, A2 2.20~5.53 s). 청크 분할은 총 처리시간을 늘리지 않고 **같은 작업을 80개의 짧은 트랜잭션으로 쪼갠다.** 처리량을 대가로 지불하지 않는다.
+**tick 총 소요는 두 arm이 겹친다**(A1 2.27-5.80 s, A2 2.20-5.53 s). 청크 분할은 총 처리시간을 늘리지 않고 **같은 작업을 80개의 짧은 트랜잭션으로 쪼갠다.** 처리량을 대가로 지불하지 않는다.
 
 호스트 CPU는 max 65.9% / avg 34.2%로 포화가 아니었다(#344 측정의 99.87%와 다르다). 절대 수치가 상대적으로 깨끗하다.
 
@@ -114,7 +114,7 @@ ALTER TABLE seat ADD INDEX idx_seat_status_hold_expired_at (seat_status, hold_ex
 
 원인은 단순하다 — 만료 fallback은 `@Scheduled` 스케줄러 스레드 **하나**가 도는 단일 스레드 경로다. 커넥션을 한 개만 쓴다(실측 `active` 피크 1, `idle` 9). 풀 크기가 10이므로 단일 트랜잭션이 5초를 물고 있어도 **대기할 다른 요청이 없다.**
 
-> Prometheus 스크랩은 15초라 2~6초짜리 tick을 통째로 놓친다. 그래서 actuator를 **1초로 직접 폴링**해 확인했다(`hikari-{a1,a2,b1}.csv`). 1초 해상도에서도 `pending`은 전 구간 0이다.
+> Prometheus 스크랩은 15초라 2-6초짜리 tick을 통째로 놓친다. 그래서 actuator를 **1초로 직접 폴링**해 확인했다(`hikari-{a1,a2,b1}.csv`). 1초 해상도에서도 `pending`은 전 구간 0이다.
 
 **따라서 "청크 분할로 커넥션 풀 고갈을 회피한다"는 서술은 이 경로·이 규모에서 실측으로 뒷받침되지 않는다.** 풀 압박을 만들려면 만료 처리와 동시에 다른 요청들이 커넥션을 다투어야 하고, 그건 이 시나리오 밖이다. **청크 분할의 실측 이득은 락 보유 시간 하나로 좁혀진다** — 그리고 그 하나가 42배다.
 
@@ -131,8 +131,8 @@ ALTER TABLE seat ADD INDEX idx_seat_status_hold_expired_at (seat_status, hold_ex
 | 5 | 05:48:09.345 | 05:48:12.088 | 2.743 s | 2,000 | **0** |
 
 - **정확히 5 tick, tick당 정확히 2,000건.** 이슈가 예측한 상한 동작(`chunkSize` × `maxChunks` = 2,000/tick)이 그대로 관측됐다. 매 tick 처리 상한 경고가 찍혔다.
-- 시딩 → 완전 소진 **5분 18초**. tick 간격은 60.00 s로 일정하다(`fixedDelay`는 **완료 시각** 기준이므로 tick 소요가 그만큼 뒤로 밀린다 — 표의 시작 시각이 매 tick 3~5초씩 늦어지는 이유다).
-- 5 tick 전체 트랜잭션: **6,250건, 최장 182.9 ms, 평균 11.9 ms.** 400개 청크(80×5) + 릴레이·게이지 트랜잭션이 섞인 수치다. 최장값이 A1 단발 회차(58.8~77.1 ms)보다 큰 것은 관측 창이 5분으로 길어 꼬리가 잡힌 결과다.
+- 시딩 → 완전 소진 **5분 18초**. tick 간격은 60.00 s로 일정하다(`fixedDelay`는 **완료 시각** 기준이므로 tick 소요가 그만큼 뒤로 밀린다 — 표의 시작 시각이 매 tick 3-5초씩 늦어지는 이유다).
+- 5 tick 전체 트랜잭션: **6,250건, 최장 182.9 ms, 평균 11.9 ms.** 400개 청크(80×5) + 릴레이·게이지 트랜잭션이 섞인 수치다. 최장값이 A1 단발 회차(58.8-77.1 ms)보다 큰 것은 관측 창이 5분으로 길어 꼬리가 잡힌 결과다.
 - `hikaricp_connections_pending` 전 구간 **0**, `active` 피크 1. 5분간 지속된 적체에서도 풀 압박은 없다(§5).
 - 호스트 CPU max 74.9% / avg 30.8%.
 
@@ -178,10 +178,10 @@ ALTER TABLE seat ADD INDEX idx_seat_status_hold_expired_at (seat_status, hold_ex
 
 - **`seat_hold_expired_backlog` 게이지는 아직 배포되지 않았다.** CD가 `main` push 트리거라 develop 머지로는 배포되지 않는다. B1 적체 곡선은 SQL 폴링(`drain-b1.csv`)으로 기록했고, **Grafana 렌더 그래프는 다음 릴리스 이후 캡처한다.**
 - **Grafana PNG 5장 첨부, 남은 것은 적체 해소 곡선 1장**(§10). 관측 스택은 `127.0.0.1` 바인딩(ADR 0007)이고 이미지 렌더러 플러그인이 설치되어 있지 않아 API로 PNG를 뽑을 수 없다 — SSH 터널로 사람이 캡처해야 한다. 남은 1장은 게이지 배포가 선행 조건이다.
-- **`seat_held = 0`은 측정 창 기준이다.** 이 리포트의 모든 `seat_held` 수치는 A1·A2 반복 창(05:15~05:30Z)과 B1 창(05:41~05:55Z)을 범위로 산출했다. 더 넓게 잡으면 04:26~04:33Z에 2,000짜리 펄스가 있는데, 그건 측정 회차가 아니라 시계 함정으로 잘못 시딩된 코호트다(§2.1.1). 캡처 그래프를 볼 때 이 구간을 측정 결과로 읽으면 오독이다.
-- **n이 작다**(A1 5, A2 4). 단일 EC2에 앱 9개 + Kafka·MySQL·Redis·관측 스택이 동거하는 구성이라 회차 간 편차가 크다(A1 58.8~379 ms). 배율은 중위값으로 산출했고 원값을 모두 남겼다.
+- **`seat_held = 0`은 측정 창 기준이다.** 이 리포트의 모든 `seat_held` 수치는 A1·A2 반복 창(05:15-05:30Z)과 B1 창(05:41-05:55Z)을 범위로 산출했다. 더 넓게 잡으면 04:26-04:33Z에 2,000짜리 펄스가 있는데, 그건 측정 회차가 아니라 시계 함정으로 잘못 시딩된 코호트다(§2.1.1). 캡처 그래프를 볼 때 이 구간을 측정 결과로 읽으면 오독이다.
+- **n이 작다**(A1 5, A2 4). 단일 EC2에 앱 9개 + Kafka·MySQL·Redis·관측 스택이 동거하는 구성이라 회차 간 편차가 크다(A1 58.8-379 ms). 배율은 중위값으로 산출했고 원값을 모두 남겼다.
 - `confirmSoldById` 블로킹은 직접 측정 불가(§4).
-- **측정 중 사고를 냈다.** 04:45~04:58Z, 리포 루트(`~/ticketrush/`)의 구버전 `docker-compose.prod.yml` 사본으로 `up -d seat-service`를 실행해 `depends_on`의 redis·mysql이 재생성됐고, 그 디렉토리 `.env`에 `REDIS_PASSWORD` 키가 없어(#426 이후 추가된 키) Redis가 `--requirepass` 없이 떴다. 비밀번호를 보내는 앱들이 전부 `ERR AUTH ... called without any password configured`로 끊겼고 seat-service는 22회 재시작, `redis_up=0` 알림이 발화했다. 정상 디렉토리 `~/ticketrush/deploy/`에서 재실행해 04:58Z 복구했다(볼륨이 명시적 이름이라 데이터 손실 없음). **이 구간 수치는 리포트에 쓰지 않았다.** 실행 중 스택의 소유 경로는 `docker inspect <c> --format '{{index .Config.Labels "com.docker.compose.project.config_files"}}'`로 확인한다 — 런북 §11.4에 고정했다.
+- **측정 중 사고를 냈다.** 04:45-04:58Z, 리포 루트(`~/ticketrush/`)의 구버전 `docker-compose.prod.yml` 사본으로 `up -d seat-service`를 실행해 `depends_on`의 redis·mysql이 재생성됐고, 그 디렉토리 `.env`에 `REDIS_PASSWORD` 키가 없어(#426 이후 추가된 키) Redis가 `--requirepass` 없이 떴다. 비밀번호를 보내는 앱들이 전부 `ERR AUTH ... called without any password configured`로 끊겼고 seat-service는 22회 재시작, `redis_up=0` 알림이 발화했다. 정상 디렉토리 `~/ticketrush/deploy/`에서 재실행해 04:58Z 복구했다(볼륨이 명시적 이름이라 데이터 손실 없음). **이 구간 수치는 리포트에 쓰지 않았다.** 실행 중 스택의 소유 경로는 `docker inspect <c> --format '{{index .Config.Labels "com.docker.compose.project.config_files"}}'`로 확인한다 — 런북 §11.4에 고정했다.
 
 ## 9. 증적 파일
 
@@ -197,11 +197,11 @@ ALTER TABLE seat ADD INDEX idx_seat_status_hold_expired_at (seat_status, hold_ex
 | `timeseries-hikari-{pending,active}-*.json` | Prometheus 15초 스크랩 대조군 (§5의 해상도 한계) |
 | `timeseries-node-cpu*.json` | 호스트 CPU (포화 여부 단서) |
 | `timeseries-inbox-rate-b1.json` | booking-group 인박스 소화율 |
-| `graph-seat-held-semantics.png` | **§2.1.1** — 같은 좌석 2,000건이 미만료일 때 2,000, 만료 적체일 때 0으로 읽히는 대조 (13:20~14:56 KST) |
-| `graph-outbox-backlog-b1.png` | **§6.1** — tick마다 2,000 계단 상승 → 피크 5,200(14:48) → 14:53 선형 소진 (14:41~14:57 KST) |
-| `graph-relay-rate-b1.png` | **§6.1** — 14:45~14:53 내내 정확히 20/s 천장에 눌린 평평한 선 (14:41~14:57 KST) |
-| `graph-hikari-b1.png` | **§5** — `pending` 0에 붙은 직선 / `active` 0↔1 / `idle` 10↔9 (14:41~14:57 KST). **bump가 5개 tick 중 3개만 보인다** — 15초 스크랩이 2~5초짜리 tick을 놓치는 것이고, `hikari-b1.csv`(actuator 1초 폴링)가 그 공백을 메운다 |
-| `graph-hikari-a1-a2.png` | **§5** — A1·A2 반복 구간(14:15~14:31 KST)의 같은 3종. 여기서도 `pending`은 창 전체 0이다. **중간의 시리즈 끊김 두 개는 컨테이너 재생성이다** — `up=0` 구간이 05:22:00~05:22:30Z(오버라이드 적용, 프로세스 기동 05:21:37Z)와 05:29:00~05:29:30Z(원복, 기동 05:28:37Z)로 `process_start_time_seconds`에서 확인된다. 따라서 **14:22 끊김이 A1(청크)과 A2(단일)의 경계**다 — 왼쪽이 A1, 오른쪽이 A2. 개별 bump를 특정 tick에 대응시키지는 않는다(15초 해상도로는 신뢰할 수 없다 — 그 대응은 `hikari-a1.csv`·`hikari-a2.csv`가 1초로 갖고 있다) |
+| `graph-seat-held-semantics.png` | **§2.1.1** — 같은 좌석 2,000건이 미만료일 때 2,000, 만료 적체일 때 0으로 읽히는 대조 (13:20-14:56 KST) |
+| `graph-outbox-backlog-b1.png` | **§6.1** — tick마다 2,000 계단 상승 → 피크 5,200(14:48) → 14:53 선형 소진 (14:41-14:57 KST) |
+| `graph-relay-rate-b1.png` | **§6.1** — 14:45-14:53 내내 정확히 20/s 천장에 눌린 평평한 선 (14:41-14:57 KST) |
+| `graph-hikari-b1.png` | **§5** — `pending` 0에 붙은 직선 / `active` 0↔1 / `idle` 10↔9 (14:41-14:57 KST). **bump가 5개 tick 중 3개만 보인다** — 15초 스크랩이 2-5초짜리 tick을 놓치는 것이고, `hikari-b1.csv`(actuator 1초 폴링)가 그 공백을 메운다 |
+| `graph-hikari-a1-a2.png` | **§5** — A1·A2 반복 구간(14:15-14:31 KST)의 같은 3종. 여기서도 `pending`은 창 전체 0이다. **중간의 시리즈 끊김 두 개는 컨테이너 재생성이다** — `up=0` 구간이 05:22:00-05:22:30Z(오버라이드 적용, 프로세스 기동 05:21:37Z)와 05:29:00-05:29:30Z(원복, 기동 05:28:37Z)로 `process_start_time_seconds`에서 확인된다. 따라서 **14:22 끊김이 A1(청크)과 A2(단일)의 경계**다 — 왼쪽이 A1, 오른쪽이 A2. 개별 bump를 특정 tick에 대응시키지는 않는다(15초 해상도로는 신뢰할 수 없다 — 그 대응은 `hikari-a1.csv`·`hikari-a2.csv`가 1초로 갖고 있다) |
 
 ## 10. Grafana 캡처 — 현황과 남은 것
 

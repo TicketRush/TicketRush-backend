@@ -1,0 +1,273 @@
+SERIES_ID=260727-348-openrun-e2e
+ISSUE=#348
+PR=#503
+DATE=2026-07-27 (KST)
+TARGET_HOST=EC2 54.116.243.250 (탄력 IP) — https://api.ticketrush.store
+TOPOLOGY=k6 local (docker compose, ADR 0004) --SSH tunnel(9090)--> EC2 deploy stack (Prometheus/Grafana EC2 로컬, ADR 0007)
+IMAGE_TAG=d55716976965ac08565c43bf75260aafa149465c (전 서비스 동일 — #496 서킷 임계 300ms→500ms 완화가 나간 배포본)
+RUNBOOK=docs/load-test-guide.md §13
+SCENARIO=load-test/scenarios/openrun-e2e.js
+RESET=load-test/seed/reset_e2e.sql
+SEED=load-test/seed/seed_load.sql (@perf_count=10, @rows_per=26, @cols_per=80 → 20,800석)
+PROM_SCRAPE_INTERVAL=15s
+
+# 측정 대상 코호트
+LOADTEST_PERF_IDS=4..13 (LOADTEST-000001..000010), 공연당 2,080석
+LOADTEST_SEATS_TOTAL=20800
+SEAT_ID_STEP=10 (공연 안에서 연속이 아니라 등차 — distinct_steps=1 로 전 공연 확인)
+SEAT_ID_RANGE=perf 4: 26121..46911 / perf 13: 26130..46920
+BROWSE_PERF_ID=4 (조회 집중 = 핫 로우)
+PURCHASE_PERF_IDS=4..13 (전 공연)
+LOAD_USER=loadtest@ticketrush.local (user_id=4, role USER) — 평문은 저장소·증적에 남기지 않음
+
+# 서비스 설정 (측정 당시)
+HIKARI_MAX_POOL=10 (명시 설정 없음, Spring Boot 기본)
+TOMCAT_MAX_THREADS=200 (명시 설정 없음, Spring Boot 기본)
+KAFKA_NUM_PARTITIONS=3 (deploy/docker-compose.prod.yml)
+KAFKA_CONSUMER_CONCURRENCY=1 (setConcurrency 부재 → Spring Kafka 기본)
+OUTBOX_BATCH_SIZE=300 / 릴레이 주기 5s (이론 상한 60/s, #489 실측 실효 중위 53.2/s)
+SERVER_COMPRESSION=없음 (Spring Boot 기본 false, Nginx 에도 gzip 설정 없음) ← 이 회차의 1차 발견
+
+# ── 응답 크기·압축 실측 (단발 요청) ────────────────────────────────────────
+SEAT_LAYOUTS_RESPONSE_BYTES=220990 (부하 전, 전 좌석 AVAILABLE) / 223720 (부하 중, 일부 HOLD 로 hold_expired_at 채워짐)
+SEAT_LAYOUTS_SEATS=2080 (공연 1건) / 좌석당 평균 107.6 bytes
+SEAT_LAYOUTS_GZIP=미적용 — Accept-Encoding: gzip 을 보내도 크기 동일, Content-Encoding 헤더 없음
+SEAT_LAYOUTS_SINGLE_REQ_TIME_S=0.327 (한산할 때)
+# 응답을 받아 로컬에서 압축해 본 값(같은 페이로드 223,720 bytes 기준):
+GZIP_L1_BYTES=13045 (5.83% / 절감 94.17%)
+GZIP_L6_BYTES=9709  (4.34% / 절감 95.66%)   ← Spring Boot server.compression 기본 레벨
+GZIP_L9_BYTES=9318  (4.17% / 절감 95.83%)
+# 회선 제약 환산: 실측 수신 4.5 MB/s 기준 상한이 221KB 응답에서는 약 20 iter/s 인데,
+# 9.7KB 로 줄면 약 464 iter/s 가 된다(23배). 그 지점에서는 회선이 아니라 서버가 병목이 된다.
+
+# ── 스모크 회차 (수치 폐기용, 캘리브레이션) ────────────────────────────────
+SMOKE_START_UTC=2026-07-27T08:39:02Z
+SMOKE_END_UTC=2026-07-27T08:43:01Z
+SMOKE_PROFILE=ramp browse 10 -> 30 -> 60 iter/s, 각 1분 (purchase = x0.2 → 2/6/12)
+SMOKE_ITERATIONS=6560 (browse+purchase 합)
+SMOKE_HTTP_REQS=17033 (73.73/s)
+SMOKE_HTTP_REQ_FAILED=0.27% (47 / 17033)
+SMOKE_DROPPED_ITERATIONS=1417
+SMOKE_VUS_MAX=621 (browse 가 605 까지 사용)
+SMOKE_BOOKING_CREATED=100.00% (1328/1328)
+SMOKE_SEAT_CONFLICT=0.00% (0/1328)   ← 좌석 유일 배정이 실환경에서 성립
+SMOKE_SEAT_EXHAUSTED=0.00% (0/1328)
+
+# 클라이언트 축 (k6)
+SMOKE_SEAT_LAYOUTS_AVG_MS=6220 / P95=34970 / MAX=59990
+SMOKE_BROWSE_JOURNEY_AVG_MS=6600 / P95=36330 / MAX=66000
+SMOKE_PERF_LIST_AVG_MS=137.08 / P95=449.74
+SMOKE_PERF_DETAIL_AVG_MS=111.17 / P95=352.95
+SMOKE_BOOKING_AVG_MS=182 / P95=600.39 / MAX=13280
+SMOKE_DATA_RECEIVED=1.0 GB @ 4.5 MB/s
+
+# 서버 축 (Prometheus, 같은 창)
+SMOKE_SEAT_SERVER_AVG_MS=81.96 (max 239.44)
+SMOKE_SEAT_SERVER_RPS=23.53 (max 37.46)
+SMOKE_GATEWAY_RPS=67.52 (max 127.24)
+SMOKE_GATEWAY_5XX_RPS=0 (시계열 자체가 생성되지 않음 = 5xx 0건)
+SMOKE_NODE_CPU_AVG_PCT=58.86 / MAX=82.83
+SMOKE_NODE_IOWAIT_AVG_PCT=1.85 / MAX=4.84
+SMOKE_HIKARI_PENDING_MAX=113
+SMOKE_TOMCAT_BUSY_MAX=117 (상한 200)
+
+# 캘리브레이션 판단
+# 서버는 좌석맵을 81.96ms 평균에 처리했는데 클라이언트 p95 는 34.97초다. 400배 차이는 앱이
+# 아니라 회선이다 — 221KB 응답 x 60 iter/s = 13.3 MB/s 가 필요한데 실측 수신은 4.5 MB/s 였다.
+# ADR 0004 §한계가 예고한 "가정용 회선이 상한" 이 조회 축에서 그대로 발생했다.
+# 호스트 CPU 는 58.86%(피크 82.83%)로 포화가 아니었고 gateway 5xx 는 0 건이다.
+#
+# 따라서 본 회차는 조회 축을 회선이 감당하는 범위(최대 10 iter/s ≈ 2.2 MB/s)로 묶어 배경
+# 부하로 두고, 응답이 작아 회선 영향을 받지 않는 예매 축을 계단으로 올려 앱의 포화점을 잰다.
+#   browse   2 -> 4 -> 8 -> 10 iter/s (각 5분)
+#   purchase 5 -> 10 -> 20 -> 25 iter/s (ratio 2.5)
+#   예상 좌석 소요 ≈ 18,300 / 확보 20,800
+
+# ── 무효 회차: 계단식 1차 시도 ─────────────────────────────────────────────
+RAMP_ATTEMPT1_START_UTC=2026-07-27T08:46:01Z
+RAMP_ATTEMPT1_ABORT_UTC=2026-07-27T08:55:14Z (09m11s 지점, 45%)
+RAMP_ATTEMPT1_VERDICT=무효 — 측정 중 EC2 인스턴스가 중지됨
+RAMP_ATTEMPT1_CAUSE=사람이 의도적으로 StopInstances (자동 스케줄·오토스케일링 설정은 없다)
+# 판정 근거: `last -x` 에 08:55 shutdown, journalctl -b -1 마지막이 정상 systemd-poweroff 시퀀스
+#   ("Reached target poweroff.target - System Power Off"). OOM killer 흔적 0건, kernel panic 없음,
+#   디스크 61% 로 여유. 즉 부하로 뻗은 것이 아니라 외부 중지다.
+# k6 관측: 08:55:14 부터 `dial tcp 54.116.243.250:443: connect: connection refused` 연속.
+#   직전 표본에서 VU 가 1~2 -> 304/350 으로 급증했는데, 이는 인스턴스가 내려가며 응답이 끊겨
+#   arrival-rate executor 가 VU 를 쏟아부은 결과이지 앱 포화가 아니다.
+# 재실행 전 reset_e2e.sql + Redis 락 삭제로 코호트를 되돌렸다(잔존 앱예매 3,769건 / HOLD 2,687석 제거).
+
+# ── 본 회차 (계단식, 2차 시도) ─────────────────────────────────────────────
+RAMP_START_UTC=2026-07-27T14:38:24Z
+RAMP_K6_END_UTC=2026-07-27T14:59:06Z
+RAMP_PROFILE=browse 2 -> 4 -> 8 -> 10 iter/s (각 5분, 계단 전환 램프 10s) / purchase = x2.5 -> 5/10/20/25
+RAMP_TOTAL_DURATION=20m30s
+RAMP_PRE_ALLOCATED_VUS=100(browse) / 250(purchase), MAX_VUS=600 / 1500
+
+# 유입 축 (k6, 퍼센타일 SSOT)
+RAMP_ITERATIONS=25828 (20.95/s)
+RAMP_HTTP_REQS=40597 (32.93/s)
+RAMP_HTTP_REQ_FAILED=0.00% (0 / 40597)
+RAMP_CHECKS=100.00% (25829 / 25829)
+RAMP_DROPPED_ITERATIONS=0 (요약에 항목 자체가 없음 = 도착률을 전부 채웠다)
+RAMP_VUS_MAX_USED=6 (할당 350 중) ← 앱이 여유로웠다는 가장 단순한 증거
+RAMP_DATA_RECEIVED=1.4 GB @ 1.1 MB/s
+RAMP_BOOKING_CREATED=100.00% (18449 / 18449)
+RAMP_SEAT_CONFLICT=0.00% (0 / 18449)
+RAMP_SEAT_EXHAUSTED=0.00% (0 / 18449)
+
+RAMP_SEAT_LAYOUTS_AVG_MS=64.80 / P95=92.57 / MAX=580.26
+RAMP_BROWSE_JOURNEY_AVG_MS=104.24 / P95=150.00 / MAX=3280
+RAMP_PERF_LIST_AVG_MS=19.41 / P95=31.12 / MAX=2400
+RAMP_PERF_DETAIL_AVG_MS=18.86 / P95=30.97 / MAX=628.56
+RAMP_BOOKING_AVG_MS=31.13 / P95=46.06 / MAX=1280
+RAMP_HTTP_REQ_DURATION_AVG_MS=32.95 / P95=69.03
+
+# 지연 분해 — 이 회차의 핵심 대조 (스모크와 비교할 것)
+RAMP_WAITING_P95_MS=82.67 (구간 max 1552.50)    # TTFB = 서버가 첫 바이트를 줄 때까지
+RAMP_RECEIVING_P95_MS=56.14 (구간 max 70.97)    # 본문 수신
+# 스모크(browse 60/s)에서는 좌석맵 p95 가 34,970ms 였다. 도착률을 회선이 감당하는 범위로 내리자
+# 92.57ms 가 됐고 이는 서버 처리(81.96ms)와 사실상 같다. 즉 그때의 35초는 전송 대기였다.
+
+# 처리 축 (Prometheus)
+RAMP_SEAT_SERVER_AVG_MS=11.88 (max 30.93)
+RAMP_BOOKING_SERVER_AVG_MS=15.49 (max 37.61)
+RAMP_GATEWAY_RPS=31.12 (max 55.13)
+RAMP_GATEWAY_5XX_RPS=0 (시계열 자체가 생성되지 않음 = 5xx 0건)
+
+# 호스트 자원
+RAMP_NODE_CPU_AVG_PCT=54.29 / MAX=100.00
+RAMP_NODE_IOWAIT_AVG_PCT=11.29 / MAX=19.02   # 스모크 1.85% 대비 6배 — 쓰기 부하가 실린 회차다
+
+# 병목 후보 — HTTP 계층은 놀고 있고 비동기 발행이 밀린다
+RAMP_TOMCAT_BUSY_MAX=1 (상한 200)
+RAMP_HIKARI_PENDING_MAX=0 (풀 10)
+RAMP_OUTBOX_BACKLOG_BOOKING_AVG=150.31 / MAX=868
+RAMP_OUTBOX_BACKLOG_SEAT_AVG=43.82 / MAX=494
+RAMP_KAFKA_LAG_MAX=52 (booking-group) / 51 (payment) / 24 (seat)
+RAMP_SEAT_LOCK_CONTENTION=0 (시계열 없음 — §10.1 대로 구조적으로 0, 락 잔존 없음)
+
+# 측정 창 종점
+RAMP_DRAIN_DONE_UTC=2026-07-27T15:05:05Z
+WINDOW_END_SOURCE=outbox PENDING/FAILED = 0 첫 관측 시각. k6 종료(14:59:06) 후 6분이 더 걸린 것은
+  마지막 예매가 5~6분 뒤 만료되면서 만료 계열 이벤트가 뒤따라 나왔기 때문이다(§13.1-(e)).
+  BookingCreatedEvent 만 보고 종점을 찍었다면 만료가 드레인 중인 시점을 "처리 완료"로 기록했을 것이다.
+
+# 정합성 (드레인 완료 후 확정)
+RAMP_BOOKING_TOTAL=18449 (k6 e2e_booking_created 와 정확히 일치)
+RAMP_OVERSELL_ROWS=0        # 좌석당 활성(PENDING/CONFIRMED) 예매 2건 이상 = 0행
+RAMP_GHOST_HOLD=0           # 드레인 중에는 13건 관측됐으나 완료 후 0 — 비동기 중간 상태였다
+RAMP_FINAL_BOOKING_STATUS=EXPIRED 18449 (전량. 결제를 하지 않으므로 정상 귀결)
+RAMP_FINAL_SEAT_STATUS=AVAILABLE 20800 (전량 회수) ← 만료 파이프라인이 좌석을 유실 없이 되돌렸다
+
+# 시계열이 '없는' 것이 결과인 항목 (쿼리는 성공, 데이터 부재)
+RAMP_NO_SERIES=k6_dropped_iterations_total / gateway 5xx / ticketrush_seat_lock_contention_total
+  # 각각 도착률 전량 충족 / 5xx 0건 / 락 경합 0건 을 뜻한다.
+# 만료 배경 부하가 실측으로 확인됐다: 생성한 18,449건 중 74% 가 측정 창 안에서 EXPIRED 로 전이했고
+# 그만큼 BookingExpiredEvent + SeatHoldExpiredEvent 가 outbox 에 더 실렸다.
+# ⚠ outbox 의 SENT 는 리셋이 지우지 않으므로 누적값이다. 회차 기여분은 델타로 읽어야 한다.
+
+# ── 오픈런 스파이크 회차 ───────────────────────────────────────────────────
+SPIKE_START_UTC=2026-07-27T15:15:59Z
+SPIKE_K6_END_UTC=2026-07-27T15:33:28Z
+SPIKE_PROFILE=browse 2 -(10s)-> 12 (5m 유지) -(10s)-> 2 / purchase = x2.5 -> 5 -> 30 -> 5
+SPIKE_BASELINE_DURATION=6m (전/후), PEAK_DURATION=5m, RAMP=10s
+SPIKE_PEAK_WINDOW=15:22:19Z ~ 15:27:19Z
+
+# 유입 축
+SPIKE_ITERATIONS=18128 (17.42/s)
+SPIKE_HTTP_REQS=28497 (27.38/s)
+SPIKE_HTTP_REQ_FAILED=0.00% (0 / 28497)
+SPIKE_CHECKS=100.00% (18129 / 18129)
+SPIKE_DROPPED_ITERATIONS=0 (요약에 항목 없음)
+SPIKE_VUS_MAX_USED=101 (할당 350)
+SPIKE_BOOKING_CREATED=100.00% (12949 / 12949)
+SPIKE_SEAT_CONFLICT=0.00% / SPIKE_SEAT_EXHAUSTED=0.00%
+SPIKE_DATA_RECEIVED=1.1 GB @ 1.1 MB/s
+
+SPIKE_SEAT_LAYOUTS_AVG_MS=77.59 / P95=105.83 / MAX=2580
+SPIKE_BROWSE_JOURNEY_AVG_MS=125.90 / P95=153.00 / MAX=3590
+SPIKE_BOOKING_AVG_MS=39.56 / P95=44.60 / MAX=2680
+SPIKE_PERF_LIST_AVG_MS=27.88 / P95=30.43 / MAX=2580
+SPIKE_PERF_DETAIL_AVG_MS=19.01 / P95=29.03 / MAX=469.09
+SPIKE_HTTP_REQ_DURATION_AVG_MS=40.62 / P95=75.28
+
+# 스파이크를 흡수했다 — 피크에서 유입이 6배로 뛰었는데 p95 가 계단식과 거의 같다
+#   좌석맵 p95 92.57 -> 105.83 / 예매 p95 46.06 -> 44.60 / 여정 p95 150 -> 153
+
+# ── backlog 회복시간 (outbox-sampler.sh, 5초 간격 164샘플) ─────────────────
+# 완료조건의 "스파이크 유입 흡수 후 backlog 회복시간"을 티켓발급 파이프라인으로는 잴 수 없어
+# (결제 불가, §2.2) 예매생성→좌석HOLD 파이프라인으로 대체 측정했다.
+SPIKE_BACKLOG_PEAK_DURING_BOOKING=358 (구간 평균 174.1)
+SPIKE_BACKLOG_PEAK_DURING_SEAT=182 (구간 평균 24.1)
+SPIKE_BACKLOG_PEAK_AFTER_BOOKING=1219 @ 2026-07-27T15:28:45Z
+SPIKE_BACKLOG_PEAK_AFTER_SEAT=976  @ 2026-07-27T15:28:45Z
+SPIKE_BACKLOG_PEAK_AFTER_OFFSET=피크 종료 +86초
+SPIKE_BACKLOG_RECOVERY_TO_30=정점 +254초(booking) / +249초(seat)
+SPIKE_BACKLOG_RECOVERY_TO_0=정점 +307초(booking) / +312초(seat)
+SPIKE_BACKLOG_RECOVERY_FROM_PEAK_END=393초 (6분 33초, 피크 종료 → backlog 0)
+
+# ⚠ 부하가 끝난 뒤에 정점이 온다. 피크 중 최대 358 인데 피크 종료 86초 뒤 1219 로 3.4배다.
+#   피크 5분(15:22:19~15:27:19)에 만든 약 9,000건이 PAYMENT_WAIT_MINUTES=5 뒤 만료되기
+#   시작하는데 그 시점이 정확히 피크 종료 시점이고, 60초 주기 스케줄러가 배치로 밀어낸다.
+#   → 유입 스파이크가 5~6분 지연된 2차 파동으로 되돌아온다.
+# ⚠ 이 파동의 크기는 결제를 하지 않는 이 측정의 조건이 증폭한 값이다. 실제 운영에서는 결제
+#   완료분이 만료되지 않으므로 파동이 이보다 작다. 다만 미결제 예매의 만료 자체는 실제로도 있다.
+# ✅ 파동 내내 HTTP 응답은 영향받지 않았다(좌석맵 p95 105.83ms, 실패 0%). 비동기 파이프라인이
+#   밀려도 사용자 경험이 유지된다는 것이 outbox 패턴의 목적이며 그대로 관측됐다.
+
+# ── 검표 스모크 (#500 이관 항목) ───────────────────────────────────────────
+ENTRY_SMOKE_START_UTC=2026-07-27T15:41:41Z
+ENTRY_SMOKE_END_UTC=2026-07-27T15:44:59Z
+ENTRY_SCENARIO=load-test/scenarios/entry-spike.js
+ENTRY_SEED=load-test/seed/seed_entry.sql (@ticket_count=2000, ADMIN 해시는 실행자 생성·비커밋)
+ENTRY_PROFILE=baseline 5/s x 1m -> 10s ramp -> peak 10/s x 30s -> 10s ramp -> 5/s x 1m (총 3m10s)
+ENTRY_BOOKING_ID_RANGE=1000001..1002000 (연속, 시드 검증쿼리 contiguous=1)
+ENTRY_ADMIN_USER_ID=5
+
+ENTRY_ITERATIONS=1200 (6.31/s)
+ENTRY_HTTP_REQS=3601 (18.93/s)
+ENTRY_HTTP_REQ_FAILED=0.00% (0 / 3601)
+ENTRY_CHECKS=100.00% (1201 / 1201)
+ENTRY_CHECKIN_OK=100.00% (1200 / 1200)
+ENTRY_ALREADY_USED=0.00% / ENTRY_NOT_USABLE=0.00% / ENTRY_TICKET_EXHAUSTED=0.00%
+ENTRY_BOOKING_UNAVAILABLE=0.00% (0 / 2400)   ← #496 §5.3 에서 오탐 때 1,472 건이던 지표
+ENTRY_QR_AVG_MS=19.43 / P95=25.83
+ENTRY_VERIFY_AVG_MS=24.50 / P95=33.11
+ENTRY_CHECKIN_AVG_MS=32.54 / P95=43.29
+
+# 판정 (Prometheus 직접 조회)
+ENTRY_CB_BASELINE=resilience4j_* 시계열 자체가 없었다 (검표 경로 콜드 = #500 이 전제한 조건 성립)
+ENTRY_CB_NOT_PERMITTED_AFTER=0        ← 증가분 0. #500 이관 항목 통과
+ENTRY_CB_CALLS_SUCCESSFUL=2400 (verify + check-in)
+ENTRY_CB_CALLS_FAILED=0
+ENTRY_CB_STATE=closed=1 (open=0, half_open=0)
+ENTRY_CB_SLOW_CALL_RATE=0 / ENTRY_CB_FAILURE_RATE=0
+# 이 스모크가 slowCallDurationThreshold 300ms -> 500ms 완화 배포(d5571697) 후 첫 검표 트래픽이다.
+# #496 §5.3 의 워밍업 오탐(실패 0 인데 not_permitted 1,472)이 재현되지 않았다.
+# 판정 조건 slidingWindowSize=20 / minimumNumberOfCalls=10 대비 2,400 건이라 평가에 충분하다.
+
+# ── 다음 회차 재개 절차 (이 회차의 3개 측정은 모두 완료) ────────────────────────────────────────────────────
+# 이 회차에서 완료: 계단식 / 오픈런 스파이크 / 검표 스모크(#500 이관). 남은 것은 개선 후 재측정이다.
+#
+# 다음 측정의 목적은 #505(응답 gzip 압축) 적용 후 "조회 축의 진짜 포화점" 을 찾는 것이다.
+# 지금은 조회 도착률을 올리면 앱이 아니라 부하 생성기의 회선이 먼저 차서 앱의 무릎을 통과할 수
+# 없다(리포트 §4.4). 압축이 켜지면 회선 제약이 약 23배 완화되므로 계단을 훨씬 위까지 올릴 수 있다.
+#
+# 재개 절차:
+# 1) EC2 기동 후 컨테이너 15개 확인 (gateway 는 부팅 후 약 30초)
+# 2) SSH 터널: ssh -i <key> -N -L 3000:localhost:3000 -L 9090:localhost:9090 ubuntu@54.116.243.250
+#    k6 컨테이너에서 host.docker.internal:9090 도달을 반드시 확인하고 시작한다
+#    (계단식 1차 시도 때 터널이 끊겨 remote-write 가 실패한 전례가 있다).
+# 3) 압축 적용 확인 — 이것이 먼저다:
+#      curl -D - -H 'Accept-Encoding: gzip' -o /dev/null https://api.ticketrush.store/api/v1/seat/4/seat-layouts
+#      → Content-Encoding: gzip 이 있어야 하고 size_download 가 10KB 수준이어야 한다
+# 4) 리셋: reset_e2e.sql + Redis `seat:lock:*` 삭제, 삭제 후 키 수 0 확인
+# 5) 스모크로 새 무릎을 다시 잡는다. 이전 캘리브레이션(browse 10/s 상한)은 압축 후 무의미하다.
+#      필요 좌석 = Σ(rate x ratio x 구간길이). 확보 20,800석을 넘기지 않게 계단을 설계한다.
+# 6) 증적: python load-test/bench/dump-timeseries.py <START> <END> <OUTDIR> <회차이름>
+#      회차 이름을 반드시 넘긴다 — 안 주면 앞 회차 파일을 덮어쓴다.
+#
+# 시딩 자산은 EBS 볼륨에 남아 있다(재시딩 불필요):
+#   LOADTEST 공연 10건 x 2,080석 = 20,800석, 공연 ID 4..13, seat_id 등차 step=10
+#   검표 코호트: booking_id 1000001..1002000, 티켓 2,000건(스모크로 1,200건 USED 소모됨)
+#   ⚠ 검표를 다시 돌리려면 seed_entry.sql 을 재실행한다(리셋 내장 — USED->UNUSED 되돌림).
