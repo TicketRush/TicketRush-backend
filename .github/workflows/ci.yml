@@ -59,7 +59,7 @@ jobs:
       - name: Prometheus scrape 타깃 검증
         run: |
           python3 - <<'PY'
-          import sys, yaml, pathlib
+          import re, sys, yaml, pathlib
 
           prom = yaml.safe_load(open("monitoring/prometheus.aws.yml", encoding="utf-8"))
           comp = yaml.safe_load(open("deploy/docker-compose.prod.yml", encoding="utf-8"))
@@ -85,13 +85,44 @@ jobs:
           for miss in sorted(expected - scraped):
               errors.append(f"배포되는데 스크랩하지 않는다: {miss}")
 
+          # network_mode: host 인 서비스는 compose 네트워크 DNS 에 이름이 없어 서비스명으로 스크랩할 수
+          # 없다. host.docker.internal 로 잡으므로(#508) 서비스명 대조가 성립하지 않는다. 대신 그 서비스가
+          # --web.listen-address 로 실제 리스닝하는 포트와 대조한다 — 포트 오타는 그대로 잡힌다.
+          host_ports = {
+              m.group(1)
+              for svc in comp["services"].values()
+              if svc.get("network_mode") == "host"
+              for arg in svc.get("command") or []
+              if (m := re.search(r"--web\.listen-address=.*:(\d+)$", str(arg)))
+          }
+
           # 앱이 아닌 타깃(redis-exporter 등)도 스크랩한다. 이 검증의 목적은 up=0 인 타깃을 막는 것이므로,
           # 앱처럼 :8090 을 강제하는 대신 compose 에 그 서비스가 실제로 있는지만 본다.
           # (exporter 는 SERVER_PORT 가 없어 deployed 에 잡히지 않고, 포트도 앱과 다르다.)
           services = set(comp["services"])
           for extra in sorted(scraped - expected):
-              if extra.split(":")[0] not in services:
+              host, _, port = extra.partition(":")
+              if host == "host.docker.internal":
+                  if port not in host_ports:
+                      errors.append(
+                          f"{extra} 를 스크랩하는데 network_mode: host 서비스 중 "
+                          f"--web.listen-address 로 :{port} 를 리스닝하는 것이 없다 (up=0 이 된다)"
+                      )
+              elif host not in services:
                   errors.append(f"스크랩하는데 배포되지 않는다 (up=0 이 된다): {extra}")
+
+          # host.docker.internal 은 도커가 자동으로 만들어 주지 않는다. prometheus 에 host-gateway
+          # 매핑이 없으면 이름 해석에 실패해 up=0 이 된다.
+          if any(t.startswith("host.docker.internal:") for t in scraped):
+              mapped = any(
+                  str(h).startswith("host.docker.internal:")
+                  for h in comp["services"]["prometheus"].get("extra_hosts") or []
+              )
+              if not mapped:
+                  errors.append(
+                      "host.docker.internal 을 스크랩하는데 prometheus 에 "
+                      'extra_hosts: ["host.docker.internal:host-gateway"] 가 없다'
+                  )
 
           # 타깃 포트가 각 서비스의 실제 management.server.port 와 같은가
           for name in sorted(deployed):
