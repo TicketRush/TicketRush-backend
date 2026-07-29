@@ -318,7 +318,7 @@ utc      active completed pool queued
 | 3 | SSE 동시 구독, 수신율·전파 지연 | ✅ §7 — 100/300/600, p95 1.25s→2.16s→2.77s, 수신율 93.7~99.4%(거부 구간 제외) |
 | 4 | 스레드풀 포화(큐 적체·거부)를 지표로 기록 | ✅ §8 — `executor_queued_tasks` 시계열 + 거부 2,009건(10.3%). 거부 시각이 큐 포화 구간과 전부 일치 |
 | 5 | 각 부하 단계 5분 이상 유지, SSE 10분 이상 | ✅ 집계 5분 × 6계단, SSE 10분 × 3계단 |
-| 6 | Grafana 그래프 캡처 | ⚠️ `grafana-capture-links.md`에 Explore 링크 7건 생성. **렌더러 플러그인이 없어 캡처는 수동이다** |
+| 6 | Grafana 그래프 캡처 | ✅ `graph-*.png` 7장. 최소 요구 4장을 넘긴다. 다만 `graph-sse-propagation.png` 1장은 재촬영 대상(아래) |
 
 ---
 
@@ -359,4 +359,14 @@ utc      active completed pool queued
 | `executor-queue-poll-saturation.txt` | 회차 4 큐 깊이 3초 폴링 원자료 |
 | `seed-verification.txt` | 시딩 검증 SELECT 출력 |
 | `timeseries-*-{countsa,countsb,sse}.json` | Prometheus 시계열 덤프 |
-| `grafana-capture-links.md` | Grafana Explore 캡처 링크 7건 |
+| `graph-*.png` | Grafana Explore 캡처 7장 |
+| `grafana-capture-links.md` | 캡처 절차 + Explore 링크 |
+
+### 캡처 판독 메모
+
+- `graph-counts-{a,b}-latency` — 계단별 rps·avg·p95. 두 장을 나란히 놓으면 §5의 좌석 수 대비 비용이 눈으로 보인다.
+- `graph-counts-b-saturation` — **CPU 100% · tomcat busy 50 · hikari pending 40이 한 시각에 함께 붙는 것**이 §5 포화 판정의 근거다.
+- `graph-sse-executor` — 큐가 1000에 고착됐다가 약 2분 20초에 걸쳐 빠지는 구간이 §8이다.
+- `graph-sse-receipt` — 수신율 계단 700 → 3,000 → 6,000과 버스트 직후 16K 스파이크(밀렸던 이벤트의 일괄 도착).
+- `graph-sse-resources` — CPU·힙·`jvm_threads_live`(110 → 127). tomcat 현재 스레드가 10에서 꿈쩍 않는 것이 "SSE는 스레드를 점유하지 않는다"의 그림이다.
+- ⚠️ **`graph-sse-propagation`은 다시 찍어야 한다.** `k6_vus`(0~600)를 같은 축에 넣어 전파 지연(원단위 1.2~4.0)이 바닥에 깔렸다. `grafana-capture-links.md`의 해당 링크를 ms 스케일·지연 축 단독으로 고쳐 두었고, 구독자 계단은 `graph-sse-subscribers.png`로 분리했다.
