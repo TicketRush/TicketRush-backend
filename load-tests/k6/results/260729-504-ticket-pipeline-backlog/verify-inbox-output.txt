@@ -1,0 +1,23 @@
+# #504 load-test/chaos/verify-inbox.sql 실행 결과 (완료조건 4)
+# 실행: 드레인 완료(lag 0, 2026-07-29T07:29:19Z) 이후
+#
+# 이 파일에는 쿼리가 둘인데 첫 번째 출력이 없다. 빠진 게 아니라 그것이 결과다 —
+# 쿼리 1 (티켓 이중 발급): SELECT booking_id, COUNT(*) FROM ticket GROUP BY booking_id
+#                          HAVING COUNT(*) > 1;  -> 0행 (헤더조차 나오지 않는다)
+#
+# ⚠ 다만 이 쿼리는 스스로 아무것도 증명하지 못한다. ticket.booking_id 가 UNIQUE 제약이라
+#   어떤 상황에서도 구조적으로 0행이다. 실제 근거는 아래 두 가지다:
+#     - 쿼리 2 의 PaymentConfirmed 행이 booking-group / ticket-group 모두 23,000 으로
+#       주입 건수와 정확히 일치한다(유입이 깎이지도, 부풀지도 않았다).
+#     - ticketrush_ticket_issue_total{result="already_issued"} 와
+#       ticketrush_kafka_inbox_total{result="duplicate"} 시계열이 아예 존재하지 않는다
+#       (Micrometer 지연 등록 -> 한 번도 증가하지 않았다는 뜻).
+#
+# 쿼리 2 (inbox 건수 sanity):
+consumer_group	event_type	cnt
+booking-group	PaymentConfirmed	23000
+booking-group	SeatHoldExpiredEvent	120323
+booking-group	SeatHoldFailedEvent	1321
+payment-group	BookingExpiredEvent	123094
+seat-group	BookingCreatedEvent	83847
+ticket-group	PaymentConfirmed	23000

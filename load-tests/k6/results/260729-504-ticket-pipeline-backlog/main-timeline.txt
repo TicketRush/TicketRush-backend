@@ -1,0 +1,69 @@
+# #504 본 회차 원문 — baseline(3000 @ 10/s) -> 스파이크(20000 무페이싱) -> 드레인
+# 실행: load-test/chaos/inject-payment-confirmed.sh (EC2 호스트)
+# [drain] 줄이 회복 곡선의 원자료다. 5초 폴링 + kafka-consumer-groups --describe 호출 지연이 섞여
+# 표본 간격은 8~15초로 흔들린다 — 회복시간의 해상도가 그만큼이다.
+
+=== BASELINE (3000 @ 10/s) ===
+[inject] topic   payment-confirmed-topic  partitions=3
+[inject] group   booking-group  consumers=1
+[inject] group   ticket-group  consumers=1
+[inject] begin   count=3000 offset=0 rate=10 run=178530936564562  2026-07-29 07:16:05 UTC
+[inject] end     count=3000 elapsed=302s actual_rate=9/s  2026-07-29 07:21:07 UTC
+[drain]  begin   2026-07-29 07:21:07 UTC
+[drain]  2026-07-29T07:21:10Z booking-group=0 ticket-group=0 total=0
+[drain]  drained elapsed_from_inject_end=0s  2026-07-29 07:21:10 UTC
+=== SPIKE (20000 unpaced) ===
+[inject] topic   payment-confirmed-topic  partitions=3
+[inject] group   booking-group  consumers=1
+[inject] group   ticket-group  consumers=1
+[inject] begin   count=20000 offset=3000 rate=0 run=178530967764561  2026-07-29 07:21:17 UTC
+[inject] end     count=20000 elapsed=3s actual_rate=6666/s  2026-07-29 07:21:20 UTC
+[drain]  begin   2026-07-29 07:21:20 UTC
+[drain]  2026-07-29T07:21:26Z booking-group=19870 ticket-group=19505 total=39375
+[drain]  2026-07-29T07:21:37Z booking-group=19454 ticket-group=18577 total=38031
+[drain]  2026-07-29T07:21:47Z booking-group=19034 ticket-group=17662 total=36696
+[drain]  2026-07-29T07:21:58Z booking-group=18621 ticket-group=16747 total=35368
+[drain]  2026-07-29T07:22:09Z booking-group=18189 ticket-group=15801 total=33990
+[drain]  2026-07-29T07:22:20Z booking-group=17771 ticket-group=14886 total=32657
+[drain]  2026-07-29T07:22:30Z booking-group=17350 ticket-group=13962 total=31312
+[drain]  2026-07-29T07:22:41Z booking-group=16922 ticket-group=13035 total=29957
+[drain]  2026-07-29T07:22:52Z booking-group=16505 ticket-group=12122 total=28627
+[drain]  2026-07-29T07:23:02Z booking-group=16083 ticket-group=11208 total=27291
+[drain]  2026-07-29T07:23:13Z booking-group=15666 ticket-group=10285 total=25951
+[drain]  2026-07-29T07:23:24Z booking-group=15234 ticket-group=9319 total=24553
+[drain]  2026-07-29T07:23:35Z booking-group=14800 ticket-group=8392 total=23192
+[drain]  2026-07-29T07:23:46Z booking-group=14370 ticket-group=7469 total=21839
+[drain]  2026-07-29T07:23:57Z booking-group=13951 ticket-group=6490 total=20441
+[drain]  2026-07-29T07:24:08Z booking-group=13516 ticket-group=5555 total=19071
+[drain]  2026-07-29T07:24:19Z booking-group=13094 ticket-group=4614 total=17708
+[drain]  2026-07-29T07:24:29Z booking-group=12672 ticket-group=3696 total=16368
+[drain]  2026-07-29T07:24:40Z booking-group=12248 ticket-group=2765 total=15013
+[drain]  2026-07-29T07:24:51Z booking-group=11834 ticket-group=1845 total=13679
+[drain]  2026-07-29T07:25:01Z booking-group=11407 ticket-group=924 total=12331
+[drain]  2026-07-29T07:25:13Z booking-group=10976 ticket-group=0 total=10976
+[drain]  2026-07-29T07:25:23Z booking-group=10529 ticket-group=0 total=10529
+[drain]  2026-07-29T07:25:32Z booking-group=10075 ticket-group=0 total=10075
+[drain]  2026-07-29T07:25:42Z booking-group=9626 ticket-group=0 total=9626
+[drain]  2026-07-29T07:25:52Z booking-group=9173 ticket-group=0 total=9173
+[drain]  2026-07-29T07:26:02Z booking-group=8724 ticket-group=0 total=8724
+[drain]  2026-07-29T07:26:12Z booking-group=8275 ticket-group=0 total=8275
+[drain]  2026-07-29T07:26:22Z booking-group=7825 ticket-group=0 total=7825
+[drain]  2026-07-29T07:26:32Z booking-group=7375 ticket-group=0 total=7375
+[drain]  2026-07-29T07:26:42Z booking-group=6927 ticket-group=0 total=6927
+[drain]  2026-07-29T07:26:52Z booking-group=6476 ticket-group=0 total=6476
+[drain]  2026-07-29T07:27:02Z booking-group=6029 ticket-group=0 total=6029
+[drain]  2026-07-29T07:27:12Z booking-group=5574 ticket-group=0 total=5574
+[drain]  2026-07-29T07:27:22Z booking-group=5129 ticket-group=0 total=5129
+[drain]  2026-07-29T07:27:32Z booking-group=4684 ticket-group=0 total=4684
+[drain]  2026-07-29T07:27:42Z booking-group=4227 ticket-group=0 total=4227
+[drain]  2026-07-29T07:27:52Z booking-group=3781 ticket-group=0 total=3781
+[drain]  2026-07-29T07:28:02Z booking-group=3336 ticket-group=0 total=3336
+[drain]  2026-07-29T07:28:11Z booking-group=2885 ticket-group=0 total=2885
+[drain]  2026-07-29T07:28:21Z booking-group=2439 ticket-group=0 total=2439
+[drain]  2026-07-29T07:28:31Z booking-group=1990 ticket-group=0 total=1990
+[drain]  2026-07-29T07:28:41Z booking-group=1544 ticket-group=0 total=1544
+[drain]  2026-07-29T07:28:51Z booking-group=1096 ticket-group=0 total=1096
+[drain]  2026-07-29T07:29:01Z booking-group=647 ticket-group=0 total=647
+[drain]  2026-07-29T07:29:10Z booking-group=199 ticket-group=0 total=199
+[drain]  2026-07-29T07:29:19Z booking-group=0 ticket-group=0 total=0
+[drain]  drained elapsed_from_inject_end=475s  2026-07-29 07:29:19 UTC
