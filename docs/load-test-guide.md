@@ -1585,8 +1585,9 @@ docker compose --profile loadtest run --rm --no-deps \
 
 - 구독자 단계당 **10분**은 완료조건이다 — 장기 커넥션의 누수·타임아웃 전 구간을 본다. 기본값 기준 총 31분 30초이고, 서버 emitter 타임아웃이 30분이라 **가장 먼저 붙은 커넥션은 회차 끝에서 타임아웃에 닿는다.** `sse_connection_closed`가 그 시각에 오르는 것은 정상이다(그 전에 오르면 다른 원인이다).
 - **VU 1개 = 커넥션 1개**다(`sse.open`이 커넥션이 닫힐 때까지 블로킹한다). VU 수가 곧 동시 구독자 수다.
-- ⚠️ **이벤트율은 `SSE_MUTATE_RATE` 하나로 고정되지 않는다.** 좌석 락 TTL이 5분이라(`SeatLockUseCase.LOCK_TTL_MINUTES`) 예매 5분 뒤 스케줄러가 그 좌석을 해제하며 **두 번째 이벤트**를 낸다. 즉 회차 5분 이후의 정상 상태 이벤트율은 `SSE_MUTATE_RATE × 2`이고, 그중 절반은 매끄럽지 않다 — 스케줄러가 60초 tick마다 몰아서 해제하므로 `5/s × 60s ≈ 300건`이 **한 번에** executor로 들어간다. 구독자 600명이면 그 순간 큐에 300개 태스크 × 태스크당 600 send다.
-  이건 측정 오염이 아니라 시스템의 실제 성질이므로 통제하지 말고 **리포트에 명시**한다. 다만 전파 지연 표본이 버스트 직후에 몰리면 값이 튀므로, `probe`를 낮은 도착률로 회차 전 구간에 고르게 뿌려 계단별 p95를 잡는다(그래서 `SSE_PROBE_PER_MINUTE`가 2다).
+- ⚠️ **이벤트율은 `SSE_MUTATE_RATE` 하나로 고정되지 않는다.** 좌석 락 TTL이 5분이라(`SeatLockUseCase.LOCK_TTL_MINUTES`) 예매 5분 뒤 그 좌석이 해제되며 **두 번째 이벤트**를 낸다. 즉 회차 5분 이후의 정상 상태 이벤트율은 `SSE_MUTATE_RATE × 2`다.
+  해제 경로는 **둘**이고 성격이 다르다 — `SeatReleaseSingleUseCase`(**Redis 키 만료 이벤트**로 1건씩 즉시 해제, 주 경로, 고르게 퍼진다)와 `SeatStatusScheduler`(`@Scheduled(fixedDelay = 60000)` fallback, 놓친 것을 60초마다 쓸어 담는다). **정상 상태의 해제는 60초 버스트가 아니다.** 스케줄러가 큰 덩어리를 만드는 것은 만료 HOLD가 대량으로 쌓여 있을 때이고, 그 조건을 인위적으로 만드는 것이 아래 회차 4다.
+  이건 측정 오염이 아니라 시스템의 실제 성질이므로 통제하지 말고 **리포트에 명시**한다. 전파 지연 표본이 한쪽에 몰리면 값이 튀므로 `probe`를 낮은 도착률로 회차 전 구간에 고르게 뿌려 계단별 p95를 잡는다(그래서 `SSE_PROBE_PER_MINUTE`가 2다).
 - **수신 누락률** = `1 − (sse_events_received / (구독자 수 × 발생 이벤트 수))`. 발생 이벤트 수는 `sse_mutate_created` 성공 건수이며, **권위는 k6가 아니라 SQL**이다(§10.2 oversell 검증과 같은 선):
   ```sql
   SELECT COUNT(*) FROM seat WHERE performance_id = <SSE 공연> AND seat_status = 'HOLD';
@@ -1668,6 +1669,14 @@ rate(node_network_transmit_bytes_total{job="node", device="ens5"}[1m])
   ```bash
   MSYS_NO_PATHCONV=1 docker compose --profile loadtest run --rm --no-deps ... k6 run /scripts/scenarios/seat-counts.js ...
   ```
+- **로그에서 시각을 뽑을 때는 `^`로 줄 앞을 앵커링한다.** 페이로드에도 시각이 들어 있다. #403에서 거부 로그의 시각 분포를 `grep -oE "T[0-9]{2}:[0-9]{2}:[0-9]{2}"`로 뽑았다가, 줄 맨 앞 타임스탬프와 이벤트의 `holdExpiredAt`을 함께 세어 **존재하지 않는 두 번째 거부 구간을 만들어냈다**(매치 2,289 vs 실제 줄 2,009). 좌석 락 TTL이 5분이라 그 허상이 정확히 5분 뒤에 규칙적으로 나타나 그럴듯해 보였다.
+  ```bash
+  # 이렇게 — 줄 앞 앵커 + 합계 검산
+  docker logs --since 3h seat-service 2>&1 | grep "<패턴>" \
+    | grep -oE "^[0-9-]+T[0-9]{2}:[0-9]{2}:[0-9]{2}" | sort | uniq -c \
+    | awk '{s+=$1; print} END {print "합계 =", s}'
+  ```
+  **분포의 합계가 원본 줄 수(`grep -c`)와 같은지 반드시 확인한다.** 이 검산 하나면 위 오류가 그 자리에서 잡힌다.
 - **k6 종료코드 99는 실행 실패가 아니라 임계 초과다.** 포화를 일부러 만드는 회차에서는 `http_req_duration`·`http_req_failed` 임계가 당연히 깨진다. 회차가 끝까지 돌았는지는 `running (...)` 마지막 줄의 경과시간과 `iterations` 총합으로 판단하고, 데이터 유효성은 `seat_counts_scale_mismatch`로 판단한다.
 
 ### 14.9 증적 그래프 캡처
