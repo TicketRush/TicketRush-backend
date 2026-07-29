@@ -1624,6 +1624,14 @@ executor_queued_tasks{name="seatStatusSseExecutor"}        # 1000 이 상한
 executor_active_threads{name="seatStatusSseExecutor"}
 executor_pool_size_threads{name="seatStatusSseExecutor"}   # 4 -> 16 은 큐 포화 뒤에만
 
+# 거부 = 이벤트 유실(#403 이후 추가). 위 큐 깊이가 '왜' 를 말하고 이 카운터가 '얼마나' 를 말한다.
+rate(ticketrush_seat_sse_event_rejected_total[1m])
+increase(ticketrush_seat_sse_event_rejected_total[<회차 길이>s])   # 회차 유실 총량
+# 유실률 = 거부 / (거부 + executor 완료)
+increase(ticketrush_seat_sse_event_rejected_total[1h])
+  / (increase(ticketrush_seat_sse_event_rejected_total[1h])
+     + increase(executor_completed_tasks_total{name="seatStatusSseExecutor"}[1h]))
+
 # ── 커넥션 유지 축 ────────────────────────────────────────────────────
 tomcat_threads_current_threads{instance="seat-service:8090"}   # SSE 는 async 라 요청당 스레드를 안 문다
 jvm_threads_live_threads{instance="seat-service:8090"}
@@ -1661,3 +1669,17 @@ rate(node_network_transmit_bytes_total{job="node", device="ens5"}[1m])
   MSYS_NO_PATHCONV=1 docker compose --profile loadtest run --rm --no-deps ... k6 run /scripts/scenarios/seat-counts.js ...
   ```
 - **k6 종료코드 99는 실행 실패가 아니라 임계 초과다.** 포화를 일부러 만드는 회차에서는 `http_req_duration`·`http_req_failed` 임계가 당연히 깨진다. 회차가 끝까지 돌았는지는 `running (...)` 마지막 줄의 경과시간과 `iterations` 총합으로 판단하고, 데이터 유효성은 `seat_counts_scale_mismatch`로 판단한다.
+
+### 14.9 증적 그래프 캡처
+
+**Grafana에 이미지 렌더러 플러그인이 없어 PNG를 서버가 만들어 주지 못한다.** Explore를 열어 직접 캡처한다(#346·#347 회차와 같은 관행).
+
+측정 창을 손으로 맞추면 어긋나기 쉬우므로, 쿼리와 UTC 절대 시각을 URL에 박아둔 링크 목록을 회차 증적 디렉토리에 함께 남긴다 — **절차와 링크는 `load-tests/k6/results/260728-403-seat-counts-sse/grafana-capture-links.md`에 있다.** 새 회차를 돌리면 그 파일의 `WINDOWS`(측정 창)와 `GRAPHS`(그래프 정의)만 갈아 끼워 같은 형식으로 다시 만든다.
+
+요지만 옮기면:
+
+1. `ssh -L 3000:localhost:3000 -L 9090:localhost:9090` 터널을 올린다(§7.1 — 3000·9090은 `127.0.0.1` 바인딩이다).
+2. http://localhost:3000 에 **먼저 로그인한다.** 로그인 전에 Explore 링크를 열면 로그인 화면으로 튕기면서 쿼리·시간 범위가 유실된다.
+3. 링크를 그대로 열고 화면을 캡처해 `graph-*.png`로 증적 디렉토리에 저장한다.
+
+> Prometheus 보존 기간이 지나면 이 링크들은 빈 그래프가 된다. 그래서 같은 디렉토리에 `dump-timeseries.py` 결과(`timeseries-*.json`)를 함께 커밋한다 — 그쪽이 장기 원자료다.
