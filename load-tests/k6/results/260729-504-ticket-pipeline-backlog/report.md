@@ -363,6 +363,14 @@ booking-group  : inbox tx → booking UPDATE → bookingNumber 재조회
 | `seed-verify.txt` | 시딩·리셋·검증 SELECT 출력(완료조건 1) |
 | `verify-inbox-output.txt` | `load-test/chaos/verify-inbox.sql` 실행 결과(완료조건 4). 첫 쿼리가 0행이라 출력이 없는 것이 결과다 — 파일 머리말에 설명을 붙였다 |
 | `timeseries-*.json` | Prometheus 15초 스크랩 덤프. 접미사 `-smoke`(07:09~07:15:30Z) / `-main`(07:15:30~07:32Z). `ticket-issue-rate`·`inbox-rate` 는 `dump-timeseries.py` 의 목록에 없어 따로 떴다 |
-| `grafana-capture-links.md` | Explore 링크 4개(쿼리·UTC 창이 URL 에 박혀 있다) |
+| `grafana-capture-links.md` | Explore 링크 2장(쿼리·UTC 창이 URL 에 박혀 있다) |
+| `graph-drain-rate.png` | 두 그룹 처리율. baseline 9/s → 스파이크 ticket 86/s·booking 39/s → ticket 종료 후 booking 45/s |
+| `graph-resources.png` | 회복 구간 호스트 CPU·HikariCP 대기·seat-service 톰캣 스레드 |
+
+### 캡처 판독 메모
+
+- **그래프의 시각은 KST 다(브라우저 시간대). 이 리포트의 시각은 전부 UTC 다.** `16:16` = `07:16Z`. 9시간을 빼고 읽는다.
+- `graph-drain-rate.png` 의 **범례에 있는 노란색 `ticket-group` 선이 안 보이는 것은 정상이다.** 파란색 `{result="issued"}` 와 **완전히 겹친다** — `ticket-group` 이 처리한 이벤트 1건이 곧 티켓 1장이라 두 값이 정의상 같다. 선이 빠진 게 아니다.
+- `graph-resources.png` 에서 **HikariCP(7개 인스턴스)와 톰캣 스레드는 바닥에 눌려 서로 구분되지 않는다.** CPU 축이 0~90 인데 그 둘은 각각 0과 1이라 #403 이 기록한 "쿼리 단위가 다르면 한 그래프에 넣지 않는다" 함정에 그대로 걸린다. 다만 이 그림이 말하려는 것이 **"CPU 가 80% 인 동안 두 풀은 바닥에 붙어 있었다"** 이므로 그 자체는 읽힌다. 정확한 값은 `metadata.txt` 의 `HIKARI_PENDING_MAX=0`·`TOMCAT_BUSY_SEAT_MAX=1` 이다.
 
 > **그래프 PNG 는 이 회차의 완료조건이 아니다.** #403 은 완료조건 6이 "Grafana 그래프 캡처" 였지만 #504 의 완료조건 6은 리포트 디렉토리 형식이다. 수치의 원자료는 `lag-samples-spike.csv`(5초 폴링, 브로커의 `LEO − committed`)와 `timeseries-*.json`(Prometheus 15초 스크랩) 두 벌이고 둘 다 커밋돼 있다. 그림이 필요하면 `grafana-capture-links.md` 의 링크를 열어 캡처해 `graph-*.png` 로 같은 디렉토리에 넣으면 된다 — 링크에 쿼리와 측정 창이 이미 박혀 있다.
