@@ -38,29 +38,19 @@ Grafana 에 이미지 렌더러 플러그인이 없어 **PNG 를 서버가 만�
 - **`ticketrush_ticket_issue_total` 은 스모크 전에는 시계열이 없다.** Micrometer 지연 등록이라
   첫 발급이 일어나야 생긴다. 창을 스모크 시작 이전으로 넓히면 앞부분이 비어 보인다.
 
+
 ## 캡처 목록
 
-### graph-backlog-recovery.png — 스파이크 유입 → backlog 정점 → lag 0. 이 회차의 본 그림이다(완료조건 3)
+**2장이다.** 이 회차의 본 그림인 backlog 회복 곡선은 **Grafana 로 그리지 않는다** — `kafka_consumer_fetch_manager_records_lag` 가 파티션별 "마지막 fetch 응답 시점의 값"이라 단일 스레드가 파티션 3개를 훑는 이 구성에서는 단조 감소하지 않고 톱니로 튄다(report.md §7.6). 회복 곡선의 원자료는 브로커 축인 `lag-samples-spike.csv` 이고, 파티션 분포는 브로커의 파티션별 LOG-END-OFFSET(9,559 / 9,740 / 9,702)으로 판정했다. 아래 2장은 **서버 카운터와 자원 축**이라 스크랩 시점 문제가 없다.
+
+### graph-drain-rate.png — 두 그룹의 처리율. ticket-group 이 먼저 0에 닿고(07:25:12Z) 그 뒤 booking-group 이 뛰는 것이 보인다 — §7.2·§7.3 의 그림
 
 측정 창: 2026-07-29T07:15:30Z ~ 2026-07-29T07:31:00Z (UTC)
 
-http://localhost:3000/explore?orgId=1&schemaVersion=1&panes=%7B%22a%22%3A%7B%22datasource%22%3A%22prometheus%22%2C%22queries%22%3A%5B%7B%22refId%22%3A%22A%22%2C%22expr%22%3A%22sum%20by%20%28instance%2C%20topic%29%20%28kafka_consumer_fetch_manager_records_lag%7Bjob%3D%5C%22ticketrush-services%5C%22%2C%20topic%3D%5C%22payment-confirmed-topic%5C%22%7D%29%22%2C%22datasource%22%3A%7B%22type%22%3A%22prometheus%22%2C%22uid%22%3A%22prometheus%22%7D%7D%5D%2C%22range%22%3A%7B%22from%22%3A%221785309330000%22%2C%22to%22%3A%221785310260000%22%7D%7D%7D
+http://localhost:3000/explore?orgId=1&schemaVersion=1&panes=%7B%22a%22%3A%7B%22datasource%22%3A%22prometheus%22%2C%22queries%22%3A%5B%7B%22refId%22%3A%22A%22%2C%22expr%22%3A%22sum%20by%20%28consumer_group%2C%20result%29%20%28rate%28ticketrush_kafka_inbox_total%5B1m%5D%29%29%22%2C%22datasource%22%3A%7B%22type%22%3A%22prometheus%22%2C%22uid%22%3A%22prometheus%22%7D%7D%2C%7B%22refId%22%3A%22B%22%2C%22expr%22%3A%22sum%20by%20%28result%29%20%28rate%28ticketrush_ticket_issue_total%5B1m%5D%29%29%22%2C%22datasource%22%3A%7B%22type%22%3A%22prometheus%22%2C%22uid%22%3A%22prometheus%22%7D%7D%5D%2C%22range%22%3A%7B%22from%22%3A%221785309330000%22%2C%22to%22%3A%221785310260000%22%7D%7D%7D
 
-### graph-drain-rate.png — 두 그룹의 발급·처리율. booking-group 이 구속 조건이라는 근거
-
-측정 창: 2026-07-29T07:15:30Z ~ 2026-07-29T07:31:00Z (UTC)
-
-http://localhost:3000/explore?orgId=1&schemaVersion=1&panes=%7B%22a%22%3A%7B%22datasource%22%3A%22prometheus%22%2C%22queries%22%3A%5B%7B%22refId%22%3A%22A%22%2C%22expr%22%3A%22sum%20by%20%28result%29%20%28rate%28ticketrush_ticket_issue_total%5B1m%5D%29%29%22%2C%22datasource%22%3A%7B%22type%22%3A%22prometheus%22%2C%22uid%22%3A%22prometheus%22%7D%7D%2C%7B%22refId%22%3A%22B%22%2C%22expr%22%3A%22sum%20by%20%28consumer_group%2C%20result%29%20%28rate%28ticketrush_kafka_inbox_total%5B1m%5D%29%29%22%2C%22datasource%22%3A%7B%22type%22%3A%22prometheus%22%2C%22uid%22%3A%22prometheus%22%7D%7D%5D%2C%22range%22%3A%7B%22from%22%3A%221785309330000%22%2C%22to%22%3A%221785310260000%22%7D%7D%7D
-
-### graph-partition-skew.png — sum(총 적체) 대비 max(파티션 최댓값). 셋이 고르게 빠지면 스큐가 없다
-
-측정 창: 2026-07-29T07:15:30Z ~ 2026-07-29T07:31:00Z (UTC)
-
-http://localhost:3000/explore?orgId=1&schemaVersion=1&panes=%7B%22a%22%3A%7B%22datasource%22%3A%22prometheus%22%2C%22queries%22%3A%5B%7B%22refId%22%3A%22A%22%2C%22expr%22%3A%22sum%20by%20%28instance%2C%20topic%29%20%28kafka_consumer_fetch_manager_records_lag%7Bjob%3D%5C%22ticketrush-services%5C%22%2C%20topic%3D%5C%22payment-confirmed-topic%5C%22%7D%29%22%2C%22datasource%22%3A%7B%22type%22%3A%22prometheus%22%2C%22uid%22%3A%22prometheus%22%7D%7D%2C%7B%22refId%22%3A%22B%22%2C%22expr%22%3A%22max%20by%20%28instance%2C%20topic%29%20%28kafka_consumer_fetch_manager_records_lag%7Bjob%3D%5C%22ticketrush-services%5C%22%2C%20topic%3D%5C%22payment-confirmed-topic%5C%22%7D%29%22%2C%22datasource%22%3A%7B%22type%22%3A%22prometheus%22%2C%22uid%22%3A%22prometheus%22%7D%7D%5D%2C%22range%22%3A%7B%22from%22%3A%221785309330000%22%2C%22to%22%3A%221785310260000%22%7D%7D%7D
-
-### graph-resources.png — 회복 구간의 호스트 CPU·DB 대기. 드레인율의 상한이 어디였는지
+### graph-resources.png — 회복 구간의 호스트 CPU·HikariCP 대기·seat-service 톰캣 스레드. 병목이 어느 풀도 아니라는 근거 — §7.4
 
 측정 창: 2026-07-29T07:15:30Z ~ 2026-07-29T07:31:00Z (UTC)
 
 http://localhost:3000/explore?orgId=1&schemaVersion=1&panes=%7B%22a%22%3A%7B%22datasource%22%3A%22prometheus%22%2C%22queries%22%3A%5B%7B%22refId%22%3A%22A%22%2C%22expr%22%3A%22100%20%2A%20%281%20-%20avg%28rate%28node_cpu_seconds_total%7Bjob%3D%5C%22node%5C%22%2C%20mode%3D%5C%22idle%5C%22%7D%5B1m%5D%29%29%29%22%2C%22datasource%22%3A%7B%22type%22%3A%22prometheus%22%2C%22uid%22%3A%22prometheus%22%7D%7D%2C%7B%22refId%22%3A%22B%22%2C%22expr%22%3A%22hikaricp_connections_pending%7Bjob%3D%5C%22ticketrush-services%5C%22%7D%22%2C%22datasource%22%3A%7B%22type%22%3A%22prometheus%22%2C%22uid%22%3A%22prometheus%22%7D%7D%2C%7B%22refId%22%3A%22C%22%2C%22expr%22%3A%22tomcat_threads_busy_threads%7Binstance%3D%5C%22seat-service%3A8090%5C%22%7D%22%2C%22datasource%22%3A%7B%22type%22%3A%22prometheus%22%2C%22uid%22%3A%22prometheus%22%7D%7D%5D%2C%22range%22%3A%7B%22from%22%3A%221785309330000%22%2C%22to%22%3A%221785310260000%22%7D%7D%7D
-

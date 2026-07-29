@@ -1806,11 +1806,27 @@ baseline (드레인율 미만, 5분)  →  스파이크 (무페이싱 스텝)  �
 | DB 대기 | `hikaricp_connections_pending{job="ticketrush-services"}` |
 | 호스트 CPU | `100 * (1 - avg(rate(node_cpu_seconds_total{job="node", mode="idle"}[1m])))` |
 
-> ⚠️ 대시보드와 §10.3 이 쓰는 `max by (...)` 는 **파티션 3개 중 최댓값**이지 총 적체가 아니다. 회복량·기울기를 읽으려면 `sum by (...)` 여야 한다. `max` 는 파티션 스큐 확인용으로만 병기한다.
->
 > ⚠️ 라벨 축은 `instance` 다(`ticket-service:8090`, `booking-service:8090`). `application` 라벨은 이 스택에 없다(§11.6).
 
-**그래프는 Prometheus 15초 스크랩으로 그리고, 숫자는 주입 스크립트의 `[drain]` 루프에서 뽑는다.** 그쪽은 브로커의 `LEO − committed` 라 클라이언트측 `records-lag`(마지막 fetch 응답 시점 값)보다 권위 있다.
+### 🚨 `kafka_consumer_fetch_manager_records_lag` 로 backlog 곡선을 그리지 않는다
+
+**#504 실측에서 확인했다.** 이 지표는 파티션별로 **"마지막 fetch 응답 시점의 lag"** 이다. `max.poll.records=20` 인 단일 스레드가 파티션 3개를 번갈아 훑으면 파티션마다 갱신 시각이 달라지고, `sum by (instance)` 는 **신선한 값과 낡은 값을 더한다.** 그 결과 적체가 단조 감소하지 않고 톱니로 튄다.
+
+```
+booking-service:8090   4,632 → 4,052 → 10,013 → 9,413      (Prometheus 15초)
+ticket-service:8090    4,692 → 9,973 →  8,653 → 14,031     (Prometheus 15초)
+```
+
+같은 구간을 브로커에서 5초로 뜬 값은 완벽하게 단조 감소했고 정점도 두 배 가까이 컸다(booking 10,013 vs **19,870**, ticket 14,031 vs **19,505**).
+
+| 무엇을 | 어디서 |
+|---|---|
+| 적체 절대량·회복 곡선·드레인율 | **브로커** — 주입 스크립트의 `[drain]` 루프(`kafka-consumer-groups --describe` = `LEO − committed`) |
+| 파티션 분포(스큐) | **브로커** — 파티션별 `LOG-END-OFFSET` |
+| 처리율·자원 축 | **Prometheus** — `ticketrush_kafka_inbox_total`·`ticketrush_ticket_issue_total`·CPU·HikariCP·톰캣(서버 카운터라 스크랩 시점 문제 없음) |
+| `records-lag` 패널 | **"랙이 있다/없다" 신호로만.** 절대량·곡선 판단 금지 |
+
+§10.3 과 Grafana `Kafka Consumer Lag` 패널이 이 지표를 쓴다 — **컨슈머가 여러 파티션을 한 스레드로 훑는 구성에서는 그 패널을 적체량으로 읽지 않는다.**
 
 ### 15.5 주의 / 무효 판정
 

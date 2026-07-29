@@ -114,9 +114,23 @@ SPIKE_INJECT_END_UTC=2026-07-29T07:21:20Z
 SPIKE_PEAK_BOOKING=19870 @ 2026-07-29T07:21:26Z (주입 종료 +6s)
 SPIKE_PEAK_TICKET=19505 @ 2026-07-29T07:21:26Z (주입 종료 +6s)
 SPIKE_PEAK_TOTAL=39375
-# 파티션 스큐 확인용. max-by 는 파티션 3개 중 최댓값이라 sum 의 약 1/3 이다(고른 분산).
-SPIKE_PEAK_BOOKING_MAXBY=6508
-SPIKE_PEAK_TICKET_MAXBY=6248
+# ⚠ 정점은 브로커 축(LEO - committed, lag-samples-spike.csv)에서 뽑았다. Prometheus 의
+#   kafka_consumer_fetch_manager_records_lag 로는 못 뽑는다 — 아래 참고.
+# 파티션 분포는 브로커의 파티션별 LOG-END-OFFSET 으로 판정한다(권위 있는 축).
+PARTITION_LEO_P0=9559
+PARTITION_LEO_P1=9740
+PARTITION_LEO_P2=9702
+PARTITION_LEO_TOTAL=29001
+PARTITION_SKEW=평균 9667 대비 편차 1.1% — 사실상 균등
+
+# ── ⚠ Prometheus 의 records-lag 는 이 회차의 backlog 곡선으로 쓸 수 없다 ──────
+# 파티션별 "마지막 fetch 응답 시점의 lag" 이라, max.poll.records=20 인 단일 스레드가 파티션
+# 3개를 번갈아 훑으면 파티션마다 갱신 시각이 달라진다. sum by (instance) 는 신선한 값과 낡은
+# 값을 더하므로 단조 감소하지 않고 톱니로 튄다. 실측 비교:
+#   booking  Prometheus 정점 10013 (톱니)  vs  브로커 19870 (단조 감소)
+#   ticket   Prometheus 정점 14031 (톱니)  vs  브로커 19505 (단조 감소)
+# 이 리포트의 회복 수치는 전부 브로커 축이다. Prometheus 축은 발급률과 자원 축에만 썼다.
+PROM_RECORDS_LAG_USABLE=아니오 (랙 유무 신호로만. 절대량·곡선 판단 금지)
 
 # ── 회복시간 (완료조건 3) ────────────────────────────────────────────────────
 # 스크립트의 [drain] drained 줄은 elapsed_from_inject_end=475s, 마지막 표본 UTC 기준은 479s.
