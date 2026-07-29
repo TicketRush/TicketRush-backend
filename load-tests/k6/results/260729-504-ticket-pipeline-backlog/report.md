@@ -386,6 +386,7 @@ booking-group  : inbox tx → booking UPDATE → bookingNumber 재조회
 | `lag-samples-spike.csv` | 위 `[drain]` 줄을 CSV 로 정리한 것 |
 | `seed-verify.txt` | 시딩·리셋·검증 SELECT 출력(완료조건 1) |
 | `verify-inbox-output.txt` | `load-test/chaos/verify-inbox.sql` 실행 결과(완료조건 4). 첫 쿼리가 0행이라 출력이 없는 것이 결과다 — 파일 머리말에 설명을 붙였다 |
+| `broker-state.txt` | 브로커·actuator 직접 조회 출력. §3(파티션·컨슈머 배정), §7.5(파티션 분포), §8.1(게이트), §8.2(카운터 절대값)의 근거다. **이 회차는 k6 를 쓰지 않아 `k6-summary.txt` 가 없고 이 파일이 그 자리를 대신한다** |
 | `timeseries-*.json` | Prometheus 15초 스크랩 덤프. 접미사 `-smoke`(07:09~07:15:30Z) / `-main`(07:15:30~07:32Z). `ticket-issue-rate`·`inbox-rate` 는 `dump-timeseries.py` 의 목록에 없어 따로 떴다 |
 | `grafana-capture-links.md` | Explore 링크 2장(쿼리·UTC 창이 URL 에 박혀 있다) |
 | `graph-drain-rate.png` | 두 그룹 처리율. baseline 9/s → 스파이크 ticket 86/s·booking 39/s → ticket 종료 후 booking 45/s |
