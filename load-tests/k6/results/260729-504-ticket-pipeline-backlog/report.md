@@ -315,9 +315,26 @@ ticketrush_kafka_inbox_total{consumer_group="booking-group",result="processed"} 
 
 ### 측정 후 코호트를 남겨 두었다 — 시한이 하나 걸려 있다
 
-`LTP-A` 코호트 30,000건을 지우지 않았다(재실행 가능하게 두는 편이 낫다). 그중 **7,000석이 아직 `HOLD` 이고 `hold_expired_at` 이 `2026-07-29T13:15Z`(시딩 +6시간)** 다. EC2 를 그때까지 켜 두면 `SeatStatusScheduler`(60초 주기, tick 당 최대 2,000건)가 그 7,000석을 해제하면서 좌석 1건당 `SeatHoldExpiredEvent` 를 만든다 — **그 시각 근처에 다른 회차를 돌리면 오염된다.**
+`LTP-A` 코호트 30,000건을 지우지 않았다(재실행 가능하게 두는 편이 낫다). 그중 **7,000석이 아직 `HOLD` 이고 `hold_expired_at` 이 `2026-07-29 13:15:37 UTC`(시딩 +6시간)** 다.
 
-지우려면 `@mode='reset'` 이 아니라 코호트 삭제가 필요하다. `cleanup_load.sql` 에 `LTP-%`/`LT-P%` 정리를 추가해 뒀지만 그 파일은 **다른 이슈의 `LOADTEST-%` 코호트까지 전부 지운다.** 이 코호트만 지우려면 그 절만 떼어 실행한다.
+> ⚠️ **EC2 를 끄는 것으로 해소되지 않는다 — 미뤄질 뿐이다.** `SeatStatusScheduler`(60초 주기, tick 당 최대 2,000건)는 인스턴스가 떠 있을 때만 돌지만, **13:15Z 이후에 인스턴스를 다시 켜면 만료 시각이 이미 과거라 기동 직후 첫 tick 에 7,000석이 한꺼번에 해제된다.** 좌석 1건당 `SeatHoldExpiredEvent` 가 나가므로 **그때 다른 회차를 돌리고 있으면 오염된다.**
+>
+> (측정 종료 시점에 EC2 가 내려가 있어 이 정리를 실행하지 못했다. **다음 기동 때 측정보다 먼저 해야 한다.**)
+
+지우려면 `@mode='reset'` 이 아니라 코호트 삭제가 필요하다. `cleanup_load.sql` 에 `LTP-%`/`LT-P%` 정리를 추가해 뒀지만 그 파일은 **다른 이슈의 `LOADTEST-%` 코호트까지 전부 지운다.** 이 코호트만 지우려면 그 절만 떼어 실행한다:
+
+```sql
+DELETE t FROM ticket t JOIN booking b ON b.booking_id = t.booking_id
+ WHERE b.booking_number LIKE 'LT-P%';
+DELETE FROM booking WHERE booking_number LIKE 'LT-P%';
+DELETE s  FROM seat s        JOIN performance p ON p.performance_id = s.performance_id
+ WHERE p.title LIKE 'LTP-%';
+DELETE sl FROM seat_layout sl JOIN performance p ON p.performance_id = sl.performance_id
+ WHERE p.title LIKE 'LTP-%';
+DELETE FROM performance WHERE title LIKE 'LTP-%';
+DELETE FROM inbox WHERE event_type = 'PaymentConfirmed'
+   AND consumer_group IN ('booking-group', 'ticket-group');
+```
 
 ---
 
