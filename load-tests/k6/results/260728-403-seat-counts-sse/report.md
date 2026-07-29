@@ -318,7 +318,7 @@ utc      active completed pool queued
 | 3 | SSE 동시 구독, 수신율·전파 지연 | ✅ §7 — 100/300/600, p95 1.25s→2.16s→2.77s, 수신율 93.7~99.4%(거부 구간 제외) |
 | 4 | 스레드풀 포화(큐 적체·거부)를 지표로 기록 | ✅ §8 — `executor_queued_tasks` 시계열 + 거부 2,009건(10.3%). 거부 시각이 큐 포화 구간과 전부 일치 |
 | 5 | 각 부하 단계 5분 이상 유지, SSE 10분 이상 | ✅ 집계 5분 × 6계단, SSE 10분 × 3계단 |
-| 6 | Grafana 그래프 캡처 | ✅ `graph-*.png` 7장. 최소 요구 4장을 넘긴다. 다만 `graph-sse-propagation.png` 1장은 재촬영 대상(아래) |
+| 6 | Grafana 그래프 캡처 | ✅ `graph-*.png` **8장**. 최소 요구 4장의 두 배다 |
 
 ---
 
@@ -359,7 +359,7 @@ utc      active completed pool queued
 | `executor-queue-poll-saturation.txt` | 회차 4 큐 깊이 3초 폴링 원자료 |
 | `seed-verification.txt` | 시딩 검증 SELECT 출력 |
 | `timeseries-*-{countsa,countsb,sse}.json` | Prometheus 시계열 덤프 |
-| `graph-*.png` | Grafana Explore 캡처 7장 |
+| `graph-*.png` | Grafana Explore 캡처 8장 |
 | `grafana-capture-links.md` | 캡처 절차 + Explore 링크 |
 
 ### 캡처 판독 메모
@@ -369,4 +369,7 @@ utc      active completed pool queued
 - `graph-sse-executor` — 큐가 1000에 고착됐다가 약 2분 20초에 걸쳐 빠지는 구간이 §8이다.
 - `graph-sse-receipt` — 수신율 계단 700 → 3,000 → 6,000과 버스트 직후 16K 스파이크(밀렸던 이벤트의 일괄 도착).
 - `graph-sse-resources` — CPU·힙·`jvm_threads_live`(110 → 127). tomcat 현재 스레드가 10에서 꿈쩍 않는 것이 "SSE는 스레드를 점유하지 않는다"의 그림이다.
-- ⚠️ **`graph-sse-propagation`은 다시 찍어야 한다.** `k6_vus`(0~600)를 같은 축에 넣어 전파 지연(원단위 1.2~4.0)이 바닥에 깔렸다. `grafana-capture-links.md`의 해당 링크를 ms 스케일·지연 축 단독으로 고쳐 두었고, 구독자 계단은 `graph-sse-subscribers.png`로 분리했다.
+- `graph-sse-propagation` + `graph-sse-subscribers` — **이 두 장이 완료조건 3의 곡선이다.** 시간 범위가 같으니 나란히 놓고 읽는다. 구독자가 600으로 올라가는 지점에서 지연 계단이 함께 올라간다. 버스트 직후 p99가 10.3초까지 수직으로 뛰는 것이 §8의 유실 구간이고, 바닥에 깔린 `probe_booking`(약 36ms)이 "booking API는 전파 지연의 1.5%"라는 §7의 그림이다.
+  > 범례가 셋 다 `{scenario="probe"}`로 보이는 것은 `1000 *` 연산이 메트릭 이름을 지우기 때문이다. 값 순서로 구분한다 — 위에서부터 **p99 ≥ p95 ≥ probe_booking**이다.
+  >
+  > 처음 캡처는 `k6_vus`(0~600)를 같은 축에 넣어 전파 지연(원단위 1.2~4.0)이 바닥에 깔려 못 썼다. **쿼리 단위가 다르면 한 그래프에 넣지 않는다** — 축이 큰 쪽이 작은 쪽을 완전히 가린다.
