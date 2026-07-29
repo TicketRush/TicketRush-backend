@@ -1,0 +1,246 @@
+SERIES_ID=260728-403-seat-counts-sse
+ISSUE=#403
+PR=(미생성)
+DATE=2026-07-28 ~ 2026-07-29 (KST) — 회차 1은 28일, 회차 2 이후는 29일
+TARGET_HOST=EC2 54.116.243.250 (탄력 IP) — https://api.ticketrush.store
+TOPOLOGY=k6 local (docker compose, ADR 0004) --SSH tunnel(9090)--> EC2 deploy stack (Prometheus/Grafana EC2 로컬, ADR 0007)
+IMAGE_TAG=1f2ed5d27ec7dd9cb92d72aba6b2e9b92a6ce110 (전 서비스 동일 — origin/main HEAD, 두 날짜 모두 확인)
+APP_CODE_CHANGE=none (이 회차는 배포가 아니라 실행이다 — #512 규약)
+RUNBOOK=docs/load-test-guide.md §14
+SCENARIO_COUNTS=load-test/scenarios/seat-counts.js
+SCENARIO_SSE=load-test/scenarios/seat-sse-fanout.js (k6-sse 이미지 전용)
+SEED=load-test/seed/seed_seat_counts.sql
+PROM_SCRAPE_INTERVAL=15s
+K6_IMAGE_COUNTS=grafana/k6:latest
+K6_IMAGE_SSE=ticketrush/k6-sse:local — k6 v1.2.1 (go1.26.4) + github.com/phymbert/xk6-sse v0.1.12 (k6/x/sse)
+
+# ── 선결 수정 (이 회차에서 함께 고쳤다) ───────────────────────────────────
+# nginx 가 SSE 를 버퍼링해 인터넷에서 도달 불가였다. 인터넷에 열린 포트는 nginx 443 하나뿐이므로
+# 좌석 상태 실시간 구독은 외부에서 쓸 수 없는 상태였다. #402 의 게이트웨이 라우트 누락과 같은 계열.
+NGINX_SSE_FIX=deploy/nginx/api.ticketrush.store.conf (커밋 2c630a15)
+NGINX_SSE_SMOKE_BEFORE=https 8초 무응답 (헤더조차 없음) / 게이트웨이 8080 직결은 event:connected 즉시
+NGINX_SSE_SMOKE_AFTER=https 헤더 즉시 + event:connected 수신
+NGINX_CONF_MD5_BEFORE=7ad7eb2480a7f721fa644e6a99983bc0
+NGINX_CONF_MD5_AFTER=5ef9b5bfcb2cfa8abde007145744c9ae (저장소 파일과 바이트 동일)
+NGINX_REGRESSION_CHECK=seat-counts 200 / seat-layouts 200
+NGINX_PERSIST_CHECK=07-29 EC2 재기동 후에도 md5 5ef9b5bf... 유지 — 설정이 되돌아가지 않았다
+
+# ── 선행 게이트 (§14.2) — 07-29 회차 시작 전 전부 재통과 ──────────────────
+G0_SSE_REACHABLE=pass — https 헤더 즉시 + event:connected 수신
+G1_INDEX=pass — idx_seat_performance_id (performance_id) 존재. idx_seat_status_hold_expired_at 도 존재
+G2_EXECUTOR_METRIC=pass — executor_queued_tasks{name="seatStatusSseExecutor"} 노출 확인
+#   ⚠ 사전 우려였던 "@Bean 반환 타입이 Executor 라 TaskExecutorMetricsAutoConfiguration 이 놓칠 수 있다"는
+#     실측에서 기우로 확인됐다. 큐 깊이 시계열을 지표로 확보했으므로 로그 대체 경로는 쓰지 않는다.
+G3_IMAGE_UNIFORM=pass — 8개 앱 서비스 전부 1f2ed5d2...
+G4_BASELINE_RSS=seat-service 412.6 MiB / 640 (64.5%), gateway-service 239.2 MiB / 512 (부팅 직후)
+
+# ── 코호트 재사용 시 발견 (07-29) ─────────────────────────────────────────
+# EC2 를 껐다 다음 날 켜니 미만료 HOLD(+6시간)가 그 사이 만료돼 있었고, 부팅 직후 스케줄러가
+# 전부 해제했다. 상태 분포가 회차 1과 달라져 그대로 재면 두 곡선을 겹칠 수 없다(§14.8 무효 판정).
+COHORT_DECAY_OBSERVED=LTC-A hold 120 -> 0 (available 360 -> 480) / LTC-B hold 600 -> 0 (1800 -> 2400)
+COHORT_DECAY_CROSSCHECK=부팅 직후 executor_completed_tasks_total = 720 = 120 + 600 (해제 이벤트 수와 정확히 일치)
+COHORT_RESTORE=seed_seat_counts.sql 에 @mode='refresh' 를 추가해 복원. 좌석번호 S-<i> 의 i 로 시딩 당시
+#   배분 규칙을 재현하므로 '원래 HOLD 였던 바로 그 좌석' 만 되돌아가고 performance_id 가 보존된다.
+#   재시딩하면 id 가 바뀌어 회차 1과의 연결이 끊긴다.
+
+# ── 시딩 규모 (완료조건 1) ────────────────────────────────────────────────
+# 기존 LOADTEST 코호트(#348/#509 의 20,800석)는 건드리지 않았다. 접두사 LTC 로 분리.
+# hold_expired_at 은 UTC_TIMESTAMP() 기준(앱 JVM 시계와 맞춤). 미만료 HOLD 는 +6시간이라
+# 60초 스케줄러가 회차 도중 해제하지 않는다 = 상태 분포가 회차 안에서는 고정된다.
+SEED_DB_CLOCK=KST (세션 NOW() 13:10) / APP_CLOCK=UTC (04:10) — 9시간 차 재확인됨
+SEED_A_TITLE=LTC-A
+SEED_A_PERF_ID=14
+SEED_A_SEATS=600 (AVAILABLE 360 / SOLD 120 / HOLD_live 120 / HOLD_expired 0)
+SEED_A_API_CHECK=total_count=600 available_count=360 sold_count=120 hold_count=120 (시딩과 일치)
+SEED_B_TITLE=LTC-B
+SEED_B_PERF_ID=15
+SEED_B_SEATS=3000 (AVAILABLE 1800 / SOLD 600 / HOLD_live 600 / HOLD_expired 0)
+SEED_B_API_CHECK=total_count=3000 available_count=1800 sold_count=600 hold_count=600 (시딩과 일치)
+SEED_SSE_TITLE=LTC-SSE
+SEED_SSE_PERF_ID=17 (07-29 재시딩. 07-28 의 16 은 SSE 스모크가 좌석을 양끝에서 96석 소모해 폐기)
+SEED_SSE_SEATS=12000 (전부 AVAILABLE — 예매 부하로 HOLD 전이를 유발한다)
+SEED_SSE_API_CHECK=total_count=12000 available_count=12000 sold_count=0 hold_count=0 (시딩과 일치)
+SEED_STATUS_RATIO=SOLD 20% / HOLD 20% / AVAILABLE 60% (A·B 동일 — 두 곡선을 겹치기 위한 전제)
+
+# ── 캘리브레이션 (수치 폐기, 계단 상한 산정용) ────────────────────────────
+# 스케일 B(3,000석)에 320 -> 640/s 를 45초씩 넣어 무릎 위치를 먼저 찾았다.
+CALIB_TARGET_RATE=640/s
+CALIB_ACTUAL_THROUGHPUT=246.8 rps (고원 — 도착률을 2.6배 올려도 여기서 멈춘다)
+CALIB_NODE_CPU_PEAK=99.96%
+CALIB_TOMCAT_BUSY_PEAK=50 / 50 (max-threads 50, #509 에서 낮춘 값)
+CALIB_HIKARI_PENDING_PEAK=41 (풀 10) — 집계 쿼리가 커넥션을 물고 줄을 세운다
+CALIB_K6_P95=3.52s / http_req_failed 5.30% / dropped_iterations 21,863
+CALIB_CONCLUSION=무릎 약 247 rps. 그 아래위를 감싸는 40,80,160,240,320,480 을 본 회차 계단으로 확정
+CALIB_VERDICT=본 회차 실측이 이 예측을 그대로 맞혔다 — 회차 2의 고원이 247 rps 다(아래 R2_STAGE_480).
+
+# ── 회차 1: seat-counts 스케일 A (600석) ─────────────────────────────────
+R1_PERF_ID=14
+R1_STAGES=40,80,160,240,320,480 iter/s x 5m (전환 램프 10s) — 총 30m40s
+R1_PRE_ALLOCATED_VUS=100 / R1_MAX_VUS=800
+R1_START_UTC=2026-07-28T08:03:09Z (k6 실제 시작 — 종료 시각에서 running 30m50s 를 뺀 값)
+R1_END_UTC=2026-07-28T08:33:59Z
+R1_WINDOW_END_SOURCE=k6 종료 시각. 이 경로에는 outbox·컨슈머 등 비동기 파이프라인이 없어
+#   §10.2 의 "PENDING=0 첫 관측" 규약이 적용되지 않는다(#402 와 같은 판단).
+R1_ITERATIONS=405,864 (dropped 735 = 0.18%)
+R1_HTTP_REQ_FAILED=0.00% (1 / 405,864) — 유일한 실패는 480 계단의 타임아웃
+R1_SCALE_MISMATCH=0.00% (0 / 405,863) — 시딩 규모와 응답이 전 구간 일치
+R1_VUS_MAX_USED=796 / 800 (preAllocated 100)
+R1_K6_P95_MS_OVERALL=89.35 / R1_K6_AVG_MS_OVERALL=37.49 / R1_K6_MAX_MS=9190
+R1_SATURATED=no — 480 계단에서도 목표의 98.5% 를 소화했고 에러율 0. A 의 상한은 480 rps 보다 위다.
+
+# 계단별 (구간평균 / 구간최댓값, 램프 앞뒤 30초 제외). 원자료 stage-stats-countsa.txt
+#   도착률 | k6 rps      | 서버avg ms   | 서버p95 ms   | CPU %        | tomcat busy | hikari pending
+R1_STAGE_40 =39.1/40.0   | 2.46/2.83   | 4.91/5.16   | 14.31/15.77 | 0.0/0  | 0/0
+R1_STAGE_80 =79.8/80.0   | 1.89/1.97   | 4.16/4.54   | 19.65/20.43 | 0.1/1  | 0/0
+R1_STAGE_160=158.5/160.1 | 1.86/1.94   | 4.43/4.70   | 30.79/33.04 | 0.4/2  | 0/0
+R1_STAGE_240=239.1/240.8 | 2.34/2.83   | 6.96/9.46   | 43.43/44.32 | 0.6/1  | 0/0
+R1_STAGE_320=319.6/320.5 | 4.67/12.21  | 20.69/64.40 | 60.03/74.14 | 1.2/5  | 0/0
+R1_STAGE_480=472.8/480.9 | 22.81/28.42 | 85.97/98.69 | 88.76/91.50 | 14.0/50 | 7.7/40
+
+# ── 회차 2: seat-counts 스케일 B (3,000석) ───────────────────────────────
+# 계단·유지시간·VU 설정을 회차 1과 동일하게 두었다. 다른 것은 PERF_ID 와 좌석 수뿐이다.
+R2_PERF_ID=15
+R2_STAGES=40,80,160,240,320,480 iter/s x 5m (전환 램프 10s) — 총 30m50s (k6 실측 31m18.9s)
+R2_PRE_ALLOCATED_VUS=100 / R2_MAX_VUS=800
+R2_START_UTC=2026-07-29T04:14:28Z
+R2_END_UTC=2026-07-29T04:45:18Z
+R2_ITERATIONS=318,131 (dropped 88,468 = 21.8%)
+R2_HTTP_REQ_FAILED=1.86% (5,925 / 318,131)
+R2_SCALE_MISMATCH=0.00% (0 / 312,206) — 데이터 유효
+R2_VUS_MAX_USED=800 / 800
+R2_K6_P95_MS_OVERALL=3100 / R2_K6_AVG_MS_OVERALL=1430 / R2_K6_MAX_MS=30030
+R2_EXIT_CODE=99 — 임계 초과(포화가 목적이므로 정상). 회차는 31m18.9s 를 끝까지 돌았다.
+R2_SATURATED=yes — 고원 247 rps
+
+# 계단별 (구간평균 / 구간최댓값, 램프 앞뒤 30초 제외). 원자료 stage-stats-countsb.txt
+#   도착률 | k6 rps        | 서버avg ms      | 서버p95 ms      | CPU %         | tomcat busy | hikari pending
+R2_STAGE_40 =40.0/40.0    | 5.12/6.40      | 10.96/23.80    | 21.32/23.49  | 0.1/1.0  | 0.0/0.0
+R2_STAGE_80 =80.0/80.0    | 4.28/4.68      | 7.75/8.36      | 30.07/31.29  | 0.4/1.0  | 0.0/0.0
+R2_STAGE_160=160.0/160.1  | 5.65/6.37      | 19.10/21.65    | 51.88/54.76  | 1.2/7.0  | 0.0/0.0
+R2_STAGE_240=239.9/240.3  | 40.81/72.35    | 140.01/238.22  | 92.87/95.96  | 7.9/50.0 | 3.2/40.0
+R2_STAGE_320=254.9/260.0  | 204.96/207.57  | 368.40/379.25  | 99.97/100.00 | 50.0/50.0| 40.1/42.0
+R2_STAGE_480=254.4/260.2  | 202.69/204.86  | 371.56/403.74  | 99.99/100.00 | 50.0/50.0| 39.6/40.0
+# 읽는 법
+#  - 포화점은 320 계단이고 고원은 247 rps 다(서버 축). 480 계단에서 도착률을 1.5배 올렸는데
+#    처리량이 254.9 -> 254.4 로 전혀 움직이지 않았다 = VU 부족이 아니라 서버 포화다.
+#    같은 시각 CPU 100%, tomcat busy 50/50(상한), hikari pending 40(풀 10) 이 함께 붙는다.
+#  - 무릎은 240 과 320 사이. 240 계단에서 이미 CPU 92.87%, tomcat busy 최대 50, pending 최대 40 이다.
+#  - 회차 1과 마찬가지로 40 계단에 JVM 워밍업이 섞여 있다(5.12 -> 80 계단 4.28 로 내려간다).
+#    40 계단 값은 상한으로만 쓴다(#402 §6.1).
+
+# ── 좌석 수 대비 비용 (완료조건 2) ────────────────────────────────────────
+# 두 회차의 80 계단을 비교한다. 양쪽 다 CPU 여유가 크고(19.65% vs 30.07%) 대기열이 없어
+# '좌석 수' 외의 변수가 가장 적은 구간이다. 40 계단은 워밍업 오염이라 쓰지 않는다.
+COST_A_600_AVG_MS=1.89 (서버 축, 80 계단)
+COST_B_3000_AVG_MS=4.28 (서버 축, 80 계단)
+COST_FIT=cost ≈ 1.29ms + 0.000996ms x 좌석수  (좌석당 약 0.996 마이크로초)
+COST_SCAN_SHARE_600=0.60ms / 1.89ms = 31.6%
+COST_SCAN_SHARE_3000=2.99ms / 4.28ms = 69.8%
+COST_THROUGHPUT_CEILING=A 480 rps 초과(미포화) / B 247 rps
+COST_READING=좌석 수가 5배인데 서버 평균은 2.26배다. 응답 시간이 좌석 수에 비례한다는 이슈의 전제는
+#   '큰 고정 비용 위에' 성립한다. 고정항 1.29ms 는 3,000석에서도 비용의 30% 를 차지한다.
+#   07-28 캘리브레이션의 1차 근사(2.60ms + 0.88us/좌석)는 워밍업이 섞인 스모크에서 나온 값이라
+#   폐기하고, 5분 계단 2개로 다시 잡은 위 값을 쓴다.
+
+# ── 비교 회차: seat-counts vs seat-layouts (§14.5) ───────────────────────
+CMP_PERF_ID=14 (스케일 A 600석) / CMP_RATE=20 iter/s 고정 / CMP_DURATION=3m
+CMP_START_UTC=2026-07-29T04:49:08Z
+CMP_END_UTC=2026-07-29T04:52:10Z
+CMP_WARMUP=45초 선행, 수치 폐기
+CMP_RPS_CHECK=두 uri 모두 19.267 rps — 같은 iteration 에서 1:1 로 호출됐다는 확인
+CMP_COUNTS_SERVER_AVG_MS=3.785 / CMP_COUNTS_SERVER_P95_MS=5.815 / 응답 203 B
+CMP_LAYOUTS_SERVER_AVG_MS=3.538 / CMP_LAYOUTS_SERVER_P95_MS=6.252 / 응답 약 46 KB
+CMP_READING=응답 크기가 2자리 작은데 서버 비용은 사실상 같고, 오히려 집계가 평균 7% 비싸다.
+#   둘 다 performance_id 로 같은 행을 읽고, 그 다음이 다르다 — 집계는 행마다 CASE WHEN 4개와
+#   hold_expired_at 비교를 하고, 좌석맵은 행을 DTO 로 옮겨 46 KB 를 만든다. 그 둘이 맞먹는다.
+#   "집계 API 는 가벼운 조회" 라는 전제는 이 규모에서 성립하지 않는다.
+CMP_NOT_DONE_ON_B=스케일 B 에서는 하지 않았다 — 3,000석 좌석맵이 비교 자체를 오염시킨다(#509 의 OOM 경로)
+
+# ── 회차 3: SSE 팬아웃 (완료조건 3) ──────────────────────────────────────
+R3_PERF_ID=17
+R3_SUBSCRIBER_STEPS=100,300,600 (램프 30s + 유지 10m) — 총 31m30s
+R3_MUTATE_RATE=5/s (constant-arrival-rate) / R3_PROBE_RATE=2/min
+R3_START_UTC=2026-07-29T04:56:44Z (setup 완료 직후 = k6 t0)
+R3_END_UTC=2026-07-29T05:28:14Z
+R3_EXIT_CODE=0 — 임계 전부 통과(http_req_duration p95 390.98ms / http_req_failed 0.00%)
+R3_EVENTS_RECEIVED_TOTAL=6,056,614
+R3_CONNECTED=697 (구독자 600 + probe 63 + 재연결) / CLOSED=97 / ERROR=1
+R3_MUTATE_CREATED=9,451 / 9,451 (100%) — conflict 0, exhausted 0
+R3_PROBE=63건 예매(100% 성공) -> 56건 매칭 / 7건 타임아웃(20s 초과) = 11.1%
+R3_PROPAGATION_OVERALL=avg 2.34s / med 2.09s / p90 3.46s / p95 3.87s / max 16.36s
+R3_PROBE_BOOKING_AVG_MS=36.51 — 전파 지연의 1.5% 다. 나머지는 Kafka + HOLD tx + 팬아웃
+R3_SQL_CROSSCHECK=booking 테이블 performance_id=17 행수 9,514 = mutate 9,451 + probe 63 (정확히 일치)
+R3_FINAL_SEAT_STATE=AVAILABLE 11,444 / HOLD 556 (합 12,000)
+R3_RSS_PEAK=seat-service 574.5 MiB / 640 (89.8%) — OOM 없음, 여유 10%
+R3_JVM_THREADS=115 -> 128 (SSE 커넥션은 스레드를 점유하지 않는다 — 비동기 SseEmitter)
+R3_TOMCAT_CURRENT=10 (전 구간 불변)
+
+# 구간별 (구간평균 / 구간최댓값, 램프 앞 30초 제외). 원자료 stage-stats-sse.txt
+#   구간              | 구독자 | 전파p95 | 전파p99 | 수신ev/s      | 큐깊이   | 활성스레드 | 풀 | CPU %
+R3_PHASE_100 =100/102 | 1249ms | 1286ms | 712/1358   | 37/564  | 0.4/4.0 | 4  | 30.1/44.5
+R3_PHASE_300 =300/300 | 2158ms | 2346ms | 2992/3115  | 3/53    | 0.6/4.0 | 4  | 40.8/43.5
+R3_PHASE_600A=602/603 | 2768ms | 3150ms | 5368/6218  | 50/307  | 1.5/4.0 | 4  | 53.5/60.7   (버스트 전)
+R3_PHASE_600B=602/604 | 3567ms | 9951ms | 7025/14978 | 0/0     | 0.4/3.0 | 16 | 60.6/93.8   (버스트 후)
+# 읽는 법
+#  - 완료조건 3의 '구독자 수 대비 전파 지연 곡선' 은 위 p95 열이다. 1.25s -> 2.16s -> 2.77s 로
+#    단조 증가하고 기울기는 구독자당 약 3.0ms 다.
+#  - 풀 크기가 600 구독자 구간에서도 core 4 에 머문다. 평균 활성 스레드가 1.5 라 늘 이유가 없다.
+#    16 이 된 것은 인위적 버스트를 넣은 순간뿐이다(R4).
+#  - 태스크 1건 소요 = 활성스레드 / 태스크처리율. 100명 53ms, 300명 59ms, 600명 167ms.
+#    구독자 1명당 send 는 0.2~0.3ms 로 일정하고 '태스크 길이' 가 구독자 수에 비례한다
+#    = 이슈가 서술한 '스레드 수요 증가' 가 아니다.
+#  - 600명 자기 이벤트 팬아웃은 약 170ms 인데 실측 p95 는 2.77s 다. 차이는 앞에 쌓인 큐 대기다
+#    (큐 50 x 0.167s / 4스레드 ≈ 2.1s) — 지연의 지배항은 팬아웃이 아니라 큐다.
+#    평균 이용률은 38% 로 여유로운데 큐가 최대 307 까지 간다 = 도착이 고르지 않다. 다만 그 불균일이
+#    Redis 만료 쪽인지 스케줄러 fallback 쪽인지는 이 회차로 가르지 못했다(이벤트에 경로 태그가 없다).
+R3_RECEIPT_RATE=구독자당 수신 ev/s ÷ 서버 태스크/s — 100명 93.7% / 300명 98.7% / 600명(버스트전) 99.4%
+#   거부가 없는 구간에서는 수신이 사실상 완전하다. 유실은 큐가 넘칠 때만 생긴다.
+# ⚠ 이벤트율은 SSE_MUTATE_RATE 하나로 고정되지 않는다. 좌석 락 TTL 이 5분이라
+#   (SeatLockUseCase.LOCK_TTL_MINUTES) 예매 5분 뒤 그 좌석이 해제되며 두 번째 이벤트를 낸다.
+#   즉 회차 5분 이후 정상 상태는 약 10 events/s 다. 해제 경로는 둘이고 성격이 다르다:
+#     - SeatReleaseSingleUseCase : Redis 키 만료 이벤트로 1건씩 즉시 해제 (주 경로, 고르게 퍼진다)
+#     - SeatStatusScheduler      : @Scheduled(fixedDelay=60000) fallback (놓친 것을 60초마다 쓸어 담는다)
+#   정상 상태의 해제는 60초 버스트가 아니라 Redis 만료로 고르게 들어온다. 스케줄러가 큰 덩어리를
+#   만드는 것은 '해제되지 않은 만료 HOLD 가 대량으로 쌓여 있을 때' 이고 그게 회차 4의 조건이다.
+#   ⚠ 큐가 평균 이용률 38% 인데도 최대 307 까지 쌓이는 '도착의 불균일' 은 이 회차로 경로를 가르지
+#     못했다. 이벤트에 발행 경로 태그가 없어서다(후속 과제).
+
+# ── 회차 4: 큐 포화·거부 (완료조건 4) ────────────────────────────────────
+R4_METHOD=구독자 600명 유지 구간에서 @mode='expire' @expire_count=2000 주입 -> 다음 60초 tick 이 버스트
+R4_TRIGGER_UTC=2026-07-29T05:21:06Z
+R4_EXPIRED_APPLIED=2,043건 (hold_expired). 공연을 지우지 않으므로 performance_id 17 보존 = 구독자 유효
+R4_QUEUE_PRE_BURST=427 (버스트 전에 이미 쌓여 있다 — 600 구독자 x ~10 events/s 의 정상 상태 적체)
+R4_QUEUE_FULL_AT=05:21:13Z — 큐 1000 도달
+R4_POOL_GROWTH=4 -> 16, 큐가 1000 에 닿은 바로 그 시각. 05:21:10 에 큐 474 였을 때는 여전히 4 였다
+#   = 이슈가 경고한 순서의 실증. 큐 1000 이 차기 전까지 실질 동시성은 4 다.
+R4_QUEUE_PINNED=05:21:52 ~ 05:22:32 구간 1000 유지(두 번째 tick 이 다시 채움)
+R4_DRAIN_DONE_AT=05:23:29Z — 배수 완료. 총 약 2분 20초, 16스레드로 약 1,900 태스크
+R4_TASK_COST_UNDER_LOAD=약 1.2초/태스크 (600 구독자 팬아웃 1건)
+R4_REJECTED_TOTAL=2,009
+R4_EXECUTOR_COMPLETED_TOTAL=17,490 (회차 전체 increase)
+R4_ATTEMPTED=19,499 = 17,490 + 2,009
+R4_LOSS_RATE=10.30%
+R4_EVENT_ACCOUNTING=예매 9,514 + 만료 해제 약 7,950(5/s x 26.5분) + 인위적 만료 2,043 ≈ 19,507
+#   -> 시도 19,499 와 거의 일치. 회계가 맞는다.
+R4_REJECT_WINDOW=05:21:12 ~ 05:22:33 — 2,009건 '전부' 이 한 구간에 있다(줄 맨 앞 타임스탬프 기준 합계 2,009).
+#   큐가 1000 에 붙어 있던 시각과 정확히 일치하고 그 밖에서는 한 건도 나지 않았다. 최대 초당 728건(05:21:14).
+#   스레드 내역: scheduling-2 + Kafka 리스너(...Container#0-0-C-1) 둘.
+#   -> 버스트와 무관한 '일반 예매 이벤트' 까지 함께 드롭됐다. 큐가 공유 자원이라 피해가 번진다.
+R4_REJECT_MISCOUNT_CORRECTED=처음에 '05:26~05:27 에 5초마다 25건씩 나는 2구간' 을 보고했으나 집계 오류였다.
+#   시각 추출에 쓴 grep -oE "T[0-9]{2}:[0-9]{2}:[0-9]{2}" 가 줄 맨 앞 로그 타임스탬프뿐 아니라
+#   이벤트 페이로드의 holdExpiredAt 까지 잡았다. 매치 총수 2,289 = 실제 줄 수 2,009 + 280 이고,
+#   그 280 이 holdExpiredAt 이 null 이 아닌 줄 수와 정확히 일치한다. 좌석 락 TTL 이 5분이라
+#   05:21:13 거부 줄의 holdExpiredAt 이 05:26:13 이고 그게 '5분 뒤의 2구간' 으로 보였다.
+#   교훈: 로그에서 시각을 뽑을 때는 '^' 로 줄 앞을 앵커링한다. 페이로드에도 시각이 들어 있다.
+#   -> 거부는 큐 포화로 전부 설명된다. 미해명 구간은 없다.
+R4_CROSSCHECK=1구간 직후 전파 p99 가 3,150ms -> 9,951ms 로 튀고 구간 최대 수신율이 14,978 ev/s 까지
+#   솟는다(밀렸던 이벤트가 한꺼번에 도착). 거부 축과 수신·지연 축이 같은 시각에 움직인다.
+
+# ── 다음 회차 재개 절차 ───────────────────────────────────────────────────
+# 1) EC2 기동 후 §14.2 게이트 G0~G4 를 다시 통과시킨다. 특히 G0 — nginx 설정이 되돌아갔는지 본다.
+# 2) 코호트는 EBS 에 남아 있다. A·B 는 @mode='refresh' 로 분포를 되돌린 뒤 쓴다(재시딩 금지 —
+#    performance_id 가 바뀌어 이전 회차와 겹칠 수 없다). SSE 코호트는 좌석이 소모되므로 재시딩한다.
+# 3) 회차 사이 seat-service 를 재시작한다(#509 §8 — 부하 후 RSS 가 돌아오지 않는다).
+#    단 재시작하면 JVM 워밍업이 사라지므로 짧은 스모크를 먼저 돌리고 그 수치는 버린다(#402 §6.1).
+# 4) SSE 회차는 LOAD_USER_PASSWORD 평문이 필요하다(예매로 이벤트를 만든다). 저장소·증적에 남기지 않는다.
+# 5) Git Bash 에서는 MSYS_NO_PATHCONV=1 을 앞에 붙인다(§14.8).

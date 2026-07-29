@@ -1,0 +1,63 @@
+# 비교 회차 — seat-counts vs seat-layouts (#403 §14.5)
+# 스케일 A(600석, performance_id=14) / 고정 도착률 20 iter/s / 3분
+# 같은 iteration 에서 두 엔드포인트를 연달아 호출한다 = 부하·시각·커넥션 조건이 동일하다.
+# 창: 2026-07-29T04:49:08Z ~ 2026-07-29T04:52:10Z
+# 워밍업 45초를 먼저 돌리고 그 수치는 버렸다(#402 §6.1).
+
+  █ THRESHOLDS
+    http_req_duration
+    ✓ 'p(95)<800' p(95)=26.63ms
+    http_req_failed
+    ✓ 'rate<0.01' rate=0.00%
+
+  █ TOTAL RESULTS
+
+    checks_total.......: 7200    39.996053/s
+    checks_succeeded...: 100.00% 7200 out of 7200
+    checks_failed......: 0.00%   0 out of 7200
+
+    ✓ seat-counts 200
+    ✓ seat-layouts 200
+
+    CUSTOM
+    seat_counts_duration...........: avg=16.96ms min=9.37ms  med=13.13ms max=296ms    p(90)=20.95ms p(95)=31.18ms
+    seat_counts_scale_mismatch.....: 0.00%  0 out of 3600
+    seat_layouts_duration..........: avg=14.46ms min=9.11ms  med=12.5ms  max=318.12ms p(90)=17.97ms p(95)=21.72ms
+
+    HTTP
+    http_req_duration..............: avg=15.71ms min=9.11ms  med=12.82ms max=318.12ms p(90)=19.28ms p(95)=26.63ms
+    http_req_failed................: 0.00%  0 out of 7200
+    http_reqs......................: 7200   39.996053/s
+
+    EXECUTION
+    iteration_duration.............: avg=31.9ms  min=19.86ms med=26.93ms max=531.47ms p(90)=41.51ms p(95)=52.59ms
+    iterations.....................: 3600   19.998027/s
+    vus............................: 0      min=0         max=6
+    vus_max........................: 30     min=30        max=30
+
+    NETWORK
+    data_received..................: 19 MB  106 kB/s
+    data_sent......................: 1.1 MB 6.2 kB/s
+
+
+# ── 서버 축 (판정 SSOT) ─────────────────────────────────────────────────────
+# k6 축에는 가정용 회선 RTT 와 응답 크기 전송 시간이 섞인다. '앱이 쓴 비용' 은 서버 축으로 읽는다.
+# 구간: 04:49:40Z~04:51:40Z (앞뒤 30초 제외), avg_over_time([120s:15s])
+#
+#   uri                                          avg ms   p95 ms   rps
+#   /api/v1/seat/{performanceId}/seat-counts      3.785    5.815    19.267
+#   /api/v1/seat/{performanceId}/seat-layouts     3.538    6.252    19.267
+#
+# 읽는 법
+#  - 두 rps 가 정확히 같다(19.267) = 같은 iteration 에서 1:1 로 호출됐다는 확인.
+#  - 응답 크기는 203 B 대 약 46 KB 로 2자리 차이인데 서버 비용은 사실상 같다.
+#    오히려 집계가 평균 7% 비싸다(3.785 vs 3.538).
+#  - 둘 다 performance_id 로 같은 행을 읽는다. 차이는 그 다음이다 —
+#    집계는 행마다 CASE WHEN 4개와 hold_expired_at 비교를 하고 203 B 를 만들고,
+#    좌석맵은 행을 그대로 DTO 로 옮겨 46 KB 를 만든다. 실측은 그 둘이 맞먹는다고 말한다.
+#  - 따라서 "집계 API 는 가벼운 조회" 라는 전제는 이 규모에서 성립하지 않는다.
+#    응답이 작다는 것이 서버가 싸다는 뜻이 아니다.
+#
+# ⚠ 스케일 B(3,000석)에서는 이 비교를 하지 않았다. 3,000석 좌석맵 응답이 CPU·메모리를 삼켜
+#   비교 자체를 오염시킨다 — #509 가 2,080석 좌석맵으로 seat-service 를 cgroup OOM 까지 몰고 간
+#   경로가 정확히 이것이다(런북 §14.5).
