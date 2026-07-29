@@ -1,0 +1,55 @@
+time="2026-07-29T13:56:35+09:00" level=warning msg="C:\\Users\\PC\\Desktop\\TicketRush-backend\\docker-compose.yml: the attribute `version` is obsolete, it will be ignored, please remove it to avoid potential confusion"
+ Container ticketrush-backend-k6-sse-run-a2889bc6b712 Creating 
+ Container ticketrush-backend-k6-sse-run-a2889bc6b712 Created 
+         /\      Grafana   /‾‾/  
+    /\  /  \     |\  __   /  /   
+   /  \/    \    | |/ /  /   ‾‾\ 
+  /          \   |   (  |  (‾)  |
+ / __________ \  |_|\_\  \_____/ 
+     execution: local
+        script: /scripts/scenarios/seat-sse-fanout.js
+        output: Prometheus remote write (http://host.docker.internal:9090/api/v1/write)
+     scenarios: (100.00%) 3 scenarios, 720 max VUs, 32m0s max duration (incl. graceful stop):
+              * mutators: 5.00 iterations/s for 31m30s (maxVUs: 15-100, exec: mutate, gracefulStop: 30s)
+              * probe: 0.03 iterations/s for 31m30s (maxVUs: 4-20, exec: probe)
+              * subscribers: Up to 600 looping VUs for 31m30s over 6 stages (gracefulRampDown: 0s, exec: subscribe)
+time="2026-07-29T04:56:36Z" level=info msg="[setup] perfId=17 구독자 계단=100,300,600 x 10m (총 1890s), 이벤트율=5/s, AVAILABLE 12000석 (mutate 9450 + probe 63 사용 예정)" source=console
+  █ THRESHOLDS 
+    http_req_duration
+    ✓ 'p(95)<800' p(95)=390.98ms
+    http_req_failed
+    ✓ 'rate<0.01' rate=0.00%
+  █ TOTAL RESULTS 
+    checks_total.......: 98      0.051838/s
+    checks_succeeded...: 100.00% 98 out of 98
+    checks_failed......: 0.00%   0 out of 98
+    ✓ login 200
+    ✓ sse open ok
+    CUSTOM
+    sse_connect_duration...........: avg=86.58ms min=25ms    med=39ms    max=1s       p(90)=191.39ms p(95)=350.39ms
+    sse_connected..................: 697     0.368682/s
+    sse_connection_closed..........: 97      0.051309/s
+    sse_connection_error...........: 1       0.000529/s
+    sse_event......................: 6059717 3205.319596/s
+    sse_events_received............: 6056614 3203.678247/s
+    sse_mutate_conflict............: 0.00%   0 out of 9451
+    sse_mutate_created.............: 100.00% 9451 out of 9451
+    sse_mutate_exhausted...........: 0.00%   0 out of 9451
+    sse_probe_booked...............: 100.00% 63 out of 63
+    sse_probe_booking_duration.....: avg=36.51ms min=17.56ms med=22ms    max=610.28ms p(90)=40.37ms  p(95)=61.14ms 
+    sse_probe_matched..............: 56      0.029621/s
+    sse_probe_timeout..............: 7       0.003703/s
+    sse_propagation_ms.............: avg=2.34s   min=553ms   med=2.09s   max=16.36s   p(90)=3.46s    p(95)=3.87s   
+    HTTP
+    http_req_duration..............: avg=18.16s  min=16.37ms med=25.2ms  max=30m4s    p(90)=185.74ms p(95)=390.98ms
+      { expected_response:true }...: avg=68.46ms min=16.37ms med=25.04ms max=2.51s    p(90)=144.71ms p(95)=303.6ms 
+    http_req_failed................: 0.00%   0 out of 9516
+    http_reqs......................: 9676    5.118172/s
+    EXECUTION
+    iteration_duration.............: avg=18.28s  min=16.62ms med=25.49ms max=30m4s    p(90)=186.57ms p(95)=392.5ms 
+    iterations.....................: 9611    5.08379/s
+    vus............................: 600     min=3            max=610
+    vus_max........................: 619     min=619          max=619
+    NETWORK
+    data_received..................: 1.2 GB  620 kB/s
+    data_sent......................: 5.6 MB  3.0 kB/s

@@ -15,3 +15,68 @@ seat	0	PRIMARY	1	seat_id	A	22592	NULL	NULL		BTREE			YES	NULL
 seat	1	idx_seat_performance_id	1	performance_id	A	11	NULL	NULL		BTREE			YES	NULL
 seat	1	idx_seat_status_hold_expired_at	1	seat_status	A	2	NULL	NULL		BTREE			YES	NULL
 seat	1	idx_seat_status_hold_expired_at	2	hold_expired_at	A	1347	NULL	NULL	YES	BTREE			YES	NULL
+
+# ============================================================================
+# 2026-07-29 — 회차 2 이후. EC2 를 하루 껐다 켠 뒤의 상태와 복원.
+# ============================================================================
+
+# ---- 재기동 직후 (복원 전) — +6시간 HOLD 가 만료돼 스케줄러가 전부 해제했다 -------
+# performance_id  title    seat_status  cnt   hold_live
+# 14              LTC-A    AVAILABLE    480   NULL      <- 원래 360 (HOLD 120 이 넘어왔다)
+# 14              LTC-A    SOLD         120   NULL
+# 15              LTC-B    AVAILABLE    2400  NULL      <- 원래 1800 (HOLD 600 이 넘어왔다)
+# 15              LTC-B    SOLD         600   NULL
+# 16              LTC-SSE  AVAILABLE    12000 NULL
+#
+# 교차검증: 부팅 직후 executor_completed_tasks_total = 720 = 120 + 600
+#           (해제된 좌석 수 = 발행된 SSE 이벤트 수)
+
+# ---- @mode='refresh' 복원 결과 (performance_id 보존) -----------------------
+db_now	app_now_used	mode_used
+2026-07-29 13:10:40	2026-07-29 04:10:40	refresh
+title	performance_id	total_seats	available	sold	hold_live	hold_expired
+LTC-A	14	600	360	120	120	0
+LTC-B	15	3000	1800	600	600	0
+title	expect_total_count	expect_available_count	expect_sold_count	expect_hold_count
+LTC-A	600	360	120	120
+LTC-B	3000	1800	600	600
+
+# API 대조 (복원 직후)
+# perf 14: {"total_count":600,"available_count":360,"sold_count":120,"hold_count":120}
+# perf 15: {"total_count":3000,"available_count":1800,"sold_count":600,"hold_count":600}
+
+# ---- SSE 코호트 재시딩 (스모크가 좌석을 양끝에서 96석 소모해 폐기 -> 신규) -----
+db_now	app_now_used	mode_used
+2026-07-29 13:55:41	2026-07-29 04:55:41	seed
+title	performance_id	total_seats	available	sold	hold_live	hold_expired
+LTC-SSE	17	12000	12000	0	0	0
+title	expect_total_count	expect_available_count	expect_sold_count	expect_hold_count
+LTC-SSE	12000	12000	0	0
+# API 대조: perf 17: {"total_count":12000,"available_count":12000,"sold_count":0,"hold_count":0}
+
+# ---- 회차 4 버스트 주입 (@mode='expire' @expire_count=2000) ----------------
+db_now	app_now_used	mode_used
+2026-07-29 14:21:07	2026-07-29 05:21:07	expire
+title	performance_id	total_seats	available	sold	hold_live	hold_expired
+LTC-SSE	17	12000	8446	0	1511	2043
+
+# ---- 전 회차 종료 후 SSE 코호트 최종 상태 ----------------------------------
+# seat_status  count
+# AVAILABLE    11444
+# HOLD         556          (합 12,000)
+# booking 테이블 performance_id=17 행수: 9514  = k6 mutate 9,451 + probe 63 (정확히 일치)
+
+# ---- 기존 LOADTEST 코호트 무결성 (전 회차 종료 후 재확인) ------------------
+title	seats
+LOADTEST-000001	2080
+LOADTEST-000002	2080
+LOADTEST-000003	2080
+LOADTEST-000004	2080
+LOADTEST-000005	2080
+LOADTEST-000006	2080
+LOADTEST-000007	2080
+LOADTEST-000008	2080
+LOADTEST-000009	2080
+LOADTEST-000010	2080
+loadtest_total
+20800
