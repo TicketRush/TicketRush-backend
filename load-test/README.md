@@ -17,13 +17,15 @@ load-test/
 │           #  seed_expired_holds.sql(만료 HOLD 코호트 — #345),
 │           #  seed_entry.sql(검표 코호트 + ADMIN 계정, 리셋 내장 — #402),
 │           #  reset_e2e.sql(e2e 회차 간 리셋 — #348),
-│           #  seed_seat_counts.sql(규모·상태분포 지정 코호트 LTC-* — #403)
+│           #  seed_seat_counts.sql(규모·상태분포 지정 코호트 LTC-* — #403),
+│           #  seed_payment_pipeline.sql(결제확정 파이프라인 코호트 LTP-*, seed/reset/verify — #504)
 ├── bench/    # trx-sampler.sh(MySQL 트랜잭션 지속시간·락 점유 샘플러 — #345),
 │           #  outbox-sampler.sh(outbox backlog·릴레이 처리량 샘플러 — #489),
 │           #  dump-timeseries.py(회차 시계열 증적 덤프 — #348, 로컬 실행)
 └── chaos/    # 장애 주입(#346): broker-outage.sh, verify-loss.sql, booking-outbox.override.yml,
             #  inbox-redeliver.sh·verify-inbox.sql(#347),
-            #  seat-release-singletrx.override.yml(단일 트랜잭션 비교군 — #345)
+            #  seat-release-singletrx.override.yml(단일 트랜잭션 비교군 — #345),
+            #  inject-payment-confirmed.sh(결제확정 이벤트 직접 주입 + 드레인 대기 — #504)
 ```
 
 `bench/`·`chaos/`의 스크립트와 override는 **측정 전용**이다(프로덕션 반영 아님). 스크립트는 EC2 배포본 호스트에서 실행하고, override는 적용 후 반드시 원복한다. 예외로 `bench/dump-timeseries.py`는 **로컬에서** 실행한다(Prometheus SSH 터널 경유, 부하가 끝난 뒤 1회).
