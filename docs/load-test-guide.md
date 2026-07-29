@@ -1502,8 +1502,18 @@ run_seed "@i_confirm_loadtest_db=1, @perf_tag='SSE', @seats=12000, @sold_pct=0, 
 ```
 
 - **재실행마다 `performance_id`가 바뀐다.** 이 시드는 NOT EXISTS idempotency 대신 삭제+재삽입을 한다 — 규모를 바꿔 재실행하는 것이 정상 사용법인데 NOT EXISTS로는 이전 규모의 잔여 좌석이 남아 분포가 파라미터와 달라지기 때문이다. 검증 쿼리 출력을 매번 다시 읽는다.
+
+> **코호트를 하루 넘겨 재사용할 때는 `@mode='refresh'`를 먼저 돌린다.** 미만료 HOLD의 만료시각이 `+6시간`이라, EC2를 껐다가 다음 날 켜면 그 사이에 만료돼 있고 부팅 직후 스케줄러가 전부 AVAILABLE로 해제한다. 실측에서 A는 `hold 120 → 0`, B는 `600 → 0`이 됐다(그 해제가 `executor_completed_tasks_total`을 정확히 720 = 120+600으로 올린 것이 부수 증거다). 그대로 재면 **회차 1과 회차 2의 상태 분포가 달라 두 곡선을 겹칠 수 없다** — §14.8의 무효 판정 항목이다.
+>
+> `refresh`는 좌석번호 `S-<i>`의 `i`로 시딩 당시의 배분 규칙을 재현해 **원래 HOLD였던 바로 그 좌석만** 되돌리고, 공연을 지우지 않으므로 `performance_id`가 보존된다. 재시딩하면 id가 바뀌어 이전 회차와의 연결이 끊긴다.
+> ```bash
+> run_seed "@i_confirm_loadtest_db=1, @perf_tag='A', @mode='refresh', @sold_pct=20, @hold_pct=20"
+> run_seed "@i_confirm_loadtest_db=1, @perf_tag='B', @mode='refresh', @sold_pct=20, @hold_pct=20"
+> ```
+> 되돌린 뒤 `/seat-counts` 응답이 `expect_*`와 일치하는지 한 번 더 대조한다.
 - 검증 쿼리의 **두 번째 SELECT(`expect_*`)가 `/seat-counts` 응답과 일치해야 한다.** 시딩 직후 `curl`로 한 번 대조한다. 이 출력이 리포트 "시딩 규모" 절의 원자료다(완료조건 1).
 - SSE 코호트의 `@seats`는 `SSE_MUTATE_RATE × 회차 길이(초)` 이상이어야 한다. 예매는 좌석 1개를 비가역 소모하고, 부족하면 회차 후반이 통째로 이벤트 0이 된다. 시나리오 `setup()`이 시작 전에 이걸 검증하고 부족하면 죽는다.
+- **SSE 회차를 한 번이라도 돌렸으면(스모크 포함) 다음 회차 전에 SSE 코호트를 재시딩한다.** `mutate`는 코호트 앞에서, `probe`는 뒤에서 좌석을 소모하므로 AVAILABLE `seat_id`가 양끝부터 뚫린다. `setup()`의 간격 균일성 검증이 이걸 잡아 회차를 시작조차 하지 않는다(그 검증이 없으면 409가 "정상 경합"으로 위장돼 이벤트 수가 조용히 줄어든다). 스케일 A·B와 달리 SSE 코호트는 `refresh`로 되돌릴 수 없다 — 소모가 상태 분포가 아니라 좌석 점유 자체이기 때문이다.
 
 ### 14.4 회차 1·2 — seat-counts 좌석 수 대비 곡선
 
@@ -1575,6 +1585,8 @@ docker compose --profile loadtest run --rm --no-deps \
 
 - 구독자 단계당 **10분**은 완료조건이다 — 장기 커넥션의 누수·타임아웃 전 구간을 본다. 기본값 기준 총 31분 30초이고, 서버 emitter 타임아웃이 30분이라 **가장 먼저 붙은 커넥션은 회차 끝에서 타임아웃에 닿는다.** `sse_connection_closed`가 그 시각에 오르는 것은 정상이다(그 전에 오르면 다른 원인이다).
 - **VU 1개 = 커넥션 1개**다(`sse.open`이 커넥션이 닫힐 때까지 블로킹한다). VU 수가 곧 동시 구독자 수다.
+- ⚠️ **이벤트율은 `SSE_MUTATE_RATE` 하나로 고정되지 않는다.** 좌석 락 TTL이 5분이라(`SeatLockUseCase.LOCK_TTL_MINUTES`) 예매 5분 뒤 스케줄러가 그 좌석을 해제하며 **두 번째 이벤트**를 낸다. 즉 회차 5분 이후의 정상 상태 이벤트율은 `SSE_MUTATE_RATE × 2`이고, 그중 절반은 매끄럽지 않다 — 스케줄러가 60초 tick마다 몰아서 해제하므로 `5/s × 60s ≈ 300건`이 **한 번에** executor로 들어간다. 구독자 600명이면 그 순간 큐에 300개 태스크 × 태스크당 600 send다.
+  이건 측정 오염이 아니라 시스템의 실제 성질이므로 통제하지 말고 **리포트에 명시**한다. 다만 전파 지연 표본이 버스트 직후에 몰리면 값이 튀므로, `probe`를 낮은 도착률로 회차 전 구간에 고르게 뿌려 계단별 p95를 잡는다(그래서 `SSE_PROBE_PER_MINUTE`가 2다).
 - **수신 누락률** = `1 − (sse_events_received / (구독자 수 × 발생 이벤트 수))`. 발생 이벤트 수는 `sse_mutate_created` 성공 건수이며, **권위는 k6가 아니라 SQL**이다(§10.2 oversell 검증과 같은 선):
   ```sql
   SELECT COUNT(*) FROM seat WHERE performance_id = <SSE 공연> AND seat_status = 'HOLD';
@@ -1644,3 +1656,8 @@ rate(node_network_transmit_bytes_total{job="node", device="ens5"}[1m])
   - 회차 전후로 시딩 상태 분포가 달라진 경우(스케줄러가 HOLD를 해제)
   - 서비스별 `IMAGE_TAG`가 다른 경우
 - **단일 인스턴스 기준이다.** emitter가 인스턴스 로컬(`ConcurrentHashMap`)이라 다중 인스턴스로 확장하면 크로스 인스턴스 브로드캐스트가 없다. 이 회차는 그 문제를 다루지 않는다.
+- **Git Bash에서 실행할 때는 `MSYS_NO_PATHCONV=1`을 앞에 붙인다.** 안 붙이면 MSYS가 `/scripts/scenarios/...`를 Windows 경로로 바꿔버려 k6가 `C:/Program Files/Git/scripts/...`를 찾다가 죽는다. 컨테이너 안 경로라 로컬에는 없는 파일이므로 에러 메시지가 "스크립트를 못 찾음"으로 나와 원인이 잘 안 보인다.
+  ```bash
+  MSYS_NO_PATHCONV=1 docker compose --profile loadtest run --rm --no-deps ... k6 run /scripts/scenarios/seat-counts.js ...
+  ```
+- **k6 종료코드 99는 실행 실패가 아니라 임계 초과다.** 포화를 일부러 만드는 회차에서는 `http_req_duration`·`http_req_failed` 임계가 당연히 깨진다. 회차가 끝까지 돌았는지는 `running (...)` 마지막 줄의 경과시간과 `iterations` 총합으로 판단하고, 데이터 유효성은 `seat_counts_scale_mismatch`로 판단한다.

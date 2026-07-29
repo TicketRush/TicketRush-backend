@@ -32,6 +32,11 @@ DEALLOCATE PREPARE guard_check;
 --         'expire' : 이미 있는 코호트의 AVAILABLE 좌석 @expire_count 건을 '이미 만료된 HOLD' 로
 --                    바꾼다. 공연을 지우지 않으므로 performance_id 가 보존된다 —
 --                    SSE 구독자가 붙어 있는 상태에서 이벤트 버스트를 만들 때 쓴다(런북 §14.6).
+--         'refresh': 미만료 HOLD 의 만료 시각을 다시 +6시간으로 밀어 시딩 당시 분포로 되돌린다.
+--                    코호트를 며칠에 걸쳐 재사용하면 6시간이 지나 스케줄러가 HOLD 를 전부
+--                    AVAILABLE 로 해제해 버리므로(실측: 하루 뒤 hold 120 -> 0), 회차 간
+--                    비교 전제인 '상태 분포 동일' 이 깨진다. performance_id 를 보존한 채
+--                    분포만 복원한다.
 SET @mode      = COALESCE(@mode, 'seed');
 SET @perf_tag  = COALESCE(@perf_tag, 'A');       -- 코호트 식별자. 공연 title = 'LTC-<tag>'
 SET @seats     = COALESCE(@seats, 600);          -- 공연당 좌석 수
@@ -53,9 +58,9 @@ PREPARE pct_check FROM @stmt;
 EXECUTE pct_check;
 DEALLOCATE PREPARE pct_check;
 
-SET @stmt := IF(@mode IN ('seed', 'expire'),
+SET @stmt := IF(@mode IN ('seed', 'expire', 'refresh'),
                 'SELECT ''mode ok'' AS guard',
-                'SELECT * FROM `ABORT__mode_must_be_seed_or_expire`');
+                'SELECT * FROM `ABORT__mode_must_be_seed_expire_or_refresh`');
 PREPARE mode_check FROM @stmt;
 EXECUTE mode_check;
 DEALLOCATE PREPARE mode_check;
@@ -152,6 +157,22 @@ SET @stmt := IF(@mode = 'expire',
 PREPARE expire_stmt FROM @stmt;
 EXECUTE expire_stmt;
 DEALLOCATE PREPARE expire_stmt;
+
+-- ============================================================================
+-- MODE = refresh — 시딩 당시의 상태 분포로 되돌린다 (코호트 재사용)
+-- ============================================================================
+-- 좌석 번호 'S-<i>' 의 i 로 시딩 당시의 CASE 를 그대로 재현한다. 즉 원래 HOLD 로 배분됐던
+-- 바로 그 좌석만 다시 HOLD 로 되돌리므로, 회차 간 '같은 좌석 집합' 이 유지된다.
+-- 예매 부하로 SOLD 가 된 좌석은 건드리지 않는다(seat_status='AVAILABLE' 조건).
+UPDATE seat
+SET seat_status     = 'HOLD',
+    hold_expired_at = @app_now + INTERVAL 6 HOUR,
+    updated_at      = @app_now
+WHERE @mode = 'refresh'
+  AND performance_id = @perf_id
+  AND seat_status = 'AVAILABLE'
+  AND ((CAST(SUBSTRING(seat_number, 3) AS UNSIGNED) - 1) % 100) >= @sold_pct
+  AND ((CAST(SUBSTRING(seat_number, 3) AS UNSIGNED) - 1) % 100) <  @sold_pct + @hold_pct;
 
 -- ---- 검증 쿼리 -------------------------------------------------------------
 -- 이 출력이 리포트 '시딩 규모' 절의 원자료다(#403 완료조건 1).
