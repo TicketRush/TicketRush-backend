@@ -3,6 +3,7 @@ package com.ticketrush.boundedcontext.seat.app.support;
 import com.ticketrush.boundedcontext.seat.app.dto.response.SeatStatusChangedResponse;
 import com.ticketrush.boundedcontext.seat.app.mapper.SeatMapper;
 import com.ticketrush.boundedcontext.seat.domain.entity.Seat;
+import com.ticketrush.boundedcontext.seat.out.repository.SeatMapCacheRepository;
 import com.ticketrush.global.constants.MetricNames;
 import io.micrometer.core.instrument.Counter;
 import io.micrometer.core.instrument.MeterRegistry;
@@ -17,6 +18,7 @@ public class SeatStatusEventPublisher {
 
   private final SeatStatusEventSender seatStatusEventSender;
   private final SeatMapper seatMapper;
+  private final SeatMapCacheRepository seatMapCacheRepository;
 
   /**
    * 경로별 Counter를 기동 시 전부 만들어 둔다(#520).
@@ -35,9 +37,11 @@ public class SeatStatusEventPublisher {
   public SeatStatusEventPublisher(
       SeatStatusEventSender seatStatusEventSender,
       SeatMapper seatMapper,
+      SeatMapCacheRepository seatMapCacheRepository,
       MeterRegistry meterRegistry) {
     this.seatStatusEventSender = seatStatusEventSender;
     this.seatMapper = seatMapper;
+    this.seatMapCacheRepository = seatMapCacheRepository;
 
     for (SeatEventSource source : SeatEventSource.values()) {
       publishedCounters.put(
@@ -60,8 +64,7 @@ public class SeatStatusEventPublisher {
     Counter published = publishedCounters.get(source);
 
     if (!TransactionSynchronizationManager.isSynchronizationActive()) {
-      published.increment();
-      seatStatusEventSender.send(event);
+      evictSeatMapCacheThenSend(event, published);
       return;
     }
 
@@ -69,9 +72,19 @@ public class SeatStatusEventPublisher {
         new TransactionSynchronization() {
           @Override
           public void afterCommit() {
-            published.increment();
-            seatStatusEventSender.send(event);
+            evictSeatMapCacheThenSend(event, published);
           }
         });
+  }
+
+  /**
+   * 좌석맵 캐시 무효화(#469)를 SSE 발행보다 먼저 한다 — 이벤트를 받은 클라이언트가 즉시 재조회해도 stale 캐시를 읽지 않아야 한다. 좌석 상태 DB 전이는 전부
+   * 이 발행 지점을 지나므로 무효화 훅은 여기 하나로 끝난다. evict 실패는 {@code SeatMapCacheRepository}가 삼키므로(TTL 30s로 수렴)
+   * 발행을 막지 않는다.
+   */
+  private void evictSeatMapCacheThenSend(SeatStatusChangedResponse event, Counter published) {
+    seatMapCacheRepository.evict(event.performanceId());
+    published.increment();
+    seatStatusEventSender.send(event);
   }
 }

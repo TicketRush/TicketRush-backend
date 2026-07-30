@@ -1,6 +1,5 @@
 package com.ticketrush.boundedcontext.seat.in.api.v1;
 
-import com.ticketrush.boundedcontext.seat.app.dto.response.SeatMapItemResponse;
 import com.ticketrush.boundedcontext.seat.app.dto.response.SeatNumberResponse;
 import com.ticketrush.boundedcontext.seat.app.dto.response.SeatStatusCountsResponse;
 import com.ticketrush.boundedcontext.seat.app.facade.SeatFacade;
@@ -20,6 +19,7 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
+import tools.jackson.databind.util.RawValue;
 
 @Validated
 @RestController
@@ -31,10 +31,12 @@ public class SeatController {
 
   @GetMapping("/{performanceId}/seat-layouts")
   @Operation(summary = "공연별 좌석 배치 조회", description = "공연 ID에 해당하는 좌석 ID, 좌석 배치 ID, 좌석 번호를 조회합니다.")
-  public ResponseEntity<ApiResponse<List<SeatMapItemResponse>>> getSeatMap(
-      @PathVariable Long performanceId) {
-    List<SeatMapItemResponse> response = seatFacade.getPerformanceSeatMap(performanceId);
-    return ApiResponse.onSuccess(SuccessStatus.OK, response);
+  @SeatMapApiResponses
+  public ResponseEntity<ApiResponse<Object>> getSeatMap(@PathVariable Long performanceId) {
+    // 파사드가 캐시/직렬화한 JSON 배열을 재파싱 없이 result 자리에 그대로 끼운다(#469). 래퍼를 응답째 캐싱하지
+    // 않는 이유는 ApiResponse.traceId가 요청마다 새로 뽑히기 때문 — 래퍼만 매번 만들고 배열은 RawValue로 스플라이스.
+    String seatMapJson = seatFacade.getPerformanceSeatMap(performanceId);
+    return ApiResponse.onSuccess(SuccessStatus.OK, new RawValue(seatMapJson));
   }
 
   @GetMapping("/numbers")

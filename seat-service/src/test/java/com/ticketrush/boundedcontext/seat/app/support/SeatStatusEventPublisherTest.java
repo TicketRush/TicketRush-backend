@@ -2,11 +2,13 @@ package com.ticketrush.boundedcontext.seat.app.support;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.argThat;
+import static org.mockito.Mockito.inOrder;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 
 import com.ticketrush.boundedcontext.seat.app.mapper.SeatMapper;
 import com.ticketrush.boundedcontext.seat.domain.entity.Seat;
+import com.ticketrush.boundedcontext.seat.out.repository.SeatMapCacheRepository;
 import com.ticketrush.global.constants.MetricNames;
 import com.ticketrush.global.types.SeatStatus;
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
@@ -29,6 +31,7 @@ class SeatStatusEventPublisherTest {
   private SimpleMeterRegistry meterRegistry;
 
   @Mock private SeatStatusEventSender seatStatusEventSender;
+  @Mock private SeatMapCacheRepository seatMapCacheRepository;
 
   private final SeatMapper seatMapper = Mappers.getMapper(SeatMapper.class);
 
@@ -38,7 +41,8 @@ class SeatStatusEventPublisherTest {
     // (SeatHoldUseCaseTest와 같은 패턴).
     meterRegistry = new SimpleMeterRegistry();
     seatStatusEventPublisher =
-        new SeatStatusEventPublisher(seatStatusEventSender, seatMapper, meterRegistry);
+        new SeatStatusEventPublisher(
+            seatStatusEventSender, seatMapper, seatMapCacheRepository, meterRegistry);
   }
 
   @Test
@@ -100,8 +104,10 @@ class SeatStatusEventPublisherTest {
       // when
       seatStatusEventPublisher.publishAfterCommit(seat(null), SeatEventSource.SCHEDULER_FALLBACK);
 
-      // then — 롤백된 트랜잭션의 발행을 세면 큐 도착과 어긋난다. 아직 커밋 전이므로 둘 다 일어나지 않아야 한다.
+      // then — 롤백된 트랜잭션의 발행을 세면 큐 도착과 어긋난다. 아직 커밋 전이므로 발행·계측·캐시 무효화
+      // 어느 것도 일어나지 않아야 한다(롤백된 변경으로 캐시를 지우면 미스만 유발한다).
       verifyNoInteractions(seatStatusEventSender);
+      verifyNoInteractions(seatMapCacheRepository);
       assertThat(publishedCount(SeatEventSource.SCHEDULER_FALLBACK)).isZero();
       assertThat(TransactionSynchronizationManager.getSynchronizations()).hasSize(1);
 
@@ -110,10 +116,23 @@ class SeatStatusEventPublisherTest {
 
       // then
       verify(seatStatusEventSender).send(argThat(event -> event.performanceId().equals(1L)));
+      verify(seatMapCacheRepository).evict(1L);
       assertThat(publishedCount(SeatEventSource.SCHEDULER_FALLBACK)).isEqualTo(1.0);
     } finally {
       TransactionSynchronizationManager.clearSynchronization();
     }
+  }
+
+  @Test
+  @DisplayName("좌석맵 캐시 무효화가 SSE 발행보다 먼저 일어난다")
+  void evictsSeatMapCacheBeforeSend() {
+    // when
+    seatStatusEventPublisher.publishAfterCommit(seat(null), SeatEventSource.BOOKING_HOLD);
+
+    // then — 순서가 뒤집히면 SSE를 받고 즉시 재조회한 클라이언트가 stale 캐시를 읽는다(#469)
+    var order = inOrder(seatMapCacheRepository, seatStatusEventSender);
+    order.verify(seatMapCacheRepository).evict(1L);
+    order.verify(seatStatusEventSender).send(argThat(event -> event.performanceId().equals(1L)));
   }
 
   private double publishedCount(SeatEventSource source) {

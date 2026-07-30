@@ -6,13 +6,11 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
-import com.ticketrush.boundedcontext.seat.app.dto.response.SeatMapItemResponse;
 import com.ticketrush.boundedcontext.seat.app.dto.response.SeatNumberResponse;
 import com.ticketrush.boundedcontext.seat.app.dto.response.SeatStatusCountsResponse;
 import com.ticketrush.boundedcontext.seat.app.facade.SeatFacade;
 import com.ticketrush.global.config.CustomSecurityProperties;
 import com.ticketrush.global.config.SecurityConfig;
-import com.ticketrush.global.types.SeatStatus;
 import com.ticketrush.support.WebMvcSliceTest;
 import java.util.List;
 import org.junit.jupiter.api.DisplayName;
@@ -36,13 +34,16 @@ class SeatControllerTest {
   @WithMockUser
   @DisplayName("공연 ID로 전체 좌석 맵 조회를 성공하고 200 OK를 반환한다")
   void getSeatMap() throws Exception {
-    // given
+    // given: 파사드가 캐시/직렬화해 돌려주는 형태 그대로의 snake_case JSON 배열(#469).
+    // RawValue 스플라이스가 이 문자열을 이스케이프된 String이 아니라 실제 JSON 배열로 내보내는지가
+    // 아래 jsonPath 단언의 핵심이다 — 기존 응답 형태 회귀 방지.
     Long performanceId = 1L;
-    List<SeatMapItemResponse> mockResponse =
-        List.of(
-            new SeatMapItemResponse(1L, 101L, "A-1", SeatStatus.AVAILABLE, null),
-            new SeatMapItemResponse(2L, 101L, "A-2", SeatStatus.HOLD, null));
-    given(seatFacade.getPerformanceSeatMap(performanceId)).willReturn(mockResponse);
+    String seatMapJson =
+        "[{\"seat_id\":1,\"seat_layout_id\":101,"
+            + "\"seat_number\":\"A-1\",\"seat_status\":\"AVAILABLE\"},"
+            + "{\"seat_id\":2,\"seat_layout_id\":101,"
+            + "\"seat_number\":\"A-2\",\"seat_status\":\"HOLD\"}]";
+    given(seatFacade.getPerformanceSeatMap(performanceId)).willReturn(seatMapJson);
 
     // when & then
     mockMvc

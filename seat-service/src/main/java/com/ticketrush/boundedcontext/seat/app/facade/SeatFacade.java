@@ -13,7 +13,9 @@ import com.ticketrush.boundedcontext.seat.app.usecase.SeatHoldUseCase;
 import com.ticketrush.boundedcontext.seat.app.usecase.SeatLockUseCase;
 import com.ticketrush.boundedcontext.seat.app.usecase.SeatUnlockUseCase;
 import com.ticketrush.boundedcontext.seat.out.repository.SeatLayoutRepository;
+import com.ticketrush.boundedcontext.seat.out.repository.SeatMapCacheRepository;
 import com.ticketrush.global.eventpublisher.EventPublisher;
+import com.ticketrush.global.json.JsonConverter;
 import com.ticketrush.shared.seat.event.SeatHoldFailedEvent;
 import java.time.LocalDateTime;
 import java.util.List;
@@ -40,9 +42,35 @@ public class SeatFacade {
   private final SeatStatusStreamSubscriber seatStatusStreamSubscriber;
   private final SeatLayoutRepository seatLayoutRepository;
   private final EventPublisher eventPublisher;
+  private final SeatMapCacheRepository seatMapCacheRepository;
+  private final JsonConverter jsonConverter;
 
-  public List<SeatMapItemResponse> getPerformanceSeatMap(Long performanceId) {
-    return seatGetSeatMapUseCase.execute(performanceId);
+  /**
+   * 좌석맵을 응답 본문에 그대로 실을 JSON 배열 문자열로 반환한다(#469).
+   *
+   * <p>DTO 리스트가 아니라 직렬화된 JSON을 캐싱하는 이유: 이 경로의 병목이 DB가 아니라 CPU(직렬화 포함)라는 실측(#509·#518) 때문이다. 히트는 DB
+   * 커넥션·JPA 매핑·Jackson 직렬화를 전부 건너뛰고, 캐시 확인이 {@code SeatGetSeatMapUseCase}의 트랜잭션 밖에 있어 히트 시 커넥션 풀도
+   * 건드리지 않는다. 미스에서도 직렬화는 여기 1회뿐이며 그 결과를 캐시와 응답에 같이 쓴다. 무효화는 {@code
+   * SeatStatusEventPublisher#publishAfterCommit}이 담당한다.
+   */
+  public String getPerformanceSeatMap(Long performanceId) {
+    String cached = seatMapCacheRepository.get(performanceId);
+    if (cached != null) {
+      return cached;
+    }
+
+    List<SeatMapItemResponse> seatMap = seatGetSeatMapUseCase.execute(performanceId);
+    // 공용 JsonConverter는 MVC 응답과 같은 auto-configured ObjectMapper를 쓰므로
+    // snake_case·날짜 포맷이 기존 응답과 동일하다.
+    String json = jsonConverter.serialize(seatMap);
+
+    // 좌석 생성 전의 빈 배열을 캐싱하면 생성 직후 TTL까지 빈 좌석맵이 보이므로 캐시하지 않는다
+    // (생성 경로는 상태 변경 발행을 안 거쳐 evict로 걷어낼 수 없다).
+    if (!seatMap.isEmpty()) {
+      seatMapCacheRepository.set(performanceId, json);
+    }
+
+    return json;
   }
 
   public List<SeatNumberResponse> getSeatNumbers(List<Long> seatIds) {
