@@ -10,6 +10,7 @@ import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 
+import com.ticketrush.boundedcontext.seat.app.support.SeatEventSource;
 import com.ticketrush.boundedcontext.seat.app.support.SeatHoldExpiredPublisher;
 import com.ticketrush.boundedcontext.seat.app.support.SeatStatusEventPublisher;
 import com.ticketrush.boundedcontext.seat.domain.entity.Seat;
@@ -73,7 +74,7 @@ class SeatReleaseSingleUseCaseTest {
     // then
     verify(seatRepository).findById(seatId);
     verify(seatHoldExpiredPublisher).publish(seat);
-    verify(seatStatusEventPublisher).publishAfterCommit(seat);
+    verify(seatStatusEventPublisher).publishAfterCommit(seat, SeatEventSource.EXPIRE_SINGLE);
     assertThat(bookingNumberAtPublish.get()).isEqualTo("BK-1"); // releaseHold 전 캡처 보장
   }
 

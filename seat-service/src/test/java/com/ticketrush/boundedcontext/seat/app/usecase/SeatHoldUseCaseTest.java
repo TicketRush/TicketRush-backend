@@ -6,6 +6,7 @@ import static org.mockito.BDDMockito.given;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 
+import com.ticketrush.boundedcontext.seat.app.support.SeatEventSource;
 import com.ticketrush.boundedcontext.seat.app.support.SeatStatusEventPublisher;
 import com.ticketrush.boundedcontext.seat.domain.entity.Seat;
 import com.ticketrush.boundedcontext.seat.out.repository.SeatRepository;
@@ -67,7 +68,7 @@ class SeatHoldUseCaseTest {
     assertThat(seat.getSeatStatus()).isEqualTo(SeatStatus.HOLD);
     assertThat(seat.getHoldExpiredAt()).isEqualTo(expiredAt);
     assertThat(seat.getBookingNumber()).isEqualTo(bookingNumber);
-    verify(seatStatusEventPublisher).publishAfterCommit(seat);
+    verify(seatStatusEventPublisher).publishAfterCommit(seat, SeatEventSource.BOOKING_HOLD);
     assertThat(
             meterRegistry
                 .counter(MetricNames.SEAT_HOLD, MetricNames.TAG_RESULT, MetricNames.RESULT_SUCCESS)

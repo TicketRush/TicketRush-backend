@@ -133,7 +133,8 @@ class SeatHoldConcurrencyTest {
         new SeatHoldUseCase(
             seatRepository,
             // SSE 전송은 이 테스트의 관심사가 아니다. SeatStatusEventSender가 인터페이스라 람다로 끝난다.
-            new SeatStatusEventPublisher(event -> {}, Mappers.getMapper(SeatMapper.class)),
+            new SeatStatusEventPublisher(
+                event -> {}, Mappers.getMapper(SeatMapper.class), meterRegistry),
             meterRegistry);
 
     // ponytail: SeatFacade의 생성자 11개 중 홀드 경로가 쓰는 4개만 채우고 나머지 7개는 null로 둔다.

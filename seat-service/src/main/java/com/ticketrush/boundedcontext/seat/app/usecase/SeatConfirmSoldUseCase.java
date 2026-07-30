@@ -1,5 +1,6 @@
 package com.ticketrush.boundedcontext.seat.app.usecase;
 
+import com.ticketrush.boundedcontext.seat.app.support.SeatEventSource;
 import com.ticketrush.boundedcontext.seat.app.support.SeatStatusEventPublisher;
 import com.ticketrush.boundedcontext.seat.domain.entity.Seat;
 import com.ticketrush.boundedcontext.seat.out.repository.SeatRepository;
@@ -38,7 +39,7 @@ public class SeatConfirmSoldUseCase {
             .orElseThrow(() -> new BusinessException(ErrorStatus.SEAT_NOT_FOUND));
 
     if (updatedCount == 1) {
-      seatStatusEventPublisher.publishAfterCommit(seat);
+      seatStatusEventPublisher.publishAfterCommit(seat, SeatEventSource.CONFIRM_SOLD);
       forceReleaseAfterCommit(seatId);
       log.info("좌석 판매 확정 완료. bookingNumber: {}, seatId: {}", bookingNumber, seatId);
       return;

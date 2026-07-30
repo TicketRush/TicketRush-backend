@@ -1,5 +1,6 @@
 package com.ticketrush.boundedcontext.seat.app.usecase;
 
+import com.ticketrush.boundedcontext.seat.app.support.SeatEventSource;
 import com.ticketrush.boundedcontext.seat.app.support.SeatHoldExpiredPublisher;
 import com.ticketrush.boundedcontext.seat.app.support.SeatStatusEventPublisher;
 import com.ticketrush.boundedcontext.seat.out.repository.SeatRepository;
@@ -49,7 +50,7 @@ public class SeatReleaseSingleUseCase {
               // 조정이고, 위 조건부 UPDATE가 이미 DB를 바꿨다. 가드가 통과했으므로 스냅샷은 최신이다.
               seatHoldExpiredPublisher.publish(seat);
               seat.releaseHold();
-              seatStatusEventPublisher.publishAfterCommit(seat);
+              seatStatusEventPublisher.publishAfterCommit(seat, SeatEventSource.EXPIRE_SINGLE);
               log.info("Redis 만료 이벤트 수신: 좌석 {} 상태를 AVAILABLE로 즉시 롤백했습니다.", seatId);
             },
             () ->
