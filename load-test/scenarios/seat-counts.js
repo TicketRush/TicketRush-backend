@@ -2,10 +2,14 @@
 //
 // ── 왜 좌석 수 전제가 측정의 성립 조건인가 ──────────────────────────────────
 // SeatRepository.getStatusCountsByPerformanceIdAndStatuses 의 WHERE 절은
-// `s.performanceId = :performanceId` 하나뿐이다(SeatRepository.java:18-32). idx_seat_performance_id
-// 로 range scan 을 타지만 커버링 인덱스가 아니라 매칭 행을 전부 읽어 CASE 를 평가한다.
-// 즉 응답 시간이 공연당 좌석 수에 정비례한다 — 좌석 수를 고정하지 않은 수치는 해석할 수 없고
-// 다른 환경에서 재현도 불가능하다. 그래서 COUNTS_EXPECTED_SEATS 로 규모를 검증한다.
+// `s.performanceId = :performanceId` 하나뿐이다(SeatRepository.java:18-32). 매칭 행 전부를 훑어
+// CASE 를 평가하므로 응답 시간이 공연당 좌석 수에 정비례한다 — 좌석 수를 고정하지 않은 수치는
+// 해석할 수 없고 다른 환경에서 재현도 불가능하다. 그래서 COUNTS_EXPECTED_SEATS 로 규모를 검증한다.
+//
+// ⚠ #521 이 idx_seat_performance_id_status_hold_expired_at 로 이 스캔을 index-only 로 바꿨다.
+//   스캔 몫은 줄었지만 좌석 수 비례 자체가 사라진 것은 아니다(인덱스 엔트리를 여전히 좌석 수만큼
+//   읽는다). 회차를 비교할 때는 인덱스 적용 여부를 metadata 에 반드시 기록한다 — #403 은 인덱스
+//   없는 상태의 수치다.
 //
 // ── HOLD 비율이 왜 필요한가 ─────────────────────────────────────────────────
 // 집계는 만료 HOLD(holdExpiredAt <= now)를 AVAILABLE 로 선반영한다. 좌석이 전부 AVAILABLE 이면

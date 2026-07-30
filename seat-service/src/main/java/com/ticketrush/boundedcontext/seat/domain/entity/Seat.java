@@ -21,8 +21,23 @@ import lombok.NoArgsConstructor;
 /**
  * 좌석. 인덱스 두 개를 두는 근거는 아래와 같다.
  *
- * <p><b>idx_seat_performance_id</b> — {@code SeatRepository.findSeatMapByPerformanceId}가
- * performanceId로만 필터한다. 인덱스가 없으면 공연당 수천 행을 매 요청 풀스캔해 부하 테스트 수치가 앱이 아닌 인덱스 부재를 반영한다.
+ * <p><b>idx_seat_performance_id_status_hold_expired_at</b> — 공연 단위 조회 두 개를 함께 받는다.
+ *
+ * <ul>
+ *   <li><b>상태별 집계</b>({@code getStatusCountsByPerformanceIdAndStatuses})가 읽는 컬럼은 {@code
+ *       performance_id}(WHERE) · {@code seat_status} · {@code hold_expired_at} <b>이 셋이 전부</b>라 이
+ *       인덱스만으로 index-only scan이 끝난다. #403 실측에서 3,000석 집계 비용의 <b>70%</b>가 테이블 접근을 동반한 스캔 몫이었다({@code
+ *       cost ≈ 1.29ms + 0.996µs × 좌석수}). 커버링이 되면 그 몫이 줄어든다 — <b>고정항 1.29ms는 남으며 이 최적화의 상한이
+ *       거기다</b>(#521).
+ *   <li><b>좌석맵 조회</b>({@code findSeatMapByPerformanceId})는 {@code seat_layout_id}·{@code
+ *       seat_number}까지 읽어 커버링은 안 되지만, 선두 컬럼이 {@code performance_id}로 같아 range scan 진입은 동일하다.
+ * </ul>
+ *
+ * <p><b>단일 컬럼 {@code idx_seat_performance_id}는 제거했다(#521).</b> 위 인덱스가 그것의 leftmost prefix 상위집합이라 두
+ * 조회 모두 그대로 받는다. seat 테이블의 나머지 쿼리는 PK나 {@code (seat_status, hold_expired_at)}로 걸리고,
+ * booking-service의 native SQL 두 건({@code JdbcBookingSeatStatusReader} · {@code
+ * JdbcBookingReferenceReader})은 {@code WHERE seat_id = ? AND performance_id = ?}로 <b>PK equality가
+ * 선행</b>이라 무관하다. 중복 인덱스를 남기면 좌석 전이(HOLD/확정/해제) 쓰기 비용만 늘어난다.
  *
  * <p><b>idx_seat_status_hold_expired_at</b> — 만료 HOLD 조회가 주기 스케줄러의 핫패스다(#343). {@code
  * SeatStatusScheduler}(60초)의 {@code findExpiredHoldSeats}와 {@code SeatHeldGaugeMetrics}(30초)의
@@ -42,6 +57,20 @@ import lombok.NoArgsConstructor;
  *     ALGORITHM=INPLACE, LOCK=NONE;
  * </pre>
  *
+ * <p><b>#521의 인덱스 교체도 같은 이유로 수동 DDL이다.</b> 적용 전후로 {@code SHOW INDEX FROM seat} 출력을 증적에 남긴다 —
+ * {@code @Index}가 있다는 것이 prod에 그 인덱스가 있다는 뜻이 아니다(#464에서 booking 2개, #345에서 seat 1개가 미적용인 채로 발견됐다).
+ * 성능 측정 전이면 특히 — 인덱스 부재가 측정하려는 효과를 통째로 덮는다.
+ *
+ * <pre>
+ *   ALTER TABLE seat
+ *     ADD INDEX idx_seat_performance_id_status_hold_expired_at
+ *       (performance_id, seat_status, hold_expired_at),
+ *     ALGORITHM=INPLACE, LOCK=NONE;
+ *   ALTER TABLE seat
+ *     DROP INDEX idx_seat_performance_id,
+ *     ALGORITHM=INPLACE, LOCK=NONE;
+ * </pre>
+ *
  * <p><b>version 컬럼도 기존 가동 DB에 수동 추가해야 한다(#427).</b> 인덱스와 달리 컬럼은 prod의 ddl-auto=validate가 검출하므로, 배포
  * <b>전</b>에 실행하지 않으면 기동이 실패한다. {@code DEFAULT 0}이 기존 행을 백필한다({@code booking.version}과 동일 — ADR 0005
  * 선례).
@@ -54,7 +83,9 @@ import lombok.NoArgsConstructor;
 @Table(
     name = "seat",
     indexes = {
-      @Index(name = "idx_seat_performance_id", columnList = "performance_id"),
+      @Index(
+          name = "idx_seat_performance_id_status_hold_expired_at",
+          columnList = "performance_id, seat_status, hold_expired_at"),
       @Index(name = "idx_seat_status_hold_expired_at", columnList = "seat_status, hold_expired_at")
     })
 @Getter
