@@ -1,0 +1,54 @@
+# k6 원본 요약 — 260728-509-oom-fix / ramp
+# 실행: 2026-07-28T15:41:51+09:00 (= 06:41:51Z), running 4m37.6s
+# 시나리오: browse up to 80.00 iter/s + purchase up to 16.00 iter/s, 4m30s over 7 stages
+#           (maxVUs browse 100-600 / purchase 20-120)
+# ⚠ LOAD_USER_PASSWORD 는 이 파일에 남기지 않는다.
+
+INFO[0003] [setup] profile=ramp 예매 가능 좌석 20800석 / 공연 10건, 인기 공연=4
+WARN[0266] Insufficient VUs, reached 600 active VUs and cannot initialize more  executor=ramping-arrival-rate scenario=browse
+
+  █ THRESHOLDS
+    http_req_duration
+    ✗ 'p(95)<800' p(95)=6.77s
+    http_req_failed
+    ✓ 'rate<0.01' rate=0.00%
+
+  █ TOTAL RESULTS
+    checks_total.......: 15644   56.357667/s
+    checks_succeeded...: 100.00% 15644 out of 15644
+    checks_failed......: 0.00%   0 out of 15644
+    ✓ login 200
+    ✓ booking created(201)
+    ✓ browse journey ok(200)
+
+    CUSTOM
+    e2e_booking_created............: 100.00% 2699 out of 2699
+    e2e_booking_duration...........: avg=82.43ms  min=18.83ms med=37.81ms  max=2.25s p(90)=87.07ms p(95)=192.06ms
+    e2e_browse_journey_duration....: avg=2.5s     min=35ms    med=639ms    max=9.59s p(90)=7.33s   p(95)=7.86s
+    e2e_perf_detail_duration.......: avg=63.65ms  min=7.59ms  med=18.43ms  max=2.32s p(90)=56.22ms p(95)=107.95ms
+    e2e_perf_list_duration.........: avg=65.31ms  min=7.18ms  med=17.05ms  max=2.74s p(90)=52.88ms p(95)=130.79ms
+    e2e_seat_conflict..............: 0.00%   0 out of 2699
+    e2e_seat_exhausted.............: 0.00%   0 out of 2699
+    e2e_seat_layouts_duration......: avg=2.37s    min=15.25ms med=548.21ms max=9.56s p(90)=7.28s   p(95)=7.8s
+
+    HTTP
+    http_req_duration..............: avg=785.26ms min=7.18ms  med=27.07ms  max=9.56s p(90)=2.64s   p(95)=6.77s
+      { expected_response:true }...: avg=785.26ms min=7.18ms  med=27.07ms  max=9.56s p(90)=2.64s   p(95)=6.77s
+    http_req_failed................: 0.00%   0 out of 41542
+    http_reqs......................: 41542   149.655471/s
+
+    EXECUTION
+    dropped_iterations.............: 555     1.999393/s
+    iteration_duration.............: avg=2.08s    min=18.96ms med=322.86ms max=9.59s p(90)=7.17s   p(95)=7.75s
+    iterations.....................: 15643   56.354064/s
+    vus............................: 75      min=0            max=601
+    vus_max........................: 620     min=120          max=620
+
+    NETWORK
+    data_received..................: 190 MB  684 kB/s
+    data_sent......................: 17 MB   60 kB/s
+
+running (4m37.6s), 000/620 VUs, 15643 complete and 0 interrupted iterations
+browse   ✓ [======================================] 000/600 VUs  4m30s  80.00 iters/s
+purchase ✓ [======================================] 000/020 VUs  4m30s  16.00 iters/s
+ERRO[0277] thresholds on metrics 'http_req_duration' have been crossed

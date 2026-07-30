@@ -29,6 +29,32 @@ SET @admin_email = 'loadtest-admin@ticketrush.local';
 DELETE FROM ticket  WHERE ticket_token_hash LIKE 'LOADTEST-ENTRY-%';
 DELETE FROM booking WHERE booking_number    LIKE 'LT-E%';
 
+-- ---- #504 결제확정 파이프라인 코호트 (LTP-* / LT-P*) -------------------------
+-- 이 코호트는 title 'LTP-%' 라 아래 @marker('LOADTEST-%') JOIN 에 걸리지 않으므로 따로 지운다.
+-- ticket -> booking 순서는 #402 블록과 같은 이유다(ticket 에 마커 컬럼이 없어 booking 을 통해서만
+-- 범위를 특정할 수 있다). 좌석은 예매와 1:1 이라 공연 JOIN 으로 정확히 잡힌다.
+DELETE t FROM ticket t
+JOIN booking b ON b.booking_id = t.booking_id
+WHERE b.booking_number LIKE 'LT-P%';
+
+DELETE FROM booking WHERE booking_number LIKE 'LT-P%';
+
+DELETE s FROM seat s
+JOIN performance p ON p.performance_id = s.performance_id
+WHERE p.title LIKE 'LTP-%';
+
+DELETE sl FROM seat_layout sl
+JOIN performance p ON p.performance_id = sl.performance_id
+WHERE p.title LIKE 'LTP-%';
+
+DELETE FROM performance WHERE title LIKE 'LTP-%';
+
+-- inbox 는 회차마다 새 eventId 를 쓰므로 코호트당 2N 행이 쌓인다(retention 은 기본 비활성).
+-- payment-confirmed-topic 은 주입 외에 흐른 적이 없어 event_type 으로 잘라도 안전하다.
+DELETE FROM inbox
+ WHERE event_type = 'PaymentConfirmed'
+   AND consumer_group IN ('booking-group', 'ticket-group');
+
 DELETE b FROM booking b
 JOIN performance p ON p.performance_id = b.performance_id
 WHERE p.title LIKE CONCAT(@marker, '-%');

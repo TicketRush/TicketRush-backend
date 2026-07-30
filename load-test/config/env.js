@@ -118,3 +118,56 @@ export const E2E_PURCHASE_PERF_IDS = parsePositiveList(
 // 잡아 두고, 그래도 dropped 가 나면 그때는 대상 포화로 읽는다(런북 §13.5 무효 판정).
 export const E2E_PRE_ALLOCATED_VUS = Number(__ENV.E2E_PRE_ALLOCATED_VUS || 100);
 export const E2E_MAX_VUS = Number(__ENV.E2E_MAX_VUS || 600);
+
+// ---- #403 좌석 상태 집계 (seat-counts.js) -----------------------------------
+// 계단식 포화점 탐색. openrun-e2e 의 ramp 회차와 같은 형태이고 단계당 5분도 같다
+// (이슈 완료조건이자 관측 하한 — Prometheus 스크랩 15초라 단계당 20표본).
+// 상한 근거: seat-counts 응답은 203 bytes 로 seat-layouts(2,080석 기준 약 230 KB)보다 3자리
+// 작다. 회선·직렬화가 아니라 집계 스캔만 남으므로 seat-layouts 계단(10~80)보다 위를 본다.
+// 실측 캘리브레이션으로 조정한다.
+export const COUNTS_STAGE_RATES = parsePositiveList(
+  'COUNTS_STAGE_RATES',
+  __ENV.COUNTS_STAGE_RATES || '20,40,80,160',
+  '20,40,80,160',
+);
+export const COUNTS_STAGE_DURATION = __ENV.COUNTS_STAGE_DURATION || '5m';
+
+// 시딩 규모 검증값. seed_seat_counts.sql 검증 쿼리의 expect_total_count 를 그대로 넘긴다.
+// 0 이면 검증을 생략한다 — 다만 규모가 곧 이 측정의 전제이므로 실회차에서는 반드시 지정한다.
+// 응답이 조용히 빈 값이 되거나 엉뚱한 공연을 재는 사고를 여기서 잡는다.
+export const COUNTS_EXPECTED_SEATS = Number(__ENV.COUNTS_EXPECTED_SEATS || 0);
+
+// 1 이면 같은 iteration 에서 seat-layouts 도 호출해 비용을 비교한다(런북 §14.5 비교 회차 전용).
+// 상시로 켜면 안 된다 — 좌석 3,000석 응답이 CPU·메모리를 삼켜 집계 쿼리 수치를 오염시킨다
+// (#509 가 2,080석 seat-layouts 로 seat-service 를 cgroup OOM 까지 몰고 간 경로다).
+export const COUNTS_COMPARE = __ENV.COUNTS_COMPARE === '1';
+
+export const COUNTS_PRE_ALLOCATED_VUS = Number(__ENV.COUNTS_PRE_ALLOCATED_VUS || 50);
+export const COUNTS_MAX_VUS = Number(__ENV.COUNTS_MAX_VUS || 400);
+
+// ---- #403 SSE 대량 구독 (seat-sse-fanout.js, k6-sse 이미지 전용) ------------
+// 구독 대상 공연. seed_seat_counts.sql 이 만든 SSE 코호트의 performance_id 를 넘긴다.
+export const SSE_PERF_ID = Number(__ENV.SSE_PERF_ID || PERF_ID);
+
+// 동시 구독자 계단. VU 1개 = SSE 커넥션 1개다(sse.open 이 커넥션이 닫힐 때까지 블로킹한다).
+// 단계당 유지시간이 10분인 것은 이슈 완료조건이다 — 장기 커넥션의 누수·타임아웃 전 구간을 본다.
+export const SSE_SUBSCRIBER_STEPS = parsePositiveList(
+  'SSE_SUBSCRIBER_STEPS',
+  __ENV.SSE_SUBSCRIBER_STEPS || '100,300,600',
+  '100,300,600',
+);
+export const SSE_STEP_DURATION = __ENV.SSE_STEP_DURATION || '10m';
+export const SSE_STEP_RAMP = __ENV.SSE_STEP_RAMP || '30s';
+
+// 좌석 상태 변경(=이벤트) 발생률. 이 회차의 통제 변수다 — 구독자 수만 바꾸고 이벤트율은 고정해야
+// '구독자 수 대비 전파 지연' 곡선이 성립한다. POST /api/v1/booking 1건 = (Kafka 경유) HOLD 1건
+// = 이벤트 1건이고, iteration 당 좌석 1개를 비가역 소모한다.
+//   필요 좌석 ≈ SSE_MUTATE_RATE x 전체 회차 길이(초). 기본값 기준 5/s x 약 33분 ≈ 9,900석.
+export const SSE_MUTATE_RATE = Number(__ENV.SSE_MUTATE_RATE || 5);
+
+// probe = 전파 지연 SSOT. 자기가 구독하고 자기가 예매를 걸어, 자기 seat_id 이벤트가 돌아오는
+// 시각차를 같은 k6 프로세스의 시계로 잰다(EC2 와 로컬의 시계 차를 타지 않는다).
+// 매 iteration 이 새 커넥션이라 구독자 목록의 '뒤쪽' 에 등록된다 = 팬아웃 전 구간을 통과한 값.
+export const SSE_PROBE_PER_MINUTE = Number(__ENV.SSE_PROBE_PER_MINUTE || 2);
+// probe 가 자기 이벤트를 이 시간 안에 못 받으면 포기하고 커넥션을 닫는다(미수신으로 집계).
+export const SSE_PROBE_TIMEOUT_MS = Number(__ENV.SSE_PROBE_TIMEOUT_MS || 20000);

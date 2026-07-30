@@ -117,6 +117,31 @@ services:
     networks:
       - ticketrush-net
 
+  # SSE 시나리오 전용 부하 생성기(#403). 위 k6 서비스와 설정은 같고 이미지만 다르다 —
+  # k6/x/sse 확장을 넣어 직접 빌드한다(근거는 load-test/Dockerfile.k6-sse 주석).
+  #   빌드: docker compose --profile loadtest build k6-sse
+  #   실행: docker compose run --rm k6-sse run /scripts/scenarios/seat-sse-fanout.js
+  k6-sse:
+    build:
+      context: ./load-test
+      dockerfile: Dockerfile.k6-sse
+    image: ticketrush/k6-sse:local
+    container_name: k6-sse
+    profiles: ["loadtest"]
+    depends_on:
+      - prometheus
+    environment:
+      K6_OUT: experimental-prometheus-rw
+      K6_PROMETHEUS_RW_SERVER_URL: http://prometheus:9090/api/v1/write
+      K6_PROMETHEUS_RW_TREND_STATS: "p(95),p(99),avg"
+      BASE_URL: http://host.docker.internal:8080
+    volumes:
+      - ./load-test:/scripts:ro
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    networks:
+      - ticketrush-net
+
 volumes:
   redis_data:
   kafka-data:

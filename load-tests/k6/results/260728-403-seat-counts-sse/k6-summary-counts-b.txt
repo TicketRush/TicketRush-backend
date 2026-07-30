@@ -1,0 +1,44 @@
+time="2026-07-29T13:13:58+09:00" level=warning msg="C:\\Users\\PC\\Desktop\\TicketRush-backend\\docker-compose.yml: the attribute `version` is obsolete, it will be ignored, please remove it to avoid potential confusion"
+ Container ticketrush-backend-k6-run-af4afca5c184 Creating 
+ Container ticketrush-backend-k6-run-af4afca5c184 Created 
+         /\      Grafana   /‾‾/  
+    /\  /  \     |\  __   /  /   
+   /  \/    \    | |/ /  /   ‾‾\ 
+  /          \   |   (  |  (‾)  |
+ / __________ \  |_|\_\  \_____/ 
+     execution: local
+        script: /scripts/scenarios/seat-counts.js
+        output: Prometheus remote write (http://host.docker.internal:9090/api/v1/write)
+     scenarios: (100.00%) 1 scenario, 800 max VUs, 31m20s max duration (incl. graceful stop):
+              * counts: Up to 480.00 iterations/s for 30m50s over 11 stages (maxVUs: 100-800, gracefulStop: 30s)
+time="2026-07-29T04:13:59Z" level=info msg="[setup] perfId=15 stages=40,80,160,240,320,480 x 5m expectedSeats=3000 compare=false" source=console
+time="2026-07-29T04:34:58Z" level=warning msg="Insufficient VUs, reached 800 active VUs and cannot initialize more" executor=ramping-arrival-rate scenario=counts
+  █ THRESHOLDS 
+    http_req_duration
+    ✗ 'p(95)<800' p(95)=3.1s
+    http_req_failed
+    ✗ 'rate<0.01' rate=1.86%
+  █ TOTAL RESULTS 
+    checks_total.......: 318131 169.314834/s
+    checks_succeeded...: 98.13% 312206 out of 318131
+    checks_failed......: 1.86%  5925 out of 318131
+    ✗ seat-counts 200
+      ↳  98% — ✓ 312206 / ✗ 5925
+    CUSTOM
+    seat_counts_duration...........: avg=1.43s min=0s     med=109.38ms max=30.03s p(90)=3.01s p(95)=3.1s 
+    seat_counts_scale_mismatch.....: 0.00%  0 out of 312206
+    HTTP
+    http_req_duration..............: avg=1.43s min=0s     med=109.38ms max=30.03s p(90)=3.01s p(95)=3.1s 
+      { expected_response:true }...: avg=1.41s min=8.64ms med=146.54ms max=22.67s p(90)=3.01s p(95)=3.09s
+    http_req_failed................: 1.86%  5925 out of 318131
+    http_reqs......................: 318131 169.314834/s
+    EXECUTION
+    dropped_iterations.............: 88468  47.084204/s
+    iteration_duration.............: avg=1.53s min=8.71ms med=122.76ms max=30.03s p(90)=3.02s p(95)=3.11s
+    iterations.....................: 318131 169.314834/s
+    vus............................: 1      min=0              max=800
+    vus_max........................: 800    min=100            max=800
+    NETWORK
+    data_received..................: 334 MB 178 kB/s
+    data_sent......................: 81 MB  43 kB/s
+time="2026-07-29T04:45:18Z" level=error msg="thresholds on metrics 'http_req_duration, http_req_failed' have been crossed"

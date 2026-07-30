@@ -101,11 +101,14 @@ init SQL은 **빈 DB의 최초 기동에만** 실행된다. 이미 데이터가 
    다만 빠지면 시딩 SQL이 `ERROR 1364`로 깨지고 `validate` CI는 이를 검출하지 못하므로, 여기서 눈으로 확인한다.
 
    ```sh
-   grep -E "idx_seat_performance_id|uk_seat_layout_performance_id" deploy/mysql/init/001-ticket-rush-schema.sql
+   grep -E "idx_seat_performance_id_status_hold_expired_at|uk_seat_layout_performance_id" deploy/mysql/init/001-ticket-rush-schema.sql
    grep -c "NOT NULL DEFAULT '0'" deploy/mysql/init/001-ticket-rush-schema.sql   # @Version 엔티티 수와 일치해야 한다
    grep -E "uk_payment_completed_booking|GENERATED ALWAYS" deploy/mysql/init/001-ticket-rush-schema.sql  # #422 수동 DDL
    grep -E "idx_outbox_aggtype_status_id" deploy/mysql/init/001-ticket-rush-schema.sql  # #483 릴레이 조회
    ```
+
+   > `idx_seat_performance_id_status_hold_expired_at`이 빠지면 좌석 상태 집계가 index-only scan을 잃고
+   > 매칭 행을 전부 읽는 계획으로 되돌아간다(#521, `Seat` javadoc). 이것도 실패가 아니라 성능 저하다.
 
    > `idx_outbox_aggtype_status_id`가 빠지면 릴레이 조회의 인덱스 힌트가 무시돼 조회가 배치 크기가 아니라
    > **적체 전체를 읽고 filesort**하는 계획으로 되돌아간다(#483, `OutboxEntity` javadoc). 실패가 아니라

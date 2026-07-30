@@ -1,0 +1,21 @@
+# k6 + SSE 확장 (#403)
+#
+# k6 기본 바이너리에는 Server-Sent Events 클라이언트가 없다(WebSocket 은 있다).
+# grafana/k6 로 /seat-status/stream 을 치면 http.get 이 응답 전체를 버퍼링하다 타임아웃까지
+# 블로킹되므로 '이벤트별 수신 시각' 을 잡을 수 없고, 이슈 #403 의 완료조건인 전파 지연·수신
+# 누락률을 잴 수 없다. 그래서 커뮤니티 확장(k6/x/sse)을 넣은 바이너리를 만든다.
+#
+# xk6-sse 는 "이제 커스텀 빌드 없이 import 만으로 해결된다" 고 안내하지만 그 자동 해석은
+# Grafana Cloud 바이너리 프로비저닝(로그인 토큰)에 얹혀 있다. 오프라인·무토큰으로 재현
+# 가능해야 하므로 여기서는 직접 빌드한다.
+#
+# 사용: docker compose --profile loadtest build k6-sse
+#       docker compose run --rm --no-deps k6-sse run /scripts/scenarios/seat-sse-fanout.js
+#
+# ⚠ seat-sse-fanout.js 는 이 이미지에서만 돈다. 기본 k6 서비스로 실행하면 'k6/x/sse' import
+#   해석 실패로 즉시 죽는다(부하가 시작조차 안 되므로 조용한 오염은 아니다).
+FROM grafana/xk6:latest AS build
+RUN xk6 build --with github.com/phymbert/xk6-sse --output /tmp/k6
+
+FROM grafana/k6:latest
+COPY --from=build /tmp/k6 /usr/bin/k6

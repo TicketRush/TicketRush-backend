@@ -1,5 +1,6 @@
 package com.ticketrush.boundedcontext.seat.app.usecase;
 
+import com.ticketrush.boundedcontext.seat.app.support.SeatEventSource;
 import com.ticketrush.boundedcontext.seat.app.support.SeatStatusEventPublisher;
 import com.ticketrush.boundedcontext.seat.out.repository.SeatRepository;
 import com.ticketrush.global.types.SeatStatus;
@@ -54,7 +55,7 @@ public class SeatReleaseSoldSeatUseCase {
     }
 
     seat.releaseBooking(); // SOLD → AVAILABLE
-    seatStatusEventPublisher.publishAfterCommit(seat);
+    seatStatusEventPublisher.publishAfterCommit(seat, SeatEventSource.REFUND_RELEASE);
     log.info("환불 좌석 반환 완료. seatId: {}", seatId);
   }
 }
