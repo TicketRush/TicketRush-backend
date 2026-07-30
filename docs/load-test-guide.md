@@ -1485,12 +1485,12 @@ ssh -i ~/ticket_rush_ssh.pem ubuntu@<EC2>
 | # | 확인 | 명령 | 기대 |
 |---|---|---|---|
 | G0 | SSE가 인터넷에서 도달 | `timeout 6 curl -sN -H 'Accept: text/event-stream' https://api.ticketrush.store/api/v1/seat/<SSE공연>/seat-status/stream` | `event:connected` 즉시 수신. 무응답이면 §14.1-(f) — nginx 설정이 되돌아간 것이다 |
-| G1 | `performance_id` 인덱스 실존 | `docker exec -i ticketrush-mysql sh -c 'mysql -uroot -p"$MYSQL_ROOT_PASSWORD" ticket_rush -e "SHOW INDEX FROM seat"'` | `idx_seat_performance_id` 존재 |
+| G1 | 집계 커버링 인덱스 실존 | `docker exec -i ticketrush-mysql sh -c 'mysql -uroot -p"$MYSQL_ROOT_PASSWORD" ticket_rush -e "SHOW INDEX FROM seat"'` | `idx_seat_performance_id_status_hold_expired_at` 존재(#521). **인덱스 적용 전후 회차를 비교하는 경우에는 그 회차의 실제 상태를 metadata 에 기록하고 진행한다** |
 | G2 | executor 메트릭 노출 | `docker exec seat-service wget -qO- localhost:8090/actuator/prometheus \| grep executor_` | `executor_queued_tasks{name="seatStatusSseExecutor"}` 존재 |
 | G3 | 배포본 = 저장소 | `docker inspect --format '{{.Config.Image}}' $(docker ps -q)` | 전 서비스 `IMAGE_TAG` 동일 |
 | G4 | seat-service 기준선 | `docker stats --no-stream seat-service` | 400 MiB 내외. 550 MiB면 **재시작 후 시작**(§14.8) |
 
-> **G1이 실패하면 측정 자체가 무의미하다.** 인덱스가 없으면 집계가 풀스캔이 되어 "앱의 특성"이 아니라 "인덱스 부재"를 재게 된다. `@Index`는 `ddl-auto=update`인 로컬/신규 초기화 DB에서만 생성되고 prod(`validate`)는 부재를 검출하지 못한다(`Seat.java:35-51`). 없으면 먼저 수동 DDL을 넣는다.
+> **G1이 실패하면 측정 자체가 무의미하다.** 인덱스가 없으면 집계가 풀스캔이 되어 "앱의 특성"이 아니라 "인덱스 부재"를 재게 된다. `@Index`는 `ddl-auto=update`인 로컬/신규 초기화 DB에서만 생성되고 prod(`validate`)는 부재를 검출하지 못한다(`Seat.java:50-73`). 없으면 먼저 수동 DDL을 넣는다 — 그 런북이 같은 javadoc에 있다.
 
 > **G2는 #403에서 실패했고 그 원인은 PR #519가 고쳤다.** `SeatStatusSseConfig`의 `@Bean` 반환 타입이 `Executor`라 Boot의 `TaskExecutorMetricsAutoConfiguration`이 `TaskExecutor` 타입으로 후보를 모으는 단계에서 이 빈을 놓쳤다. 반환 타입을 `ThreadPoolTaskExecutor`로 좁혀 해결했으므로 **그 변경이 배포된 이미지에서는 G2가 통과해야 한다.** 그래도 실패하면 배포본이 그 커밋을 담고 있는지(G3)부터 본다. 큐 깊이 시계열 없이 회차를 돌리면 §14.6의 판정이 로그 파싱으로 되돌아간다.
 
