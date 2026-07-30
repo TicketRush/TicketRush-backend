@@ -49,10 +49,14 @@ QUERIES = [
     # 실제의 1/6500 이 나왔다. 그래서 #348 회차는 회선 포화를 k6 수치로 역추정해야 했다.
     ("node-net-tx", 'rate(node_network_transmit_bytes_total{job="node", device="ens5"}[1m])'),
     ("node-net-rx", 'rate(node_network_receive_bytes_total{job="node", device="ens5"}[1m])'),
-    # 컨테이너별 메모리는 여기 없다 — 수단이 아직 없다(#515). #509 에서 cAdvisor 로 넣으려 했으나
-    # Docker 29 + cgroup v2 + systemd 조합에서 컨테이너를 열거하지 못해 되돌렸다.
-    # 그때까지 컨테이너 메모리는 부하 중 `docker stats`, OOM 판정은 `dmesg | grep CONSTRAINT_MEMCG`
-    # 로 본다(런북 §13.6). 회차 리포트에는 그 한계를 명시할 것.
+    # 컨테이너별 메모리(#515). container-mem-sampler 가 cgroup v2 를 직접 읽어 node-exporter
+    # textfile 로 넘긴다 — cAdvisor 는 이 호스트에서 컨테이너를 열거하지 못해 되돌렸다.
+    # ⚠ sampler-containers 가 0 이면 위 세 시계열이 비는 것은 '메모리를 안 썼다' 가 아니라
+    #   '수집이 멎었다' 는 뜻이다. 리포트에 수치를 옮기기 전에 이 값을 먼저 본다.
+    ("container-mem-usage", 'ticketrush_container_memory_usage_bytes'),
+    ("container-mem-limit-pct", '100 * ticketrush_container_memory_usage_bytes / ticketrush_container_memory_limit_bytes'),
+    ("container-oom-kills", 'increase(ticketrush_container_oom_kills_total[5m])'),
+    ("container-sampler-containers", 'ticketrush_container_sampler_containers'),
     # 유입 축 (k6)
     ("k6-rps", 'sum(rate(k6_http_reqs_total[1m]))'),
     ("k6-rps-by-name", 'sum by (name) (rate(k6_http_reqs_total[1m]))'),

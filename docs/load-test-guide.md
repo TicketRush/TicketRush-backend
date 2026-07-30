@@ -1371,14 +1371,28 @@ sum(rate(node_disk_read_bytes_total{job="node"}[1m]))
 rate(node_network_transmit_bytes_total{job="node", device="ens5"}[1m])
 rate(node_network_receive_bytes_total{job="node", device="ens5"}[1m])
 
-# ── 컨테이너별 메모리 — 아직 수단이 없다(#515) ────────────────────────
+# ── 컨테이너별 메모리 (#515) ──────────────────────────────────────────
 # 위 node_* 는 호스트 총량이라 "어느 컨테이너가 자기 mem_limit 에 가까운지"를 답하지 못한다.
 # #509 에서 seat-service 가 cgroup OOM 으로 죽을 때까지 신호가 없었던 것이 그래서다.
-# cAdvisor 로 메우려 했으나 Docker 29 + cgroup v2 + systemd 조합에서 컨테이너를 열거하지
-# 못해 되돌렸다(#515 에 실측 기록). 그때까지 컨테이너 메모리는 이 두 가지로만 본다.
-#   부하 중:   ssh <EC2> 'docker stats --no-stream seat-service'
-#   OOM 판정:  ssh <EC2> 'sudo dmesg -T | grep CONSTRAINT_MEMCG'
-#              ⚠ docker inspect 의 OOMKilled 는 재시작 뒤라 false 로 나온다 — 믿지 말 것
+# cAdvisor 는 이 호스트(Docker 29 + cgroup v2 + systemd)에서 컨테이너를 열거하지 못해 되돌렸고,
+# 대신 container-mem-sampler 가 cgroup v2 를 직접 읽어 node-exporter textfile 로 넘긴다.
+# 라벨은 compose 의 container_name 이다(seat-service, ticketrush-mysql …).
+ticketrush_container_memory_usage_bytes{container="seat-service"}
+ticketrush_container_memory_limit_bytes{container="seat-service"}      # mem_limit 이 지표로 나온다
+# 상한 대비 사용률(%) — OOM 여유가 원래 10%대라 이 선이 이 스택의 실질 상한이다
+100 * ticketrush_container_memory_usage_bytes / ticketrush_container_memory_limit_bytes
+topk(5, ticketrush_container_memory_usage_bytes / ticketrush_container_memory_limit_bytes)
+# 회차 peak. memory.peak 은 컨테이너 기동 이후 최댓값이라 회차 사이 재시작하면 그 회차 값이 된다.
+ticketrush_container_memory_peak_bytes{container="seat-service"}
+# OOM 을 사후 dmesg 없이 지표로 인지한다. 0 이 아니면 그 컨테이너가 cgroup OOM 으로 죽은 것이다.
+increase(ticketrush_container_oom_kills_total[<회차 길이>s])
+# ⚠ 이 값이 0 이라고 안전한 게 아니라 수집이 멎었을 수 있다 — 아래를 함께 본다.
+ticketrush_container_sampler_containers                                # 15 내외. 0 이면 열거 실패
+#
+# ⚠ 이 값들과 `docker stats` 를 직접 비교하지 말 것. #495 가 Prometheus self-scrape RSS 와
+#   docker stats 가 유휴에서 13 MiB 어긋나는 것을 확인했다(ADR 0007 §메모리). 축이 다르다.
+# ⚠ docker inspect 의 OOMKilled 는 재시작 뒤라 false 로 나온다 — 믿지 말 것.
+#   교차 확인이 필요하면 여전히 `sudo dmesg -T | grep CONSTRAINT_MEMCG` 다.
 
 # ── 게이트웨이 축 (연결 거부는 서버 축에 안 잡힌다 — #496 §2.4) ─────────
 sum(rate(http_server_requests_seconds_count{job="gateway", status=~"5.."}[1m]))

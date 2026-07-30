@@ -8,6 +8,12 @@
 /.adr-dir       text eol=lf
 docs/adr/**     text eol=lf
 
+# EC2로 흘려보내거나 컨테이너에서 실행하는 셸 스크립트. CRLF면 `set -euo pipefail\r`이 되어
+# "set: pipefail: invalid option name"으로 첫 줄부터 죽는다. 에러가 bash 버전 문제처럼 보여
+# 헤매기 쉽다 — #348에서 샘플러가 두 번(15:18:36Z, 15:19:40Z) 이렇게 실패했다(런북 §10.2).
+# 여기 규칙이 없으면 core.autocrlf=true인 Windows 체크아웃에서 매번 재발한다.
+*.sh            text eol=lf
+
 # These are Windows script files and should use crlf
 *.bat           text eol=crlf
 
