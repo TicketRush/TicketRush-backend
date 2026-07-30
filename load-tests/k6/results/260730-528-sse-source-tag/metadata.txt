@@ -1,0 +1,143 @@
+# ============================================================================
+# #528 SSE 발행 경로별 도착률 — 수치 SSOT
+# report.md 는 이 파일의 값을 인용한다. 값이 어긋나면 이 파일이 옳다.
+# ============================================================================
+
+SERIES_ID=260730-528-sse-source-tag
+ISSUE=528
+DATE=2026-07-30 (UTC)
+TARGET_HOST=https://api.ticketrush.store
+TOPOLOGY=EC2 단일 인스턴스 + Docker Compose (ADR 0004 / ADR 0007)
+INSTANCE_TYPE=m7i-flex.large
+INSTANCE_VCPU=2
+IMAGE_TAG=342a8ef5e910b6c2c55648fcd2b38dc5d8b7741a
+APP_CODE_CHANGE=0줄 (이 회차는 배포가 아니라 실행이다 — #512 규약)
+RUNBOOK=docs/load-test-guide.md §14.6
+SCENARIO=load-test/scenarios/seat-sse-fanout.js (k6-sse 이미지 전용)
+SEED=load-test/seed/seed_seat_counts.sql
+PROM_SCRAPE_INTERVAL=15s
+
+# ── 이 회차가 #403 과 다른 점 ────────────────────────────────────────────────
+# 1. 발행 경로 태그(#520) — source 5종으로 큐를 채우는 도착을 가른다
+# 2. executor 큐 깊이 시계열(#519) — #403 은 G2 실패로 로그 카운트만 있었다
+# 3. 컨테이너 메모리 시계열(#515) — #403 은 docker stats 단발값뿐이었다
+# 4. 인덱스는 아직 단일 컬럼 상태다(#521 DDL 이전) — #403 과 같은 조건
+
+# ── 배포 전후 대조 ───────────────────────────────────────────────────────────
+PRE_DEPLOY_IMAGE_TAG=1f2ed5d27ec7dd9cb92d72aba6b2e9b92a6ce110
+PRE_DEPLOY_CONTAINERS=15
+POST_DEPLOY_CONTAINERS=16   # container-mem-sampler 추가(#515)
+
+# ── 회차 전 코호트 상태 (재시딩 전) ─────────────────────────────────────────
+# 하루를 넘겨 재사용해 HOLD 가 전부 해제돼 있었다(런북 §14.3 경고 그대로).
+# perf_id 14 LTC-A     600석  AVAILABLE 480 / SOLD 120 / HOLD_live 0 (기대 120)
+# perf_id 15 LTC-B   3,000석  AVAILABLE 2400 / SOLD 600 / HOLD_live 0 (기대 600)
+# perf_id 17 LTC-SSE 12,000석 전부 AVAILABLE
+
+# ── 게이트 (§14.2, 2026-07-30 08:33Z) ───────────────────────────────────────
+G0_SSE_REACHABLE=pass — perf 17 에서 event:connected 즉시 수신(nginx proxy_buffering 설정 유지됨)
+G1_INDEX=단일 컬럼 상태 — #521 DDL 이전이라 #403 과 같은 조건이다(의도한 순서)
+G2_EXECUTOR_METRIC=pass — executor_queued_tasks{name="seatStatusSseExecutor"} 노출됨
+                   ⚠ #403 에서는 이 게이트가 실패해 큐 깊이를 로그 카운트로만 셌다.
+                     PR #519 가 빈 반환 타입을 Executor -> ThreadPoolTaskExecutor 로 좁혀 해결
+G3_IMAGE_TAG=pass — 전 서비스 342a8ef5... 단일
+G4_BASELINE_RSS=seat-service 410.6 MiB / 640 (64.15%)
+G5_SOURCE_LABELS=pass — booking_hold / confirm_sold / expire_single / refund_release / scheduler_fallback
+CONTAINER_MEM_SAMPLER=pass — 16 건 열거, seat-service limit 671088640 (= mem_limit 640 MiB)
+SCRAPE_TARGETS=11/11 up, down 0
+EXITED_CONTAINERS=none (kafka-volume-init 은 restart:"no" 인 run-to-completion 이라 제외)
+RESTART_COUNT=전 컨테이너 0
+
+# ── 인증 ─────────────────────────────────────────────────────────────────────
+# 예매 축(POST /api/v1/booking)이 이벤트를 만들고 그게 인증을 요구한다.
+LOAD_USER_EMAIL=loadtest@ticketrush.local
+LOAD_USER_PASSWORD=<-e 로 주입. 평문은 커밋하지 않는다(런북 §7.4 와 같은 규약)>
+# k6 출력에 비밀번호가 섞이지 않음을 확인했다 — setup 로그(seat-sse-fanout.js:180)는 perfId·계단·
+# 이벤트율만, 로그인 실패 메시지(lib/auth.js:20)는 status·email 만 찍는다.
+
+# ── 시딩 ─────────────────────────────────────────────────────────────────────
+# 회차 A 는 #403 이 쓰던 perf 17 을 그대로 썼다(12,000석 전부 AVAILABLE).
+SEED_SSE_PERF_ID_RUN_A=17
+# 버스트 회차는 재시딩했다 — 회차 A 의 mutate/probe 가 코호트 양끝을 소모해 seat_id 간격이
+# 깨졌고 시나리오 setup() 이 그것을 잡아 죽었다(런북 §14.3 경고 그대로).
+SEED_SSE_PERF_ID_BURST=20
+SEED_SSE_SEATS=12000 (전부 AVAILABLE)
+
+# ── 회차 ─────────────────────────────────────────────────────────────────────
+# 회차 A (팬아웃 곡선)  SSE_SUBSCRIBER_STEPS=100,300,600 / SSE_STEP_DURATION=10m / SSE_MUTATE_RATE=5
+RUN_A_START_UTC=2026-07-30T09:46:19Z
+RUN_A_END_UTC=2026-07-30T10:17:52Z
+# 버스트 1차 — setup() 실패로 시작조차 못 했다(위 참조). 주입만 들어가 '구독자 0 대조군' 이 됐다
+RUN_B_FAILED_UTC=2026-07-30T10:22:51Z ~ 10:22:53Z (setup 실패)
+INJECT_NO_SUBSCRIBERS_UTC=2026-07-30T10:25:39Z
+# 버스트 2차 (본 회차)  SSE_SUBSCRIBER_STEPS=600 / SSE_STEP_DURATION=8m
+RUN_B2_START_UTC=2026-07-30T10:28:48Z
+INJECT_UTC=2026-07-30T10:31:59Z
+RUN_B2_END_UTC=2026-07-30T10:37:24Z
+
+
+# ============================================================================
+# 결과
+# ============================================================================
+
+# ── 회차 A: 정상 상태 (구독자 계단, 앞뒤 30초 제외 '구간평균 / 구간최댓값') ──
+# 구간        큐깊이   pool  active     booking_hold expire_single scheduler_fb 합계/s
+# 구독자 100  0.0/0    4/4   0.47/3.0   5.02         1.96          0.43         7.41
+# 구독자 300  0.0/0    4/4   0.72/4.0   5.02         4.11          0.92         10.06
+# 구독자 600  0.0/0    4/4   0.11/1.0   5.04         4.18          0.85         10.07
+RUN_A_QUEUE_MAX=0        # #403 은 평균 50 · 최대 307 이었다 — 재현되지 않았다
+RUN_A_POOL=4 (core 에서 안 늘어남)
+RUN_A_RELEASE_SPLIT=expire_single 4.18/s vs scheduler_fallback 0.85/s = 약 83% : 17%
+RUN_A_EVENT_RATE_STEADY=약 10/s (유입 5 + 해제 5, 좌석 락 TTL 5분)
+RUN_A_CONFIRM_SOLD=0.00/s (부하 모델에 결제 확정 없음 — 0 으로 노출되는 것 자체가 계측 증거)
+RUN_A_REFUND_RELEASE=0.00/s (동일)
+
+# 전파 지연 · 자원
+# 구간        전파p95ms      전파p99ms      수신ev/s      CPU%        seatRSS MiB    threads
+# 구독자 100  5246/5265      5264/5275      736/1045      31.1/43.1   484.4/491.0    113/114
+# 구독자 300  5205/5229      5264/5268      3023/3192     42.9/47.7   512.5/514.5    114/115
+# 구독자 600  5161/5175      5256/5259      6056/6247     58.1/63.1   564.9/570.8    114/115
+RUN_A_PROPAGATION_FLAT=구독자 6배에도 p95 가 5246 -> 5161ms 로 평평하다(#403 은 1250 -> 2770ms)
+RUN_A_PROPAGATION_DIST=avg 2.31s / min 205ms / med 2.20s / p90 4.61s / p95 5.13s / max 5.27s
+RUN_A_PROBE_BOOKING=avg 47.36ms / p95 78.3ms (전파의 약 2%)
+RUN_A_EVENTS_RECEIVED=6,087,442
+RUN_A_MUTATE_CREATED=9,451 / 9,451 (100%)
+RUN_A_PROBE_MATCHED=63 / 63 (100%)   # #403 은 56/63, 타임아웃 11.1%
+RUN_A_CONNECTED=700 / CLOSED=100
+RUN_A_MUTATE_EXHAUSTED=0.00% / RUN_A_MUTATE_CONFLICT=0.00%
+
+# ── 전파 지연의 지배항 = outbox 릴레이 5초 폴링 ────────────────────────────
+# 분포가 uniform(0, 5s) 모양이다(min 205ms / max 5.27s / avg ≈ 5s ÷ 2).
+# BookingCreateUseCase 가 BookingCreatedEvent 를 Outbox 로 발행하고,
+# booking-service 의 OutboxRelayScheduler 가 @Scheduled(fixedDelay = 5000) 으로 밀어낸다.
+OUTBOX_ACTIVE_PROD=확인됨 — ticketrush_outbox_backlog{instance="booking-service:8090"} 값 존재
+RELAY_INTERVAL=5000ms (OutboxRelayScheduler)
+
+# ── 버스트: 큐를 채우는 것은 scheduler_fallback 단독 ───────────────────────
+# 시각      주입대비  큐    pool  booking_hold expire_single scheduler_fallback
+# 10:31:45  -14s      0     4     5.0          0.0           0.0
+# 10:32:00  +1s       0     4     5.1          0.0           0.0
+# 10:32:15  +16s      997   16    3.9          0.0           25.0
+# 10:32:30  +31s      976   16    3.8          0.0           44.4
+# 10:32:45  +46s      689   16    3.8          0.0           44.4
+# 10:33:00  +61s      390   16    5.1          0.0           19.4
+# 10:33:15  +76s      82    16    5.2          0.0           0.0
+# 10:33:30  +91s      0     16    5.2          0.0           0.0
+BURST_QUEUE_PEAK=997 / 1000 (용량)
+BURST_POOL=4 -> 16 (큐가 다 찬 뒤에만 늘어난다)
+BURST_DRAIN=약 90초
+BURST_ATTRIBUTION=scheduler_fallback 단독. booking_hold 는 오히려 감소(5.1 -> 3.9), expire_single 은 줄곧 0
+BURST_REJECTED=649 건 (= 유실). 정상 상태에서는 0
+BURST_PROPAGATION=avg 3.2s / med 1.93s / p90 4.61s / p95 8.98s / max 19.4s (회차 A 대비 크게 악화)
+BURST_MUTATE_CONFLICT=1.05% (27 / 2551) — 주입이 만든 것. 다른 코호트와 겹친 것이 아니다(리포트 §6-b)
+BURST_MUTATE_EXHAUSTED=0.00%
+BURST_EVENTS_RECEIVED=2,837,332
+
+# ── 대조군: 같은 주입, 구독자 0 명 ─────────────────────────────────────────
+# 시각      scheduler_fallback  다른 4경로  hold_expired_backlog  큐
+# 10:26:05  0.00                0.00        0                     0
+# 10:26:26  44.45               0.00        2000                  0
+# 10:26:46  37.91               0.00        0                     0
+# 10:27:06  0.00                0.00        0                     0
+CONTROL_FINDING=발행률은 같은데 큐가 안 쌓인다 — 팬아웃 태스크가 즉시 끝나기 때문.
+              큐 포화는 (도착률 × 구독자 수) 의 곱이고, 도착률 쪽을 만드는 것이 스케줄러다
