@@ -7,6 +7,7 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.verifyNoMoreInteractions;
 
+import com.ticketrush.boundedcontext.seat.app.support.SeatEventSource;
 import com.ticketrush.boundedcontext.seat.app.support.SeatStatusEventPublisher;
 import com.ticketrush.boundedcontext.seat.domain.entity.Seat;
 import com.ticketrush.boundedcontext.seat.out.repository.SeatRepository;
@@ -49,7 +50,7 @@ class SeatConfirmSoldUseCaseTest {
     // then
     verify(seatRepository).confirmSoldById(seatId, bookingNumber, SeatStatus.HOLD, SeatStatus.SOLD);
     verify(seatRepository).findById(seatId);
-    verify(seatStatusEventPublisher).publishAfterCommit(seat);
+    verify(seatStatusEventPublisher).publishAfterCommit(seat, SeatEventSource.CONFIRM_SOLD);
     verify(seatUnlockUseCase).forceRelease(seatId);
   }
 

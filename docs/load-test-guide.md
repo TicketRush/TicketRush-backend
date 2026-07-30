@@ -1492,7 +1492,9 @@ ssh -i ~/ticket_rush_ssh.pem ubuntu@<EC2>
 
 > **G1이 실패하면 측정 자체가 무의미하다.** 인덱스가 없으면 집계가 풀스캔이 되어 "앱의 특성"이 아니라 "인덱스 부재"를 재게 된다. `@Index`는 `ddl-auto=update`인 로컬/신규 초기화 DB에서만 생성되고 prod(`validate`)는 부재를 검출하지 못한다(`Seat.java:35-51`). 없으면 먼저 수동 DDL을 넣는다.
 
-> **G2가 실패해도 배포하지 않는다.** `SeatStatusSseConfig.java:12`의 `@Bean` 선언 반환 타입이 `Executor`라 Boot의 `TaskExecutorMetricsAutoConfiguration`이 `TaskExecutor` 타입으로 후보를 모으는 단계에서 이 빈을 놓칠 수 있다. 그 경우 큐 적체·거부는 **로그 타임스탬프**로 기록하고(§14.6), 반환 타입을 `ThreadPoolTaskExecutor`로 좁히는 1줄 변경은 **후속 이슈로 분리**한다. 리포트 한계에 "큐 깊이 시계열 부재"를 명시한다.
+> **G2는 #403에서 실패했고 그 원인은 PR #519가 고쳤다.** `SeatStatusSseConfig`의 `@Bean` 반환 타입이 `Executor`라 Boot의 `TaskExecutorMetricsAutoConfiguration`이 `TaskExecutor` 타입으로 후보를 모으는 단계에서 이 빈을 놓쳤다. 반환 타입을 `ThreadPoolTaskExecutor`로 좁혀 해결했으므로 **그 변경이 배포된 이미지에서는 G2가 통과해야 한다.** 그래도 실패하면 배포본이 그 커밋을 담고 있는지(G3)부터 본다. 큐 깊이 시계열 없이 회차를 돌리면 §14.6의 판정이 로그 파싱으로 되돌아간다.
+
+> **G5 — 발행 경로 태그(#520).** `docker exec seat-service wget -qO- localhost:8090/actuator/prometheus | grep ticketrush_seat_sse_event_published` 가 **source 라벨 5종을 전부** 내야 한다(`booking_hold`·`expire_single`·`scheduler_fallback`·`confirm_sold`·`refund_release`). 카운터를 기동 시 미리 등록하므로 발행이 0건인 경로도 나온다 — **라벨이 빠져 있으면 배포본에 #520이 없는 것이지 그 경로가 조용한 것이 아니다.**
 
 ### 14.3 시딩
 
@@ -1638,6 +1640,14 @@ sum(rate(http_server_requests_seconds_sum{instance="seat-service:8090"}[1m])) by
 executor_queued_tasks{name="seatStatusSseExecutor"}        # 1000 이 상한
 executor_active_threads{name="seatStatusSseExecutor"}
 executor_pool_size_threads{name="seatStatusSseExecutor"}   # 4 -> 16 은 큐 포화 뒤에만
+
+# 발행 경로별 도착률(#520). 위 큐 깊이와 겹쳐 읽는 것이 이 축의 용도다 — #403 은 큐가 평균 50 ·
+# 최대 307 까지 튀는 것을 봤지만 그 불균일이 어느 경로에서 왔는지 가르지 못했다(§10).
+# source 값 5종: booking_hold / expire_single / scheduler_fallback / confirm_sold / refund_release
+sum by (source) (rate(ticketrush_seat_sse_event_published_total[1m]))
+# 스케줄러 fallback 만 떼어 본다. tick 당 최대 2,000 건(chunk 25 x max-chunks 80)이 한 번에 들어가는데
+# 큐 용량이 1000 이라, 버스트가 여기서 온다면 이 선이 60초 주기의 톱니로 보인다.
+rate(ticketrush_seat_sse_event_published_total{source="scheduler_fallback"}[1m])
 
 # 거부 = 이벤트 유실(#403 이후 추가). 위 큐 깊이가 '왜' 를 말하고 이 카운터가 '얼마나' 를 말한다.
 rate(ticketrush_seat_sse_event_rejected_total[1m])

@@ -5,6 +5,7 @@ import static org.mockito.BDDMockito.given;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 
+import com.ticketrush.boundedcontext.seat.app.support.SeatEventSource;
 import com.ticketrush.boundedcontext.seat.app.support.SeatStatusEventPublisher;
 import com.ticketrush.boundedcontext.seat.domain.entity.Seat;
 import com.ticketrush.boundedcontext.seat.out.repository.SeatRepository;
@@ -49,7 +50,7 @@ class SeatReleaseSoldSeatUseCaseTest {
 
     // then
     assertThat(seat.getSeatStatus()).isEqualTo(SeatStatus.AVAILABLE);
-    verify(seatStatusEventPublisher).publishAfterCommit(seat);
+    verify(seatStatusEventPublisher).publishAfterCommit(seat, SeatEventSource.REFUND_RELEASE);
   }
 
   @Test
@@ -64,7 +65,7 @@ class SeatReleaseSoldSeatUseCaseTest {
 
     // then
     assertThat(seat.getSeatStatus()).isEqualTo(SeatStatus.AVAILABLE);
-    verify(seatStatusEventPublisher).publishAfterCommit(seat);
+    verify(seatStatusEventPublisher).publishAfterCommit(seat, SeatEventSource.REFUND_RELEASE);
   }
 
   @Test

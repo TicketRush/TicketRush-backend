@@ -24,6 +24,11 @@ public class MetricNames {
   // 이벤트가 안 왔다는 사실조차 모르므로, 이 카운터가 유일한 관측 축이다. #403 실측에서 회차 하나에
   // 2,009건(시도의 10.3%)이 사라졌는데 그걸 로그 파싱으로만 셀 수 있었다.
   public static final String SEAT_SSE_EVENT_REJECTED = "ticketrush.seat.sse.event.rejected";
+  // SSE 전송 큐에 들어간 이벤트를 발행 경로별로 센다(#520). REJECTED가 "얼마나 잃었나"를 말한다면 이쪽은
+  // "그 큐를 누가 채웠나"를 말한다. #403은 큐 깊이가 평균 50·최대 307까지 튀는 것을 봤지만 도착 불균일의
+  // 출처를 가르지 못했다(리포트 §10) — executor_queued_tasks와 겹쳐 읽으라고 있는 축이다.
+  // 태그 값은 SeatEventSource 열거형이라 유한 집합이 컴파일 시점에 보장된다.
+  public static final String SEAT_SSE_EVENT_PUBLISHED = "ticketrush.seat.sse.event.published";
 
   // payment
   public static final String PAYMENT_CONFIRM = "ticketrush.payment.confirm";
@@ -56,6 +61,8 @@ public class MetricNames {
   public static final String TAG_CONSUMER_GROUP = "consumer_group";
   public static final String TAG_AGGREGATE_TYPE = "aggregate_type";
   public static final String TAG_PROVIDER = "provider";
+  // 이벤트를 만든 발행 경로(#520). 값은 seat-service의 SeatEventSource 열거형이 SSOT다.
+  public static final String TAG_SOURCE = "source";
 
   // ===== Tag values =====
   public static final String RESULT_SUCCESS = "success";

@@ -1,5 +1,6 @@
 package com.ticketrush.boundedcontext.seat.app.usecase;
 
+import com.ticketrush.boundedcontext.seat.app.support.SeatEventSource;
 import com.ticketrush.boundedcontext.seat.app.support.SeatHoldExpiredPublisher;
 import com.ticketrush.boundedcontext.seat.app.support.SeatStatusEventPublisher;
 import com.ticketrush.boundedcontext.seat.domain.entity.Seat;
@@ -72,7 +73,7 @@ public class SeatReleaseExpiredChunkProcessor {
        * UPDATE ... WHERE seat_id = ? 더티 체킹 쓰기가 되살아난다. 즉 위 가드가 무력화된다. */
       seatHoldExpiredPublisher.publish(seat);
       seat.releaseHold();
-      seatStatusEventPublisher.publishAfterCommit(seat);
+      seatStatusEventPublisher.publishAfterCommit(seat, SeatEventSource.SCHEDULER_FALLBACK);
       released++;
     }
 

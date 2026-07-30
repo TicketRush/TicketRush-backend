@@ -126,6 +126,9 @@ QUERIES = [
     ("sse-executor-active", 'executor_active_threads{name="seatStatusSseExecutor"}'),
     ("sse-executor-pool-size", 'executor_pool_size_threads{name="seatStatusSseExecutor"}'),
     ("sse-executor-completed-rate", 'rate(executor_completed_tasks_total{name="seatStatusSseExecutor"}[1m])'),
+    # 발행 경로별 도착률(#520). 위 큐 깊이와 같은 창에 떠야 겹쳐 읽을 수 있다 — #403 은 큐가 평균 50 ·
+    # 최대 307 까지 튀는 것을 봤지만 그 불균일의 출처를 가르지 못했다(§10). source 5종.
+    ("sse-published-by-source", 'sum by (source) (rate(ticketrush_seat_sse_event_published_total[1m]))'),
     ("k6-sse-propagation-p95", 'k6_sse_propagation_ms_p95'),
     ("k6-sse-propagation-p99", 'k6_sse_propagation_ms_p99'),
     ("k6-sse-probe-booking-p95", 'k6_sse_probe_booking_duration_p95'),

@@ -1,5 +1,6 @@
 package com.ticketrush.boundedcontext.seat.app.usecase;
 
+import com.ticketrush.boundedcontext.seat.app.support.SeatEventSource;
 import com.ticketrush.boundedcontext.seat.app.support.SeatStatusEventPublisher;
 import com.ticketrush.boundedcontext.seat.domain.entity.Seat;
 import com.ticketrush.boundedcontext.seat.out.repository.SeatRepository;
@@ -54,7 +55,7 @@ public class SeatHoldUseCase {
     }
 
     seat.hold(holdExpiredAt, bookingNumber);
-    seatStatusEventPublisher.publishAfterCommit(seat);
+    seatStatusEventPublisher.publishAfterCommit(seat, SeatEventSource.BOOKING_HOLD);
     incrementSuccessAfterCommit();
     return true;
   }

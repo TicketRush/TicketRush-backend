@@ -8,6 +8,7 @@ import static org.mockito.BDDMockito.willAnswer;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 
+import com.ticketrush.boundedcontext.seat.app.support.SeatEventSource;
 import com.ticketrush.boundedcontext.seat.app.support.SeatHoldExpiredPublisher;
 import com.ticketrush.boundedcontext.seat.app.support.SeatStatusEventPublisher;
 import com.ticketrush.boundedcontext.seat.domain.entity.Seat;
@@ -61,8 +62,10 @@ class SeatReleaseExpiredChunkProcessorTest {
     assertThat(expiredSeat1.getSeatStatus()).isEqualTo(SeatStatus.AVAILABLE);
     assertThat(expiredSeat2.getSeatStatus()).isEqualTo(SeatStatus.AVAILABLE);
     verify(seatRepository).findExpiredHoldSeats(SeatStatus.HOLD, now, PageRequest.of(0, chunkSize));
-    verify(seatStatusEventPublisher).publishAfterCommit(expiredSeat1);
-    verify(seatStatusEventPublisher).publishAfterCommit(expiredSeat2);
+    verify(seatStatusEventPublisher)
+        .publishAfterCommit(expiredSeat1, SeatEventSource.SCHEDULER_FALLBACK);
+    verify(seatStatusEventPublisher)
+        .publishAfterCommit(expiredSeat2, SeatEventSource.SCHEDULER_FALLBACK);
     verify(seatHoldExpiredPublisher).publish(expiredSeat1);
     verify(seatHoldExpiredPublisher).publish(expiredSeat2);
   }
@@ -129,7 +132,8 @@ class SeatReleaseExpiredChunkProcessorTest {
     // then: 팔린 좌석이 풀려 재판매되면 안 된다
     assertThat(seat.getSeatStatus()).isEqualTo(SeatStatus.HOLD);
     verify(seatHoldExpiredPublisher, never()).publish(any(Seat.class));
-    verify(seatStatusEventPublisher, never()).publishAfterCommit(any(Seat.class));
+    verify(seatStatusEventPublisher, never())
+        .publishAfterCommit(any(Seat.class), any(SeatEventSource.class));
     // 조회 건수는 그대로 세되(오케스트레이터의 다음 청크 판단용), 해제 건수에선 빠져야 로그가 부풀지 않는다
     assertThat(result.fetched()).isEqualTo(1);
     assertThat(result.released()).isZero();
