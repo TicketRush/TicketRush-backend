@@ -196,6 +196,22 @@ sse_probe_booking_duration: avg=47.36ms  p95=78.3ms      <- booking API 는 전�
 
 ---
 
+## 캡처 판독 메모
+
+**그래프의 시각은 KST 다**(브라우저 시간대). 이 리포트의 시각은 전부 UTC 이므로 **9시간을 빼고 읽는다** — `19:32` = `10:32Z`.
+
+**`graph-burst-attribution.png`** — 이 회차의 본 그림이다. 빨강(`scheduler_fallback`)만 0 → 44.4/s 로 솟고, 초록(`booking_hold`)은 5/s 에 평평하며, 파랑(`expire_single`)은 버스트 구간 내내 **0** 이다. 파랑이 `19:34` 이후에야 올라오는 것은 회차 시작 5 분 뒤부터 예매분의 좌석 락 TTL 이 만료되기 시작하기 때문이고, 버스트와 무관하다.
+
+**`graph-burst-queue.png`** — ⚠️ **`executor_pool_size_threads`(4 → 16)와 `executor_active_threads` 는 이 그래프에서 바닥에 눌려 보이지 않는다.** 큐가 0-997 스케일을 잡아서다. 풀이 늘어난 시각은 [`metadata.txt`](metadata.txt) 의 버스트 표와 `timeseries-sse-executor-pool-size-burst.json` 으로 읽는다. **이 그래프가 말하는 것은 큐 곡선 하나** — 997 까지 16 초 만에 차고 약 90 초에 걸쳐 빠진다.
+
+**`graph-sse-steady.png`** — 빨강(`scheduler_fallback`)의 **60 초 주기 톱니**가 그대로 보인다. `@Scheduled(fixedDelay = 60000)` 이 tick 마다 소량을 쓸어 담는 모습이고, 정상 상태에서는 그 덩어리가 작아 큐(바닥의 평평한 선, **줄곧 0**)를 흔들지 못한다. 파랑(`expire_single`)이 약 4/s 에서 잔물결치는 것은 Redis 키 만료가 개별 좌석마다 흩어져 도착하기 때문이다.
+
+**`graph-sse-propagation.png`** — ⚠️ **세로축이 0 이 아니라 5.12K 에서 시작한다.** 자동 스케일이 좁은 대역을 확대해 변동이 커 보이지만, **전 구간 폭이 약 140ms 로 값의 2.7%** 다. 0 부터 그리면 완전한 수평선이다 — 그것이 §4 의 주장이다. 범례가 둘 다 `{scenario="probe"}` 인 것은 `1000 *` 연산이 메트릭 이름을 지우기 때문이고, **값 순서로 읽는다**(위 노랑 = p99, 아래 초록 = p95).
+
+**`graph-sse-resources.png`** — 둘 다 백분율이라 한 축에서 읽힌다. 노랑이 seat-service 메모리 사용률, 초록이 호스트 CPU 다. **구독자 계단마다 메모리가 한 칸씩 올라간다**(약 75% → 80% → 88-90%) — `#515` 가 없었으면 못 봤을 그림이고, 600 구독자 구간에서 상한의 10% 여유만 남는다는 것이 눈으로 확인된다.
+
+---
+
 ## 증적 파일
 
 | 파일 | 내용 |
@@ -208,4 +224,5 @@ sse_probe_booking_duration: avg=47.36ms  p95=78.3ms      <- booking API 는 전�
 | `timeseries-sse-executor-{queued,pool-size,active,completed-rate}-{sse,burst}.json` | 큐 깊이 · 풀 크기. `#403` 은 이 축을 로그로만 셌다 |
 | `timeseries-k6-sse-propagation-p{95,99}-sse.json` | 전파 지연 — §4 의 근거 |
 | `timeseries-container-mem-usage-{sse,burst}.json` | **컨테이너별 메모리(#515).** 이 프로젝트의 첫 컨테이너 메모리 시계열 |
+| `graph-*.png` (5장) | Grafana Explore 캡처. 재현용 링크와 절차는 `grafana-capture-links.md`, 읽는 법은 위 "캡처 판독 메모" |
 | `timeseries-node-cpu-*.json` 외 | 호스트 · JVM · DB 축 |
