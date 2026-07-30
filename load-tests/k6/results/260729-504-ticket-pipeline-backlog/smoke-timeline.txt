@@ -1,0 +1,49 @@
+# #504 스모크 회차 (수치 폐기) — 워밍업 확인용
+# 기동 직후 JIT 워밍업 때문에 드레인율이 회차마다 오른다. 고원 도달을 확인하고 본 회차로 넘어간다.
+
+===== 스모크 1 =====
+[inject] topic   payment-confirmed-topic  partitions=3
+[inject] group   booking-group  consumers=1
+[inject] group   ticket-group  consumers=1
+[inject] begin   count=2000 offset=0 rate=0 run=178530900827471  2026-07-29 07:10:08 UTC
+[inject] end     count=2000 elapsed=3s actual_rate=666/s  2026-07-29 07:10:11 UTC
+[drain]  begin   2026-07-29 07:10:11 UTC
+[drain]  2026-07-29T07:10:22Z booking-group=1938 ticket-group=1754 total=3692
+[drain]  2026-07-29T07:10:37Z booking-group=1724 ticket-group=1219 total=2943
+[drain]  2026-07-29T07:10:50Z booking-group=1455 ticket-group=499 total=1954
+[drain]  2026-07-29T07:11:02Z booking-group=1160 ticket-group=0 total=1160
+[drain]  2026-07-29T07:11:13Z booking-group=829 ticket-group=0 total=829
+[drain]  2026-07-29T07:11:25Z booking-group=479 ticket-group=0 total=479
+[drain]  2026-07-29T07:11:36Z booking-group=108 ticket-group=0 total=108
+[drain]  2026-07-29T07:11:44Z booking-group=0 ticket-group=0 total=0
+[drain]  drained elapsed_from_inject_end=90s  2026-07-29 07:11:44 UTC
+
+===== 스모크 2 =====
+[inject] topic   payment-confirmed-topic  partitions=3
+[inject] group   booking-group  consumers=1
+[inject] group   ticket-group  consumers=1
+[inject] begin   count=2000 offset=2000 rate=0 run=178530914640978  2026-07-29 07:12:26 UTC
+[inject] end     count=2000 elapsed=2s actual_rate=1000/s  2026-07-29 07:12:28 UTC
+[drain]  begin   2026-07-29 07:12:28 UTC
+[drain]  2026-07-29T07:12:36Z booking-group=1886 ticket-group=1567 total=3453
+[drain]  2026-07-29T07:12:50Z booking-group=1495 ticket-group=692 total=2187
+[drain]  2026-07-29T07:13:02Z booking-group=1093 ticket-group=0 total=1093
+[drain]  2026-07-29T07:13:14Z booking-group=670 ticket-group=0 total=670
+[drain]  2026-07-29T07:13:24Z booking-group=257 ticket-group=0 total=257
+[drain]  2026-07-29T07:13:33Z booking-group=0 ticket-group=0 total=0
+[drain]  drained elapsed_from_inject_end=61s  2026-07-29 07:13:33 UTC
+
+===== 스모크 3 =====
+[inject] topic   payment-confirmed-topic  partitions=3
+[inject] group   booking-group  consumers=1
+[inject] group   ticket-group  consumers=1
+[inject] begin   count=2000 offset=4000 rate=0 run=178530923952600  2026-07-29 07:13:59 UTC
+[inject] end     count=2000 elapsed=2s actual_rate=1000/s  2026-07-29 07:14:01 UTC
+[drain]  begin   2026-07-29 07:14:01 UTC
+[drain]  2026-07-29T07:14:08Z booking-group=1901 ticket-group=1558 total=3459
+[drain]  2026-07-29T07:14:21Z booking-group=1503 ticket-group=611 total=2114
+[drain]  2026-07-29T07:14:32Z booking-group=1082 ticket-group=0 total=1082
+[drain]  2026-07-29T07:14:43Z booking-group=667 ticket-group=0 total=667
+[drain]  2026-07-29T07:14:53Z booking-group=256 ticket-group=0 total=256
+[drain]  2026-07-29T07:15:01Z booking-group=0 ticket-group=0 total=0
+[drain]  drained elapsed_from_inject_end=57s  2026-07-29 07:15:01 UTC

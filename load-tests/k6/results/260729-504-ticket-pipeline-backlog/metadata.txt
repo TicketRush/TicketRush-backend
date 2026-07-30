@@ -1,0 +1,206 @@
+# ============================================================================
+# #504 티켓 발급 파이프라인 backlog 회복시간 측정 — 수치 SSOT
+# report.md 는 이 파일의 값을 인용한다. 값이 어긋나면 이 파일이 옳다.
+# ============================================================================
+
+SERIES_ID=260729-504-ticket-pipeline-backlog
+ISSUE=504
+DATE=2026-07-29 (UTC)
+TARGET_HOST=https://api.ticketrush.store
+TOPOLOGY=EC2 단일 인스턴스 + Docker Compose (ADR 0004 / ADR 0007)
+INSTANCE_TYPE=m7i-flex.large
+INSTANCE_VCPU=2
+INSTANCE_MEM_GIB=7
+KERNEL=6.17.0-1019-aws
+IMAGE_TAG=1f2ed5d27ec7dd9cb92d72aba6b2e9b92a6ce110
+APP_CODE_CHANGE=0줄 (이 회차는 배포가 아니라 실행이다 — #512 규약)
+RUNBOOK=docs/load-test-guide.md §15
+SEED=load-test/seed/seed_payment_pipeline.sql
+INJECTOR=load-test/chaos/inject-payment-confirmed.sh
+PROM_SCRAPE_INTERVAL=15s
+PROM_RETENTION_DAYS=15
+
+# ── 파이프라인 구성 (완료조건 5) ─────────────────────────────────────────────
+# 코드가 아니라 배포본에서 읽은 값이다.
+#   docker exec ticketrush-kafka kafka-topics.sh --describe --topic payment-confirmed-topic
+#   docker exec ticketrush-kafka kafka-consumer-groups.sh --describe --group <group>
+TOPIC=payment-confirmed-topic
+TOPIC_PARTITION_COUNT=3
+TOPIC_REPLICATION_FACTOR=1
+CONSUMER_GROUPS=booking-group, ticket-group (팬아웃 — 같은 토픽을 두 그룹이 각각 소비)
+BOOKING_GROUP_CONSUMERS=1
+TICKET_GROUP_CONSUMERS=1
+CONSUMER_CONCURRENCY=1
+# 파티션 3개가 그룹당 CONSUMER-ID 하나에 전부 배정된다. KafkaConfig 의
+# kafkaListenerContainerFactory 에 setConcurrency 호출이 없고 @KafkaListener 에도 concurrency
+# 속성이 없어 Spring Kafka 기본값 1이 그대로 쓰인다.
+MAX_POLL_RECORDS=20
+FETCH_MAX_WAIT_MS=500
+AUTO_OFFSET_RESET=latest
+ACK_MODE=MANUAL_IMMEDIATE
+DLT_BACKOFF=ExponentialBackOffWithMaxRetries(5), initial 1s, x2, max 60s (합 약 31초)
+EVENT_PUBLISHER_TYPE=payment-service=kafka (outbox 미경유), booking-service=outbox
+
+# ── 사전 상태 (측정 전) ──────────────────────────────────────────────────────
+# 이 토픽에는 지금까지 한 건도 흐른 적이 없다. #348 두 회차 모두 ticket-service x
+# payment-confirmed-topic 의 lag 이 전 구간 0이었던 것과 같은 사실이다.
+PRE_TOPIC_LOG_END_OFFSET=0 (파티션 0/1/2 전부)
+PRE_INBOX_PAYMENT_CONFIRMED_ROWS=0
+PRE_DLT_TOPICS=없음
+PRE_DB_BOOKING_ROWS=21572
+PRE_DB_SEAT_ROWS=36520
+PRE_DB_TICKET_ROWS=2000
+PRE_DB_INBOX_ROWS=328585
+
+# ── 코호트 (완료조건 1) ──────────────────────────────────────────────────────
+COHORT_TITLE=LTP-A
+COHORT_PERF_ID=19
+COHORT_SIZE=30000
+COHORT_BOOKING_ID_MIN=2000001
+COHORT_BOOKING_ID_MAX=2030000
+COHORT_SEAT_ID_MIN=76054
+COHORT_USER_ID=4 (loadtest@ticketrush.local — seed_load.sql 계정 재사용, 신규 계정 없음)
+COHORT_SEED_ELAPSED=1.4s
+COHORT_SEAT_BOOKING_RATIO=1:1
+# 시딩 검증 SELECT (전부 통과해야 측정 진행)
+SEED_CONTIGUOUS_SEATS=1
+SEED_SEAT_NUMBER_ORDERED=1
+SEED_CONTIGUOUS_BOOKINGS=1
+SEED_SEAT_BOOKING_ALIGNED=1
+SEED_PENDING=30000
+SEED_HELD=30000
+SEED_EXPIRY_SAFE=30000
+
+# ── 프리플라이트 (1건) ───────────────────────────────────────────────────────
+# lag 이 0으로 떨어졌다는 것만으로는 처리됐다는 증거가 아니다 — 역직렬화 실패로 DLT 에 가도
+# lag 은 0이 된다. 그래서 DB 4곳을 직접 확인했다.
+PREFLIGHT_UTC=2026-07-29T07:08:28Z
+PREFLIGHT_INBOX_BOOKING_GROUP=1
+PREFLIGHT_INBOX_TICKET_GROUP=1
+PREFLIGHT_TICKET_ISSUED=1 (ticket_id 52001, booking_id 2000001, user_id 4, UNUSED)
+PREFLIGHT_BOOKING_STATUS=CONFIRMED
+PREFLIGHT_SEAT_STATUS=SOLD (booking_number LT-P000000001)
+PREFLIGHT_DLT_TOPICS=없음
+
+# ── 회차 0: 스모크 (수치 폐기 — 워밍업 확인용) ───────────────────────────────
+# 인스턴스 기동 직후라 JIT 워밍업이 끝나지 않았다. 드레인율이 회차마다 올라 고원에 도달할
+# 때까지 3회 돌렸다. 이 수치를 본 회차와 섞어 읽으면 안 된다.
+SMOKE_COUNT_EACH=2000
+SMOKE1_UTC=2026-07-29T07:10:08Z / drained +90s / booking-group 약 21/s / ticket-group 약 39/s
+SMOKE2_UTC=2026-07-29T07:12:26Z / drained +61s / booking-group 약 31/s / ticket-group 약 55/s
+SMOKE3_UTC=2026-07-29T07:13:59Z / drained +57s / booking-group 약 35/s / ticket-group 약 65/s
+SMOKE_VERDICT=3차에서 고원 도달(61s -> 57s 는 잡음 범위). 본 회차를 이 값으로 사이징했다.
+
+# ── 회차 1: 본 회차 — baseline ───────────────────────────────────────────────
+# 드레인율(약 35/s) 훨씬 아래인 10/s 로 5분간 흘려 "흡수된다"를 먼저 확인한다.
+BASELINE_COUNT=3000
+BASELINE_OFFSET=0
+BASELINE_RATE_NOMINAL=10/s
+BASELINE_RATE_ACTUAL=9/s (3000건 / 302초)
+BASELINE_START_UTC=2026-07-29T07:16:05Z
+BASELINE_END_UTC=2026-07-29T07:21:07Z
+BASELINE_LAG_AT_END=0 (주입 종료 3초 뒤 첫 표본이 이미 0)
+BASELINE_DRAIN_ELAPSED=0s
+
+# ── 회차 1: 본 회차 — 스파이크 ───────────────────────────────────────────────
+# 페이싱하지 않는다. 주입 종료 후 유입이 정확히 0이어야 lag 하강 기울기가 그대로 드레인율이
+# 된다. baseline 은 스파이크 시작과 동시에 끊긴다(스크립트 순차 실행).
+SPIKE_COUNT=20000
+SPIKE_OFFSET=3000
+SPIKE_RATE_NOMINAL=0 (무페이싱)
+SPIKE_RATE_ACTUAL=6666/s (20000건 / 3초)
+SPIKE_START_UTC=2026-07-29T07:21:17Z
+SPIKE_INJECT_END_UTC=2026-07-29T07:21:20Z
+SPIKE_PEAK_BOOKING=19870 @ 2026-07-29T07:21:26Z (주입 종료 +6s)
+SPIKE_PEAK_TICKET=19505 @ 2026-07-29T07:21:26Z (주입 종료 +6s)
+SPIKE_PEAK_TOTAL=39375
+# ⚠ 정점은 브로커 축(LEO - committed, lag-samples-spike.csv)에서 뽑았다. Prometheus 의
+#   kafka_consumer_fetch_manager_records_lag 로는 못 뽑는다 — 아래 참고.
+# 파티션 분포는 브로커의 파티션별 LOG-END-OFFSET 으로 판정한다(권위 있는 축).
+PARTITION_LEO_P0=9559
+PARTITION_LEO_P1=9740
+PARTITION_LEO_P2=9702
+PARTITION_LEO_TOTAL=29001
+PARTITION_SKEW=평균 9667 대비 편차 1.1% — 사실상 균등
+
+# ── ⚠ Prometheus 의 records-lag 는 이 회차의 backlog 곡선으로 쓸 수 없다 ──────
+# 파티션별 "마지막 fetch 응답 시점의 lag" 이라, max.poll.records=20 인 단일 스레드가 파티션
+# 3개를 번갈아 훑으면 파티션마다 갱신 시각이 달라진다. 집계하면 신선한 값과 낡은 값이 섞여
+# 단조 감소하지 않고 톱니로 튄다. 유입이 끝난 회복 구간인데도 그렇다.
+# 커밋된 timeseries-kafka-consumer-lag-main.json (max by, 15s) 기준:
+#   booking  ... 4632 -> 4052 -> 6073(재상승) -> 5473 ...        재상승 2회
+#   ticket   ... 4692 -> 6033(재상승) -> 4713 -> 6248(재상승) ... 재상승 3회, 이후 3919 에서 3표본 정체
+# 같은 구간 브로커 축(lag-samples-spike.csv, 5s)은 표본 47개에서 단조 감소 위반 0회.
+# 이 리포트의 회복 수치는 전부 브로커 축이다. Prometheus 축은 발급률과 자원 축에만 썼다.
+PROM_RECORDS_LAG_USABLE=아니오 (랙 유무 신호로만. 절대량·곡선 판단 금지)
+
+# ── 회복시간 (완료조건 3) ────────────────────────────────────────────────────
+# 스크립트의 [drain] drained 줄은 elapsed_from_inject_end=475s, 마지막 표본 UTC 기준은 479s.
+# 차이는 5초 폴링 간격 + kafka-consumer-groups --describe 호출 지연이다. 직전 표본(07:29:10Z)에
+# 199건이 남아 있었으므로 실제 0 도달은 그 사이 — 회복시간의 해상도가 그만큼이다.
+RECOVERY_LAG_ZERO_UTC=2026-07-29T07:29:19Z
+RECOVERY_BOOKING_PEAK_TO_30=473s
+RECOVERY_BOOKING_PEAK_TO_0=473s
+RECOVERY_BOOKING_FROM_INJECT_END=479s (7분 59초)
+RECOVERY_TICKET_PEAK_TO_30=227s
+RECOVERY_TICKET_PEAK_TO_0=227s
+RECOVERY_TICKET_FROM_INJECT_END=233s (3분 53초)
+RECOVERY_HEADLINE=약 8분 — 팬아웃 두 그룹 중 느린 booking-group 이 정한다
+
+# ── 드레인율 ─────────────────────────────────────────────────────────────────
+DRAIN_BOOKING_AVG=42.0/s (19870건 / 473초)
+DRAIN_TICKET_AVG=85.9/s (19505건 / 227초)
+DRAIN_RATIO=2.05배 (ticket / booking)
+# 경합 증거: ticket-group 이 0에 도달한 07:25:12Z 를 경계로 booking-group 처리율이 뛴다.
+DRAIN_BOOKING_CONCURRENT=avg 36.2/s, max 39.6/s (07:21:30Z~07:25:10Z)
+DRAIN_BOOKING_ALONE=avg 44.8/s, max 45.6/s (07:25:30Z~07:29:15Z)
+DRAIN_BOOKING_CONTENTION_GAIN=+24%
+
+# ── 자원 축 (회복 구간 07:21:20Z~07:29:19Z) ──────────────────────────────────
+# 스레드 풀도 DB 풀도 포화하지 않았다. 병목은 용량이 아니라 concurrency=1 의 직렬화다.
+CPU_BASELINE_AVG=26.11%
+CPU_RECOVERY_AVG=80.84% / MAX=87.51%
+CPU_RECOVERY_BOTH_GROUPS=81.13%
+CPU_RECOVERY_BOOKING_ALONE=80.25%
+CPU_IDLE_AFTER_DRAIN=28.19%
+HIKARI_PENDING_MAX=0 (전 인스턴스)
+TOMCAT_BUSY_SEAT_MAX=1 (avg 0.34)
+TOMCAT_BUSY_BOOKING_MAX=0
+TOMCAT_BUSY_TICKET_MAX=0
+JVM_HEAP_PEAK_BOOKING=94 MiB
+JVM_HEAP_PEAK_TICKET=91 MiB
+JVM_HEAP_PEAK_SEAT=82 MiB
+# concurrency 를 올렸을 때의 상한 추정(측정값 아님):
+#   드레인 귀속 CPU = 80.84 - 28.19 = 약 52%p, 여유 = 100 - 80.84 = 약 19%p
+#   42.0 x (52+19)/52 = 약 57/s -> 약 1.4배. 2 vCPU 를 늘리지 않는 한 3배는 나오지 않는다.
+CONCURRENCY_UPSIDE_ESTIMATE=약 1.4배 (추정, 측정 아님)
+
+# ── 정합성 (완료조건 2·4) ───────────────────────────────────────────────────
+INJECTED_TOTAL_MAIN=23000 (baseline 3000 + 스파이크 20000)
+VERIFY_CONFIRMED=23000
+VERIFY_SOLD=23000
+VERIFY_TICKETS=23000
+VERIFY_INBOX_BOOKING=23000
+VERIFY_INBOX_TICKET=23000
+VERIFY_STRAY_EVENTS=0
+VERIFY_REMAINING_PENDING=7000
+# 카운터 절대값(회차 누적). 29001 = 1(프리플라이트) + 6000(스모크 3회) + 23000(본 회차)
+COUNTER_TICKET_ISSUE_ISSUED=29001
+COUNTER_INBOX_TICKET_PROCESSED=29001
+COUNTER_INBOX_BOOKING_PROCESSED=29001
+COUNTER_TICKET_ISSUE_ALREADY_ISSUED=시계열 부재 (한 번도 증가 안 함)
+COUNTER_INBOX_DUPLICATE=시계열 부재 (한 번도 증가 안 함)
+VERIFY_INBOX_SQL_DOUBLE_ISSUE=0행
+# ⚠ 그 쿼리(ticket GROUP BY booking_id HAVING COUNT(*)>1)는 ticket.booking_id 가 UNIQUE 라
+#   구조적으로 항상 0행이다. 증적은 되지만 스스로 아무것도 증명하지 않는다.
+
+# ── 회차 유효성 게이트 ───────────────────────────────────────────────────────
+GATE_DLT_TOPICS=미생성
+GATE_CRITICAL_LOGS=booking 0 / ticket 0 / seat 0
+GATE_SEAT_CONFIRM_NOT_OWNED=0건
+GATE_VERDICT=전부 통과 — 폐기 회차 없음
+
+# ── 이 회차에 없는 것 ────────────────────────────────────────────────────────
+# k6 를 쓰지 않는다(HTTP 부하가 아니라 이벤트 주입이다). 그래서 timeseries-k6-*.json 이 없고
+# k6-summary.txt 도 없다. 유입 축의 SSOT 는 주입 스크립트 stdout(main-timeline.txt)이다.
+K6_USED=아니오

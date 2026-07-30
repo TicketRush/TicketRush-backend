@@ -1,0 +1,110 @@
+# #504 브로커·DB 직접 조회 출력 (측정 전 / 측정 후)
+#
+# 리포트 §3(완료조건 5)과 §7.5(파티션 분포)의 근거다. 이 회차는 k6 를 쓰지 않아
+# k6-summary.txt 가 없고, 아래 명령 출력이 그 자리를 대신한다.
+#
+# 실행 위치: EC2 배포본 호스트. IMAGE_TAG=1f2ed5d27ec7dd9cb92d72aba6b2e9b92a6ce110
+# ⚠ prod 브로커 리스너는 29092 다(로컬 compose 의 9092 가 아니다).
+
+# ============================================================================
+# [측정 전] 2026-07-29T06:5x Z — 토픽 구성과 컨슈머 배정
+# ============================================================================
+$ docker exec ticketrush-kafka /opt/kafka/bin/kafka-topics.sh \
+    --bootstrap-server localhost:29092 --describe --topic payment-confirmed-topic
+
+Topic: payment-confirmed-topic	TopicId: H4RAaPvgSp6tS_uXRdUw_Q	PartitionCount: 3	ReplicationFactor: 1	Configs:
+	Topic: payment-confirmed-topic	Partition: 0	Leader: 1	Replicas: 1	Isr: 1
+	Topic: payment-confirmed-topic	Partition: 1	Leader: 1	Replicas: 1	Isr: 1
+	Topic: payment-confirmed-topic	Partition: 2	Leader: 1	Replicas: 1	Isr: 1
+
+# 파티션 3개가 그룹당 CONSUMER-ID 하나에 전부 배정된다 = 소비 병렬도 1.
+# 그리고 CURRENT-OFFSET = LOG-END-OFFSET = 0 — 이 토픽에는 한 건도 흐른 적이 없다.
+$ docker exec ticketrush-kafka /opt/kafka/bin/kafka-consumer-groups.sh \
+    --bootstrap-server localhost:29092 --describe --group ticket-group
+
+GROUP           TOPIC                   PARTITION  CURRENT-OFFSET  LOG-END-OFFSET  LAG  CONSUMER-ID                                                  HOST         CLIENT-ID
+ticket-group    payment-confirmed-topic 0          0               0               0    consumer-ticket-group-2-6fe19d2c-0e6c-4cd2-a3d1-80b8edf23bb8 /172.19.0.6  consumer-ticket-group-2
+ticket-group    payment-confirmed-topic 1          0               0               0    consumer-ticket-group-2-6fe19d2c-0e6c-4cd2-a3d1-80b8edf23bb8 /172.19.0.6  consumer-ticket-group-2
+ticket-group    payment-confirmed-topic 2          0               0               0    consumer-ticket-group-2-6fe19d2c-0e6c-4cd2-a3d1-80b8edf23bb8 /172.19.0.6  consumer-ticket-group-2
+ticket-group    payment-canceled-topic  0          0               0               0    consumer-ticket-group-1-75ea11f0-4cbb-4895-9019-aad57eba1b7f /172.19.0.6  consumer-ticket-group-1
+ticket-group    payment-canceled-topic  1          0               0               0    consumer-ticket-group-1-75ea11f0-4cbb-4895-9019-aad57eba1b7f /172.19.0.6  consumer-ticket-group-1
+ticket-group    payment-canceled-topic  2          0               0               0    consumer-ticket-group-1-75ea11f0-4cbb-4895-9019-aad57eba1b7f /172.19.0.6  consumer-ticket-group-1
+
+$ ... --describe --group booking-group   (payment-confirmed-topic 부분만)
+
+GROUP           TOPIC                   PARTITION  CURRENT-OFFSET  LOG-END-OFFSET  LAG  CONSUMER-ID                                                   HOST         CLIENT-ID
+booking-group   payment-confirmed-topic 0          0               0               0    consumer-booking-group-5-180fef1f-b968-42e7-8500-02647a8c67de /172.19.0.8  consumer-booking-group-5
+booking-group   payment-confirmed-topic 1          0               0               0    consumer-booking-group-5-180fef1f-b968-42e7-8500-02647a8c67de /172.19.0.8  consumer-booking-group-5
+booking-group   payment-confirmed-topic 2          0               0               0    consumer-booking-group-5-180fef1f-b968-42e7-8500-02647a8c67de /172.19.0.8  consumer-booking-group-5
+
+# 콘솔 프로듀서의 한 줄 형식(배포본 바이너리의 --help 출력). 헤더 구간이 첫 TAB 에서 끝나므로
+# value JSON 안의 콤마·콜론은 안전하다. 금지 문자는 TAB 과 개행뿐이다.
+$ docker exec ticketrush-kafka /opt/kafka/bin/kafka-console-producer.sh --help
+
+                                          parse.headers=false
+                                          key.separator=\t
+                                          headers.delimiter=\t
+                                          headers.separator=,
+                                          headers.key.separator=:
+                                          parse.headers=true and parse.key=true:
+                                           "h1:v1,h2:v2...\tkey\tvalue"
+
+# ============================================================================
+# [측정 후] 2026-07-29T07:3x Z — 파티션 분포 (리포트 §7.5)
+# ============================================================================
+# 메시지 key 가 bookingId 라 코호트가 흩어진다. 총 29,001 건(프리플라이트 1 + 스모크 6,000 +
+# 본 회차 23,000)이 세 파티션에 평균 9,667 대비 편차 1.1% 로 들어갔다 — 사실상 균등이다.
+# 따라서 concurrency 를 3으로 올려도 파티션 배분 자체는 걸림돌이 아니다.
+$ docker exec ticketrush-kafka /opt/kafka/bin/kafka-consumer-groups.sh \
+    --bootstrap-server localhost:29092 --describe --group ticket-group \
+    | awk '$2=="payment-confirmed-topic" {print "partition " $3 "  LOG-END-OFFSET " $5}'
+
+partition 0  LOG-END-OFFSET 9559
+partition 1  LOG-END-OFFSET 9740
+partition 2  LOG-END-OFFSET 9702
+
+# 회차 유효성 게이트 — DLT 토픽이 하나도 생기지 않았다.
+# (역직렬화 실패는 addNotRetryableExceptions 때문에 재시도 없이 즉시 DLT 로 간다.)
+$ docker exec ticketrush-kafka /opt/kafka/bin/kafka-topics.sh \
+    --bootstrap-server localhost:29092 --list | grep -i dlt
+
+(출력 없음)
+
+# CRITICAL 로그 0건 — BOOKING_EXPIRED · BOOKING_CONFIRM_NOT_ALLOWED · BOOKING_SEAT_MISMATCH 는
+# 전부 EXPECTED_CONFLICTS 화이트리스트 밖이라 발생했다면 CRITICAL 로 찍힌다.
+$ for s in booking-service ticket-service seat-service; do
+    echo "$s: $(docker logs --since 40m $s 2>&1 | grep -c CRITICAL)"; done
+
+booking-service: 0
+ticket-service: 0
+seat-service: 0
+
+$ docker logs --since 40m booking-service 2>&1 | grep -c SEAT_409_003
+0
+
+# ============================================================================
+# [측정 후] 카운터 절대값 — 완료조건 2
+# ============================================================================
+# 29,001 = 1(프리플라이트) + 6,000(스모크 3회) + 23,000(본 회차) 로 주입 총량과 정확히 일치.
+# result="duplicate" 와 result="already_issued" 는 시계열 자체가 없다 — Micrometer 지연 등록이라
+# 한 번이라도 증가했으면 노출된다. 즉 inbox 멱등이 단 한 건도 차단하지 않았다(= eventId 전부 유일).
+$ docker exec ticket-service  curl -s localhost:8090/actuator/prometheus | grep '^ticketrush_ticket_issue'
+ticketrush_ticket_issue_total{result="issued"} 29001.0
+
+$ docker exec ticket-service  curl -s localhost:8090/actuator/prometheus | grep '^ticketrush_kafka_inbox_total'
+ticketrush_kafka_inbox_total{consumer_group="ticket-group",result="processed"} 29001.0
+
+$ docker exec booking-service curl -s localhost:8090/actuator/prometheus | grep '^ticketrush_kafka_inbox_total'
+ticketrush_kafka_inbox_total{consumer_group="booking-group",result="processed"} 29001.0
+
+# ============================================================================
+# [측정 후] 잔여 코호트 상태 — 리포트 §10 의 시한
+# ============================================================================
+# SOLD 23,000 석은 hold_expired_at 이 NULL 로 정리됐고, 남은 HOLD 7,000 석의 만료 시각이
+# 13:15:37Z 다. 이 시각 이후 인스턴스를 다시 켜면 기동 직후 첫 tick 에 한꺼번에 해제된다.
+$ SELECT seat_status, COUNT(*) c, MIN(hold_expired_at), MAX(hold_expired_at)
+    FROM seat WHERE performance_id=19 GROUP BY seat_status;
+
+seat_status	c	min_exp	max_exp
+SOLD	23000	NULL	NULL
+HOLD	7000	2026-07-29 13:15:37.000000	2026-07-29 13:15:37.000000

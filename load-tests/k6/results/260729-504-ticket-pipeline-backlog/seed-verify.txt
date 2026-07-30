@@ -1,0 +1,31 @@
+# #504 시딩·리셋·검증 SELECT 출력 (완료조건 1)
+# seed_payment_pipeline.sql — @mode = seed / reset / verify
+#
+# 판정 기준: contiguous_seats=1, seat_number_ordered=1, contiguous_bookings=1,
+#            seat_booking_aligned=1, pending=@count, held=@count, expiry_safe=@count
+# 하나라도 어긋나면 측정을 진행하지 않는다 — 주입 스크립트가 seat_id = SEAT_ID_MIN + idx 로
+# 값을 만들기 때문에 좌석 연속성이 깨지면 전건이 BOOKING_SEAT_MISMATCH 로 죽는다.
+
+===== @mode='seed' @count=30000  (2026-07-29T07:09:16Z, 1.4초) =====
+perf_id	booking_id_min	seat_id_min	user_id	cohort_size
+19	2000001	76054	4	30000
+seats	contiguous_seats	held	seat_number_ordered
+30000	1	30000	1
+bookings	pending	not_pending	contiguous_bookings	seat_booking_aligned	expiry_safe
+30000	30000	0	1	1	30000
+
+===== @mode='reset'  (본 회차 직전 — 스모크 흔적 제거) =====
+seats	contiguous_seats	held	seat_number_ordered
+30000	1	30000	1
+bookings	pending	not_pending	contiguous_bookings	seat_booking_aligned	expiry_safe
+30000	30000	0	1	1	30000
+confirmed	sold	tickets	inbox_booking	inbox_ticket	stray_events
+0	0	0	0	0	0
+
+===== @mode='verify'  (드레인 완료 후) =====
+seats	contiguous_seats	held	seat_number_ordered
+30000	1	7000	1
+bookings	pending	not_pending	contiguous_bookings	seat_booking_aligned	expiry_safe
+30000	7000	23000	1	1	30000
+confirmed	sold	tickets	inbox_booking	inbox_ticket	stray_events
+23000	23000	23000	23000	23000	0

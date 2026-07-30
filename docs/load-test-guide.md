@@ -1692,3 +1692,159 @@ rate(node_network_transmit_bytes_total{job="node", device="ens5"}[1m])
 3. 링크를 그대로 열고 화면을 캡처해 `graph-*.png`로 증적 디렉토리에 저장한다.
 
 > Prometheus 보존 기간이 지나면 이 링크들은 빈 그래프가 된다. 그래서 같은 디렉토리에 `dump-timeseries.py` 결과(`timeseries-*.json`)를 함께 커밋한다 — 그쪽이 장기 원자료다.
+
+---
+
+## 15. 티켓 발급 파이프라인 backlog 회복시간 측정 (#504)
+
+결제확정 → 티켓발급 **비동기 파이프라인**이 스파이크 유입을 흡수한 뒤 backlog 가 얼마 만에 회복되는지 잰다. #348 완료 조건에서 분리해 나온 항목이다.
+
+**이 회차도 배포가 아니라 실행이다.** 앱 코드 변경 0줄(#512 규약).
+
+### 15.1 이슈 서사와 실측의 차이 — 먼저 읽을 것
+
+**(a) 결제 API 를 탈 수 없어서 이 회차가 생겼다.**
+
+`StubPaymentApprovalClient` 는 `@Profile("!prod")` 이고 측정 대상은 `SPRING_PROFILES_ACTIVE=prod` 단독 배포본이다(ADR 0004). 실 Toss 호출은 `paymentKey` 를 PG 가 발급하므로 k6 가 만들 수 없고, 웹훅도 `paymentKey` 로 PG 에 재조회해 진위를 검증한다. 우회 경로가 없다.
+
+prod 에서 stub 을 허용하는 방향(`@Profile("!prod")` 제거)은 **배포본에 결제 우회 경로가 환경변수 하나로 켜지는 상태**를 만들기 때문에 택하지 않았다. 대신 파이프라인 입구인 `payment-confirmed-topic` 에 이벤트를 직접 주입한다 — #402 가 `seed_entry.sql` 로 코호트를 SQL 로 심은 것과 같은 사상이다.
+
+**(b) 릴레이를 우회하므로 #489 의 발행 상한이 적용되지 않는다.**
+
+`payment-confirmed-topic` 은 payment-service 가 발행하는데, payment-service 는 `app.event-publisher.type: kafka` 라 **outbox 를 거치지 않는다**(booking-service 만 `outbox`). 그리고 이 회차는 발행조차 우회해 브로커에 직접 넣는다.
+
+#348 은 "릴레이가 앞에서 조여 컨슈머까지 부하가 도달하지 않았다"(lag 최대 52)로 끝났다. 그 조임이 사라지므로 **이 회차에서 처음으로 `concurrency=1` 컨슈머가 노출된다.**
+
+**(c) 좌석을 공유하면 안 된다 — #402 와 전제가 다르다.**
+
+`seed_entry.sql`(#402)은 LOADTEST 첫 공연의 MIN seat_id 하나를 25,000 booking 전체가 공유한다. 검표 경로에 seat-service 가 아예 없어서 가능했던 선택이다.
+
+이 회차는 `booking-group` 이 `booking.confirm()` 뒤 seat-service `POST /api/v1/internal/seat/sold` 를 부른다. 좌석을 공유하면 payload 의 `seat_id` 를 하나로 고정해야 하는데, 그러면 `BookingConfirmUseCase` 가 `BOOKING_SEAT_MISMATCH` 로 **확정 단계에서** 전건을 죽인다. 통과시켜도 `SeatConfirmSoldUseCase` 가 `SEAT_CONFIRM_NOT_OWNED`(409)를 내고 booking 이 `SeatConfirmFailedEvent` 를 outbox 에 쌓아 측정 창에 2차 파동이 얹힌다. **좌석 : 예매 = 1:1 로 심는다.**
+
+**(d) 두 스케줄러가 코호트를 시한폭탄으로 만든다.**
+
+- `BookingExpireUseCase` — `PENDING` 이고 `created_at <= now-5분` 인 예매를 EXPIRED 로 넘긴다(`PAYMENT_WAIT_MINUTES=5`, `@Scheduled(fixedDelay=60000)`, 배치 100 × 최대 200회 = **tick 당 20,000건**). 시드가 `created_at` 을 현재 시각으로 박으면 **시딩 5~6분 뒤 코호트가 통째로 EXPIRED** 가 되고, `booking.confirm()` 이 `BOOKING_EXPIRED` 로 죽어 티켓도 좌석 SOLD 도 안 나온다. 회차의 "baseline 5분" 이 정확히 도화선 길이다.
+- `SeatStatusScheduler` — 만료된 HOLD 를 60초 주기로 AVAILABLE 로 해제한다. 해제되면 `confirmSoldById(seatId, bookingNumber, HOLD, SOLD)` 가 0행을 갱신해 전건 실패한다.
+
+둘 다 시각 비교라 `seed_payment_pipeline.sql` 이 `created_at`·`hold_expired_at` 을 **6시간 미래로** 밀어 막는다. 검증 SELECT 의 `expiry_safe` 가 그 확인이다.
+
+**(e) 유선 형태가 틀리면 리스너는 실행조차 안 된다.**
+
+Kafka value 는 `PaymentConfirmedEvent` 가 아니라 `DomainEventEnvelope` 이고, 이벤트 본문은 봉투 안 `payload` 에 **JSON 문자열로 escape 되어** 들어간다. 한 메시지 안에서 두 직렬화 규칙이 다르다:
+
+| 층 | 매퍼 | 규칙 |
+|---|---|---|
+| 봉투 | `JacksonMapperUtils.enhancedJsonMapper()` (spring-kafka 전용) | camelCase |
+| payload | 앱 `ObjectMapper` (`JacksonConfig`) | **snake_case** + `yyyy-MM-dd HH:mm:ss` |
+
+그리고 **헤더 `__TypeId__: com.ticketrush.global.event.DomainEventEnvelope` 가 필수**다. `USE_TYPE_INFO_HEADERS=true` 인데 `spring.json.value.default.type` 이 설정돼 있지 않아(`KafkaConfig.java:119`), 헤더가 없으면 `DeserializationException` 이 되고 그 예외는 `addNotRetryableExceptions` 에 걸려 **재시도 없이 즉시 DLT** 로 간다.
+
+### 15.2 부하 모델
+
+```
+baseline (드레인율 미만, 5분)  →  스파이크 (무페이싱 스텝)  →  주입 종료  →  lag 0
+```
+
+**스파이크는 페이싱하지 않는다.** 이 회차가 답할 질문이 "적체가 얼마 만에 빠지는가" 인데, 주입 종료 후 유입이 정확히 0이어야 lag 하강 기울기가 그대로 드레인율이 된다. 페이싱하면 회복 앞부분에 유입이 섞여 기울기가 혼탁해진다. 같은 이유로 **스파이크 시작과 동시에 baseline 을 끊는다**(스크립트를 순차 실행하면 자동으로 그렇게 된다).
+
+**드레인율은 회복 구간의 하강 기울기로 직접 읽는다.** 별도 캘리브레이션 회차가 필요 없다.
+
+**baseline 과 스파이크는 코호트 구간을 겹치지 않게 한다**(`OFFSET`). 같은 건을 두 번 쓰면 booking 이 이미 CONFIRMED 라 `confirm()` 이 no-op 이 되고 티켓도 `already_issued` 가 되어 유입이 조용히 깎인다.
+
+### 15.3 절차
+
+1. 터널·`IMAGE_TAG` 확인(§7.1, §8.4).
+
+2. **시딩** — 규모는 `필요 건수 = baseline + 스파이크` 에 여유를 둔다.
+
+   ```bash
+   { printf "SET @i_confirm_loadtest_db=1, @mode='seed', @count=30000;\n"; \
+     tr -d '\r' < load-test/seed/seed_payment_pipeline.sql; } \
+     | ssh -i <key> ubuntu@<EC2_IP> \
+       "docker exec -i ticketrush-mysql sh -c 'mysql -u root -p\"\$MYSQL_ROOT_PASSWORD\" ticket_rush'"
+   ```
+
+   검증 SELECT 의 **`contiguous_seats=1`, `seat_number_ordered=1`, `seat_booking_aligned=1`, `pending=@count`, `held=@count`, `expiry_safe=@count`** 를 눈으로 확인한다. 하나라도 어긋나면 진행하지 않는다 — 주입 스크립트가 `seat_id = SEAT_ID_MIN + idx` 로 값을 만들기 때문에 좌석 연속성이 깨지면 전건이 `BOOKING_SEAT_MISMATCH` 로 죽는다.
+
+   출력의 `perf_id / booking_id_min / seat_id_min / user_id` 를 다음 단계 인자로 쓴다.
+
+3. **스크립트 전송** — 워킹트리가 CRLF 라 그대로 넘기면 첫 줄부터 죽는다(§10.2).
+
+   ```bash
+   tr -d '\r' < load-test/chaos/inject-payment-confirmed.sh | ssh -i <key> ubuntu@<EC2_IP> 'cat > /tmp/inject.sh'
+   ```
+
+4. **1건 프리플라이트** — 추측하지 말고 실물을 확인한다.
+
+   ```bash
+   ssh ... 'BOOKING_ID_MIN=.. SEAT_ID_MIN=.. USER_ID=.. COUNT=1 bash /tmp/inject.sh'
+   ```
+
+   그 뒤 DB 에서 넷을 확인한다: `inbox` 에 `booking-group`·`ticket-group` 행 각 1건 / `ticket` 1건 / `booking` `CONFIRMED` / `seat` `SOLD`. 그리고 `kafka-topics.sh --list | grep dlt` 가 비어야 한다. **lag 이 0으로 떨어졌다는 것만으로는 처리됐다는 증거가 아니다** — 역직렬화 실패로 DLT 에 가도 lag 은 0이 된다.
+
+5. **스모크(수치 폐기)** — 소량을 무페이싱으로 2~3회 넣어 드레인율이 고원에 도달할 때까지 돌린다. **기동 직후에는 JIT 워밍업 때문에 드레인율이 회차 중에도 계속 오른다**(실측: 1차 21/s → 3차 35/s). 워밍업이 안 끝난 상태로 본 회차를 돌리면 회복 곡선 앞부분이 오염된다. 스모크는 `ticketrush_ticket_issue_total` 시계열을 낳는 역할도 한다(Micrometer 지연 등록이라 첫 발급 전엔 시계열이 아예 없다).
+
+6. **리셋 후 본 회차** — 매 회차 앞에 반드시 리셋한다(#496 이 이걸 빠뜨려 회차 하나를 폐기했다). `@mode='reset'` 은 티켓·inbox 를 지우고 booking 을 PENDING, seat 를 HOLD 로 되돌린다.
+
+   ```bash
+   ssh ... 'BOOKING_ID_MIN=.. COUNT=3000  OFFSET=0    RATE=10 bash /tmp/inject.sh'   # baseline
+   ssh ... 'BOOKING_ID_MIN=.. COUNT=20000 OFFSET=3000 RATE=0  bash /tmp/inject.sh'   # 스파이크 + 드레인 대기
+   ```
+
+7. **드레인 완료 후** `@mode='verify'` 로 정합성을 본다. 기대: `confirmed = sold = tickets = 주입 건수`, `stray_events = 0`.
+
+8. 증적 기록(§10.5 구성) → 다음 회차면 리셋 → EC2 중지.
+
+### 15.4 PromQL
+
+| 축 | 쿼리 |
+|---|---|
+| **컨슈머 랙(총 적체)** | `sum by (instance, topic) (kafka_consumer_fetch_manager_records_lag{job="ticketrush-services", topic="payment-confirmed-topic"})` |
+| 컨슈머 랙(파티션 스큐) | `max by (instance, topic) (kafka_consumer_fetch_manager_records_lag{job="ticketrush-services", topic="payment-confirmed-topic"})` |
+| 발급 처리율 | `sum by (result) (rate(ticketrush_ticket_issue_total[1m]))` |
+| Inbox 중복 차단 | `sum by (consumer_group, result) (rate(ticketrush_kafka_inbox_total[1m]))` |
+| DB 대기 | `hikaricp_connections_pending{job="ticketrush-services"}` |
+| 호스트 CPU | `100 * (1 - avg(rate(node_cpu_seconds_total{job="node", mode="idle"}[1m])))` |
+
+> ⚠️ 라벨 축은 `instance` 다(`ticket-service:8090`, `booking-service:8090`). `application` 라벨은 이 스택에 없다(§11.6).
+
+### 🚨 `kafka_consumer_fetch_manager_records_lag` 로 backlog 곡선을 그리지 않는다
+
+**#504 실측에서 확인했다.** 이 지표는 파티션별로 **"마지막 fetch 응답 시점의 lag"** 이다. `max.poll.records=20` 인 단일 스레드가 파티션 3개를 번갈아 훑으면 파티션마다 갱신 시각이 달라지고, `sum by (instance)` 는 **신선한 값과 낡은 값을 더한다.** 그 결과 적체가 단조 감소하지 않고 톱니로 튄다.
+
+```
+booking-service:8090   4,632 → 4,052 → 6,073 ↑ → 5,473          (Prometheus 15초, max by)
+ticket-service:8090    4,692 → 6,033 ↑ → 4,713 → 6,248 ↑        (Prometheus 15초, max by)
+                       ... 이후 3,919 에서 3표본(45초) 정체 — 그 파티션이 fetch 되지 않았다
+```
+
+**유입이 이미 끝난 회복 구간인데 값이 다시 올라간다.** 같은 구간을 브로커에서 5초로 뜬 값은 표본 47개에서 **단조 감소 위반이 0회**였다(정점 19,870 → 0).
+
+| 무엇을 | 어디서 |
+|---|---|
+| 적체 절대량·회복 곡선·드레인율 | **브로커** — 주입 스크립트의 `[drain]` 루프(`kafka-consumer-groups --describe` = `LEO − committed`) |
+| 파티션 분포(스큐) | **브로커** — 파티션별 `LOG-END-OFFSET` |
+| 처리율·자원 축 | **Prometheus** — `ticketrush_kafka_inbox_total`·`ticketrush_ticket_issue_total`·CPU·HikariCP·톰캣(서버 카운터라 스크랩 시점 문제 없음) |
+| `records-lag` 패널 | **"랙이 있다/없다" 신호로만.** 절대량·곡선 판단 금지 |
+
+§10.3 과 Grafana `Kafka Consumer Lag` 패널이 이 지표를 쓴다 — **컨슈머가 여러 파티션을 한 스레드로 훑는 구성에서는 그 패널을 적체량으로 읽지 않는다.**
+
+### 15.5 주의 / 무효 판정
+
+아래가 하나라도 어긋나면 회차를 폐기한다.
+
+| 항목 | 기준 | 왜 |
+|---|---|---|
+| DLT 토픽 | `payment-confirmed-topic.DLT` 미생성 | 생기면 유선 형태가 틀렸거나 일시 실패가 났다는 뜻 |
+| `stray_events` | 0 | `SeatConfirmFailedEvent`·`BookingExpiredEvent` 가 나오면 좌석 1:1 이 깨졌거나 만료 스케줄러가 코호트를 물었다 |
+| `confirmed = sold = tickets` | 주입 건수와 일치 | 어긋나면 유입이 깎였다(eventId 중복 / OFFSET 겹침) |
+| inbox `duplicate` 증가 | 0 | 완료조건 2 |
+| `[CRITICAL]` 로그 | 0건 | `BOOKING_EXPIRED`·`BOOKING_CONFIRM_NOT_ALLOWED`·`BOOKING_SEAT_MISMATCH` 는 전부 `EXPECTED_CONFLICTS` 밖이라 CRITICAL 로 찍힌다 |
+
+**DLT 백오프가 회복시간을 오염시킨다.** `ExponentialBackOffWithMaxRetries(5)`, initial 1s, ×2, max 60s → 일시 실패(seat-service 5xx·타임아웃) 1건마다 **그 파티션이 약 31초 멈춘다.** 회복 곡선이 계단식으로 튀면 그건 드레인율이 아니라 백오프다.
+
+**`auto.offset.reset=latest` 함정.** 컨슈머가 붙기 전에 주입하면 그 분량을 통째로 건너뛴다. 스크립트의 preflight 가 두 그룹의 토픽 구독을 먼저 확인한다.
+
+**`verify-inbox.sql` 의 한계를 리포트에 명시한다.** 완료조건은 "티켓 이중 발급 0건을 `verify-inbox.sql` 로 검증"이라고 적었는데, 그 쿼리(`ticket GROUP BY booking_id HAVING COUNT(*) > 1`)는 **`ticket.booking_id` 가 UNIQUE 제약이라 구조적으로 항상 0행**이다. 증적은 되지만 스스로 아무것도 증명하지 않는다. 실제 중복 유입이 흡수됐다는 근거는 `ticketrush_kafka_inbox_total{result="duplicate"}` 와 `ticketrush_ticket_issue_total{result="already_issued"}` 쪽이다.
+
+**실효 드레인율의 상한 요인**을 리포트에 함께 적는다: 파티션 수, 그룹당 컨슈머 수(= 소비 병렬도), `max.poll.records=20`, `fetch.max.wait.ms=500`(`KafkaConfig` 상수).
