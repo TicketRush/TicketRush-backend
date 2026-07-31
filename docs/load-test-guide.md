@@ -1893,3 +1893,106 @@ ticket-service:8090    4,692 → 6,033 ↑ → 4,713 → 6,248 ↑        (Prome
 **`verify-inbox.sql` 의 한계를 리포트에 명시한다.** 완료조건은 "티켓 이중 발급 0건을 `verify-inbox.sql` 로 검증"이라고 적었는데, 그 쿼리(`ticket GROUP BY booking_id HAVING COUNT(*) > 1`)는 **`ticket.booking_id` 가 UNIQUE 제약이라 구조적으로 항상 0행**이다. 증적은 되지만 스스로 아무것도 증명하지 않는다. 실제 중복 유입이 흡수됐다는 근거는 `ticketrush_kafka_inbox_total{result="duplicate"}` 와 `ticketrush_ticket_issue_total{result="already_issued"}` 쪽이다.
 
 **실효 드레인율의 상한 요인**을 리포트에 함께 적는다: 파티션 수, 그룹당 컨슈머 수(= 소비 병렬도), `max.poll.records=20`, `fetch.max.wait.ms=500`(`KafkaConfig` 상수).
+
+---
+
+## 16. 대기열 유입 제어 측정 (#472)
+
+대기열([ADR 0009](adr/0009-virtual-waiting-room-with-server-directed-polling.md))이 실제로 유입을 흡수하는지 확인하는 회차다. 회차 A와 B의 **순서가 설계에 걸려 있다** — A가 확정한 `R`이 B의 입력값이다.
+
+### 16.1 이슈 서사와 실측의 차이 — 먼저 읽을 것
+
+**`R`(상태 확인 경로가 감당하는 RPS)은 존재하지 않는 수치다.** [#470](https://github.com/TicketRush/TicketRush-backend/issues/470)은 폴링 주기 하한을 "#348에서 실측한 폴링 경로 무릎"으로 역산하라고 적었지만, **#348은 회선 제약(좌석맵 응답 221 KB, 압축 없음)에 막혀 앱의 무릎에 도달조차 못 했다.** ADR 0009 §3이 이 사실을 명시하고 임시값 `R ≥ 400`을 쓴다 — #529 `seat-counts` 포화점 396.75 RPS를 빌린 보수적 하한이다.
+
+**회차 A의 산출물이 그 수치다.** 여기서 `R`을 재고 `T = ceil(10000 / R)`로 폴링 주기를 확정한 뒤, ADR 0009 §3을 갱신하고 상태를 "제안됨" → "승인됨"으로 정정한다.
+
+**ADR 0009 §5는 이미 틀린 것이 확인됐다.** "keep-alive 타임아웃을 짧게 둔다"고 적었지만 게이트웨이 8080은 `127.0.0.1`로만 publish되고, `deploy/nginx/api.ticketrush.store.conf`의 `location /`은 upstream 블록 없이 `proxy_pass` 직접이라 **`keepalive` 지시자가 구조적으로 부재**하다. nginx는 게이트웨이 커넥션을 재사용하지 않으며, 1만 개의 유휴 커넥션은 게이트웨이가 아니라 **nginx가 쥔다.** 게이트웨이 netty 튜닝은 효과가 없고 실제 상한은 nginx `worker_connections × worker_processes`다. 방향(단축/유지)은 회차 A의 A/B로 가른다.
+
+### 16.2 부하 모델
+
+| 프로파일 | executor | 무엇을 재나 |
+|---|---|---|
+| `status` | `ramping-arrival-rate` 계단 `200 → 400 → 800 → 1600` × 5분 | **`R`.** 상태 확인 경로 단독. 사용자 행동이 아니라 경로 용량이라 sleep이 없다 |
+| `flood` | `ramping-vus` → 10,000 | **유입 제어.** 진입 → 서버 지시 폴링 → 입장 → 예매의 전 여정 |
+
+계단 시작점이 200인 근거: 이 경로는 `GET`(대기 토큰) + `ZRANK` 두 번이고 **DB를 타지 않는다.** 게이트웨이 홉 + DB 집계를 포함한 #529의 396.75 RPS보다 빠를 수밖에 없으므로 그 위에서 시작한다.
+
+**서버 지시 폴링은 이 저장소에 선례가 없는 패턴이다.** k6가 `sleep(고정값)`이 아니라 응답의 `next_poll_after_seconds` + 지터(±20%)로 잔다. 응답이 깨졌을 때의 폴백(`QUEUE_FALLBACK_POLL=25`)이 안전장치가 아니라 **필수**다 — 값이 없거나 0으로 떨어지면 k6가 sleep 없이 재폴링해 스스로 DDoS가 되고, 하필 대상이 죽어가는 구간에서 정확히 그렇게 된다.
+
+### 16.3 시딩
+
+**DB 시딩이 필요 없다** — 대기열은 Redis만 쓴다. 다만 두 가지 준비가 있다.
+
+1. **`flood`의 마지막 단계인 예매는 DB를 탄다.** `seed_load.sql`의 좌석 풀이 필요하고, VU 수만큼 좌석을 비가역 소모한다.
+2. **`user_id` 코호트.** k6가 게이트웨이와 같은 시크릿으로 JWT를 직접 서명한다(`-e QUEUE_JWT_SECRET=...`). 1만 번 로그인은 bcrypt(cost 10) 비용이 2 vCPU를 통째로 먹어 auth-service를 재게 되므로 택하지 않았다. **다만 `flood`의 예매가 실제 `user_id`를 요구하므로 코호트 규모만큼 계정이 시딩돼 있어야 한다** — `seed_load.sql`은 현재 계정 하나만 만든다. 필요 규모는 회차 A 결과에 달려 있어 측정 이슈에서 확정한다.
+
+`status` 회차는 `setup()`이 `QUEUE_PRELOAD_SIZE`(기본 10,000)명을 진입시켜 ZSET을 채운다. **빈 대기열을 재면 안 된다** — `ZRANK`는 skiplist 탐색이라 크기에 로그 비례하고, 낙관적인 `R`은 그대로 폴링 주기 하한이 되어 운영에서 터진다. 폴링에 쓰는 토큰은 마지막 진입자 것이라 순번이 가장 뒤 = 탐색 비용이 가장 큰 지점이다.
+
+### 16.4 절차
+
+**사전 게이트 — 하나라도 어긋나면 시작하지 않는다.**
+
+| # | 항목 | 확인 |
+|---|---|---|
+| G0 | 대상 EC2 기동 · `IMAGE_TAG` 기록 | `docker compose ps` |
+| G1 | **nginx `worker_connections` 실측** | `nginx -T \| grep -E 'worker_connections\|worker_processes'`. 기본값 1024 × 2 ≈ 2,048이면 1만 VU에 못 미친다 → 16384 + `worker_rlimit_nofile` 상향. **미조치 회차는 무효** |
+| G2 | `QUEUE_ENABLED=true` | `deploy/.env` 확인 후 `docker compose restart gateway-service` |
+| G3 | 대기열 지표 노출 | `curl -s localhost:8090/actuator/prometheus \| grep ticketrush_queue` — 미발생 상태에서도 0으로 보여야 한다 |
+| G4 | Redis 여유 | `redis_memory_used_bytes` < 48 MB. `maxmemory 64mb` + `noeviction`이라 상한에 닿으면 좌석 락 SET까지 거절된다 |
+| G5 | Prometheus targets | `job='gateway'` up |
+| G6 | 생성기 EC2 | [ADR 0010](adr/0010-in-aws-load-generator-for-ten-thousand-vu.md) — 같은 리전, spot, 회차 후 **종료** |
+
+**회차 A (R 실측)**
+
+```bash
+# 생성기 EC2에서. QUEUE_JWT_SECRET 은 게이트웨이 jwt.secret 과 같은 값이며 커밋하지 않는다.
+docker run --rm -v $PWD/load-test:/scripts:ro \
+  -e K6_OUT=experimental-prometheus-rw \
+  -e K6_PROMETHEUS_RW_SERVER_URL=http://<EC2>:9090/api/v1/write \
+  grafana/k6:latest run \
+  -e BASE_URL=https://api.ticketrush.store -e QUEUE_PROFILE=status \
+  -e QUEUE_PERF_ID=1 -e QUEUE_JWT_SECRET='...' \
+  /scripts/scenarios/waiting-room.js
+```
+
+1. 리셋 — Redis 대기열 키 삭제 (`redis-cli --scan --pattern 'queue:*' | xargs redis-cli del`), 0건 확인
+2. 스모크 — 수치 폐기 전제(§6.1 규칙 4)
+3. 본 회차 — 계단 유지 5분(Prometheus 15초 스크랩 × 20표본)
+4. **nginx `keepalive_timeout` A/B** — 같은 계단을 `75s`(기본)와 `15s`로 각 1회. 호스트 CPU·메모리·`k6_http_req_connecting_p95`로 §16.1의 판단을 가른다
+5. 판정 — 도착률을 올려도 실제 RPS가 안 오르는 구간 + `dropped_iterations` + 호스트 CPU 수렴 → 그 값이 **R**
+6. 반영 — `queue.status-rps-capacity` 교체, **ADR 0009 §3·§5 갱신 + 상태 승인됨**
+
+**회차 B (1만 VU 유입 제어)** — A에서 확정한 `R`을 반영한 배포본으로 `QUEUE_PROFILE=flood`.
+
+완료 조건의 핵심 축은 하나다: **`POST /api/v1/booking`의 서버 RPS가 `queue.admit-rate-per-second`(기본 20) 부근에서 평평할 것.** 유입 1만 VU와 무관하게 평평해야 ADR 0009 "결과"의 첫 줄이 수치로 확인된다. 부수 확인은 `ticketrush_queue_waiting` 단조 감소, `queue_wait_to_admit_seconds` p95, 오버셀 0행(#344 검증 SQL).
+
+### 16.5 PromQL
+
+`load-test/bench/dump-timeseries.py`의 `QUERIES`에 이미 들어 있다(`queue-*`, `booking-server-rps`, `redis-mem-used`, `k6-queue-*`). 회차 종료 후 1회 덤프하고 결과 디렉터리에 커밋한다.
+
+| 축 | 쿼리 |
+|---|---|
+| 상태 확인 RPS | `sum(rate(ticketrush_queue_admission_total{job="gateway"}[1m]))` — 폴링 1회 = 카운터 1증가 |
+| 입장 허용률 | `sum(rate(...{result="admitted"}[1m])) / sum(rate(...[1m]))` |
+| 대기 인원 | `ticketrush_queue_waiting{job="gateway"}` |
+| 폴링 주기 | `ticketrush_queue_poll_interval_seconds{job="gateway"}` |
+| 예매 경로 RPS | `sum(rate(http_server_requests_seconds_count{instance="booking-service:8090"}[1m]))` |
+
+게이트웨이의 `http_server_requests`는 uri 라벨이 `/**`·`UNKNOWN`으로 뭉개져(#402 실측 카디널리티 4) 폴링 경로를 따로 볼 수 없다. **위 커스텀 지표가 유일한 수단이다.**
+
+### 16.6 주의 / 무효 판정
+
+| 항목 | 기준 | 왜 |
+|---|---|---|
+| `queue_status_unavailable` | 0 | >0이면 fail-closed(ADR 0008)가 발동한 것이다. 대기열 성능이 아니라 Redis 장애를 측정한 회차다 |
+| `ticketrush_queue_entry_token{result="unavailable"}` | 0 | 같은 이유 |
+| nginx `worker_connections` | 실측·상향 완료 | 미조치면 앱이 아니라 nginx가 벽이다(§16.1) |
+| `redis_memory_used_bytes` | < 48 MB | `noeviction` 상한에 닿으면 좌석 락 SET까지 거절돼 대기열 밖 경로가 함께 무너진다 |
+| `dropped_iterations` | 해석 대상 | `status` 회차에서는 포화 신호이지 실패가 아니다 |
+| `queue_polls_exhausted` | 0 | >0이면 입장 허용량이 유입을 소화하지 못했다 |
+| `queue_booking_forbidden` | 0 | 승급 직후 예매라 0이어야 한다. >0이면 폴링→예매 지연이 입장 토큰 TTL(5m)을 넘었다 |
+| 생성기 종료 | 필수 | CD가 건드리지 않아 "떠 있는 줄 몰랐다"가 가능하다(ADR 0010) |
+
+**§6.1 재현성 규칙이 여기서 한 겹 더 걸린다.** [ADR 0010](adr/0010-in-aws-load-generator-for-ten-thousand-vu.md)이 생성기를 로컬에서 AWS로 옮겼으므로 **이 회차 수치를 ADR 0004 토폴로지 회차(#348·#403·#529 등)와 절대값으로 직접 잇지 않는다.** 비교가 필요하면 그 사실을 리포트 한계에 적는다.
+
+**15초 샘플러의 중앙값을 "최대"로 쓰지 않는다.** 묶음 C에서 두 번 틀렸다(#469 Redis 사용률 6.76 → 7.46%, #540 seat RSS 586 → 602 MiB). 시계열 덤프에서 max를 뽑거나 Grafana 캡처로 확인한다.
