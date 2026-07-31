@@ -90,3 +90,40 @@ http://localhost:3000/explore?orgId=1&schemaVersion=1&panes=%7B%22a%22%3A%7B%22d
 
 http://localhost:3000/explore?orgId=1&schemaVersion=1&panes=%7B%22a%22%3A%7B%22datasource%22%3A%22prometheus%22%2C%22queries%22%3A%5B%7B%22refId%22%3A%22A%22%2C%22expr%22%3A%22100%20%2A%20redis_memory_used_bytes%20%2F%20redis_memory_max_bytes%22%2C%22datasource%22%3A%7B%22type%22%3A%22prometheus%22%2C%22uid%22%3A%22prometheus%22%7D%7D%2C%7B%22refId%22%3A%22B%22%2C%22expr%22%3A%22sum%20by%20%28result%29%20%28rate%28ticketrush_seat_seatmap_cache_total%5B1m%5D%29%29%22%2C%22datasource%22%3A%7B%22type%22%3A%22prometheus%22%2C%22uid%22%3A%22prometheus%22%7D%7D%5D%2C%22range%22%3A%7B%22from%22%3A%221785482370000%22%2C%22to%22%3A%221785484020000%22%7D%7D%7D
 
+
+---
+
+## 찍고 나서 안 것 — 판독 주의 (2026-07-31)
+
+8장을 실제로 찍어 보니 **자릿수가 다른 지표를 한 그래프에 넣으면 작은 쪽이 안 보인다.**
+이 회차에서 세 번 반복됐으므로 다음 회차 설계에 반영한다.
+
+| 장 | 상태 | 읽는 법 |
+|---|---|---|
+| `graph-after-throughput.png` | ✅ 좋음 | 초록 처리량이 20 → 40 → 60 → 80 → 100 계단으로 뚜렷하고, 노랑 avg 는 100 계단에서야 오른다 |
+| `graph-after-cache-hitrate.png` | ✅ 좋음 | `failure` 가 **범례에 보이는 채로 0**. hit 가 계단마다 오른다 |
+| `graph-after-saturation.png` | ✅ 좋음 | dropped 가 100 계단에서만 발생(browse 265 + purchase 8 = **273**, 리포트와 일치) |
+| `graph-before-ramp1-saturation.png` | ✅ 좋음 | CPU 계단 40 → 73 → 90 |
+| `graph-before-ramp1-throughput.png` | ⚠️ 부분 | 서버 avg 는 읽히나 **처리량(20-60 rps)이 0-800ms 스케일에 눌린다** |
+| `graph-before-ramp2-throughput.png` | ⚠️ 부분 | 같은 이유. avg 가 80 계단에서 980ms 로 꺾이는 것은 잘 보인다 |
+| `graph-before-ramp2-saturation.png` | ⚠️ 주의 | dropped 가 9.5K 라 **CPU(0-100)가 바닥에 눌린다.** after 장(스케일 300)과 세로 눈금이 달라 나란히 놓을 때 눈금을 반드시 읽을 것 |
+| `graph-after-redis-budget.png` | ❌ 실패 | Redis 사용률(3-7%)이 캐시 hit(최대 100)에 눌렸고 나머지는 앞 장과 중복이다. **아래 보완 링크로 다시 찍는다** |
+
+### 🚨 `before-ramp1` 두 장의 앞부분은 이 회차 값이 아니다
+
+측정 창(05:49Z)이 **직전 스모크 회차의 카운터가 아직 살아 있는 시점**에서 시작한다.
+
+- `graph-before-ramp1-saturation.png` 의 노랑 **195** (14:49-14:53 KST 구간) — **스모크의 `dropped` 다.**
+  1차 회차 자체의 `dropped` 는 **0** 이다(k6 요약에 항목이 아예 없다)
+- `graph-before-ramp1-throughput.png` 의 14:49 **800ms** 도 같은 잔재다
+
+**그림만 보면 "1차 회차 초반에 손실이 있었다"로 오독된다.** 표(`report.md` §5)가 옳다.
+
+### 보완 링크 — graph-after-redis-budget.png 다시 찍기
+
+Redis 축만 남긴다(사용률 % + 실사용 MiB). 세로 눈금이 0-10 대로 잡혀 3-7% 구간이 읽힌다.
+**`#469` 완료조건("128 MiB 상한 내 동작")의 그림 증적이므로 이 장은 다시 찍을 값이 있다.**
+
+측정 창: 2026-07-31T07:19:30Z ~ 2026-07-31T07:47:00Z (UTC)
+
+http://localhost:3000/explore?orgId=1&schemaVersion=1&panes=%7B%22a%22%3A%7B%22datasource%22%3A%22prometheus%22%2C%22queries%22%3A%5B%7B%22refId%22%3A%22A%22%2C%22expr%22%3A%22100%20%2A%20redis_memory_used_bytes%20%2F%20redis_memory_max_bytes%22%2C%22datasource%22%3A%7B%22type%22%3A%22prometheus%22%2C%22uid%22%3A%22prometheus%22%7D%7D%2C%7B%22refId%22%3A%22B%22%2C%22expr%22%3A%22redis_memory_used_bytes%20%2F%201024%20%2F%201024%22%2C%22datasource%22%3A%7B%22type%22%3A%22prometheus%22%2C%22uid%22%3A%22prometheus%22%7D%7D%5D%2C%22range%22%3A%7B%22from%22%3A%221785482370000%22%2C%22to%22%3A%221785484020000%22%7D%7D%7D
