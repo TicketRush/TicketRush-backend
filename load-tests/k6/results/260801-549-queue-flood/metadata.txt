@@ -24,8 +24,12 @@ GENERATOR_DECISION=로컬 k6. ADR 0010 의 "AWS 임시 EC2" 를 기각한다.
 #   ③ 가정 공유기 세션 테이블("통상 수천") — 서버측 established :443 이 정확히 10,000 으로
 #      3분 이상 유지됐고 probe_connect_failed 0.00%(0/99,944).
 #   회차 후 ADR 0010 의 상태를 이 실측으로 정정한다.
-PROBE=1만 VU 커넥션 프로브(scratchpad/connection-probe.js, 6분 30초).
-#   probe_connect_failed 0.00% / http_req_failed 0.00% / connecting p95 7.53ms / vus_max 10,000.
+PROBE=1만 VU 커넥션 프로브(load-test/scenarios/connection-probe.js, 6분 30초).
+#   probe_connect_failed 0.00%(0/99,944) / http_req_failed 0.00% / connecting p95 7.53ms / vus_max 10,000
+#   / data_sent 30 MB = 74 kB/s(0.6 Mbps) / 서버측 established 정확히 10,000 을 3분 이상 유지.
+#   재현: docker run --rm -v $PWD/load-test:/scripts:ro --ulimit nofile=1048576:1048576 \
+#         grafana/k6:latest run -e BASE_URL=https://api.ticketrush.store -e PROBE_VUS=10000 \
+#         /scripts/scenarios/connection-probe.js
 
 # ── 사전 게이트 (런북 §16.4) ────────────────────────────────────────────────
 G0_EC2=기동. ⚠ .env 의 IMAGE_TAG 가 6b7301a0(ECR·CD기록·저장소 어디에도 없는 값)을 가리켜
