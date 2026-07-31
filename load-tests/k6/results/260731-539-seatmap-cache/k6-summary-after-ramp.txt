@@ -1,0 +1,35 @@
+    ✓ booking created(201)
+
+    CUSTOM
+    e2e_booking_created............: 100.00% 18474 out of 18474
+    e2e_booking_duration...........: avg=106.33ms min=16.65ms med=32.59ms max=2.14s p(90)=192.9ms  p(95)=652.71ms
+    e2e_browse_journey_duration....: avg=312.87ms min=25ms    med=57ms    max=5.44s p(90)=725ms    p(95)=2.09s   
+    e2e_perf_detail_duration.......: avg=93.73ms  min=7.04ms  med=16.31ms max=2.3s  p(90)=189.92ms p(95)=650.97ms
+    e2e_perf_list_duration.........: avg=93.07ms  min=6.78ms  med=15.44ms max=2.23s p(90)=185.88ms p(95)=652.15ms
+    e2e_seat_conflict..............: 0.00%   0 out of 18474
+    e2e_seat_exhausted.............: 0.00%   0 out of 18474
+    e2e_seat_layouts_duration......: avg=125.66ms min=8.45ms  med=21.42ms max=2.56s p(90)=338.6ms  p(95)=815.48ms
+
+    HTTP
+    http_req_duration..............: avg=104.29ms min=6.78ms  med=18.48ms max=2.56s p(90)=235.77ms p(95)=710.49ms
+      { expected_response:true }...: avg=104.29ms min=6.78ms  med=18.48ms max=2.56s p(90)=235.77ms p(95)=710.49ms
+    http_req_failed................: 0.00%   0 out of 294881
+    http_reqs......................: 294881  191.374362/s
+
+    EXECUTION
+    dropped_iterations.............: 273     0.177174/s
+    iteration_duration.............: avg=278.45ms min=16.81ms med=52.56ms max=5.44s p(90)=628.45ms p(95)=1.62s   
+    iterations.....................: 110606  71.782016/s
+    vus............................: 17      min=1              max=431
+    vus_max........................: 453     min=180            max=453
+
+    NETWORK
+    data_received..................: 1.2 GB  779 kB/s
+    data_sent......................: 112 MB  73 kB/s
+
+
+
+
+running (25m40.9s), 0000/0453 VUs, 110606 complete and 0 interrupted iterations
+browse   ✓ [ 100% ] 000/417 VUs  25m40s  100.00 iters/s
+purchase ✓ [ 100% ] 000/036 VUs  25m40s  20.00 iters/s

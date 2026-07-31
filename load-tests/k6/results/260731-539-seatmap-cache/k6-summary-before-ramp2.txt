@@ -1,0 +1,46 @@
+
+    checks_total.......: 78662  82.717951/s
+    checks_succeeded...: 94.78% 74561 out of 78662
+    checks_failed......: 5.21%  4101 out of 78662
+
+    ✓ login 200
+    ✗ booking created(201)
+      ↳  85% — ✓ 12488 / ✗ 2110
+    ✗ browse journey ok(200)
+      ↳  96% — ✓ 62072 / ✗ 1991
+
+    CUSTOM
+    e2e_booking_created............: 85.54% 12488 out of 14598
+    e2e_booking_duration...........: avg=48.49ms  min=0s       med=36.98ms max=3.36s  p(90)=77.47ms p(95)=115.66ms
+    e2e_browse_journey_duration....: avg=8.51s    min=37ms     med=8.82s   max=1m31s  p(90)=12.51s  p(95)=16.43s  
+    e2e_perf_detail_duration.......: avg=140.96ms min=0s       med=20.96ms max=30.03s p(90)=56.72ms p(95)=87.62ms 
+    e2e_perf_list_duration.........: avg=200.95ms min=0s       med=18.31ms max=30.27s p(90)=54.59ms p(95)=91.76ms 
+    e2e_seat_conflict..............: 0.00%  0 out of 14598
+    e2e_seat_exhausted.............: 0.00%  0 out of 14598
+    e2e_seat_layouts_duration......: avg=6.94s    min=0s       med=8.66s   max=32.5s  p(90)=11.51s  p(95)=12.6s   
+
+    HTTP
+    http_req_duration..............: avg=2.25s    min=0s       med=30.69ms max=32.5s  p(90)=9.65s   p(95)=10.98s  
+      { expected_response:true }...: avg=2.25s    min=7.5ms    med=32.68ms max=32.5s  p(90)=9.67s   p(95)=10.95s  
+    http_req_failed................: 4.92%  10189 out of 206810
+    http_reqs......................: 206810 217.473488/s
+
+    EXECUTION
+    dropped_iterations.............: 9648   10.145468/s
+    iteration_duration.............: avg=7.56s    min=748.13µs med=8.45s   max=1m31s  p(90)=12.59s  p(95)=30s     
+    iterations.....................: 78661  82.7169/s
+    vus............................: 9      min=0               max=1045
+    vus_max........................: 1051   min=180             max=1051
+
+    NETWORK
+    data_received..................: 949 MB 997 kB/s
+    data_sent......................: 130 MB 137 kB/s
+
+
+
+
+running (15m51.0s), 0000/1051 VUs, 78661 complete and 9 interrupted iterations
+browse   ✓ [ 100% ] 009/900 VUs  15m20s  100.00 iters/s
+purchase ✓ [ 100% ] 000/151 VUs  15m20s  20.00 iters/s
+time="2026-07-31T06:24:41Z" level=error msg="thresholds on metrics 'http_req_duration, http_req_failed' have been crossed"
+

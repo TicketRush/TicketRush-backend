@@ -1,0 +1,55 @@
+
+  █ THRESHOLDS 
+
+    http_req_duration
+    ✗ 'p(95)<800' p(95)=4.04s
+
+    http_req_failed
+    ✓ 'rate<0.01' rate=0.00%
+
+
+  █ TOTAL RESULTS 
+
+    checks_total.......: 7785    37.917833/s
+    checks_succeeded...: 100.00% 7785 out of 7785
+    checks_failed......: 0.00%   0 out of 7785
+
+    ✓ login 200
+    ✓ browse journey ok(200)
+    ✓ booking created(201)
+
+    CUSTOM
+    e2e_booking_created............: 100.00% 1330 out of 1330
+    e2e_booking_duration...........: avg=80.32ms  min=22.92ms med=50.73ms  max=2.28s p(90)=110.93ms p(95)=224.73ms
+    e2e_browse_journey_duration....: avg=1.89s    min=36ms    med=1.64s    max=7.26s p(90)=4.53s    p(95)=4.92s   
+    e2e_perf_detail_duration.......: avg=58.98ms  min=9.86ms  med=27.63ms  max=2.83s p(90)=75.32ms  p(95)=169.08ms
+    e2e_perf_list_duration.........: avg=50.42ms  min=9.06ms  med=23.09ms  max=1.9s  p(90)=63.28ms  p(95)=155.19ms
+    e2e_seat_conflict..............: 0.00%   0 out of 1330
+    e2e_seat_exhausted.............: 0.00%   0 out of 1330
+    e2e_seat_layouts_duration......: avg=1.78s    min=15.73ms med=1.23s    max=7.22s p(90)=4.43s    p(95)=4.84s   
+
+    HTTP
+    http_req_duration..............: avg=595.96ms min=9.06ms  med=34.92ms  max=7.22s p(90)=2.96s    p(95)=4.04s   
+      { expected_response:true }...: avg=595.96ms min=9.06ms  med=34.92ms  max=7.22s p(90)=2.96s    p(95)=4.04s   
+    http_req_failed................: 0.00%   0 out of 20703
+    http_reqs......................: 20703   100.836594/s
+
+    EXECUTION
+    dropped_iterations.............: 195     0.949772/s
+    iteration_duration.............: avg=1.58s    min=23.12ms med=228.54ms max=7.26s p(90)=4.41s    p(95)=4.86s   
+    iterations.....................: 7784    37.912962/s
+    vus............................: 59      min=0            max=294
+    vus_max........................: 315     min=120          max=315
+
+    NETWORK
+    data_received..................: 91 MB   441 kB/s
+    data_sent......................: 8.3 MB  41 kB/s
+
+
+
+
+running (3m25.3s), 000/315 VUs, 7784 complete and 0 interrupted iterations
+browse   ✓ [ 100% ] 000/295 VUs  3m20s  60.00 iters/s
+purchase ✓ [ 100% ] 000/020 VUs  3m20s  12.00 iters/s
+time="2026-07-31T05:47:55Z" level=error msg="thresholds on metrics 'http_req_duration' have been crossed"
+
