@@ -1971,6 +1971,60 @@ docker run --rm -v $PWD/load-test:/scripts:ro \
 
 완료 조건의 핵심 축은 하나다: **`POST /api/v1/booking`의 서버 RPS가 `queue.admit-rate-per-second`(기본 20) 부근에서 평평할 것.** 유입 1만 VU와 무관하게 평평해야 ADR 0009 "결과"의 첫 줄이 수치로 확인된다. 부수 확인은 `ticketrush_queue_waiting` 단조 감소, `queue_wait_to_admit_seconds` p95, 오버셀 0행(#344 검증 SQL).
 
+> **회차 A의 결과가 회차 B의 전제를 바꿨다(#549).** `T`가 25초 → 8초(대기 인원이 줄면 하한 3초)로 짧아지면서 폴링 안전 상한 `QUEUE_MAX_POLLS`가 60에서는 순번 6,900부터 걸려 **약 31%가 `queue_polls_exhausted`로 집계된다** — 클라이언트가 먼저 포기한 것을 "입장 허용량이 유입을 소화하지 못했다"로 오독하게 된다. 기본값을 300으로 올렸다. `R`이나 `min-poll-seconds`를 다시 바꾸면 이 값도 다시 계산한다.
+
+**B-1. 시딩** — 대기열은 Redis만 쓰지만 **여정의 마지막인 예매는 DB를 탄다.** `BookingValidateReferencesUseCase`가 `user` 행과 `(seat_id, performance_id)` 쌍을 요구하므로 코호트 규모만큼 둘 다 있어야 한다. `seed_load.sql`은 계정 1개 + 공연당 600석이라 못 쓴다.
+
+```bash
+# EC2 에서. 가드 변수가 없으면 본문이 돌지 않는다(seed_load.sql 과 같은 규율).
+docker exec -i ticketrush-mysql mysql -uroot -p"$PW" ticket_rush \
+  --init-command="SET @i_confirm_loadtest_db=1" < load-test/seed/seed_queue_flood.sql
+```
+
+끝에 출력되는 **`-e 인자` 4줄을 그대로 k6 실행에 넣는다**(`QUEUE_PERF_ID` · `QUEUE_USER_ID_MIN` · `QUEUE_SEAT_ID_MIN` · `QUEUE_FLOOD_VUS`). 오프셋이 `MIN(id) - 1`인 것은 시나리오가 `id = 오프셋 + exec.vu.idInTest`로 매기고 `idInTest`가 1부터이기 때문이다.
+
+**연속성이 `GAP`이면 그대로 쓰지 않는다.** 구멍에 걸린 VU의 예매가 404로 튕겨 예매 경로 RPS가 과소 집계된다 — `cleanup_load.sql` 후 재시딩한다. `prod`는 `seat_id`가 이미 13만대까지 소진돼 있어 좌석과 계정의 번호대가 겹치지 않는다. **오프셋 없이 돌리면 회차 전체가 404다.**
+
+**B-2. 생성기 EC2** — [ADR 0010](adr/0010-in-aws-load-generator-for-ten-thousand-vu.md). 대상과 같은 리전·VPC, `m7i.2xlarge`(8 vCPU / 32 GiB) spot, Ubuntu 24.04, 키 페어는 대상과 같은 것을 재사용한다. 보안 그룹은 인바운드 SSH를 **내 IP에서만**.
+
+사용자 데이터(기동 시 1회):
+
+```bash
+#!/bin/bash
+apt-get update -y && apt-get install -y docker.io git
+usermod -aG docker ubuntu
+sysctl -w net.ipv4.ip_local_port_range="10000 65535"
+echo "* soft nofile 1048576" >> /etc/security/limits.conf
+echo "* hard nofile 1048576" >> /etc/security/limits.conf
+docker pull grafana/k6:latest
+```
+
+**포트 범위와 fd 상한이 없으면 1만 커넥션에서 생성기가 대상보다 먼저 고갈된다**(기본 ephemeral 포트 약 28,000 · `nofile` 1,024). 적용 여부는 `ulimit -n`과 `sysctl net.ipv4.ip_local_port_range`로 회차 전에 확인한다.
+
+**B-3. 관측 터널** — 대상의 Prometheus는 `127.0.0.1` 바인딩이라(ADR 0007) 생성기에서도 터널이 필요하다. 대상 키를 생성기로 옮긴 뒤 백그라운드 터널을 연다. 대상 보안 그룹이 IP 제한이면 생성기 사설 IP의 22번을 열어야 한다.
+
+```bash
+chmod 600 ~/target.pem && ssh -f -N -L 9090:localhost:9090 -i ~/target.pem ubuntu@<대상사설IP>
+```
+
+**B-4. 실행**
+
+```bash
+docker run --rm --network host --ulimit nofile=1048576:1048576 \
+  -v $PWD/load-test:/scripts:ro \
+  -e K6_OUT=experimental-prometheus-rw \
+  -e K6_PROMETHEUS_RW_SERVER_URL=http://localhost:9090/api/v1/write \
+  grafana/k6:latest run \
+  -e BASE_URL=https://api.ticketrush.store -e QUEUE_PROFILE=flood \
+  -e QUEUE_PERF_ID=<시딩값> -e QUEUE_USER_ID_MIN=<시딩값> -e QUEUE_SEAT_ID_MIN=<시딩값> \
+  -e QUEUE_JWT_SECRET='...' \
+  /scripts/scenarios/waiting-room.js
+```
+
+`--network host` 없이는 터널의 `localhost:9090`에 닿지 못하고, 컨테이너 NAT이 커넥션 상한을 한 겹 더 만든다. **`QUEUE_ADMIT_RATE`는 기본값 20 그대로 둔다** — 회차 A에서 1로 낮춘 것은 폴링 대상의 승급을 막기 위한 조치였고, 이 회차는 승급 자체가 관측 대상이다.
+
+**B-5. 정리** — `cleanup_load.sql`(LTQ 코호트 블록 포함) 실행 → `queue:*` 리셋 → `QUEUE_ENABLED=false` 복구 → **생성기 terminate**. 마지막 항목이 빠지면 24/7 과금된다.
+
 ### 16.5 PromQL
 
 `load-test/bench/dump-timeseries.py`의 `QUERIES`에 이미 들어 있다(`queue-*`, `booking-server-rps`, `redis-mem-used`, `k6-queue-*`). 회차 종료 후 1회 덤프하고 결과 디렉터리에 커밋한다.
