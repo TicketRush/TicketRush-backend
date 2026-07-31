@@ -55,6 +55,29 @@ DELETE FROM inbox
  WHERE event_type = 'PaymentConfirmed'
    AND consumer_group IN ('booking-group', 'ticket-group');
 
+-- ---- #549 대기열 1만 VU 코호트 (LTQ-*) --------------------------------------
+-- seed_queue_flood.sql 이 만든 공연 1건 + 좌석 1만 석 + user 1만 행. 이 코호트도 title 'LTQ-%' 라
+-- 아래 @marker('LOADTEST-%') JOIN 에 안 걸리므로 따로 지운다.
+-- ticket 은 지우지 않는다 — flood 는 예매를 PENDING 으로 만들고 끝나며 결제를 타지 않아 티켓이
+-- 생기지 않는다. booking 은 앱이 번호를 발급해 마커가 없으므로 공연 JOIN 으로만 특정된다.
+DELETE b FROM booking b
+JOIN performance p ON p.performance_id = b.performance_id
+WHERE p.title LIKE 'LTQ-%';
+
+DELETE s FROM seat s
+JOIN performance p ON p.performance_id = s.performance_id
+WHERE p.title LIKE 'LTQ-%';
+
+DELETE sl FROM seat_layout sl
+JOIN performance p ON p.performance_id = sl.performance_id
+WHERE p.title LIKE 'LTQ-%';
+
+DELETE FROM performance WHERE title LIKE 'LTQ-%';
+
+-- user_account 를 만들지 않았으므로(seed_queue_flood.sql 참고) FK 선행 삭제가 필요 없다.
+-- email 이 UNIQUE 인덱스라 프리픽스 LIKE 가 range scan 을 탄다.
+DELETE FROM `user` WHERE email LIKE 'ltq-%@ticketrush.local';
+
 DELETE b FROM booking b
 JOIN performance p ON p.performance_id = b.performance_id
 WHERE p.title LIKE CONCAT(@marker, '-%');
