@@ -92,5 +92,8 @@ confirm_sold=0 / refund_release=0
 SSE_PROPAGATION_P95=4.14s (k6 요약) / 시계열 최대 7.55s
                     #528 의 5,161ms 와 같은 수준 — 릴레이 5초 폴링이 지배항이라는
                     #528 결론과 어긋나지 않는다
-SEAT_RSS=580-586 MiB / 640 MiB (약 91%) 로 안정. OOM·재시작 없음
+SEAT_RSS=**최대 602.1 MiB / 640 MiB (94.1%)**. OOM·재시작 없음, 여유 약 38 MiB.
+         주입 직후 구간은 580-586 MiB 였고 회차 후반에 602 MiB 까지 올랐다.
+         ⚠ 15초 샘플링 창(07:57-07:58)만 보면 이 상승을 놓친다 — Grafana 캡처에서 잡혔다.
+         시계열 원자료: timeseries-container-mem-usage-sse.json / -limit-pct-sse.json
 PROBE=21건 중 18 matched / 3 timeout
