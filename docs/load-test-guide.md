@@ -1934,7 +1934,7 @@ ticket-service:8090    4,692 → 6,033 ↑ → 4,713 → 6,248 ↑        (Prome
 
 | # | 항목 | 확인 |
 |---|---|---|
-| G0 | 대상 EC2 기동 · `IMAGE_TAG` 기록 | `docker compose ps` |
+| G0 | 대상 EC2 기동 · `IMAGE_TAG` 기록 | `docker ps --format '{{.Names}}\t{{.Image}}'`. **`.env`의 `IMAGE_TAG`를 믿지 말고 실제 실행 중인 태그를 읽는다** — 아래 참조 |
 | G1 | **nginx `worker_connections` 실측** | `nginx -T \| grep -E 'worker_connections\|worker_processes'`. 기본값 1024 × 2 ≈ 2,048이면 1만 VU에 못 미친다 → 16384 + `worker_rlimit_nofile` 상향. **미조치 회차는 무효** |
 | G2 | `QUEUE_ENABLED=true` | `deploy/.env` 확인 후 `docker compose restart gateway-service` |
 | G3 | 대기열 지표 노출 | `curl -s localhost:8090/actuator/prometheus \| grep ticketrush_queue` — 미발생 상태에서도 0으로 보여야 한다 |
@@ -1943,6 +1943,12 @@ ticket-service:8090    4,692 → 6,033 ↑ → 4,713 → 6,248 ↑        (Prome
 | G6 | 생성기 EC2 | [ADR 0010](adr/0010-in-aws-load-generator-for-ten-thousand-vu.md) — 같은 리전, spot, 회차 후 **종료** |
 | G7 | **대기열 키 리셋** | `redis-cli --scan --pattern 'queue:*' \| xargs -r redis-cli del` 후 0건 확인. **회차 A·B 양쪽 모두 필수** — 이전 회차의 `queue:opened-at:{pid}`(TTL 6h)가 남아 있으면 `threshold = 경과 × rate` 가 이미 수십만이라 전원이 첫 폴링에서 즉시 승급한다. "유입 제어가 되는가"를 보려던 회차가 그냥 스파이크가 된다 |
 
+> **⚠️ `deploy/.env`의 `IMAGE_TAG`가 실제 배포본과 다를 수 있다.** 2026-07-31 회차 B 준비 중 실측: `.env`는 `6b7301a0…`을 가리키는데 **그 태그는 ECR에도, CD 실행 기록(최근 20건)에도, 저장소 커밋에도 없었고**, 실제 컨테이너 8개는 전부 `21d2da2d…`로 떠 있었다. EC2 재시작은 기존 컨테이너를 되살릴 뿐 `.env`를 다시 읽지 않아 이 불일치가 드러나지 않는다.
+>
+> **그대로 `docker compose up -d`를 하면 없는 이미지를 당기다 그 서비스가 내려간다.** 회차 중 `--force-recreate`가 필요한 절차(`QUEUE_ENABLED` 반영 등)가 있으므로, **G0에서 실행 중 태그를 읽어 `.env`를 먼저 맞춘 뒤** `metadata.txt`에 기록한다.
+>
+> **설정 차이는 재배포가 아니라 `.env`로 메울 수 있는지 먼저 본다.** 같은 날 실측에서 배포본(`21d2da2d`)과 `develop` 사이의 **프로덕션 코드 차이는 `gateway-service/.../application.yml` 한 파일**뿐이었다(변경 파일 122개 중 나머지는 전부 증적·문서). 회차 A가 갱신한 `status-rps-capacity` 기본값 400 → 1,400이 그 내용이고, 이 값은 `${QUEUE_STATUS_RPS_CAPACITY}`로 열려 있다 — **`.env`에 `QUEUE_STATUS_RPS_CAPACITY=1400`을 넣으면 CD 약 20분 없이 같은 상태가 된다.** 재배포는 프로덕션 코드가 실제로 바뀌었을 때만 한다(#512 "배포는 묶어서 1회").
+>
 > **회차 A는 `QUEUE_ADMIT_RATE` 를 낮춘다(권장 `1`).** 승급 임계치는 `경과 × admit-rate` 라 기본값 20이면 PRELOAD 1만 기준 **8분 20초에 폴링 대상이 승급해 버린다.** 회차가 20분(4계단 × 5분)이라 반드시 걸린다. 승급 후 폴링은 입장 토큰 `SET` 이 붙어 Redis 명령이 2회(`GET`+`ZRANK`)에서 3회로 늘고 `noeviction` Redis 에 쓰기까지 생긴다 — **재려던 "대기 중인 사용자의 폴링" 이 아니라 다른 경로를 재게 되어 `R` 이 과소평가된다.** `1` 이면 1만에 도달하는 데 2.8시간이라 회차 내내 대기 상태가 유지된다. 시나리오의 `queue_status_admitted_leak` 이 이 사고를 감지한다(§16.6).
 >
 > **대기열 개시는 시나리오의 `setup()` 이 한다** — `POST /api/v1/queue/{pid}/open`(ADMIN). 개시 시각을 진입의 부작용으로 두면 오픈 전에 미리 진입해 둔 사람이 임계치를 부풀려 대기열을 무력화할 수 있어서, 운영자만 심도록 되어 있다. **G7 리셋이 이 호출보다 먼저**여야 새 기준점이 잡힌다.
@@ -2021,7 +2027,9 @@ docker run --rm --network host --ulimit nofile=1048576:1048576 \
   /scripts/scenarios/waiting-room.js
 ```
 
-`--network host` 없이는 터널의 `localhost:9090`에 닿지 못하고, 컨테이너 NAT이 커넥션 상한을 한 겹 더 만든다. **`QUEUE_ADMIT_RATE`는 기본값 20 그대로 둔다** — 회차 A에서 1로 낮춘 것은 폴링 대상의 승급을 막기 위한 조치였고, 이 회차는 승급 자체가 관측 대상이다.
+`--network host` 없이는 터널의 `localhost:9090`에 닿지 못하고, 컨테이너 NAT이 커넥션 상한을 한 겹 더 만든다.
+
+**⚠️ `deploy/.env`에서 `QUEUE_ADMIT_RATE=1`을 지우고 20으로 되돌린다.** 회차 A가 남긴 값이고(폴링 대상의 승급을 막는 조치였다), 이 회차는 **승급 자체가 관측 대상**이다. 1로 두면 1만 명이 다 들어가는 데 2.8시간이 걸려 회차가 성립하지 않는다 — `.env`에 남아 있는지 눈으로 확인한다. 2026-07-31 회차 B 준비 시점에 실제로 남아 있었다.
 
 **B-5. 정리** — `cleanup_load.sql`(LTQ 코호트 블록 포함) 실행 → `queue:*` 리셋 → `QUEUE_ENABLED=false` 복구 → **생성기 terminate**. 마지막 항목이 빠지면 24/7 과금된다.
 
