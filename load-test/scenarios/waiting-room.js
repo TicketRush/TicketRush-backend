@@ -110,6 +110,12 @@ const bookingForbidden = new Rate('queue_booking_forbidden');
 const statusUnavailable = new Rate('queue_status_unavailable');
 // 안전 상한에 걸려 끝난 VU. > 0 이면 입장 허용량이 유입을 소화하지 못한 것이다.
 const pollsExhausted = new Counter('queue_polls_exhausted');
+// status 회차 전용 무효 판정. 폴링 대상이 회차 도중 승급하면 그 이후 폴링은 입장 토큰 SET 이 붙어
+// Redis 명령이 2회(GET+ZRANK) 에서 3회로 늘고 noeviction Redis 에 쓰기까지 생긴다. 재려던 것은
+// '대기 중인 사용자의 폴링' 인데 다른 경로를 재게 되므로 R 이 과소평가된다.
+//   threshold = 경과 x admit-rate 라 PRELOAD 1만 - admit-rate 20 이면 8분 20초에 승급한다.
+//   회차가 20분(4계단 x 5분)이므로 반드시 걸린다 → status 회차는 QUEUE_ADMIT_RATE 를 낮춘다(런북 §16.4).
+const statusAdmittedLeak = new Rate('queue_status_admitted_leak');
 
 function signAccessToken(userId, role) {
   const header = encoding.b64encode(JSON.stringify({ alg: 'HS256', typ: 'JWT' }), 'rawurl');
@@ -210,7 +216,9 @@ export function setup() {
 
 /** status 회차 — 상태 확인 경로만 두드려 R 을 잰다. 사용자 행동이 아니라 경로 용량 측정이라 sleep 이 없다. */
 export function pollOnly(data) {
-  pollStatus(data.waitingToken);
+  const res = pollStatus(data.waitingToken);
+  // > 0 이면 폴링 대상이 승급해 측정 경로가 바뀌었다 = 이 회차는 R 을 재지 못했다.
+  statusAdmittedLeak.add(Boolean(jsonField(res, 'result.entry_token')));
 }
 
 /** flood 회차 — 진입 → 서버 지시 폴링 → 입장 → 예매의 전 여정. */
