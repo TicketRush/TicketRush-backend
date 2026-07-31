@@ -432,6 +432,9 @@ services:
     environment:
       SERVER_PORT: 8080
     depends_on:
+      # 대기열(#472)이 게이트웨이에서 Redis를 직접 쓴다. 없이 뜨면 오픈 시각 첫 폴링이 전부 503이다.
+      redis:
+        condition: service_healthy
       auth-service:
         condition: service_started
       user-service:
