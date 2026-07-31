@@ -1,0 +1,99 @@
+SERIES_ID=260731-540-sse-backpressure
+ISSUE=#540 (#532 귀속)
+RELATED=#512 묶음 C / #528(이 회차의 before) / #539(같은 배포의 읽기 축 측정)
+DATE=2026-07-31 (KST)
+TARGET_HOST=EC2 54.116.243.250 (탄력 IP) — https://api.ticketrush.store
+TOPOLOGY=k6 local (docker compose, ADR 0004) --SSH tunnel(9090)--> EC2 deploy stack
+INSTANCE_TYPE=m7i-flex.large / 2 vCPU
+IMAGE_TAG=e0b42dc633e841af1fb4a3ba47dd27b1c2fce7bf (묶음 C 배포본, PR #538)
+APP_CODE_CHANGE=0줄 (이 회차는 배포가 아니라 실행이다 — #512 규약)
+RUNBOOK=docs/load-test-guide.md §14.6 회차 4
+SCENARIO=load-test/scenarios/seat-sse-fanout.js (k6-sse 이미지)
+SEED=load-test/seed/seed_seat_counts.sql
+K6_IMAGE=ticketrush/k6-sse:local
+PROM_SCRAPE_INTERVAL=15s
+
+# ── 이 회차의 before 는 #528 이다 ──────────────────────────────────────────
+# #532 의 완료조건이 절대 기준(거부 0건)이라 before 를 새로 뜰 필요가 없다
+# (#512 트리아지 판정). #528 이 같은 조건에서 649건 유실을 관측한 것이 비교 대상이다.
+BEFORE_ROUND=260730-528-sse-source-tag (#528)
+BEFORE_REJECTED=649건 유실 (구독자 600 조건)
+
+# ── 코호트 ──────────────────────────────────────────────────────────────────
+# LTC-SSE 는 refresh 로 되돌릴 수 없다 — 소모가 상태 분포가 아니라 좌석 점유 자체다(런북 §14.3).
+# @mode='seed' 로 재시딩했고 performance_id 가 바뀌었다.
+SSE_COHORT=LTC-SSE / performance_id=21 / 12,000석 전부 AVAILABLE
+SEED_VERIFY=expect_total=12000 / expect_available=12000 / expect_sold=0 / expect_hold=0 일치
+
+# ── 회차 전 처치 ────────────────────────────────────────────────────────────
+SEAT_SERVICE_RESTART=예 — after 회차 직후 RSS 527.4/640MiB(82%)라 재시작.
+                     SSE 600 구독자는 메모리를 크게 쓰므로(#403·#509 선례) 필수로 봤다
+REDIS_LOCK_PURGE=0건(이미 비어 있었다)
+
+# ── 회차 ────────────────────────────────────────────────────────────────────
+S540_START=2026-07-31T07:53:52Z
+SSE_SUBSCRIBER_STEPS=600 (단일 계단, #528 과 같은 구독자 수)
+SSE_STEP_DURATION=10m
+SSE_MUTATE_RATE=5
+S540_INJECT=2026-07-31T07:56:37Z  (@mode='expire' @expire_count=2000)
+S540_END=2026-07-31T08:04:49Z
+RESULT=완주 10m30s / 실패율 0.00%(0/3,173) / VU peak 607 / mutate 3,083 성공(97.87%)
+
+# ── 정상 상태 (주입 전) — #532 완료조건 3 ──────────────────────────────────
+IDLE_QUEUE_DEPTH=0
+IDLE_ACTIVE_THREADS=0
+IDLE_POOL_SIZE=4 (초기값 그대로)
+IDLE_REJECTED=0 / IDLE_CALLER_RUNS=0
+IDLE_PUBLISH_RATE=5.04/s
+# 고치려다 상시 경로를 느리게 만들지 않았다.
+
+# ── 주입 후 (핵심) ──────────────────────────────────────────────────────────
+#  utc       큐    active pool  거부  역압   sched발행/s  RSS(MB)
+#  07:57:24  986    16    16     0    15     26.28       582.53
+#  07:57:40  973    16    16     0    26     30.55       585.56
+#  07:57:55  913    16    16     0    37     16.11       580.38
+#  07:58:10  656    16    16     0    37     10.00       579.81
+#  07:58:25  402    16    16     0    37      4.44       580.43
+#  07:58:41  122    16    16     0    37      0.00       581.22
+#  07:58:56    0     0    16     0    37      0.00       580.89   <- 해소
+#
+QUEUE_PEAK=986 / 1000 (98.6%)
+POOL_GROWTH=4 -> 16 — 큐가 찬 **뒤에** 늘었다(ThreadPoolTaskExecutor 의 정상 순서)
+REJECTED_TOTAL=**0** (카운터 0 · 로그 0건)
+CALLER_RUNS_TOTAL=**37** (카운터 37 · 로그 37건, 교차검증 일치)
+QUEUE_DRAIN_TIME=약 2분 20초 (주입 07:56:37 -> 큐 0 도달 07:58:56)
+SCHEDULER_FALLBACK_PEAK=33.86/s (#528 은 44.4/s)
+
+# ── 역압 로그 실측 ──────────────────────────────────────────────────────────
+LOG_SAMPLE=2026-07-31T07:57:05.217Z WARN [scheduling-1] SeatStatusSseConfig :
+           좌석 상태 SSE 전송 큐가 가득 차 호출 스레드가 팬아웃을 대신 실행합니다
+           (이벤트는 유실되지 않습니다). queue=1000/1000 activeThreads=16 poolSize=16/16
+LOG_THREAD=scheduling-1 — **스케줄러 tick 스레드가 직접 팬아웃을 떠안았다는 증거**
+LOG_STACKTRACE=0건 (#403 로그 폭주 교훈대로 스택 트레이스를 남기지 않는다)
+LOG_REJECTED=0건 ("전송 작업이 거부" 문구)
+
+# ── ShedLock — #532 완료조건 4 ──────────────────────────────────────────────
+# 스케줄러 tick 로그:
+#   07:54:48 / 07:55:48 / 07:56:48 <- 주입분 처리 / (07:57:48 없음) / 07:58:48 / 07:59:48
+# @Scheduled(fixedDelay = 60000) 이라 [실행 종료 + 60초]가 다음 tick 이다.
+# 07:56:48 -> 07:58:48 = 120초이므로 **그 tick 의 소요가 약 60초**다(평소엔 사실상 0초).
+TICK_DURATION=약 60초 (평소 약 0초)
+SHEDLOCK_VERDICT=**lockAtMostFor = 2m 이내. 초과하지 않았다.** 다만 여유가 절반뿐이고,
+                 tick 이 한 번 건너뛰어졌다(07:57:48). 이것이 (C) 역압 채택의 대가다.
+SHEDLOCK_WARNINGS=0건
+
+# ── 발행 경로별 최대 rate (#520 태그) ───────────────────────────────────────
+scheduler_fallback=33.86/s   <- 주입분을 밀어 넣은 경로
+booking_hold=5.53/s
+expire_single=5.40/s
+confirm_sold=0 / refund_release=0
+
+# ── 부수 관측 ───────────────────────────────────────────────────────────────
+SSE_PROPAGATION_P95=4.14s (k6 요약) / 시계열 최대 7.55s
+                    #528 의 5,161ms 와 같은 수준 — 릴레이 5초 폴링이 지배항이라는
+                    #528 결론과 어긋나지 않는다
+SEAT_RSS=**최대 602.1 MiB / 640 MiB (94.1%)**. OOM·재시작 없음, 여유 약 38 MiB.
+         주입 직후 구간은 580-586 MiB 였고 회차 후반에 602 MiB 까지 올랐다.
+         ⚠ 15초 샘플링 창(07:57-07:58)만 보면 이 상승을 놓친다 — Grafana 캡처에서 잡혔다.
+         시계열 원자료: timeseries-container-mem-usage-sse.json / -limit-pct-sse.json
+PROBE=21건 중 18 matched / 3 timeout
