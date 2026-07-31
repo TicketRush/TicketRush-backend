@@ -1934,7 +1934,7 @@ ticket-service:8090    4,692 → 6,033 ↑ → 4,713 → 6,248 ↑        (Prome
 
 | # | 항목 | 확인 |
 |---|---|---|
-| G0 | 대상 EC2 기동 · `IMAGE_TAG` 기록 | `docker compose ps` |
+| G0 | 대상 EC2 기동 · `IMAGE_TAG` 기록 | `docker ps --format '{{.Names}}\t{{.Image}}'`. **`.env`의 `IMAGE_TAG`를 믿지 말고 실제 실행 중인 태그를 읽는다** — 아래 참조 |
 | G1 | **nginx `worker_connections` 실측** | `nginx -T \| grep -E 'worker_connections\|worker_processes'`. 기본값 1024 × 2 ≈ 2,048이면 1만 VU에 못 미친다 → 16384 + `worker_rlimit_nofile` 상향. **미조치 회차는 무효** |
 | G2 | `QUEUE_ENABLED=true` | `deploy/.env` 확인 후 `docker compose restart gateway-service` |
 | G3 | 대기열 지표 노출 | `curl -s localhost:8090/actuator/prometheus \| grep ticketrush_queue` — 미발생 상태에서도 0으로 보여야 한다 |
@@ -1943,6 +1943,12 @@ ticket-service:8090    4,692 → 6,033 ↑ → 4,713 → 6,248 ↑        (Prome
 | G6 | 생성기 EC2 | [ADR 0010](adr/0010-in-aws-load-generator-for-ten-thousand-vu.md) — 같은 리전, spot, 회차 후 **종료** |
 | G7 | **대기열 키 리셋** | `redis-cli --scan --pattern 'queue:*' \| xargs -r redis-cli del` 후 0건 확인. **회차 A·B 양쪽 모두 필수** — 이전 회차의 `queue:opened-at:{pid}`(TTL 6h)가 남아 있으면 `threshold = 경과 × rate` 가 이미 수십만이라 전원이 첫 폴링에서 즉시 승급한다. "유입 제어가 되는가"를 보려던 회차가 그냥 스파이크가 된다 |
 
+> **⚠️ `deploy/.env`의 `IMAGE_TAG`가 실제 배포본과 다를 수 있다.** 2026-07-31 회차 B 준비 중 실측: `.env`는 `6b7301a0…`을 가리키는데 **그 태그는 ECR에도, CD 실행 기록(최근 20건)에도, 저장소 커밋에도 없었고**, 실제 컨테이너 8개는 전부 `21d2da2d…`로 떠 있었다. EC2 재시작은 기존 컨테이너를 되살릴 뿐 `.env`를 다시 읽지 않아 이 불일치가 드러나지 않는다.
+>
+> **그대로 `docker compose up -d`를 하면 없는 이미지를 당기다 그 서비스가 내려간다.** 회차 중 `--force-recreate`가 필요한 절차(`QUEUE_ENABLED` 반영 등)가 있으므로, **G0에서 실행 중 태그를 읽어 `.env`를 먼저 맞춘 뒤** `metadata.txt`에 기록한다.
+>
+> **설정 차이는 재배포가 아니라 `.env`로 메울 수 있는지 먼저 본다.** 같은 날 실측에서 배포본(`21d2da2d`)과 `develop` 사이의 **프로덕션 코드 차이는 `gateway-service/.../application.yml` 한 파일**뿐이었다(변경 파일 122개 중 나머지는 전부 증적·문서). 회차 A가 갱신한 `status-rps-capacity` 기본값 400 → 1,400이 그 내용이고, 이 값은 `${QUEUE_STATUS_RPS_CAPACITY}`로 열려 있다 — **`.env`에 `QUEUE_STATUS_RPS_CAPACITY=1400`을 넣으면 CD 약 20분 없이 같은 상태가 된다.** 재배포는 프로덕션 코드가 실제로 바뀌었을 때만 한다(#512 "배포는 묶어서 1회").
+>
 > **회차 A는 `QUEUE_ADMIT_RATE` 를 낮춘다(권장 `1`).** 승급 임계치는 `경과 × admit-rate` 라 기본값 20이면 PRELOAD 1만 기준 **8분 20초에 폴링 대상이 승급해 버린다.** 회차가 20분(4계단 × 5분)이라 반드시 걸린다. 승급 후 폴링은 입장 토큰 `SET` 이 붙어 Redis 명령이 2회(`GET`+`ZRANK`)에서 3회로 늘고 `noeviction` Redis 에 쓰기까지 생긴다 — **재려던 "대기 중인 사용자의 폴링" 이 아니라 다른 경로를 재게 되어 `R` 이 과소평가된다.** `1` 이면 1만에 도달하는 데 2.8시간이라 회차 내내 대기 상태가 유지된다. 시나리오의 `queue_status_admitted_leak` 이 이 사고를 감지한다(§16.6).
 >
 > **대기열 개시는 시나리오의 `setup()` 이 한다** — `POST /api/v1/queue/{pid}/open`(ADMIN). 개시 시각을 진입의 부작용으로 두면 오픈 전에 미리 진입해 둔 사람이 임계치를 부풀려 대기열을 무력화할 수 있어서, 운영자만 심도록 되어 있다. **G7 리셋이 이 호출보다 먼저**여야 새 기준점이 잡힌다.
@@ -1970,6 +1976,62 @@ docker run --rm -v $PWD/load-test:/scripts:ro \
 **회차 B (1만 VU 유입 제어)** — A에서 확정한 `R`을 반영한 배포본으로 `QUEUE_PROFILE=flood`.
 
 완료 조건의 핵심 축은 하나다: **`POST /api/v1/booking`의 서버 RPS가 `queue.admit-rate-per-second`(기본 20) 부근에서 평평할 것.** 유입 1만 VU와 무관하게 평평해야 ADR 0009 "결과"의 첫 줄이 수치로 확인된다. 부수 확인은 `ticketrush_queue_waiting` 단조 감소, `queue_wait_to_admit_seconds` p95, 오버셀 0행(#344 검증 SQL).
+
+> **회차 A의 결과가 회차 B의 전제를 바꿨다(#549).** `T`가 25초 → 8초(대기 인원이 줄면 하한 3초)로 짧아지면서 폴링 안전 상한 `QUEUE_MAX_POLLS`가 60에서는 순번 6,900부터 걸려 **약 31%가 `queue_polls_exhausted`로 집계된다** — 클라이언트가 먼저 포기한 것을 "입장 허용량이 유입을 소화하지 못했다"로 오독하게 된다. 기본값을 300으로 올렸다. `R`이나 `min-poll-seconds`를 다시 바꾸면 이 값도 다시 계산한다.
+
+**B-1. 시딩** — 대기열은 Redis만 쓰지만 **여정의 마지막인 예매는 DB를 탄다.** `BookingValidateReferencesUseCase`가 `user` 행과 `(seat_id, performance_id)` 쌍을 요구하므로 코호트 규모만큼 둘 다 있어야 한다. `seed_load.sql`은 계정 1개 + 공연당 600석이라 못 쓴다.
+
+```bash
+# EC2 에서. 가드 변수가 없으면 본문이 돌지 않는다(seed_load.sql 과 같은 규율).
+docker exec -i ticketrush-mysql mysql -uroot -p"$PW" ticket_rush \
+  --init-command="SET @i_confirm_loadtest_db=1" < load-test/seed/seed_queue_flood.sql
+```
+
+끝에 출력되는 **`-e 인자` 4줄을 그대로 k6 실행에 넣는다**(`QUEUE_PERF_ID` · `QUEUE_USER_ID_MIN` · `QUEUE_SEAT_ID_MIN` · `QUEUE_FLOOD_VUS`). 오프셋이 `MIN(id) - 1`인 것은 시나리오가 `id = 오프셋 + exec.vu.idInTest`로 매기고 `idInTest`가 1부터이기 때문이다.
+
+**연속성이 `GAP`이면 그대로 쓰지 않는다.** 구멍에 걸린 VU의 예매가 404로 튕겨 예매 경로 RPS가 과소 집계된다 — `cleanup_load.sql` 후 재시딩한다. `prod`는 `seat_id`가 이미 13만대까지 소진돼 있어 좌석과 계정의 번호대가 겹치지 않는다. **오프셋 없이 돌리면 회차 전체가 404다.**
+
+**B-2. 생성기 EC2** — [ADR 0010](adr/0010-in-aws-load-generator-for-ten-thousand-vu.md). 대상과 같은 리전·VPC, `m7i.2xlarge`(8 vCPU / 32 GiB) spot, Ubuntu 24.04, 키 페어는 대상과 같은 것을 재사용한다. 보안 그룹은 인바운드 SSH를 **내 IP에서만**.
+
+사용자 데이터(기동 시 1회):
+
+```bash
+#!/bin/bash
+apt-get update -y && apt-get install -y docker.io git
+usermod -aG docker ubuntu
+sysctl -w net.ipv4.ip_local_port_range="10000 65535"
+echo "* soft nofile 1048576" >> /etc/security/limits.conf
+echo "* hard nofile 1048576" >> /etc/security/limits.conf
+docker pull grafana/k6:latest
+```
+
+**포트 범위와 fd 상한이 없으면 1만 커넥션에서 생성기가 대상보다 먼저 고갈된다**(기본 ephemeral 포트 약 28,000 · `nofile` 1,024). 적용 여부는 `ulimit -n`과 `sysctl net.ipv4.ip_local_port_range`로 회차 전에 확인한다.
+
+**B-3. 관측 터널** — 대상의 Prometheus는 `127.0.0.1` 바인딩이라(ADR 0007) 생성기에서도 터널이 필요하다. 대상 키를 생성기로 옮긴 뒤 백그라운드 터널을 연다. 대상 보안 그룹이 IP 제한이면 생성기 사설 IP의 22번을 열어야 한다.
+
+```bash
+chmod 600 ~/target.pem && ssh -f -N -L 9090:localhost:9090 -i ~/target.pem ubuntu@<대상사설IP>
+```
+
+**B-4. 실행**
+
+```bash
+docker run --rm --network host --ulimit nofile=1048576:1048576 \
+  -v $PWD/load-test:/scripts:ro \
+  -e K6_OUT=experimental-prometheus-rw \
+  -e K6_PROMETHEUS_RW_SERVER_URL=http://localhost:9090/api/v1/write \
+  grafana/k6:latest run \
+  -e BASE_URL=https://api.ticketrush.store -e QUEUE_PROFILE=flood \
+  -e QUEUE_PERF_ID=<시딩값> -e QUEUE_USER_ID_MIN=<시딩값> -e QUEUE_SEAT_ID_MIN=<시딩값> \
+  -e QUEUE_JWT_SECRET='...' \
+  /scripts/scenarios/waiting-room.js
+```
+
+`--network host` 없이는 터널의 `localhost:9090`에 닿지 못하고, 컨테이너 NAT이 커넥션 상한을 한 겹 더 만든다.
+
+**⚠️ `deploy/.env`에서 `QUEUE_ADMIT_RATE=1`을 지우고 20으로 되돌린다.** 회차 A가 남긴 값이고(폴링 대상의 승급을 막는 조치였다), 이 회차는 **승급 자체가 관측 대상**이다. 1로 두면 1만 명이 다 들어가는 데 2.8시간이 걸려 회차가 성립하지 않는다 — `.env`에 남아 있는지 눈으로 확인한다. 2026-07-31 회차 B 준비 시점에 실제로 남아 있었다.
+
+**B-5. 정리** — `cleanup_load.sql`(LTQ 코호트 블록 포함) 실행 → `queue:*` 리셋 → `QUEUE_ENABLED=false` 복구 → **생성기 terminate**. 마지막 항목이 빠지면 24/7 과금된다.
 
 ### 16.5 PromQL
 
