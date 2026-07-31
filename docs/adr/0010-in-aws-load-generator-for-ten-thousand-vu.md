@@ -4,7 +4,21 @@
 
 ## 상태
 
-제안됨
+**기각됨** (2026-08-01, [#549](https://github.com/TicketRush/TicketRush-backend/issues/549) 실측)
+
+> **이 ADR이 든 벽 세 가지가 전부 실측으로 반증됐다.** 1만 VU 회차를 **로컬 k6로 마쳤고**, 생성기 EC2를 만들지 않았다.
+>
+> | 이 ADR의 주장 | 실측 (`load-tests/k6/results/260801-549-queue-flood/`) |
+> |---|---|
+> | 가정용 업로드 대역이 상한이 된다 | 1만 VU 커넥션 프로브가 쓴 양 **0.6 Mbps**. 본 회차도 41 kB/s |
+> | Docker NAT · 포트 고갈이 앱보다 먼저 온다 | ephemeral 포트 **28,231**개 · 컨테이너 `nofile` **1,048,576** |
+> | 가정 공유기 세션 테이블이 "통상 수천" | 서버측 established **정확히 10,000**을 3분 이상 유지, `probe_connect_failed` **0.00%**(0/99,944) |
+>
+> **대역폭 가정이 특히 크게 빗나갔다.** 폴링 요청·응답이 작아서(203 B 이하) 1만 명이 붙어도 1 Mbps를 넘지 않는다. 이 ADR은 응답이 221 KB였던 좌석맵 회차([#348](https://github.com/TicketRush/TicketRush-backend/issues/348))의 경험을 페이로드 크기가 세 자릿수 배 다른 대기열에 그대로 옮겨 적었다.
+>
+> **판단이 틀린 방식이 기록할 가치가 있다** — "회선이 상한일 것"은 그럴듯했지만 **재보지 않은 추정**이었고, 재는 데 6분 30초와 비용 0이 들었다. [ADR 0004](0004-load-test-execution-topology.md)가 계속 유효하다.
+>
+> 아래 본문은 당시 판단으로 남겨 둔다. 실제로 생성기가 벽이 되는 회차를 만나면 이 결정을 되살릴 수 있고, 그때는 위 실측이 출발점이 된다. **인스턴스 유형은 `m7i.2xlarge`를 유지한다**(1만 VU의 병목은 vCPU가 아니라 VU당 메모리).
 
 [ADR 0004](0004-load-test-execution-topology.md)의 측정 토폴로지를 이 회차에 한해 대체한다. [ADR 0006](0006-eight-gib-container-memory-limits.md)의 인스턴스·메모리 제약과 [ADR 0009](0009-virtual-waiting-room-with-server-directed-polling.md)의 대기열 설계를 전제로 한다.
 

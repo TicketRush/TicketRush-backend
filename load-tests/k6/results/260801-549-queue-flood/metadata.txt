@@ -1,0 +1,187 @@
+SERIES_ID=260801-549-queue-flood
+ISSUE=#549 (귀속: #472 완료 조건)
+DATE=2026-08-01 (KST) / 2026-07-31 (UTC)
+
+# ── 토폴로지 ────────────────────────────────────────────────────────────────
+TARGET_HOST=EC2 54.116.243.250 — https://api.ticketrush.store
+TOPOLOGY=k6 local (docker, ADR 0004) --SSH tunnel(9090)--> EC2 deploy stack (ADR 0007)
+# ⚠ ADR 0010 은 이 회차를 위해 "생성기를 AWS 임시 EC2 로 옮긴다" 고 결정했으나,
+#   회차 전 프로브에서 그 근거 세 가지가 전부 무너졌다(아래 GENERATOR_DECISION). 로컬로 돌린다.
+INSTANCE_TYPE=m7i-flex.large / INSTANCE_VCPU=2 / life-cycle=on-demand
+GENERATOR=로컬 Docker — 호스트 31.6 GiB / Docker 할당 24 GiB(.wslconfig 신설) / 12 vCPU / swap 4 GiB
+RUNBOOK=docs/load-test-guide.md §16.4 B-1~B-5
+SCENARIO=load-test/scenarios/waiting-room.js (QUEUE_PROFILE=flood)
+IMAGE_TAG=21d2da2d6fc2e3bfdaf27f2b1440beccaad337bf
+PROM_SCRAPE_INTERVAL=15s
+
+# ── 생성기 결정: ADR 0010 을 따르지 않는다 (실측 근거) ──────────────────────
+GENERATOR_DECISION=로컬 k6. ADR 0010 의 "AWS 임시 EC2" 를 기각한다.
+#   ADR 0010 은 회차 A 이전에 쓰였고 벽 3개를 들었는데, 회차 전 프로브가 전부 반증했다.
+#   ① 가정용 업로드 대역 — 1만 VU 프로브가 실제로 쓴 양은 30 MB / 6.5분 = 74 kB/s (0.6 Mbps).
+#      회차 A 는 같은 회선으로 1,400 RPS · 885,693 요청을 이미 통과시켰다. 폴링 응답이 203 B
+#      이하라 좌석맵 회차(#348, 221 KB)의 경험을 그대로 옮겨 적은 것이 과대추정이었다.
+#   ② Docker NAT · 포트 고갈 — ephemeral 포트 32768-60999(28,231개), 컨테이너 nofile 1,048,576.
+#   ③ 가정 공유기 세션 테이블("통상 수천") — 서버측 established :443 이 정확히 10,000 으로
+#      3분 이상 유지됐고 probe_connect_failed 0.00%(0/99,944).
+#   회차 후 ADR 0010 의 상태를 이 실측으로 정정한다.
+PROBE=1만 VU 커넥션 프로브(scratchpad/connection-probe.js, 6분 30초).
+#   probe_connect_failed 0.00% / http_req_failed 0.00% / connecting p95 7.53ms / vus_max 10,000.
+
+# ── 사전 게이트 (런북 §16.4) ────────────────────────────────────────────────
+G0_EC2=기동. ⚠ .env 의 IMAGE_TAG 가 6b7301a0(ECR·CD기록·저장소 어디에도 없는 값)을 가리켜
+#      실행 중 태그 21d2da2d 로 교정했다. 교정 없이 --force-recreate 했으면 게이트웨이가 내려갔다.
+G1_NGINX=worker_connections 16384 / worker_rlimit_nofile 65535 (회차 A 조치 유지, #522)
+G2_QUEUE_ENABLED=true (deploy/.env → gateway --force-recreate, 컨테이너 env 로 주입 확인)
+G2_QUEUE_ADMIT_RATE=20
+#   회차 A 는 폴링 대상의 승급을 막으려 1 로 낮췄지만, 이 회차는 승급 자체가 관측 대상이다.
+#   회차 A 잔여값 1 이 .env 에 남아 있어 20 으로 되돌렸다.
+G2_QUEUE_STATUS_RPS_CAPACITY=1400
+#   배포본(21d2da2d)의 기본값은 400 이다. 배포본과 develop 의 프로덕션 코드 차이가
+#   application.yml 한 파일뿐이고 이 값이 환경변수로 열려 있어, CD(약 20분) 대신 .env 로 메웠다.
+G3_METRICS=ticketrush_queue_* 8개 시계열 전부 0 으로 노출 확인(사전 등록 패턴)
+G4_REDIS=used_memory 1.46M / maxmemory 64.00M / policy noeviction
+G5_PROM_TARGETS=11개 전부 up
+G6_GENERATOR=로컬 k6 (위 GENERATOR_DECISION)
+G7_QUEUE_RESET=queue:* 0 개 확인 후 시작
+
+# ── 시딩 ────────────────────────────────────────────────────────────────────
+SEED=load-test/seed/seed_queue_flood.sql (#549 에서 신설)
+#   대기열 자체는 Redis 만 쓰지만 여정의 마지막인 예매는 DB 를 탄다 —
+#   BookingValidateReferencesUseCase 가 existsUserById 로 실제 user 행을,
+#   existsSeatByIdAndPerformanceId 로 (좌석, 공연) 쌍을 요구한다.
+#   시딩 전 prod: user 2행(id 4-5) / seat 66,520행(id 1-134,436) → 그대로면 1만 건이 전부 404.
+SEED_RESULT=user 10,000행(id 81921-91920, 연속 OK) / seat 10,000석(id 216352-226351, 연속 OK)
+QUEUE_PERF_ID=27 / QUEUE_USER_ID_MIN=81920 / QUEUE_SEAT_ID_MIN=216351 / QUEUE_FLOOD_VUS=10000
+#   user_account 는 만들지 않았다. existsUserById 는 user 행만 보고 k6 는 JWT 를 직접 서명해
+#   로그인을 하지 않는다 — 계정 1만 개를 시딩하면서 로그인 가능한 계정은 0개다.
+
+# ── 회차 전 처치 ───────────────────────────────────────────────────────────
+SMOKE=VU 50 / 램프 20s / 유지 1m. queue_admitted 100%(50/50), queue_booking_ok 100%(50/50),
+#     booking_forbidden 0%, status_unavailable 0%, p95 97.31ms.
+#     http_reqs 151 = open 1 + (enqueue+status+booking) x 50 인데 이터레이션은 213 회다 →
+#     1회 여정 가드(#549)가 실제 시나리오에서 동작함을 이 숫자가 고정한다. 가드가 없었다면
+#     213 회분의 예매가 나갔다. 수치 자체는 폐기한다(§6.1 규칙 4).
+SMOKE_CLEANUP=예매 50건 삭제 + 좌석 50석 AVAILABLE 복구 + queue:* 리셋 → 좌석 10,000 전부 AVAILABLE 확인
+
+# ── 부하 모델 ───────────────────────────────────────────────────────────────
+PROFILE=flood / executor=ramping-vus
+STAGES=0→10,000 (2m 램프) → 10,000 유지 15m → 0 (30s)
+QUEUE_MAX_POLLS=300
+#   직전 기본값 60 은 T=25초(R=400 가정) 시절 값이다. 회차 A 가 R=1,400 을 실측해 T 가 8초가 됐고
+#   대기 인원이 줄면 min-poll-seconds 3 까지 내려간다 — 순번 9,999 는 106회가 필요하고 6,900 부터
+#   60 을 넘겨, 그대로면 약 31% 가 queue_polls_exhausted 로 잡힌다. 클라이언트가 먼저 포기한 것을
+#   '입장 허용량이 유입을 못 따라갔다' 로 오독하게 된다. 300 은 최악의 약 3배 여유다.
+EXPECTED_ADMIT_COMPLETE=약 500초(8분 20초) — threshold = 경과 x 20 이 1만에 닿는 시점
+
+# ── 판정 기준 (회차 전에 정한다 — §6.1) ────────────────────────────────────
+PRIMARY_CRITERION=POST /api/v1/booking 의 서버 RPS 가 유입 1만 VU 와 무관하게
+#   queue.admit-rate-per-second(20) 부근에서 평평할 것. ADR 0009 "결과" 첫 줄을 수치로 확인하는
+#   유일한 축이다. 판정: 승급 진행 구간(램프 종료 ~ 8분 20초)의 booking RPS 1분 이동평균이
+#   20 ± 50% (10-30 RPS) 안에 머물면 통과. 이 밴드를 회차 전에 못 박는다.
+#   ⚠ 밴드를 넓게 잡은 이유: 승급은 시각의 함수라 폴링 시점 분포에 따라 초 단위로 흔들린다.
+#     '평평하다' 의 반대는 '유입 규모를 따라간다'(수백~수천 RPS)이지 '20.0 이 아니다' 가 아니다.
+SECONDARY=ticketrush_queue_waiting 단조 감소 / queue_wait_to_admit_seconds p95 기록
+#   / ticketrush_queue_poll_interval_seconds 가 8초에서 시작해 하한 3초로 수렴하는지
+#   / k6_http_req_connecting_p95 · tls_handshaking_p95 — 회차 A 가 재현 못 한 1만 유휴 커넥션 조건
+INVALID_IF=queue_status_unavailable > 0 (fail-closed 발동 = Redis 장애를 잰 것)
+INVALID_IF=ticketrush_queue_entry_token{result="unavailable"} > 0 (같은 이유)
+INVALID_IF=redis_memory_used_bytes >= 48MB (noeviction 상한 근접 — 좌석 락 SET 거절 위험)
+INVALID_IF=queue_polls_exhausted > 0 (입장 허용량이 유입을 소화하지 못함)
+INVALID_IF=queue_booking_forbidden > 0 (폴링→예매 지연이 입장 토큰 TTL 5분을 넘김)
+INVALID_IF=생성기 swap 사용량 증가 (부하 생성기가 스와핑하면 지연이 왜곡돼 대상이 아니라
+#          생성기를 잰 것이 된다. .wslconfig 에서 swap 을 4GB 로 낮춰 둔 이유가 이것이다)
+SANITY=queue_admitted 가 정확히 1.000 이면 지표가 아니라 스크립트를 의심한다(#544 선례)
+POST_CHECK=오버셀 0행 (#344 검증 SQL)
+#   ⚠ 이 기준은 회차 전에 확정했다. 결과를 보고 고치지 않는다.
+
+# ── 실측 ────────────────────────────────────────────────────────────────────
+# 회차를 두 번 돌았다. B-1 은 회차 전에 정한 무효 기준에 걸려 폐기하고, 그 원인을 고쳐 B-2 를 돌렸다.
+
+B1_START_UTC=2026-07-31T15:50:15Z
+B1_END_UTC=2026-07-31T15:54:26Z (중단)
+B1_CONFIG=QUEUE_STATUS_RPS_CAPACITY=1400(회차 A 실측값) / 램프 2m
+B1_RESULT=무효. queue_status_unavailable 15.55%(13141/84469), entry_token unavailable 300.
+#   무효 기준 2개 동시 위반 → 남은 13분을 돌리지 않고 중단했다.
+B1_CAUSE=대기열이 아니라 CPU 굶주림이다. RedisCommandTimeoutException(GET, 1초)이 5분간 25만 줄
+#   찍혔는데 Redis 컨테이너 CPU 는 3.89% 였고 slowlog 는 비어 있었다(1,283 ops/s). Lettuce 타임아웃은
+#   클라이언트 쪽에서 재는 값이라 게이트웨이가 자기 이벤트 루프를 못 돌리면 서버가 즉답해도 터진다.
+#   호스트 CPU max 99.20% / avg 68.01%, 게이트웨이 컨테이너 89.65%.
+B1_KEY_FINDING=램프 속도가 아니라 폴링 수요가 용량을 넘은 것이다. 커넥션은 증상이자 되먹임이다.
+#   B-1 안에서만 보면 TCP established >= 4,000 구간 unavailable 평균 56.0/s, < 4,000 구간 0.6/s 라
+#   '커넥션 4,000 이 선' 처럼 보인다. ⚠ 그러나 B-2 는 커넥션 4,752 까지 가고도 unavailable 0 이었다 —
+#   그 선은 B-1 내부 표본으로만 그은 것이고 회차 간에는 성립하지 않는다. 캡처
+#   graph-unavailable-compare.png 가 이 반증을 그림으로 보여 준다.
+#   실제 인과: 폴링 수요 1,250 RPS > 처리 용량 약 450 RPS -> 응답이 밀린다(p95 5.27s)
+#   -> 리틀의 법칙으로 진행 중 요청 약 6,600건 x 2슬롯(클라이언트+업스트림) ≈ 13,200
+#   -> 최대 커넥션 16,701 의 대부분이 '쌓인 요청' 이고, 그 커넥션이 다시 CPU 를 먹어 되먹임이 된다.
+#   두 회차를 가른 것은 커넥션이 아니라 R 이다(1,400 -> 400). 수요가 400 RPS 로 내려가자
+#   되먹임 자체가 시작되지 않았다(B-2 최대 커넥션 4,752, unavailable 0).
+B1_STATUS_THROUGHPUT=최대 450 RPS (queue_status_duration p95 5.27s / avg 1.6s)
+
+B2_START_UTC=2026-07-31T16:01:25Z
+B2_END_UTC=2026-07-31T16:22:41Z (20m58.6s, 정상 종료)
+B2_CONFIG=QUEUE_STATUS_RPS_CAPACITY=400 / 램프 5m / 유지 15m
+B2_RESULT=유효. queue_status_unavailable 0.00%(0/147,807),
+#   entry_token unavailable/invalid/missing 전부 0, redis 최대 13.86%(무효 기준 75% 의 아래),
+#   queue_polls_exhausted 0, queue_booking_forbidden 0%, 생성기 swap 무손상.
+B2_PRIMARY=예매 서버 RPS — 판정 창 t+300s~t+500s(램프 종료~승급 완료) 표본 14
+#   min 19.60 / max 21.00 / 평균 20.17 → 선언 밴드(10-30) 이탈 0건. 허용량 20 대비 ±5% 안.
+B2_INFLOW=VU 2,317 → 10,000 (4.3배) 동안 예매 RPS 19.5-21.0 유지
+B2_STAGES=t+1m VU2317/RPS19.8 · t+3m VU6384/19.5 · t+5m VU10000/20.3 · t+7m VU10000/20.0 · t+8m 대기 0
+B2_ADMISSION=admitted 100.00%(9,276/9,276) / booking_ok 100.00%(9,276/9,276) / booking_forbidden 0%
+B2_LATENCY=queue_status_duration avg 14.42ms p95 32.1ms (B-1 은 avg 1.6s p95 5.27s)
+B2_WAIT=queue_wait_to_admit_seconds avg 86.9s p95 154.6s max 166.6s
+B2_POLLS=queue_polls_per_user avg 15.9 max 39 (상한 300 에 한참 못 미침)
+B2_HOST=CPU max 79.53% avg 35.27% (B-1: max 99.20% avg 68.01%) / 대기 인원 max 3,254 / T max 9초
+B2_NETWORK=data_sent 51 MB (41 kB/s) — 대역은 이 회차에서도 무관했다
+B2_OVERSELL=0행. 예매 9,276 = 좌석 9,276 = 사용자 9,276 (1:1:1, #344 검증 SQL)
+B2_BOOKING_P95=booking-service 서버 p95 최대 42.9ms / 평균 29.3ms
+#   #472 완료 조건의 '예매 경로 p95 유지' 축이다. B-1 은 최대 428.8ms / 평균 250.3ms 로 10배였다 —
+#   같은 예매 허용량(20/s)인데도 그렇다. 예매 경로가 느려진 것이 아니라 호스트 CPU 99.20% 를
+#   상태 확인 경로와 나눠 쓴 결과다. k6 쪽 queue_booking 최대 20.7 RPS 로 서버 측정과 일치한다.
+
+# ── 온전성 검사 발동 → 조사 후 기각 ────────────────────────────────────────
+SANITY_TRIGGERED=queue_admitted 가 정확히 1.000 이라 회차 전에 정한 검사가 발동했다.
+SANITY_VERDICT=지표가 아니라 회차 조건 때문이다 — 진짜 100% 다.
+#   근거 ① queue_polls_per_user max 39 << 상한 300 → 상한에 걸려 끊긴 VU 가 없다
+#        ② queue_polls_exhausted 가 0 (요약에 출력조차 안 됨)
+#        ③ 회차 20m58s > 승급 완료 8m20s → 줄 선 사람은 모두 차례가 왔다
+#   #544 에서 잡은 버그(!== null 로 전원 승급 집계)와는 다른 상황이다.
+
+# ── 실효 코호트 ─────────────────────────────────────────────────────────────
+EFFECTIVE_COHORT=9,276명 (1만이 아니다)
+#   724명이 진입(enqueue)에서 실패했다 — http_req_failed 724 와 정확히 일치한다.
+#   ⚠ 계측 구멍: 시나리오가 `if (!waitingToken) return;` 으로 조용히 넘어가고 서버에도 enqueue 결과
+#     카운터가 없다. B-1 때는 '대기 3,420 + 임계치 3,000 = 진입 6,420' 으로 역산해서야 알았다.
+#     다음 회차 전에 k6 queue_enqueue_failed + 서버측 카운터를 넣는다.
+
+# ── 이 회차가 답하지 못한 것 ───────────────────────────────────────────────
+LIMIT_CONCURRENT_WAITING=대기 인원 최대가 3,254명이다 — '1만 명이 동시에 줄 서 있는' 조건은
+#   이번에도 재현되지 않았다. 승급이 20명/초로 빠지는 동안 5분에 걸쳐 채웠기 때문이다.
+#   회차 A 가 남긴 같은 숙제가 그대로 남아 있다. 재현하려면 램프가 배수보다 빨라야 하는데,
+#   그게 바로 B-1 이고 B-1 은 CPU 에서 무너졌다 — 이 하드웨어에서는 둘을 동시에 만족할 수 없다.
+LIMIT_R_IS_NOT_CONSTANT=아래 R_DEPENDS_ON_CONCURRENCY 는 두 점(1,600 커넥션 / 16,701 커넥션)으로만
+#   그은 선이다. 함수 형태를 재려면 커넥션을 계단으로 올리는 별도 회차가 필요하다.
+LIMIT_TOPOLOGY=단일 EC2(2 vCPU)에 앱 8개 + Kafka·MySQL·Redis·관측 스택 동거. '대기열 경로의 한계'가
+#   아니라 '이 구성에서 도달한 지점' 이다.
+
+# ── 이 회차의 설계적 발견 ──────────────────────────────────────────────────
+R_DEPENDS_ON_CONCURRENCY=ADR 0009 §3 의 T = ceil(N/R) 은 R 을 상수로 쓰는데, R 은 동시 커넥션의
+#   함수다. 같은 경로·같은 호스트·같은 이미지에서:
+#     커넥션 약 1,600 (회차 A, VU 783)    → 1,400 RPS
+#     커넥션    16,701 (회차 B-1, VU 1만) →   450 RPS   (3.1배 차이)
+#   대기 인원이 많을수록 커넥션이 늘어 R 이 떨어지는데 산식은 한산할 때 잰 R 을 쓰므로,
+#   정확히 붐빌 때 주기를 너무 짧게 지시한다 — 대기열이 스스로를 무너뜨린다.
+#     N=10,000 · R=1,400 → T=8초 → 폴링 수요 1,250 RPS vs 그 동시성의 실제 용량 450 RPS (2.8배)
+#   ADR 0009 의 원래 보수값(R>=400, T=25초)이 옳았고, 회차 A 가 그것을 '3.5배 보수적이었다' 고
+#   정정한 것이 오히려 위험한 방향이었다. R=400 으로 되돌린 B-2 가 유효 회차가 됐다.
+
+
+# ── 이 회차가 답하지 못하는 것 (회차 전에 적는다) ──────────────────────────
+LIMIT_COMBINATION=커넥션 1만과 1,400 RPS 를 같이 재본 적이 없다. 회차 A 가 1,400 RPS(커넥션 783)를,
+#   프로브가 커넥션 1만(250 RPS)을 각각 증명했을 뿐이다. 이 회차가 그 곱을 처음 밟는다 —
+#   생성기가 먼저 무너지면 그 사실 자체가 결과이고, 그때는 ADR 0010 이 되살아난다.
+LIMIT_TOPOLOGY=측정 대상은 단일 EC2(2 vCPU)에 앱 8개 + Kafka·MySQL·Redis·관측 스택이 동거하는
+#   구성이다. 여기서 나오는 값은 '대기열 경로의 한계' 가 아니라 '이 구성에서 도달한 지점' 이다.
+LIMIT_SERIES=이 회차 수치를 nginx worker_connections 768 시절 회차(#348·#403·#529)와 절대값으로
+#   직접 잇지 않는다. 회차 A(#546)와는 같은 전제이나 프로파일이 다르다.

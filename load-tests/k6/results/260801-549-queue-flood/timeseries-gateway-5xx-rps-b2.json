@@ -1,0 +1,25 @@
+{
+ "query": "sum(rate(http_server_requests_seconds_count{job=\"gateway\", status=~\"5..\"}[1m]))",
+ "start": "2026-07-31T16:01:00Z",
+ "end": "2026-07-31T16:23:00Z",
+ "step": "15s",
+ "data": [
+  {
+   "metric": {},
+   "values": [
+    [
+     1785513660,
+     "0"
+    ],
+    [
+     1785513675,
+     "0"
+    ],
+    [
+     1785513690,
+     "0"
+    ]
+   ]
+  }
+ ]
+}

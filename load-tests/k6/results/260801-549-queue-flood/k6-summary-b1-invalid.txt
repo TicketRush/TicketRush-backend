@@ -1,0 +1,526 @@
+         /\      Grafana   /‾‾/  
+    /\  /  \     |\  __   /  /   
+   /  \/    \    | |/ /  /   ‾‾\ 
+  /          \   |   (  |  (‾)  |
+ / __________ \  |_|\_\  \_____/ 
+     execution: local
+        script: /scripts/scenarios/waiting-room.js
+        output: Prometheus remote write (http://host.docker.internal:9090/api/v1/write)
+     scenarios: (100.00%) 1 scenario, 10000 max VUs, 18m0s max duration (incl. graceful stop):
+              * flood: Up to 10000 looping VUs for 17m30s over 3 stages (gracefulRampDown: 30s, exec: journey, gracefulStop: 30s)
+Init    [  76% ] 07566/10000 VUs initialized
+flood   [   0% ]
+time="2026-07-31T15:49:31Z" level=info msg="[setup] profile=flood perfId=27 vus=10000 (대기열 개시 완료)" source=console
+running (00m00.7s), 00055/10000 VUs, 0 complete and 0 interrupted iterations
+running (00m01.7s), 00138/10000 VUs, 0 complete and 0 interrupted iterations
+running (00m02.7s), 00221/10000 VUs, 2 complete and 0 interrupted iterations
+running (00m03.7s), 00305/10000 VUs, 24 complete and 0 interrupted iterations
+running (00m04.7s), 00388/10000 VUs, 65 complete and 0 interrupted iterations
+running (00m05.7s), 00471/10000 VUs, 88 complete and 0 interrupted iterations
+running (00m06.7s), 00555/10000 VUs, 89 complete and 0 interrupted iterations
+running (00m07.7s), 00638/10000 VUs, 98 complete and 0 interrupted iterations
+running (00m08.7s), 00721/10000 VUs, 103 complete and 0 interrupted iterations
+running (00m09.7s), 00805/10000 VUs, 116 complete and 0 interrupted iterations
+running (00m10.7s), 00888/10000 VUs, 142 complete and 0 interrupted iterations
+running (00m11.7s), 00971/10000 VUs, 199 complete and 0 interrupted iterations
+running (00m12.7s), 01055/10000 VUs, 214 complete and 0 interrupted iterations
+running (00m13.7s), 01138/10000 VUs, 216 complete and 0 interrupted iterations
+running (00m14.7s), 01221/10000 VUs, 217 complete and 0 interrupted iterations
+running (00m15.7s), 01305/10000 VUs, 229 complete and 0 interrupted iterations
+running (00m16.7s), 01388/10000 VUs, 253 complete and 0 interrupted iterations
+running (00m17.7s), 01471/10000 VUs, 305 complete and 0 interrupted iterations
+running (00m18.7s), 01555/10000 VUs, 333 complete and 0 interrupted iterations
+running (00m19.7s), 01638/10000 VUs, 362 complete and 0 interrupted iterations
+running (00m20.7s), 01721/10000 VUs, 381 complete and 0 interrupted iterations
+running (00m21.7s), 01805/10000 VUs, 410 complete and 0 interrupted iterations
+running (00m22.7s), 01888/10000 VUs, 437 complete and 0 interrupted iterations
+running (00m23.7s), 01971/10000 VUs, 444 complete and 0 interrupted iterations
+running (00m24.7s), 02055/10000 VUs, 465 complete and 0 interrupted iterations
+running (00m25.7s), 02138/10000 VUs, 503 complete and 0 interrupted iterations
+running (00m26.7s), 02221/10000 VUs, 520 complete and 0 interrupted iterations
+running (00m27.7s), 02305/10000 VUs, 555 complete and 0 interrupted iterations
+running (00m28.7s), 02388/10000 VUs, 560 complete and 0 interrupted iterations
+running (00m29.7s), 02471/10000 VUs, 563 complete and 0 interrupted iterations
+running (00m30.7s), 02555/10000 VUs, 584 complete and 0 interrupted iterations
+running (00m31.7s), 02638/10000 VUs, 611 complete and 0 interrupted iterations
+running (00m32.7s), 02721/10000 VUs, 630 complete and 0 interrupted iterations
+running (00m33.7s), 02805/10000 VUs, 677 complete and 0 interrupted iterations
+running (00m34.7s), 02888/10000 VUs, 750 complete and 0 interrupted iterations
+running (00m35.7s), 02971/10000 VUs, 798 complete and 0 interrupted iterations
+running (00m36.7s), 03055/10000 VUs, 816 complete and 0 interrupted iterations
+running (00m37.7s), 03138/10000 VUs, 864 complete and 0 interrupted iterations
+running (00m38.7s), 03221/10000 VUs, 882 complete and 0 interrupted iterations
+running (00m39.7s), 03305/10000 VUs, 901 complete and 0 interrupted iterations
+running (00m40.7s), 03388/10000 VUs, 939 complete and 0 interrupted iterations
+running (00m41.7s), 03471/10000 VUs, 1010 complete and 0 interrupted iterations
+running (00m42.7s), 03554/10000 VUs, 1066 complete and 0 interrupted iterations
+running (00m43.7s), 03638/10000 VUs, 1073 complete and 0 interrupted iterations
+running (00m44.7s), 03721/10000 VUs, 1083 complete and 0 interrupted iterations
+running (00m45.7s), 03805/10000 VUs, 1106 complete and 0 interrupted iterations
+running (00m46.7s), 03888/10000 VUs, 1150 complete and 0 interrupted iterations
+running (00m47.7s), 03971/10000 VUs, 1276 complete and 0 interrupted iterations
+running (00m48.7s), 04055/10000 VUs, 1345 complete and 0 interrupted iterations
+running (00m49.7s), 04138/10000 VUs, 1399 complete and 0 interrupted iterations
+running (00m50.7s), 04221/10000 VUs, 1433 complete and 0 interrupted iterations
+running (00m51.7s), 04305/10000 VUs, 1488 complete and 0 interrupted iterations
+running (00m52.7s), 04388/10000 VUs, 1548 complete and 0 interrupted iterations
+running (00m53.7s), 04471/10000 VUs, 1571 complete and 0 interrupted iterations
+running (00m54.7s), 04555/10000 VUs, 1596 complete and 0 interrupted iterations
+running (00m55.7s), 04638/10000 VUs, 1652 complete and 0 interrupted iterations
+running (00m56.7s), 04721/10000 VUs, 1704 complete and 0 interrupted iterations
+running (00m57.7s), 04805/10000 VUs, 1774 complete and 0 interrupted iterations
+running (00m58.7s), 04888/10000 VUs, 1863 complete and 0 interrupted iterations
+running (00m59.7s), 04971/10000 VUs, 1910 complete and 0 interrupted iterations
+running (01m00.7s), 05055/10000 VUs, 1967 complete and 0 interrupted iterations
+running (01m01.7s), 05138/10000 VUs, 2020 complete and 0 interrupted iterations
+running (01m02.7s), 05221/10000 VUs, 2068 complete and 0 interrupted iterations
+running (01m03.7s), 05305/10000 VUs, 2135 complete and 0 interrupted iterations
+running (01m04.7s), 05388/10000 VUs, 2218 complete and 0 interrupted iterations
+running (01m05.7s), 05471/10000 VUs, 2285 complete and 0 interrupted iterations
+running (01m06.7s), 05555/10000 VUs, 2312 complete and 0 interrupted iterations
+running (01m07.7s), 05638/10000 VUs, 2390 complete and 0 interrupted iterations
+running (01m08.7s), 05721/10000 VUs, 2424 complete and 0 interrupted iterations
+running (01m09.7s), 05805/10000 VUs, 2505 complete and 0 interrupted iterations
+running (01m10.7s), 05888/10000 VUs, 2557 complete and 0 interrupted iterations
+running (01m11.7s), 05971/10000 VUs, 2658 complete and 0 interrupted iterations
+running (01m12.7s), 06055/10000 VUs, 2737 complete and 0 interrupted iterations
+running (01m13.7s), 06138/10000 VUs, 2786 complete and 0 interrupted iterations
+running (01m14.7s), 06221/10000 VUs, 2797 complete and 0 interrupted iterations
+running (01m15.7s), 06305/10000 VUs, 2827 complete and 0 interrupted iterations
+running (01m16.7s), 06388/10000 VUs, 2886 complete and 0 interrupted iterations
+running (01m17.7s), 06471/10000 VUs, 3038 complete and 0 interrupted iterations
+running (01m18.7s), 06555/10000 VUs, 3154 complete and 0 interrupted iterations
+running (01m19.7s), 06638/10000 VUs, 3437 complete and 0 interrupted iterations
+running (01m20.7s), 06721/10000 VUs, 3852 complete and 0 interrupted iterations
+running (01m21.7s), 06805/10000 VUs, 3990 complete and 0 interrupted iterations
+running (01m22.7s), 06888/10000 VUs, 4134 complete and 0 interrupted iterations
+running (01m23.7s), 06971/10000 VUs, 4241 complete and 0 interrupted iterations
+running (01m24.7s), 07055/10000 VUs, 4349 complete and 0 interrupted iterations
+running (01m25.7s), 07138/10000 VUs, 4489 complete and 0 interrupted iterations
+running (01m26.7s), 07221/10000 VUs, 4624 complete and 0 interrupted iterations
+running (01m27.7s), 07305/10000 VUs, 4777 complete and 0 interrupted iterations
+running (01m28.7s), 07388/10000 VUs, 4946 complete and 0 interrupted iterations
+running (01m29.7s), 07471/10000 VUs, 5004 complete and 0 interrupted iterations
+running (01m30.7s), 07555/10000 VUs, 5061 complete and 0 interrupted iterations
+running (01m31.7s), 07638/10000 VUs, 5114 complete and 0 interrupted iterations
+running (01m32.7s), 07721/10000 VUs, 5169 complete and 0 interrupted iterations
+running (01m33.7s), 07805/10000 VUs, 5244 complete and 0 interrupted iterations
+running (01m34.7s), 07888/10000 VUs, 5334 complete and 0 interrupted iterations
+running (01m35.7s), 07971/10000 VUs, 5407 complete and 0 interrupted iterations
+running (01m36.7s), 08055/10000 VUs, 5436 complete and 0 interrupted iterations
+running (01m37.7s), 08138/10000 VUs, 5525 complete and 0 interrupted iterations
+running (01m38.7s), 08221/10000 VUs, 5568 complete and 0 interrupted iterations
+running (01m39.7s), 08305/10000 VUs, 5655 complete and 0 interrupted iterations
+running (01m40.7s), 08388/10000 VUs, 5715 complete and 0 interrupted iterations
+running (01m41.7s), 08471/10000 VUs, 5823 complete and 0 interrupted iterations
+running (01m42.7s), 08555/10000 VUs, 5930 complete and 0 interrupted iterations
+running (01m43.7s), 08638/10000 VUs, 6018 complete and 0 interrupted iterations
+running (01m44.7s), 08721/10000 VUs, 6039 complete and 0 interrupted iterations
+running (01m45.7s), 08805/10000 VUs, 6119 complete and 0 interrupted iterations
+running (01m46.7s), 08888/10000 VUs, 6199 complete and 0 interrupted iterations
+running (01m47.7s), 08971/10000 VUs, 6379 complete and 0 interrupted iterations
+running (01m48.7s), 09055/10000 VUs, 6516 complete and 0 interrupted iterations
+running (01m49.7s), 09138/10000 VUs, 6844 complete and 0 interrupted iterations
+running (01m50.7s), 09221/10000 VUs, 7927 complete and 0 interrupted iterations
+running (01m51.7s), 09305/10000 VUs, 8137 complete and 0 interrupted iterations
+running (01m52.7s), 09388/10000 VUs, 8363 complete and 0 interrupted iterations
+running (01m53.7s), 09471/10000 VUs, 8553 complete and 0 interrupted iterations
+running (01m54.7s), 09555/10000 VUs, 8745 complete and 0 interrupted iterations
+running (01m55.7s), 09638/10000 VUs, 8968 complete and 0 interrupted iterations
+running (01m56.7s), 09721/10000 VUs, 9185 complete and 0 interrupted iterations
+running (01m57.7s), 09805/10000 VUs, 9422 complete and 0 interrupted iterations
+running (01m58.7s), 09888/10000 VUs, 9675 complete and 0 interrupted iterations
+time="2026-07-31T15:51:30Z" level=warning msg="Request Failed" error="Post \"https://api.ticketrush.store/api/v1/queue/27/enqueue\": dial: i/o timeout"
+time="2026-07-31T15:51:30Z" level=warning msg="Request Failed" error="Post \"https://api.ticketrush.store/api/v1/queue/27/enqueue\": dial: i/o timeout"
+time="2026-07-31T15:51:30Z" level=warning msg="Request Failed" error="Post \"https://api.ticketrush.store/api/v1/queue/27/enqueue\": dial: i/o timeout"
+time="2026-07-31T15:51:30Z" level=warning msg="Request Failed" error="Post \"https://api.ticketrush.store/api/v1/queue/27/enqueue\": dial: i/o timeout"
+time="2026-07-31T15:51:30Z" level=warning msg="Request Failed" error="Post \"https://api.ticketrush.store/api/v1/queue/27/enqueue\": dial: i/o timeout"
+time="2026-07-31T15:51:30Z" level=warning msg="Request Failed" error="Post \"https://api.ticketrush.store/api/v1/queue/27/enqueue\": dial: i/o timeout"
+time="2026-07-31T15:51:30Z" level=warning msg="Request Failed" error="Post \"https://api.ticketrush.store/api/v1/queue/27/enqueue\": dial: i/o timeout"
+time="2026-07-31T15:51:30Z" level=warning msg="Request Failed" error="Post \"https://api.ticketrush.store/api/v1/queue/27/enqueue\": dial: i/o timeout"
+running (01m59.7s), 09971/10000 VUs, 9792 complete and 0 interrupted iterations
+running (02m00.7s), 10000/10000 VUs, 9849 complete and 0 interrupted iterations
+running (02m01.7s), 10000/10000 VUs, 9902 complete and 0 interrupted iterations
+running (02m02.7s), 10000/10000 VUs, 9955 complete and 0 interrupted iterations
+running (02m03.7s), 10000/10000 VUs, 10034 complete and 0 interrupted iterations
+running (02m04.7s), 10000/10000 VUs, 10127 complete and 0 interrupted iterations
+running (02m05.7s), 10000/10000 VUs, 10207 complete and 0 interrupted iterations
+running (02m06.7s), 10000/10000 VUs, 10258 complete and 0 interrupted iterations
+running (02m07.7s), 10000/10000 VUs, 10363 complete and 0 interrupted iterations
+running (02m08.7s), 10000/10000 VUs, 10424 complete and 0 interrupted iterations
+time="2026-07-31T15:51:40Z" level=warning msg="Request Failed" error="Post \"https://api.ticketrush.store/api/v1/queue/27/enqueue\": dial: i/o timeout"
+time="2026-07-31T15:51:40Z" level=warning msg="Request Failed" error="Post \"https://api.ticketrush.store/api/v1/queue/27/enqueue\": dial: i/o timeout"
+time="2026-07-31T15:51:40Z" level=warning msg="Request Failed" error="Post \"https://api.ticketrush.store/api/v1/queue/27/enqueue\": dial: i/o timeout"
+time="2026-07-31T15:51:40Z" level=warning msg="Request Failed" error="Post \"https://api.ticketrush.store/api/v1/queue/27/enqueue\": dial: i/o timeout"
+time="2026-07-31T15:51:40Z" level=warning msg="Request Failed" error="Post \"https://api.ticketrush.store/api/v1/queue/27/enqueue\": dial: i/o timeout"
+time="2026-07-31T15:51:40Z" level=warning msg="Request Failed" error="Post \"https://api.ticketrush.store/api/v1/queue/27/enqueue\": dial: i/o timeout"
+time="2026-07-31T15:51:40Z" level=warning msg="Request Failed" error="Post \"https://api.ticketrush.store/api/v1/queue/27/enqueue\": dial: i/o timeout"
+time="2026-07-31T15:51:40Z" level=warning msg="Request Failed" error="Post \"https://api.ticketrush.store/api/v1/queue/27/enqueue\": dial: i/o timeout"
+time="2026-07-31T15:51:40Z" level=warning msg="Request Failed" error="Post \"https://api.ticketrush.store/api/v1/queue/27/enqueue\": dial: i/o timeout"
+time="2026-07-31T15:51:40Z" level=warning msg="Request Failed" error="Post \"https://api.ticketrush.store/api/v1/queue/27/enqueue\": dial: i/o timeout"
+time="2026-07-31T15:51:40Z" level=warning msg="Request Failed" error="Post \"https://api.ticketrush.store/api/v1/queue/27/enqueue\": dial: i/o timeout"
+time="2026-07-31T15:51:40Z" level=warning msg="Request Failed" error="Post \"https://api.ticketrush.store/api/v1/queue/27/enqueue\": dial: i/o timeout"
+time="2026-07-31T15:51:40Z" level=warning msg="Request Failed" error="Post \"https://api.ticketrush.store/api/v1/queue/27/enqueue\": dial: i/o timeout"
+time="2026-07-31T15:51:40Z" level=warning msg="Request Failed" error="Post \"https://api.ticketrush.store/api/v1/queue/27/enqueue\": dial: i/o timeout"
+time="2026-07-31T15:51:40Z" level=warning msg="Request Failed" error="Post \"https://api.ticketrush.store/api/v1/queue/27/enqueue\": dial: i/o timeout"
+time="2026-07-31T15:51:40Z" level=warning msg="Request Failed" error="Post \"https://api.ticketrush.store/api/v1/queue/27/enqueue\": dial: i/o timeout"
+time="2026-07-31T15:51:40Z" level=warning msg="Request Failed" error="Post \"https://api.ticketrush.store/api/v1/queue/27/enqueue\": dial: i/o timeout"
+time="2026-07-31T15:51:40Z" level=warning msg="Request Failed" error="Post \"https://api.ticketrush.store/api/v1/queue/27/enqueue\": dial: i/o timeout"
+time="2026-07-31T15:51:40Z" level=warning msg="Request Failed" error="Post \"https://api.ticketrush.store/api/v1/queue/27/enqueue\": dial: i/o timeout"
+time="2026-07-31T15:51:40Z" level=warning msg="Request Failed" error="Post \"https://api.ticketrush.store/api/v1/queue/27/enqueue\": dial: i/o timeout"
+time="2026-07-31T15:51:40Z" level=warning msg="Request Failed" error="Post \"https://api.ticketrush.store/api/v1/queue/27/enqueue\": dial: i/o timeout"
+time="2026-07-31T15:51:40Z" level=warning msg="Request Failed" error="Post \"https://api.ticketrush.store/api/v1/queue/27/enqueue\": dial: i/o timeout"
+time="2026-07-31T15:51:40Z" level=warning msg="Request Failed" error="Post \"https://api.ticketrush.store/api/v1/queue/27/enqueue\": dial: i/o timeout"
+time="2026-07-31T15:51:40Z" level=warning msg="Request Failed" error="Post \"https://api.ticketrush.store/api/v1/queue/27/enqueue\": dial: i/o timeout"
+time="2026-07-31T15:51:40Z" level=warning msg="Request Failed" error="Post \"https://api.ticketrush.store/api/v1/queue/27/enqueue\": dial: i/o timeout"
+time="2026-07-31T15:51:40Z" level=warning msg="Request Failed" error="Post \"https://api.ticketrush.store/api/v1/queue/27/enqueue\": dial: i/o timeout"
+time="2026-07-31T15:51:41Z" level=warning msg="Request Failed" error="Post \"https://api.ticketrush.store/api/v1/queue/27/enqueue\": dial: i/o timeout"
+time="2026-07-31T15:51:41Z" level=warning msg="Request Failed" error="Post \"https://api.ticketrush.store/api/v1/queue/27/enqueue\": dial: i/o timeout"
+time="2026-07-31T15:51:41Z" level=warning msg="Request Failed" error="Post \"https://api.ticketrush.store/api/v1/queue/27/enqueue\": dial: i/o timeout"
+running (02m09.7s), 10000/10000 VUs, 10550 complete and 0 interrupted iterations
+time="2026-07-31T15:51:41Z" level=warning msg="Request Failed" error="Post \"https://api.ticketrush.store/api/v1/queue/27/enqueue\": dial: i/o timeout"
+time="2026-07-31T15:51:41Z" level=warning msg="Request Failed" error="Post \"https://api.ticketrush.store/api/v1/queue/27/enqueue\": dial: i/o timeout"
+time="2026-07-31T15:51:41Z" level=warning msg="Request Failed" error="Post \"https://api.ticketrush.store/api/v1/queue/27/enqueue\": dial: i/o timeout"
+time="2026-07-31T15:51:41Z" level=warning msg="Request Failed" error="Post \"https://api.ticketrush.store/api/v1/queue/27/enqueue\": dial: i/o timeout"
+time="2026-07-31T15:51:41Z" level=warning msg="Request Failed" error="Post \"https://api.ticketrush.store/api/v1/queue/27/enqueue\": dial: i/o timeout"
+time="2026-07-31T15:51:41Z" level=warning msg="Request Failed" error="Post \"https://api.ticketrush.store/api/v1/queue/27/enqueue\": dial: i/o timeout"
+time="2026-07-31T15:51:41Z" level=warning msg="Request Failed" error="Post \"https://api.ticketrush.store/api/v1/queue/27/enqueue\": dial: i/o timeout"
+time="2026-07-31T15:51:41Z" level=warning msg="Request Failed" error="Post \"https://api.ticketrush.store/api/v1/queue/27/enqueue\": dial: i/o timeout"
+time="2026-07-31T15:51:41Z" level=warning msg="Request Failed" error="Post \"https://api.ticketrush.store/api/v1/queue/27/enqueue\": dial: i/o timeout"
+time="2026-07-31T15:51:41Z" level=warning msg="Request Failed" error="Post \"https://api.ticketrush.store/api/v1/queue/27/enqueue\": dial: i/o timeout"
+time="2026-07-31T15:51:41Z" level=warning msg="Request Failed" error="Post \"https://api.ticketrush.store/api/v1/queue/27/enqueue\": dial: i/o timeout"
+time="2026-07-31T15:51:41Z" level=warning msg="Request Failed" error="Post \"https://api.ticketrush.store/api/v1/queue/27/enqueue\": dial: i/o timeout"
+time="2026-07-31T15:51:41Z" level=warning msg="Request Failed" error="Post \"https://api.ticketrush.store/api/v1/queue/27/enqueue\": dial: i/o timeout"
+time="2026-07-31T15:51:41Z" level=warning msg="Request Failed" error="Post \"https://api.ticketrush.store/api/v1/queue/27/enqueue\": dial: i/o timeout"
+time="2026-07-31T15:51:41Z" level=warning msg="Request Failed" error="Post \"https://api.ticketrush.store/api/v1/queue/27/enqueue\": dial: i/o timeout"
+time="2026-07-31T15:51:41Z" level=warning msg="Request Failed" error="Post \"https://api.ticketrush.store/api/v1/queue/27/enqueue\": dial: i/o timeout"
+time="2026-07-31T15:51:41Z" level=warning msg="Request Failed" error="Post \"https://api.ticketrush.store/api/v1/queue/27/enqueue\": dial: i/o timeout"
+time="2026-07-31T15:51:41Z" level=warning msg="Request Failed" error="Post \"https://api.ticketrush.store/api/v1/queue/27/enqueue\": dial: i/o timeout"
+time="2026-07-31T15:51:41Z" level=warning msg="Request Failed" error="Post \"https://api.ticketrush.store/api/v1/queue/27/enqueue\": dial: i/o timeout"
+time="2026-07-31T15:51:41Z" level=warning msg="Request Failed" error="Post \"https://api.ticketrush.store/api/v1/queue/27/enqueue\": dial: i/o timeout"
+time="2026-07-31T15:51:41Z" level=warning msg="Request Failed" error="Post \"https://api.ticketrush.store/api/v1/queue/27/enqueue\": dial: i/o timeout"
+time="2026-07-31T15:51:41Z" level=warning msg="Request Failed" error="Post \"https://api.ticketrush.store/api/v1/queue/27/enqueue\": dial: i/o timeout"
+time="2026-07-31T15:51:41Z" level=warning msg="Request Failed" error="Post \"https://api.ticketrush.store/api/v1/queue/27/enqueue\": dial: i/o timeout"
+time="2026-07-31T15:51:42Z" level=warning msg="Request Failed" error="Post \"https://api.ticketrush.store/api/v1/queue/27/enqueue\": dial: i/o timeout"
+running (02m10.7s), 10000/10000 VUs, 10666 complete and 0 interrupted iterations
+time="2026-07-31T15:51:42Z" level=warning msg="Request Failed" error="Post \"https://api.ticketrush.store/api/v1/queue/27/enqueue\": dial: i/o timeout"
+time="2026-07-31T15:51:42Z" level=warning msg="Request Failed" error="Post \"https://api.ticketrush.store/api/v1/queue/27/enqueue\": dial: i/o timeout"
+time="2026-07-31T15:51:42Z" level=warning msg="Request Failed" error="Post \"https://api.ticketrush.store/api/v1/queue/27/enqueue\": dial: i/o timeout"
+time="2026-07-31T15:51:42Z" level=warning msg="Request Failed" error="Post \"https://api.ticketrush.store/api/v1/queue/27/enqueue\": dial: i/o timeout"
+time="2026-07-31T15:51:42Z" level=warning msg="Request Failed" error="Post \"https://api.ticketrush.store/api/v1/queue/27/enqueue\": dial: i/o timeout"
+time="2026-07-31T15:51:42Z" level=warning msg="Request Failed" error="Post \"https://api.ticketrush.store/api/v1/queue/27/enqueue\": dial: i/o timeout"
+time="2026-07-31T15:51:42Z" level=warning msg="Request Failed" error="Post \"https://api.ticketrush.store/api/v1/queue/27/enqueue\": dial: i/o timeout"
+time="2026-07-31T15:51:42Z" level=warning msg="Request Failed" error="Post \"https://api.ticketrush.store/api/v1/queue/27/enqueue\": dial: i/o timeout"
+time="2026-07-31T15:51:42Z" level=warning msg="Request Failed" error="Post \"https://api.ticketrush.store/api/v1/queue/27/enqueue\": dial: i/o timeout"
+time="2026-07-31T15:51:42Z" level=warning msg="Request Failed" error="Post \"https://api.ticketrush.store/api/v1/queue/27/enqueue\": dial: i/o timeout"
+time="2026-07-31T15:51:42Z" level=warning msg="Request Failed" error="Post \"https://api.ticketrush.store/api/v1/queue/27/enqueue\": dial: i/o timeout"
+time="2026-07-31T15:51:42Z" level=warning msg="Request Failed" error="Post \"https://api.ticketrush.store/api/v1/queue/27/enqueue\": dial: i/o timeout"
+time="2026-07-31T15:51:42Z" level=warning msg="Request Failed" error="Post \"https://api.ticketrush.store/api/v1/queue/27/enqueue\": dial: i/o timeout"
+time="2026-07-31T15:51:42Z" level=warning msg="Request Failed" error="Post \"https://api.ticketrush.store/api/v1/queue/27/enqueue\": dial: i/o timeout"
+time="2026-07-31T15:51:42Z" level=warning msg="Request Failed" error="Post \"https://api.ticketrush.store/api/v1/queue/27/enqueue\": dial: i/o timeout"
+time="2026-07-31T15:51:42Z" level=warning msg="Request Failed" error="Post \"https://api.ticketrush.store/api/v1/queue/27/enqueue\": dial: i/o timeout"
+time="2026-07-31T15:51:42Z" level=warning msg="Request Failed" error="Post \"https://api.ticketrush.store/api/v1/queue/27/enqueue\": dial: i/o timeout"
+time="2026-07-31T15:51:42Z" level=warning msg="Request Failed" error="Post \"https://api.ticketrush.store/api/v1/queue/27/enqueue\": dial: i/o timeout"
+time="2026-07-31T15:51:43Z" level=warning msg="Request Failed" error="Post \"https://api.ticketrush.store/api/v1/queue/27/enqueue\": dial: i/o timeout"
+running (02m11.7s), 10000/10000 VUs, 10808 complete and 0 interrupted iterations
+time="2026-07-31T15:51:43Z" level=warning msg="Request Failed" error="Post \"https://api.ticketrush.store/api/v1/queue/27/enqueue\": dial: i/o timeout"
+time="2026-07-31T15:51:43Z" level=warning msg="Request Failed" error="Post \"https://api.ticketrush.store/api/v1/queue/27/enqueue\": dial: i/o timeout"
+time="2026-07-31T15:51:43Z" level=warning msg="Request Failed" error="Post \"https://api.ticketrush.store/api/v1/queue/27/enqueue\": dial: i/o timeout"
+time="2026-07-31T15:51:43Z" level=warning msg="Request Failed" error="Post \"https://api.ticketrush.store/api/v1/queue/27/enqueue\": dial: i/o timeout"
+time="2026-07-31T15:51:43Z" level=warning msg="Request Failed" error="Post \"https://api.ticketrush.store/api/v1/queue/27/enqueue\": dial: i/o timeout"
+time="2026-07-31T15:51:43Z" level=warning msg="Request Failed" error="Post \"https://api.ticketrush.store/api/v1/queue/27/enqueue\": dial: i/o timeout"
+time="2026-07-31T15:51:43Z" level=warning msg="Request Failed" error="Post \"https://api.ticketrush.store/api/v1/queue/27/enqueue\": dial: i/o timeout"
+time="2026-07-31T15:51:43Z" level=warning msg="Request Failed" error="Post \"https://api.ticketrush.store/api/v1/queue/27/enqueue\": dial: i/o timeout"
+time="2026-07-31T15:51:43Z" level=warning msg="Request Failed" error="Post \"https://api.ticketrush.store/api/v1/queue/27/enqueue\": dial: i/o timeout"
+time="2026-07-31T15:51:43Z" level=warning msg="Request Failed" error="Post \"https://api.ticketrush.store/api/v1/queue/27/enqueue\": dial: i/o timeout"
+time="2026-07-31T15:51:43Z" level=warning msg="Request Failed" error="Post \"https://api.ticketrush.store/api/v1/queue/27/enqueue\": dial: i/o timeout"
+time="2026-07-31T15:51:43Z" level=warning msg="Request Failed" error="Post \"https://api.ticketrush.store/api/v1/queue/27/enqueue\": dial: i/o timeout"
+time="2026-07-31T15:51:43Z" level=warning msg="Request Failed" error="Post \"https://api.ticketrush.store/api/v1/queue/27/enqueue\": dial: i/o timeout"
+time="2026-07-31T15:51:43Z" level=warning msg="Request Failed" error="Post \"https://api.ticketrush.store/api/v1/queue/27/enqueue\": dial: i/o timeout"
+time="2026-07-31T15:51:43Z" level=warning msg="Request Failed" error="Post \"https://api.ticketrush.store/api/v1/queue/27/enqueue\": dial: i/o timeout"
+time="2026-07-31T15:51:43Z" level=warning msg="Request Failed" error="Post \"https://api.ticketrush.store/api/v1/queue/27/enqueue\": dial: i/o timeout"
+time="2026-07-31T15:51:43Z" level=warning msg="Request Failed" error="Post \"https://api.ticketrush.store/api/v1/queue/27/enqueue\": dial: i/o timeout"
+time="2026-07-31T15:51:43Z" level=warning msg="Request Failed" error="Post \"https://api.ticketrush.store/api/v1/queue/27/enqueue\": dial: i/o timeout"
+time="2026-07-31T15:51:43Z" level=warning msg="Request Failed" error="Post \"https://api.ticketrush.store/api/v1/queue/27/enqueue\": dial: i/o timeout"
+time="2026-07-31T15:51:43Z" level=warning msg="Request Failed" error="Post \"https://api.ticketrush.store/api/v1/queue/27/enqueue\": dial: i/o timeout"
+time="2026-07-31T15:51:43Z" level=warning msg="Request Failed" error="Post \"https://api.ticketrush.store/api/v1/queue/27/enqueue\": dial: i/o timeout"
+time="2026-07-31T15:51:43Z" level=warning msg="Request Failed" error="Post \"https://api.ticketrush.store/api/v1/queue/27/enqueue\": dial: i/o timeout"
+time="2026-07-31T15:51:43Z" level=warning msg="Request Failed" error="Post \"https://api.ticketrush.store/api/v1/queue/27/enqueue\": dial: i/o timeout"
+time="2026-07-31T15:51:43Z" level=warning msg="Request Failed" error="Post \"https://api.ticketrush.store/api/v1/queue/27/enqueue\": dial: i/o timeout"
+time="2026-07-31T15:51:44Z" level=warning msg="Request Failed" error="Post \"https://api.ticketrush.store/api/v1/queue/27/enqueue\": dial: i/o timeout"
+time="2026-07-31T15:51:44Z" level=warning msg="Request Failed" error="Post \"https://api.ticketrush.store/api/v1/queue/27/enqueue\": dial: i/o timeout"
+running (02m12.7s), 10000/10000 VUs, 10959 complete and 0 interrupted iterations
+time="2026-07-31T15:51:44Z" level=warning msg="Request Failed" error="Post \"https://api.ticketrush.store/api/v1/queue/27/enqueue\": dial: i/o timeout"
+time="2026-07-31T15:51:44Z" level=warning msg="Request Failed" error="Post \"https://api.ticketrush.store/api/v1/queue/27/enqueue\": dial: i/o timeout"
+time="2026-07-31T15:51:44Z" level=warning msg="Request Failed" error="Post \"https://api.ticketrush.store/api/v1/queue/27/enqueue\": dial: i/o timeout"
+time="2026-07-31T15:51:44Z" level=warning msg="Request Failed" error="Post \"https://api.ticketrush.store/api/v1/queue/27/enqueue\": dial: i/o timeout"
+time="2026-07-31T15:51:44Z" level=warning msg="Request Failed" error="Post \"https://api.ticketrush.store/api/v1/queue/27/enqueue\": dial: i/o timeout"
+time="2026-07-31T15:51:44Z" level=warning msg="Request Failed" error="Post \"https://api.ticketrush.store/api/v1/queue/27/enqueue\": dial: i/o timeout"
+time="2026-07-31T15:51:44Z" level=warning msg="Request Failed" error="Post \"https://api.ticketrush.store/api/v1/queue/27/enqueue\": dial: i/o timeout"
+time="2026-07-31T15:51:44Z" level=warning msg="Request Failed" error="Post \"https://api.ticketrush.store/api/v1/queue/27/enqueue\": dial: i/o timeout"
+time="2026-07-31T15:51:44Z" level=warning msg="Request Failed" error="Post \"https://api.ticketrush.store/api/v1/queue/27/enqueue\": dial: i/o timeout"
+time="2026-07-31T15:51:44Z" level=warning msg="Request Failed" error="Post \"https://api.ticketrush.store/api/v1/queue/27/enqueue\": dial: i/o timeout"
+time="2026-07-31T15:51:44Z" level=warning msg="Request Failed" error="Post \"https://api.ticketrush.store/api/v1/queue/27/enqueue\": dial: i/o timeout"
+time="2026-07-31T15:51:44Z" level=warning msg="Request Failed" error="Post \"https://api.ticketrush.store/api/v1/queue/27/enqueue\": dial: i/o timeout"
+time="2026-07-31T15:51:44Z" level=warning msg="Request Failed" error="Post \"https://api.ticketrush.store/api/v1/queue/27/enqueue\": dial: i/o timeout"
+time="2026-07-31T15:51:44Z" level=warning msg="Request Failed" error="Post \"https://api.ticketrush.store/api/v1/queue/27/enqueue\": dial: i/o timeout"
+time="2026-07-31T15:51:44Z" level=warning msg="Request Failed" error="Post \"https://api.ticketrush.store/api/v1/queue/27/enqueue\": dial: i/o timeout"
+time="2026-07-31T15:51:44Z" level=warning msg="Request Failed" error="Post \"https://api.ticketrush.store/api/v1/queue/27/enqueue\": dial: i/o timeout"
+time="2026-07-31T15:51:44Z" level=warning msg="Request Failed" error="Post \"https://api.ticketrush.store/api/v1/queue/27/enqueue\": dial: i/o timeout"
+time="2026-07-31T15:51:44Z" level=warning msg="Request Failed" error="Post \"https://api.ticketrush.store/api/v1/queue/27/enqueue\": dial: i/o timeout"
+time="2026-07-31T15:51:44Z" level=warning msg="Request Failed" error="Post \"https://api.ticketrush.store/api/v1/queue/27/enqueue\": dial: i/o timeout"
+time="2026-07-31T15:51:45Z" level=warning msg="Request Failed" error="Post \"https://api.ticketrush.store/api/v1/queue/27/enqueue\": dial: i/o timeout"
+running (02m13.7s), 10000/10000 VUs, 11072 complete and 0 interrupted iterations
+time="2026-07-31T15:51:45Z" level=warning msg="Request Failed" error="Post \"https://api.ticketrush.store/api/v1/queue/27/enqueue\": dial: i/o timeout"
+time="2026-07-31T15:51:45Z" level=warning msg="Request Failed" error="Post \"https://api.ticketrush.store/api/v1/queue/27/enqueue\": dial: i/o timeout"
+time="2026-07-31T15:51:45Z" level=warning msg="Request Failed" error="Post \"https://api.ticketrush.store/api/v1/queue/27/enqueue\": dial: i/o timeout"
+time="2026-07-31T15:51:45Z" level=warning msg="Request Failed" error="Post \"https://api.ticketrush.store/api/v1/queue/27/enqueue\": dial: i/o timeout"
+time="2026-07-31T15:51:45Z" level=warning msg="Request Failed" error="Post \"https://api.ticketrush.store/api/v1/queue/27/enqueue\": dial: i/o timeout"
+time="2026-07-31T15:51:45Z" level=warning msg="Request Failed" error="Post \"https://api.ticketrush.store/api/v1/queue/27/enqueue\": dial: i/o timeout"
+time="2026-07-31T15:51:45Z" level=warning msg="Request Failed" error="Post \"https://api.ticketrush.store/api/v1/queue/27/enqueue\": dial: i/o timeout"
+time="2026-07-31T15:51:45Z" level=warning msg="Request Failed" error="Post \"https://api.ticketrush.store/api/v1/queue/27/enqueue\": dial: i/o timeout"
+time="2026-07-31T15:51:45Z" level=warning msg="Request Failed" error="Post \"https://api.ticketrush.store/api/v1/queue/27/enqueue\": dial: i/o timeout"
+time="2026-07-31T15:51:45Z" level=warning msg="Request Failed" error="Post \"https://api.ticketrush.store/api/v1/queue/27/enqueue\": dial: i/o timeout"
+time="2026-07-31T15:51:45Z" level=warning msg="Request Failed" error="Post \"https://api.ticketrush.store/api/v1/queue/27/enqueue\": dial: i/o timeout"
+time="2026-07-31T15:51:45Z" level=warning msg="Request Failed" error="Post \"https://api.ticketrush.store/api/v1/queue/27/enqueue\": dial: i/o timeout"
+time="2026-07-31T15:51:45Z" level=warning msg="Request Failed" error="Post \"https://api.ticketrush.store/api/v1/queue/27/enqueue\": dial: i/o timeout"
+time="2026-07-31T15:51:45Z" level=warning msg="Request Failed" error="Post \"https://api.ticketrush.store/api/v1/queue/27/enqueue\": dial: i/o timeout"
+time="2026-07-31T15:51:46Z" level=warning msg="Request Failed" error="Post \"https://api.ticketrush.store/api/v1/queue/27/enqueue\": dial: i/o timeout"
+running (02m14.7s), 10000/10000 VUs, 11134 complete and 0 interrupted iterations
+time="2026-07-31T15:51:46Z" level=warning msg="Request Failed" error="Post \"https://api.ticketrush.store/api/v1/queue/27/enqueue\": dial: i/o timeout"
+time="2026-07-31T15:51:46Z" level=warning msg="Request Failed" error="Post \"https://api.ticketrush.store/api/v1/queue/27/enqueue\": dial: i/o timeout"
+running (02m15.7s), 10000/10000 VUs, 11216 complete and 0 interrupted iterations
+running (02m16.7s), 10000/10000 VUs, 11324 complete and 0 interrupted iterations
+time="2026-07-31T15:51:48Z" level=warning msg="Request Failed" error="Post \"https://api.ticketrush.store/api/v1/queue/27/enqueue\": dial: i/o timeout"
+time="2026-07-31T15:51:48Z" level=warning msg="Request Failed" error="Post \"https://api.ticketrush.store/api/v1/queue/27/enqueue\": dial: i/o timeout"
+time="2026-07-31T15:51:48Z" level=warning msg="Request Failed" error="Post \"https://api.ticketrush.store/api/v1/queue/27/enqueue\": dial: i/o timeout"
+running (02m17.7s), 10000/10000 VUs, 11555 complete and 0 interrupted iterations
+time="2026-07-31T15:51:49Z" level=warning msg="Request Failed" error="Post \"https://api.ticketrush.store/api/v1/queue/27/enqueue\": dial: i/o timeout"
+time="2026-07-31T15:51:49Z" level=warning msg="Request Failed" error="Post \"https://api.ticketrush.store/api/v1/queue/27/enqueue\": dial: i/o timeout"
+time="2026-07-31T15:51:49Z" level=warning msg="Request Failed" error="Post \"https://api.ticketrush.store/api/v1/queue/27/enqueue\": dial: i/o timeout"
+time="2026-07-31T15:51:49Z" level=warning msg="Request Failed" error="Post \"https://api.ticketrush.store/api/v1/queue/27/enqueue\": dial: i/o timeout"
+time="2026-07-31T15:51:49Z" level=warning msg="Request Failed" error="Post \"https://api.ticketrush.store/api/v1/queue/27/enqueue\": dial: i/o timeout"
+time="2026-07-31T15:51:49Z" level=warning msg="Request Failed" error="Post \"https://api.ticketrush.store/api/v1/queue/27/enqueue\": dial: i/o timeout"
+time="2026-07-31T15:51:50Z" level=warning msg="Request Failed" error="Post \"https://api.ticketrush.store/api/v1/queue/27/enqueue\": dial: i/o timeout"
+running (02m18.7s), 10000/10000 VUs, 11744 complete and 0 interrupted iterations
+time="2026-07-31T15:51:50Z" level=warning msg="Request Failed" error="Post \"https://api.ticketrush.store/api/v1/queue/27/enqueue\": dial: i/o timeout"
+running (02m19.7s), 10000/10000 VUs, 12071 complete and 0 interrupted iterations
+running (02m20.7s), 10000/10000 VUs, 13156 complete and 0 interrupted iterations
+time="2026-07-31T15:51:52Z" level=warning msg="Request Failed" error="Post \"https://api.ticketrush.store/api/v1/queue/27/enqueue\": dial: i/o timeout"
+time="2026-07-31T15:51:52Z" level=warning msg="Request Failed" error="Post \"https://api.ticketrush.store/api/v1/queue/27/enqueue\": dial: i/o timeout"
+time="2026-07-31T15:51:52Z" level=warning msg="Request Failed" error="Post \"https://api.ticketrush.store/api/v1/queue/27/enqueue\": dial: i/o timeout"
+time="2026-07-31T15:51:52Z" level=warning msg="Request Failed" error="Post \"https://api.ticketrush.store/api/v1/queue/27/enqueue\": dial: i/o timeout"
+time="2026-07-31T15:51:52Z" level=warning msg="Request Failed" error="Post \"https://api.ticketrush.store/api/v1/queue/27/enqueue\": dial: i/o timeout"
+time="2026-07-31T15:51:52Z" level=warning msg="Request Failed" error="Post \"https://api.ticketrush.store/api/v1/queue/27/enqueue\": dial: i/o timeout"
+time="2026-07-31T15:51:52Z" level=warning msg="Request Failed" error="Post \"https://api.ticketrush.store/api/v1/queue/27/enqueue\": dial: i/o timeout"
+time="2026-07-31T15:51:52Z" level=warning msg="Request Failed" error="Post \"https://api.ticketrush.store/api/v1/queue/27/enqueue\": dial: i/o timeout"
+time="2026-07-31T15:51:52Z" level=warning msg="Request Failed" error="Post \"https://api.ticketrush.store/api/v1/queue/27/enqueue\": dial: i/o timeout"
+running (02m21.7s), 10000/10000 VUs, 13375 complete and 0 interrupted iterations
+time="2026-07-31T15:51:53Z" level=warning msg="Request Failed" error="Post \"https://api.ticketrush.store/api/v1/queue/27/enqueue\": dial: i/o timeout"
+time="2026-07-31T15:51:53Z" level=warning msg="Request Failed" error="Post \"https://api.ticketrush.store/api/v1/queue/27/enqueue\": dial: i/o timeout"
+time="2026-07-31T15:51:53Z" level=warning msg="Request Failed" error="Post \"https://api.ticketrush.store/api/v1/queue/27/enqueue\": dial: i/o timeout"
+time="2026-07-31T15:51:53Z" level=warning msg="Request Failed" error="Post \"https://api.ticketrush.store/api/v1/queue/27/enqueue\": dial: i/o timeout"
+running (02m22.7s), 10000/10000 VUs, 13783 complete and 0 interrupted iterations
+running (02m23.7s), 10000/10000 VUs, 13972 complete and 0 interrupted iterations
+running (02m24.7s), 10000/10000 VUs, 14165 complete and 0 interrupted iterations
+running (02m25.7s), 10000/10000 VUs, 14388 complete and 0 interrupted iterations
+running (02m26.7s), 10000/10000 VUs, 14605 complete and 0 interrupted iterations
+running (02m27.7s), 10000/10000 VUs, 14842 complete and 0 interrupted iterations
+running (02m28.7s), 10000/10000 VUs, 15095 complete and 0 interrupted iterations
+time="2026-07-31T15:52:00Z" level=warning msg="Request Failed" error="Post \"https://api.ticketrush.store/api/v1/queue/27/enqueue\": dial: i/o timeout"
+time="2026-07-31T15:52:00Z" level=warning msg="Request Failed" error="Post \"https://api.ticketrush.store/api/v1/queue/27/enqueue\": dial: i/o timeout"
+time="2026-07-31T15:52:00Z" level=warning msg="Request Failed" error="Post \"https://api.ticketrush.store/api/v1/queue/27/enqueue\": dial: i/o timeout"
+time="2026-07-31T15:52:00Z" level=warning msg="Request Failed" error="Post \"https://api.ticketrush.store/api/v1/queue/27/enqueue\": dial: i/o timeout"
+time="2026-07-31T15:52:00Z" level=warning msg="Request Failed" error="Post \"https://api.ticketrush.store/api/v1/queue/27/enqueue\": dial: i/o timeout"
+time="2026-07-31T15:52:00Z" level=warning msg="Request Failed" error="Post \"https://api.ticketrush.store/api/v1/queue/27/enqueue\": dial: i/o timeout"
+time="2026-07-31T15:52:00Z" level=warning msg="Request Failed" error="Post \"https://api.ticketrush.store/api/v1/queue/27/enqueue\": dial: i/o timeout"
+time="2026-07-31T15:52:00Z" level=warning msg="Request Failed" error="Post \"https://api.ticketrush.store/api/v1/queue/27/enqueue\": dial: i/o timeout"
+time="2026-07-31T15:52:00Z" level=warning msg="Request Failed" error="Post \"https://api.ticketrush.store/api/v1/queue/27/enqueue\": dial: i/o timeout"
+time="2026-07-31T15:52:00Z" level=warning msg="Request Failed" error="Post \"https://api.ticketrush.store/api/v1/queue/27/enqueue\": dial: i/o timeout"
+time="2026-07-31T15:52:00Z" level=warning msg="Request Failed" error="Post \"https://api.ticketrush.store/api/v1/queue/27/enqueue\": dial: i/o timeout"
+time="2026-07-31T15:52:00Z" level=warning msg="Request Failed" error="Post \"https://api.ticketrush.store/api/v1/queue/27/enqueue\": dial: i/o timeout"
+time="2026-07-31T15:52:00Z" level=warning msg="Request Failed" error="Post \"https://api.ticketrush.store/api/v1/queue/27/enqueue\": dial: i/o timeout"
+time="2026-07-31T15:52:00Z" level=warning msg="Request Failed" error="Post \"https://api.ticketrush.store/api/v1/queue/27/enqueue\": dial: i/o timeout"
+time="2026-07-31T15:52:00Z" level=warning msg="Request Failed" error="Post \"https://api.ticketrush.store/api/v1/queue/27/enqueue\": dial: i/o timeout"
+time="2026-07-31T15:52:00Z" level=warning msg="Request Failed" error="Post \"https://api.ticketrush.store/api/v1/queue/27/enqueue\": dial: i/o timeout"
+time="2026-07-31T15:52:01Z" level=warning msg="Request Failed" error="Post \"https://api.ticketrush.store/api/v1/queue/27/enqueue\": dial: i/o timeout"
+running (02m29.7s), 10000/10000 VUs, 15229 complete and 0 interrupted iterations
+time="2026-07-31T15:52:01Z" level=warning msg="Request Failed" error="Post \"https://api.ticketrush.store/api/v1/queue/27/enqueue\": dial: i/o timeout"
+time="2026-07-31T15:52:01Z" level=warning msg="Request Failed" error="Post \"https://api.ticketrush.store/api/v1/queue/27/enqueue\": dial: i/o timeout"
+time="2026-07-31T15:52:01Z" level=warning msg="Request Failed" error="Post \"https://api.ticketrush.store/api/v1/queue/27/enqueue\": dial: i/o timeout"
+time="2026-07-31T15:52:01Z" level=warning msg="Request Failed" error="Post \"https://api.ticketrush.store/api/v1/queue/27/enqueue\": dial: i/o timeout"
+time="2026-07-31T15:52:01Z" level=warning msg="Request Failed" error="Post \"https://api.ticketrush.store/api/v1/queue/27/enqueue\": dial: i/o timeout"
+time="2026-07-31T15:52:01Z" level=warning msg="Request Failed" error="Post \"https://api.ticketrush.store/api/v1/queue/27/enqueue\": dial: i/o timeout"
+running (02m30.7s), 10000/10000 VUs, 15292 complete and 0 interrupted iterations
+running (02m31.7s), 10000/10000 VUs, 15345 complete and 0 interrupted iterations
+running (02m32.7s), 10000/10000 VUs, 15398 complete and 0 interrupted iterations
+running (02m33.7s), 10000/10000 VUs, 15477 complete and 0 interrupted iterations
+running (02m34.7s), 10000/10000 VUs, 15576 complete and 0 interrupted iterations
+running (02m35.7s), 10000/10000 VUs, 15660 complete and 0 interrupted iterations
+running (02m36.7s), 10000/10000 VUs, 15724 complete and 0 interrupted iterations
+running (02m37.7s), 10000/10000 VUs, 15840 complete and 0 interrupted iterations
+running (02m38.7s), 10000/10000 VUs, 15929 complete and 0 interrupted iterations
+running (02m39.7s), 10000/10000 VUs, 16067 complete and 0 interrupted iterations
+running (02m40.7s), 10000/10000 VUs, 16211 complete and 0 interrupted iterations
+running (02m41.7s), 10000/10000 VUs, 16384 complete and 0 interrupted iterations
+running (02m42.7s), 10000/10000 VUs, 16583 complete and 0 interrupted iterations
+running (02m43.7s), 10000/10000 VUs, 16711 complete and 0 interrupted iterations
+running (02m44.7s), 10000/10000 VUs, 16777 complete and 0 interrupted iterations
+running (02m45.7s), 10000/10000 VUs, 16869 complete and 0 interrupted iterations
+running (02m46.7s), 10000/10000 VUs, 16979 complete and 0 interrupted iterations
+running (02m47.7s), 10000/10000 VUs, 17210 complete and 0 interrupted iterations
+running (02m48.7s), 10000/10000 VUs, 17406 complete and 0 interrupted iterations
+running (02m49.7s), 10000/10000 VUs, 17738 complete and 0 interrupted iterations
+running (02m50.7s), 10000/10000 VUs, 18821 complete and 0 interrupted iterations
+running (02m51.7s), 10000/10000 VUs, 19040 complete and 0 interrupted iterations
+running (02m52.7s), 10000/10000 VUs, 19499 complete and 0 interrupted iterations
+running (02m53.7s), 10000/10000 VUs, 19713 complete and 0 interrupted iterations
+running (02m54.7s), 10000/10000 VUs, 19906 complete and 0 interrupted iterations
+running (02m55.7s), 10000/10000 VUs, 20189 complete and 0 interrupted iterations
+running (02m56.7s), 10000/10000 VUs, 20548 complete and 0 interrupted iterations
+running (02m57.7s), 10000/10000 VUs, 20841 complete and 0 interrupted iterations
+running (02m58.7s), 10000/10000 VUs, 21243 complete and 0 interrupted iterations
+running (02m59.7s), 10000/10000 VUs, 21443 complete and 0 interrupted iterations
+running (03m00.7s), 10000/10000 VUs, 21507 complete and 0 interrupted iterations
+running (03m01.7s), 10000/10000 VUs, 21561 complete and 0 interrupted iterations
+running (03m02.7s), 10000/10000 VUs, 21614 complete and 0 interrupted iterations
+running (03m03.7s), 10000/10000 VUs, 21692 complete and 0 interrupted iterations
+running (03m04.7s), 10000/10000 VUs, 21792 complete and 0 interrupted iterations
+running (03m05.7s), 10000/10000 VUs, 21876 complete and 0 interrupted iterations
+running (03m06.7s), 10000/10000 VUs, 21940 complete and 0 interrupted iterations
+running (03m07.7s), 10000/10000 VUs, 22056 complete and 0 interrupted iterations
+running (03m08.7s), 10000/10000 VUs, 22145 complete and 0 interrupted iterations
+running (03m09.7s), 10000/10000 VUs, 22283 complete and 0 interrupted iterations
+running (03m10.7s), 10000/10000 VUs, 22427 complete and 0 interrupted iterations
+running (03m11.7s), 10000/10000 VUs, 22600 complete and 0 interrupted iterations
+running (03m12.7s), 10000/10000 VUs, 22826 complete and 0 interrupted iterations
+running (03m13.7s), 10000/10000 VUs, 22987 complete and 0 interrupted iterations
+running (03m14.7s), 10000/10000 VUs, 23084 complete and 0 interrupted iterations
+running (03m15.7s), 10000/10000 VUs, 23203 complete and 0 interrupted iterations
+running (03m16.7s), 10000/10000 VUs, 23332 complete and 0 interrupted iterations
+running (03m17.7s), 10000/10000 VUs, 23623 complete and 0 interrupted iterations
+running (03m18.7s), 10000/10000 VUs, 23838 complete and 0 interrupted iterations
+running (03m19.7s), 10000/10000 VUs, 24230 complete and 0 interrupted iterations
+running (03m20.7s), 10000/10000 VUs, 25365 complete and 0 interrupted iterations
+running (03m21.7s), 10000/10000 VUs, 25584 complete and 0 interrupted iterations
+running (03m22.7s), 10000/10000 VUs, 26073 complete and 0 interrupted iterations
+running (03m23.7s), 10000/10000 VUs, 26354 complete and 0 interrupted iterations
+running (03m24.7s), 10000/10000 VUs, 26611 complete and 0 interrupted iterations
+running (03m25.7s), 10000/10000 VUs, 26929 complete and 0 interrupted iterations
+running (03m26.7s), 10000/10000 VUs, 27310 complete and 0 interrupted iterations
+running (03m27.7s), 10000/10000 VUs, 27650 complete and 0 interrupted iterations
+running (03m28.7s), 10000/10000 VUs, 28128 complete and 0 interrupted iterations
+running (03m29.7s), 10000/10000 VUs, 28355 complete and 0 interrupted iterations
+running (03m30.7s), 10000/10000 VUs, 28433 complete and 0 interrupted iterations
+running (03m31.7s), 10000/10000 VUs, 28494 complete and 0 interrupted iterations
+running (03m32.7s), 10000/10000 VUs, 28549 complete and 0 interrupted iterations
+running (03m33.7s), 10000/10000 VUs, 28630 complete and 0 interrupted iterations
+running (03m34.7s), 10000/10000 VUs, 28730 complete and 0 interrupted iterations
+running (03m35.7s), 10000/10000 VUs, 28814 complete and 0 interrupted iterations
+running (03m36.7s), 10000/10000 VUs, 28882 complete and 0 interrupted iterations
+running (03m37.7s), 10000/10000 VUs, 29012 complete and 0 interrupted iterations
+running (03m38.7s), 10000/10000 VUs, 29109 complete and 0 interrupted iterations
+running (03m39.7s), 10000/10000 VUs, 29262 complete and 0 interrupted iterations
+running (03m40.7s), 10000/10000 VUs, 29428 complete and 0 interrupted iterations
+running (03m41.7s), 10000/10000 VUs, 29677 complete and 0 interrupted iterations
+running (03m42.7s), 10000/10000 VUs, 29963 complete and 0 interrupted iterations
+running (03m43.7s), 10000/10000 VUs, 30195 complete and 0 interrupted iterations
+running (03m44.7s), 10000/10000 VUs, 30331 complete and 0 interrupted iterations
+running (03m45.7s), 10000/10000 VUs, 30470 complete and 0 interrupted iterations
+running (03m46.7s), 10000/10000 VUs, 30623 complete and 0 interrupted iterations
+running (03m47.7s), 10000/10000 VUs, 30918 complete and 0 interrupted iterations
+running (03m48.7s), 10000/10000 VUs, 31160 complete and 0 interrupted iterations
+running (03m49.7s), 10000/10000 VUs, 31620 complete and 0 interrupted iterations
+running (03m50.7s), 10000/10000 VUs, 32830 complete and 0 interrupted iterations
+running (03m51.7s), 10000/10000 VUs, 33079 complete and 0 interrupted iterations
+running (03m52.7s), 10000/10000 VUs, 33602 complete and 0 interrupted iterations
+running (03m53.7s), 10000/10000 VUs, 34022 complete and 0 interrupted iterations
+running (03m54.7s), 10000/10000 VUs, 34361 complete and 0 interrupted iterations
+running (03m55.7s), 10000/10000 VUs, 34683 complete and 0 interrupted iterations
+running (03m56.7s), 10000/10000 VUs, 35079 complete and 0 interrupted iterations
+running (03m57.7s), 10000/10000 VUs, 35436 complete and 0 interrupted iterations
+running (03m58.7s), 10000/10000 VUs, 35916 complete and 0 interrupted iterations
+running (03m59.7s), 10000/10000 VUs, 36165 complete and 0 interrupted iterations
+running (04m00.7s), 10000/10000 VUs, 36278 complete and 0 interrupted iterations
+running (04m01.7s), 10000/10000 VUs, 36398 complete and 0 interrupted iterations
+running (04m02.7s), 10000/10000 VUs, 36567 complete and 0 interrupted iterations
+running (04m03.7s), 10000/10000 VUs, 36684 complete and 0 interrupted iterations
+running (04m04.7s), 10000/10000 VUs, 36825 complete and 0 interrupted iterations
+running (04m05.7s), 10000/10000 VUs, 36940 complete and 0 interrupted iterations
+running (04m06.7s), 10000/10000 VUs, 37034 complete and 0 interrupted iterations
+running (04m07.7s), 10000/10000 VUs, 37184 complete and 0 interrupted iterations
+running (04m08.7s), 10000/10000 VUs, 37318 complete and 0 interrupted iterations
+running (04m09.7s), 10000/10000 VUs, 37510 complete and 0 interrupted iterations
+running (04m10.7s), 10000/10000 VUs, 37692 complete and 0 interrupted iterations
+running (04m11.7s), 10000/10000 VUs, 37980 complete and 0 interrupted iterations
+running (04m12.7s), 10000/10000 VUs, 38302 complete and 0 interrupted iterations
+running (04m13.7s), 10000/10000 VUs, 38573 complete and 0 interrupted iterations
+running (04m14.7s), 10000/10000 VUs, 38737 complete and 0 interrupted iterations
+running (04m15.7s), 10000/10000 VUs, 38888 complete and 0 interrupted iterations
+running (04m16.7s), 10000/10000 VUs, 39089 complete and 0 interrupted iterations
+running (04m17.7s), 10000/10000 VUs, 39421 complete and 0 interrupted iterations
+running (04m18.7s), 10000/10000 VUs, 39692 complete and 0 interrupted iterations
+running (04m19.7s), 10000/10000 VUs, 40169 complete and 0 interrupted iterations
+running (04m20.7s), 10000/10000 VUs, 41406 complete and 0 interrupted iterations
+running (04m21.7s), 10000/10000 VUs, 41674 complete and 0 interrupted iterations
+running (04m22.7s), 10000/10000 VUs, 42230 complete and 0 interrupted iterations
+running (04m23.7s), 10000/10000 VUs, 42680 complete and 0 interrupted iterations
+running (04m24.7s), 10000/10000 VUs, 43040 complete and 0 interrupted iterations
+running (04m25.7s), 10000/10000 VUs, 43384 complete and 0 interrupted iterations
+running (04m26.7s), 10000/10000 VUs, 43804 complete and 0 interrupted iterations
+running (04m27.7s), 10000/10000 VUs, 44199 complete and 0 interrupted iterations
+running (04m28.7s), 10000/10000 VUs, 44699 complete and 0 interrupted iterations
+running (04m29.7s), 10000/10000 VUs, 44967 complete and 0 interrupted iterations
+running (04m30.7s), 10000/10000 VUs, 45108 complete and 0 interrupted iterations
+running (04m31.7s), 10000/10000 VUs, 45245 complete and 0 interrupted iterations
+running (04m32.7s), 10000/10000 VUs, 45429 complete and 0 interrupted iterations
+running (04m33.7s), 10000/10000 VUs, 45573 complete and 0 interrupted iterations
+running (04m34.7s), 10000/10000 VUs, 45737 complete and 0 interrupted iterations
+running (04m35.7s), 10000/10000 VUs, 45867 complete and 0 interrupted iterations
+running (04m36.7s), 10000/10000 VUs, 45983 complete and 0 interrupted iterations
+running (04m37.7s), 10000/10000 VUs, 46150 complete and 0 interrupted iterations
+running (04m38.7s), 10000/10000 VUs, 46310 complete and 0 interrupted iterations
+running (04m39.7s), 10000/10000 VUs, 46514 complete and 0 interrupted iterations
+running (04m40.7s), 10000/10000 VUs, 46710 complete and 0 interrupted iterations
+running (04m41.7s), 10000/10000 VUs, 47017 complete and 0 interrupted iterations
+running (04m42.7s), 10000/10000 VUs, 47347 complete and 0 interrupted iterations
+running (04m43.7s), 10000/10000 VUs, 47618 complete and 0 interrupted iterations
+running (04m44.7s), 10000/10000 VUs, 47782 complete and 0 interrupted iterations
+running (04m45.7s), 10000/10000 VUs, 47935 complete and 0 interrupted iterations
+running (04m46.7s), 10000/10000 VUs, 48145 complete and 0 interrupted iterations
+running (04m47.7s), 10000/10000 VUs, 48487 complete and 0 interrupted iterations
+running (04m48.7s), 10000/10000 VUs, 48790 complete and 0 interrupted iterations
+running (04m49.7s), 10000/10000 VUs, 49286 complete and 0 interrupted iterations
+running (04m50.7s), 10000/10000 VUs, 50537 complete and 0 interrupted iterations
+running (04m51.7s), 10000/10000 VUs, 50827 complete and 0 interrupted iterations
+running (04m52.7s), 10000/10000 VUs, 51400 complete and 0 interrupted iterations
+running (04m53.7s), 10000/10000 VUs, 51872 complete and 0 interrupted iterations
+  █ THRESHOLDS 
+    http_req_duration
+    ✗ 'p(95)<800' p(95)=5.14s
+    http_req_failed
+    ✗ 'rate<0.01' rate=27.96%
+  █ TOTAL RESULTS 
+    CUSTOM
+    queue_admitted.................: 100.00% 5748 out of 5748
+    queue_booking_forbidden........: 0.00%   0 out of 5748
+    queue_booking_ok...............: 75.17%  4321 out of 5748
+    queue_polls_per_user...........: avg=11.008873  min=1       med=11       max=34      p(90)=17       p(95)=21      
+    queue_status_duration..........: avg=1.6s       min=4.35ms  med=1.2s     max=9.33s   p(90)=4.22s    p(95)=5.27s   
+    queue_status_unavailable.......: 15.55%  13141 out of 84469
+    queue_wait_to_admit_seconds....: avg=129.696609 min=2.424   med=150.677  max=240.236 p(90)=195.9979 p(95)=200.4015
+    HTTP
+    http_req_duration..............: avg=1.62s      min=0s      med=1.22s    max=34.17s  p(90)=4.18s    p(95)=5.14s   
+      { expected_response:true }...: avg=1.35s      min=4.78ms  med=969.21ms max=9.33s   p(90)=3.45s    p(95)=4.6s    
+    http_req_failed................: 27.96%  28029 out of 100218
+    http_reqs......................: 100218  340.769589/s
+    EXECUTION
+    iteration_duration.............: avg=39.64s     min=20.07ms med=30s      max=4m4s    p(90)=30s      p(95)=2m40s   
+    iterations.....................: 51977   176.736524/s
+    vus............................: 10000   min=0               max=10000
+    vus_max........................: 10000   min=7352            max=10000
+    NETWORK
+    data_received..................: 99 MB   336 kB/s
+    data_sent......................: 38 MB   130 kB/s
+running (04m54.1s), 00000/10000 VUs, 51977 complete and 10000 interrupted iterations
+time="2026-07-31T15:54:25Z" level=error msg="test run was aborted because k6 received a 'terminated' signal"
