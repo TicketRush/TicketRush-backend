@@ -47,13 +47,18 @@ http://localhost:3000/explore?orgId=1&schemaVersion=1&panes=%7B%22a%22%3A%7B%22d
 http://localhost:3000/explore?orgId=1&schemaVersion=1&panes=%7B%22a%22%3A%7B%22datasource%22%3A%22prometheus%22%2C%22queries%22%3A%5B%7B%22refId%22%3A%22A%22%2C%22expr%22%3A%22ticketrush_container_memory_usage_bytes%7Bcontainer%3D%5C%22seat-service%5C%22%7D%2F1024%2F1024%22%2C%22datasource%22%3A%7B%22type%22%3A%22prometheus%22%2C%22uid%22%3A%22prometheus%22%7D%7D%2C%7B%22refId%22%3A%22B%22%2C%22expr%22%3A%22100%20%2A%20ticketrush_container_memory_usage_bytes%7Bcontainer%3D%5C%22seat-service%5C%22%7D%20%2F%20ticketrush_container_memory_limit_bytes%7Bcontainer%3D%5C%22seat-service%5C%22%7D%22%2C%22datasource%22%3A%7B%22type%22%3A%22prometheus%22%2C%22uid%22%3A%22prometheus%22%7D%7D%5D%2C%22range%22%3A%7B%22from%22%3A%221785484410000%22%2C%22to%22%3A%221785485130000%22%7D%7D%7D
 
 
-## 추가 후보 (선택)
+## 보완 캡처 (찍었다)
 
 ### graph-pool-growth.png — pool·active 만 떼어 4 → 16 확장 시점을 보이는 장
 
 위 `graph-queue-vs-pool.png` 가 스케일 때문에 못 보여주는 것을 보완한다. 큐 선을 빼면
 세로 눈금이 0-16 으로 잡혀 확장 시점이 드러난다. **큐 그래프와 가로 시간축이 같으므로
 두 장을 나란히 놓으면 "큐가 먼저, pool 이 나중" 순서가 보인다.**
+
+> ✅ **찍었다.** pool 이 4 에서 평평하다 **07:57:00Z 에 16 으로 점프**하고, 그 시각이
+> `graph-queue-vs-pool.png` 에서 큐가 치솟기 시작한 시점과 일치한다. 논지가 그림으로 섰다.
+> 부수 관측 둘 — pool 은 16 으로 늘어난 뒤 회차 끝까지 줄지 않았고, 큐 해소 후에도
+> active 가 07:03·07:04 에 12·16 으로 튄다(정상 부하에서도 팬아웃이 순간적으로 몰린다).
 
 측정 창: 2026-07-31T07:53:30Z ~ 2026-07-31T08:05:30Z (UTC)
 
