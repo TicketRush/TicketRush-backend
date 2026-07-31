@@ -29,6 +29,13 @@ public class MetricNames {
   // 출처를 가르지 못했다(리포트 §10) — executor_queued_tasks와 겹쳐 읽으라고 있는 축이다.
   // 태그 값은 SeatEventSource 열거형이라 유한 집합이 컴파일 시점에 보장된다.
   public static final String SEAT_SSE_EVENT_PUBLISHED = "ticketrush.seat.sse.event.published";
+  // SSE 전송 큐 포화로 호출 스레드가 팬아웃을 대신 실행한 횟수(#532). 거부 정책을 CallerRunsPolicy로
+  // 바꾸면서 REJECTED(유실)는 0이 되는 대신 비용이 "호출 스레드 지연"으로 옮겨 갔다 — 이 카운터가
+  // 그 지불한 비용을 센다. 값이 튀면 스케줄러 tick·Redis 리스너가 그만큼 밀리고 있다는 뜻이다.
+  public static final String SEAT_SSE_EVENT_CALLER_RUNS = "ticketrush.seat.sse.event.caller_runs";
+  // 좌석맵 조회 캐시 히트/미스(#469). "히트 시 DB를 거치지 않는다"는 완료 조건의 운영 관측 축이고,
+  // 티켓팅 러시(선점마다 evict)에서 히트율이 실제로 얼마나 남는지 측정 회차가 이 카운터로 읽는다.
+  public static final String SEAT_MAP_CACHE = "ticketrush.seat.seatmap.cache";
 
   // payment
   public static final String PAYMENT_CONFIRM = "ticketrush.payment.confirm";
@@ -73,4 +80,6 @@ public class MetricNames {
   public static final String RESULT_FAIL = "fail";
   public static final String RESULT_ISSUED = "issued";
   public static final String RESULT_ALREADY_ISSUED = "already_issued";
+  public static final String RESULT_HIT = "hit";
+  public static final String RESULT_MISS = "miss";
 }

@@ -1,0 +1,232 @@
+# ============================================================================
+# #529 좌석 상태 집계 커버링 인덱스 before/after — 수치 SSOT
+# report.md 는 이 파일의 값을 인용한다. 값이 어긋나면 이 파일이 옳다.
+# ============================================================================
+
+SERIES_ID=260730-529-seat-counts-covering-index
+ISSUE=529
+RELATED=#521 (인덱스), #403 (원 회차 · 비교 기준), #512 (배포 묶음)
+DATE=2026-07-30 (UTC)
+TARGET_HOST=https://api.ticketrush.store
+TOPOLOGY=EC2 단일 인스턴스 + Docker Compose (ADR 0004 / ADR 0007)
+INSTANCE_TYPE=m7i-flex.large
+INSTANCE_VCPU=2
+IMAGE_TAG=342a8ef5e910b6c2c55648fcd2b38dc5d8b7741a
+APP_CODE_CHANGE=0줄 (이 회차는 배포가 아니라 실행이다 — #512 규약)
+RUNBOOK=docs/load-test-guide.md §14.4
+SCENARIO=load-test/scenarios/seat-counts.js
+SEED=load-test/seed/seed_seat_counts.sql
+K6_IMAGE=grafana/k6:latest
+PROM_SCRAPE_INTERVAL=15s
+
+# ── 왜 before 를 새로 뜨는가 ────────────────────────────────────────────────
+# #403 수치를 그대로 before 로 쓰면 이미지 차이가 개선분에 섞인다. 이번 배포(342a8ef5)에
+# #519(SSE 거부 카운터 + executor 빈 타입) · #520(발행 경로 태그) · #515(컨테이너 메모리
+# 샘플러)가 함께 실렸다. 그래서 인덱스 DDL 을 배포 직후가 아니라 A-pre 회차 뒤에 넣어
+# before/after 를 같은 이미지 · 같은 호스트 · 같은 코호트에서 잡는다.
+#
+#   [#528 SSE 회차] -> [A-pre: A·B] -> 수동 DDL + EXPLAIN -> [A-post: A·B]
+
+# ── 배포 전후 대조 ───────────────────────────────────────────────────────────
+PRE_DEPLOY_IMAGE_TAG=1f2ed5d27ec7dd9cb92d72aba6b2e9b92a6ce110
+PRE_DEPLOY_CONTAINERS=15
+POST_DEPLOY_CONTAINERS=16   # container-mem-sampler 추가(#515)
+CD_RUN=30525321156 (success, 08:05:45Z -> 08:28:02Z = 22분 17초)
+CD_GATE_TARGETS=11/11 up, down=0
+CD_GATE_CONTAINER_SERIES=16/8 (첫 시도에 통과 — #515 가 넣은 신규 게이트)
+
+# ── 사전 게이트 (§14.2, 2026-07-30 08:33Z) ──────────────────────────────────
+G0_SSE_REACHABLE=pass — perf 17 에서 event:connected 즉시 수신
+G1_INDEX=단일 컬럼 상태(PRIMARY / idx_seat_performance_id / idx_seat_status_hold_expired_at)
+         = A-pre 조건. 커버링 인덱스는 A-pre 뒤에 넣는다
+G2_EXECUTOR_METRIC=pass — executor_queued_tasks{name="seatStatusSseExecutor"} 노출됨
+                   (#403 에서는 실패했다. PR #519 가 빈 반환 타입을 ThreadPoolTaskExecutor 로 좁혔다)
+G3_IMAGE_TAG=pass — 전 서비스 342a8ef5... 단일
+G4_BASELINE_RSS=seat-service 410.6 MiB / 640 (64.15%)
+G5_SOURCE_LABELS=pass — booking_hold / confirm_sold / expire_single / refund_release / scheduler_fallback
+CONTAINER_MEM_SAMPLER=pass — 16 건 열거, seat-service limit 671088640 (= mem_limit 640 MiB)
+EXITED_CONTAINERS=none (kafka-volume-init 은 restart:"no" 인 run-to-completion 이라 제외)
+RESTART_COUNT=전 컨테이너 0
+
+# ── 시딩 (§14.3) ────────────────────────────────────────────────────────────
+# 코호트가 하루를 넘겨 재사용돼 HOLD 가 전부 해제돼 있었다(런북 §14.3 경고 그대로).
+# @mode='refresh' 로 원래 HOLD 였던 좌석만 되돌렸다 — performance_id 가 보존된다.
+SEED_MODE=refresh (2026-07-30 08:30:47Z)
+SEED_BEFORE_A=perf 14 / 600석 / AVAILABLE 480 · SOLD 120 · HOLD_live 0   (기대 120)
+SEED_BEFORE_B=perf 15 / 3,000석 / AVAILABLE 2400 · SOLD 600 · HOLD_live 0 (기대 600)
+SEED_A_TITLE=LTC-A / SEED_A_PERF_ID=14 / SEED_A_SEATS=600
+             AVAILABLE 360 / SOLD 120 / HOLD_live 120 / HOLD_expired 0
+SEED_B_TITLE=LTC-B / SEED_B_PERF_ID=15 / SEED_B_SEATS=3000
+             AVAILABLE 1800 / SOLD 600 / HOLD_live 600 / HOLD_expired 0
+SEED_STATUS_RATIO=SOLD 20% / HOLD 20% / AVAILABLE 60% (A·B 동일, #403 과 같다)
+SEED_CROSSCHECK=/seat-counts 응답이 expect_* 와 일치함을 시딩 직후 확인
+  perf 14 -> total 600 / available 360 / sold 120 / hold 120
+  perf 15 -> total 3000 / available 1800 / sold 600 / hold 600
+
+# ── 워밍업 (폐기) ───────────────────────────────────────────────────────────
+# 배포 직후 회차는 JIT · 클래스 로딩이 섞여 폐기한다(#402 가 같은 부하에서 CPU 97.9% vs
+# 73.9%, p95 234ms vs 33ms 를 봤다). 아래는 그 워밍업이고 수치로 쓰지 않는다.
+WARMUP=perf 14 / 40 iters/s x 3m / iterations 7,199 / 실패 0 / scale_mismatch 0.00%
+WARMUP_RESULT=avg 17.21ms / p95 34.54ms
+
+# ── 회차 계단 (#403 과 동일해야 곡선을 겹칠 수 있다) ────────────────────────
+STAGES=40,80,160,240,320,480 iters/s
+STAGE_DURATION=5m
+STEP_RAMP=10s
+ROUND_LENGTH=30분 40초
+PRE_ALLOCATED_VUS=100 / MAX_VUS=800
+
+# ── 회차 시각 ───────────────────────────────────────────────────────────────
+A_PRE_A_START_UTC=2026-07-30T08:36:33Z
+A_PRE_A_END_UTC=2026-07-30T09:07:46Z
+A_PRE_B_START_UTC=2026-07-30T09:12:39Z
+A_PRE_B_END_UTC=2026-07-30T09:44:00Z
+DDL_APPLIED_UTC=2026-07-30T10:38:32Z
+A_POST_A_START_UTC=2026-07-30T10:39:47Z
+A_POST_A_END_UTC=2026-07-30T11:10:49Z
+A_POST_B_START_UTC=2026-07-30T11:12:38Z
+A_POST_B_END_UTC=2026-07-30T11:44:03Z
+
+# ── #403 기준값 (비교 대상) ─────────────────────────────────────────────────
+# 80 계단이 비교 지점이다(40 계단은 워밍업이 섞인다).
+BASELINE_403_A_80=서버 평균 1.89ms / p95 4.16ms
+BASELINE_403_B_80=서버 평균 4.28ms / p95 7.75ms
+BASELINE_403_B_SATURATION=247 rps (320 계단에서 고원, CPU 100% · tomcat busy 50/50 · hikari pending 40)
+BASELINE_403_A_SATURATION=480 rps 에서도 미포화 (목표의 98.5% 소화, p95 < 100ms)
+BASELINE_403_COST_MODEL=cost ≈ 1.29ms + 0.996µs × 좌석수
+BASELINE_403_SCAN_SHARE=600석 32% (0.60ms) / 3,000석 70% (2.99ms)
+
+# ── 인덱스 DDL (A-pre 와 A-post 사이) ──────────────────────────────────────
+# ALTER TABLE seat
+#   ADD INDEX idx_seat_performance_id_status_hold_expired_at
+#     (performance_id, seat_status, hold_expired_at),
+#   ALGORITHM=INPLACE, LOCK=NONE;
+# ALTER TABLE seat DROP INDEX idx_seat_performance_id, ALGORITHM=INPLACE, LOCK=NONE;
+# 전문은 index-ddl-output.txt, 실행한 SQL 은 index-ddl.sql 에 있다.
+SHOW_INDEX_BEFORE=PRIMARY / idx_seat_performance_id / idx_seat_status_hold_expired_at
+SHOW_INDEX_AFTER=PRIMARY / idx_seat_status_hold_expired_at / idx_seat_performance_id_status_hold_expired_at
+EXPLAIN_BEFORE=type=ref key=idx_seat_performance_id rows=3000 Extra=NULL          (커버링 아님)
+EXPLAIN_AFTER=type=ref key=idx_seat_performance_id_status_hold_expired_at rows=3000 Extra=Using index
+EXPLAIN_AFTER_SEATMAP=type=ref key=idx_seat_performance_id_status_hold_expired_at Extra=NULL
+                      -> 좌석맵 조회가 새 인덱스로 range 진입한다. 단일 컬럼 인덱스 제거 판단의 실측 근거
+DB_SEAT_ROWS=67301 (PRIMARY cardinality 기준)
+
+# ── 결과 (회차 종료 후 채운다) ─────────────────────────────────────────────
+RESULT_A_PRE_80=서버 avg 2.22ms / p95 4.81ms
+RESULT_A_POST_80=서버 avg 1.71ms / p95 3.57ms   (-23.0%)
+RESULT_B_PRE_80=서버 avg 5.50ms / p95 13.02ms
+RESULT_B_POST_80=서버 avg 2.66ms / p95 4.90ms   (-51.6%)
+RESULT_B_SATURATION_PRE=254.84 rps (320 계단부터 고원, CPU 99.98%)
+RESULT_B_SATURATION_POST=396.75 rps (480 계단, CPU 98.45%)  -> +55.7%
+RESULT_B_SATURATION_VS_403=#403 의 247 rps 대비 +60.6%
+RESULT_COST_MODEL_POST=cost ≈ 1.472ms + 0.396µs × 좌석수
+RESULT_FIXED_TERM_POST=1.472 ms (A-pre 1.400ms 대비 +5.2% — 사실상 불변)
+RESULT_PER_SEAT_POST=0.396 µs (A-pre 1.367µs 대비 -71.0%)
+RESULT_SCAN_SHARE_POST=600석 13.9% (A-pre 36.9%) / 3,000석 44.6% (A-pre 74.5%)
+
+
+# ============================================================================
+# A-pre 결과 (인덱스 이전, IMAGE_TAG 342a8ef5)
+# 계단 앞뒤 30초를 제외한 '구간평균 / 구간최댓값'. #403 과 같은 방식이다.
+# ============================================================================
+
+# ── 회차 1: LTC-A 600석 (perf 14) ──────────────────────────────────────────
+# 축            40             80             160            240            320            480
+# k6 rps        36.52/40.02    75.84/80.01    153.18/160.02  234.55/240.01  310.41/320.10  465.10/484.34
+# 서버 avg ms   2.86/3.35      2.22/2.42      2.14/2.35      2.54/2.66      4.10/6.42      34.40/58.64
+# 서버 p95 ms   5.14/8.38      4.81/4.87      4.80/4.99      7.62/8.15      16.06/23.73    137.51/230.42
+# CPU %         16.53/18.78    22.48/23.83    34.29/37.42    47.51/49.32    61.05/64.83    92.71/96.90
+# tomcat busy   0.00/0.00      0.00/0.00      0.44/1.00      0.44/1.00      2.25/10.00     21.94/50.00
+# hikari pend   0.00/0.00      0.00/0.00      0.00/0.00      0.00/0.00      0.00/0.00      13.69/42.00
+# seat RSS MiB  469.23/470.78  471.63/472.14  473.14/473.95  474.55/475.01  477.89/481.75  494.38/501.66
+A_PRE_A_ITERATIONS=406016
+A_PRE_A_FAILED=0.00% (0 / 406016)
+A_PRE_A_SCALE_MISMATCH=0.00%
+A_PRE_A_DROPPED=582 (0.14%)
+A_PRE_A_VUS_MAX=666 / 800 (상한 미도달)
+A_PRE_A_80=서버 avg 2.22ms / p95 4.81ms
+A_PRE_A_SATURATION=미포화 — 480 계단에서 목표의 96.9% 소화, CPU 92.71%
+
+# ── 회차 2: LTC-B 3,000석 (perf 15) ────────────────────────────────────────
+# 축            40             80             160            240            320            480
+# k6 rps        38.35/40.01    79.49/80.01    157.72/160.07  238.21/241.06  243.92/251.39  254.84/265.41
+# 서버 avg ms   6.46/10.95     5.50/8.22      7.68/12.92     122.61/205.82  214.52/222.10  208.37/215.12
+# 서버 p95 ms   12.00/24.62    13.02/38.22    30.19/69.69    405.52/595.44  562.02/611.61  556.09/612.61
+# CPU %         27.17/39.19    32.96/34.04    54.70/58.67    97.91/99.97    99.98/99.99    99.97/99.98
+# tomcat busy   0.31/1.00      0.44/1.00      1.75/5.00      26.06/50.00    50.00/50.00    50.00/50.00
+# hikari pend   0.00/0.00      0.00/0.00      0.00/0.00      17.69/40.00    40.06/41.00    40.00/41.00
+# seat RSS MiB  443.68/452.86  452.20/454.23  457.87/460.77  462.57/464.42  486.18/486.59  498.81/499.88
+A_PRE_B_ITERATIONS=306853 성공 / 314237 시도
+A_PRE_B_FAILED=2.34% (7384 / 314237)
+A_PRE_B_SCALE_MISMATCH=0.00%
+A_PRE_B_DROPPED=92362
+A_PRE_B_VUS_MAX=800 / 800 (상한 도달 — 아래 주의)
+A_PRE_B_80=서버 avg 5.50ms / p95 13.02ms
+A_PRE_B_SATURATION=320 계단부터 고원. 243.92 -> 254.84 rps (도착률 1.5배에도 무변화)
+A_PRE_B_SATURATION_AXES=CPU 99.98% / tomcat busy 50 of 50 / hikari pending 40 (풀 10)
+
+# ⚠ vus_max 가 800 상한에 닿았다. 그래도 이 회차를 유효로 판정하는 근거는 CPU 99.98% ·
+#   tomcat busy 50/50 · hikari pending 40 이 같은 시각에 함께 붙기 때문이다 — 드롭의 원인이
+#   VU 부족이 아니라 서버 포화다(런북 §14.8 무효 판정 항목). 다만 320·480 계단의 절대 처리량은
+#   'VU 상한 아래에서 관측된 값' 이라는 단서를 리포트에 남긴다.
+
+# ── 비용 모델 재적합 (80 계단 두 점) ───────────────────────────────────────
+# cost = a + b × 좌석수  를 A(600) · B(3000) 의 80 계단으로 푼다.
+A_PRE_COST_MODEL=cost ≈ 1.400ms + 1.367µs × 좌석수
+A_PRE_FIXED_TERM=1.400 ms
+A_PRE_PER_SEAT=1.367 µs
+A_PRE_SCAN_SHARE_600=0.820 ms (36.9%)
+A_PRE_SCAN_SHARE_3000=4.100 ms (74.5%)
+
+# ⚠ #403 은 1.29ms + 0.996µs/좌석 (스캔 몫 32% / 70%) 이었다. 새 이미지가 고정항 +8.5%,
+#   좌석당 +37% 비싸다. **이것이 before 를 다시 뜬 이유다** — #403 을 그대로 before 로 썼으면
+#   이 차이가 인덱스 개선분에 섞였다. 이번 배포에 #519 · #520 · #515 가 함께 실렸다.
+#   (원인 분해는 이 회차의 범위 밖이다. 리포트 한계에 남긴다.)
+
+
+# ============================================================================
+# A-post 결과 (커버링 인덱스 적용, 같은 이미지 342a8ef5)
+# ============================================================================
+
+# ── 회차 3: LTC-A 600석 (perf 14) ──────────────────────────────────────────
+# 축            40             80             160            240            320            480
+# k6 rps        38.00/40.07    77.89/80.01    156.67/160.03  237.73/240.13  315.26/320.02  473.55/480.15
+# 서버 avg ms   3.09/6.61      1.71/1.85      1.93/2.97      1.93/2.34      2.94/6.21      5.36/6.90
+# 서버 p95 ms   6.48/17.86     3.57/4.50      4.98/9.26      5.50/7.36      10.16/22.13    22.50/30.49
+# CPU %         28.44/39.83    19.96/20.81    30.55/32.21    41.72/42.59    54.47/56.14    80.38/82.39
+# tomcat busy   0.12/2.00      0.12/1.00      0.31/1.00      0.44/2.00      1.00/3.00      4.06/38.00
+# hikari pend   0.00/0.00      0.00/0.00      0.00/0.00      0.00/0.00      0.00/0.00      0.94/15.00
+# seat RSS MiB  438.32/445.66  446.27/446.72  449.93/453.59  454.44/455.09  458.04/462.07  462.67/463.22
+A_POST_A_ITERATIONS=406486
+A_POST_A_FAILED=0.00% (0 / 406486)
+A_POST_A_SCALE_MISMATCH=0.00%
+A_POST_A_DROPPED=113        # A-pre 582 대비 -81%
+A_POST_A_VUS_MAX=212 / 800  # A-pre 666 대비 -68%
+A_POST_A_80=서버 avg 1.71ms / p95 3.57ms
+A_POST_A_SATURATION=미포화. 480 계단에서 목표의 98.7% 소화, CPU 80.38% (A-pre 92.71%)
+
+# ── 회차 4: LTC-B 3,000석 (perf 15) ────────────────────────────────────────
+# 축            40             80             160            240            320            480
+# k6 rps        36.90/40.45    78.41/80.02    154.55/160.08  235.79/240.05  316.83/320.19  396.75/407.24
+# 서버 avg ms   5.19/14.14     2.66/2.74      2.91/3.84      3.59/4.34      7.87/14.17     121.56/131.51
+# 서버 p95 ms   14.26/61.65    4.90/4.90      6.48/9.07      12.16/14.46    29.94/49.47    369.98/403.39
+# CPU %         22.07/32.97    24.20/25.04    37.31/38.81    53.24/54.72    73.76/77.57    98.45/99.96
+# tomcat busy   0.12/1.00      0.25/1.00      0.81/1.00      2.19/16.00     3.25/23.00     50.00/50.00
+# hikari pend   0.00/0.00      0.00/0.00      0.00/0.00      0.31/5.00      0.69/11.00     40.06/41.00
+# seat RSS MiB  431.12/439.54  440.28/440.87  441.70/442.12  440.71/441.25  445.40/445.76  463.99/475.26
+A_POST_B_ITERATIONS=381391 성공 / 383945 시도
+A_POST_B_FAILED=0.66% (2554 / 383945)   # A-pre 2.34% 대비
+A_POST_B_SCALE_MISMATCH=0.00%
+A_POST_B_DROPPED=22654      # A-pre 92362 대비 -75%
+A_POST_B_VUS_MAX=800 / 800  # A-pre 와 동일하게 상한 도달(480 계단에서만)
+A_POST_B_80=서버 avg 2.66ms / p95 4.90ms
+A_POST_B_SATURATION=480 계단에서 396.75 rps, CPU 98.45%. 320 계단은 목표의 99.0% 를 소화했다
+                    (A-pre 는 320 에서 이미 고원 243.92 rps · CPU 99.98%)
+
+# ── 무릎이 두 계단 밀렸다 ──────────────────────────────────────────────────
+# A-pre : 240 계단에서 CPU 97.91% · tomcat busy 26 · hikari pending 17.69 로 이미 무너진다
+# A-post: 240 계단 CPU 53.24% · tomcat busy 2.19 · hikari pending 0.31 로 여유롭다
+#         무너지는 지점이 240 -> 480 으로 밀렸다
+KNEE_PRE=240 계단 (서버 avg 122.61ms)
+KNEE_POST=480 계단 (서버 avg 121.56ms)
+KNEE_240_COMPARISON=122.61ms -> 3.59ms (34.2배)

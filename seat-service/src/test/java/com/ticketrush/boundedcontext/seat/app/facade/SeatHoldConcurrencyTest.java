@@ -8,6 +8,7 @@ import com.ticketrush.boundedcontext.seat.app.usecase.SeatHoldUseCase;
 import com.ticketrush.boundedcontext.seat.app.usecase.SeatLockUseCase;
 import com.ticketrush.boundedcontext.seat.app.usecase.SeatUnlockUseCase;
 import com.ticketrush.boundedcontext.seat.domain.entity.Seat;
+import com.ticketrush.boundedcontext.seat.out.repository.SeatMapCacheRepository;
 import com.ticketrush.boundedcontext.seat.out.repository.SeatRepository;
 import com.ticketrush.global.constants.MetricNames;
 import com.ticketrush.global.types.SeatStatus;
@@ -132,12 +133,16 @@ class SeatHoldConcurrencyTest {
     seatHoldUseCase =
         new SeatHoldUseCase(
             seatRepository,
-            // SSE 전송은 이 테스트의 관심사가 아니다. SeatStatusEventSender가 인터페이스라 람다로 끝난다.
+            // SSE 전송·좌석맵 캐시 무효화는 이 테스트의 관심사가 아니다. SeatStatusEventSender가
+            // 인터페이스라 람다로 끝나고, 캐시 리포지토리는 no-op mock으로 채운다.
             new SeatStatusEventPublisher(
-                event -> {}, Mappers.getMapper(SeatMapper.class), meterRegistry),
+                event -> {},
+                Mappers.getMapper(SeatMapper.class),
+                org.mockito.Mockito.mock(SeatMapCacheRepository.class),
+                meterRegistry),
             meterRegistry);
 
-    // ponytail: SeatFacade의 생성자 11개 중 홀드 경로가 쓰는 4개만 채우고 나머지 7개는 null로 둔다.
+    // ponytail: SeatFacade의 생성자 13개 중 홀드 경로가 쓰는 4개만 채우고 나머지 9개는 null로 둔다.
     //           @Import + @MockitoBean 7개보다 짧고, 타입이 전부 달라 오배치는 컴파일러가 잡는다.
     //           EventPublisher도 람다 — Outbox 테이블도 Kafka도 필요 없고 호출 횟수가 곧 차단 수다
     //           (Mockito verify는 멀티스레드 카운팅에서 신뢰도가 낮다).
@@ -153,7 +158,9 @@ class SeatHoldConcurrencyTest {
             new SeatUnlockUseCase(redissonClient),
             null,
             null,
-            event -> compensations.incrementAndGet());
+            event -> compensations.incrementAndGet(),
+            null,
+            null);
   }
 
   @AfterEach
