@@ -135,6 +135,10 @@ B2_POLLS=queue_polls_per_user avg 15.9 max 39 (상한 300 에 한참 못 미침)
 B2_HOST=CPU max 79.53% avg 35.27% (B-1: max 99.20% avg 68.01%) / 대기 인원 max 3,254 / T max 9초
 B2_NETWORK=data_sent 51 MB (41 kB/s) — 대역은 이 회차에서도 무관했다
 B2_OVERSELL=0행. 예매 9,276 = 좌석 9,276 = 사용자 9,276 (1:1:1, #344 검증 SQL)
+B2_BOOKING_P95=booking-service 서버 p95 최대 42.9ms / 평균 29.3ms
+#   #472 완료 조건의 '예매 경로 p95 유지' 축이다. B-1 은 최대 428.8ms / 평균 250.3ms 로 10배였다 —
+#   같은 예매 허용량(20/s)인데도 그렇다. 예매 경로가 느려진 것이 아니라 호스트 CPU 99.20% 를
+#   상태 확인 경로와 나눠 쓴 결과다. k6 쪽 queue_booking 최대 20.7 RPS 로 서버 측정과 일치한다.
 
 # ── 온전성 검사 발동 → 조사 후 기각 ────────────────────────────────────────
 SANITY_TRIGGERED=queue_admitted 가 정확히 1.000 이라 회차 전에 정한 검사가 발동했다.
