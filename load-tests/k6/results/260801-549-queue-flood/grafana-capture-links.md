@@ -29,83 +29,104 @@ Grafana 에 이미지 렌더러 플러그인이 없어 **PNG 를 서버가 만�
 > 그래프의 시각은 브라우저 시간대(KST)로 보인다. 이 문서와 리포트의 시각은 전부 **UTC** 다 —
 > 9시간을 빼고 읽는다(`01:01` = `16:01Z`).
 
-### 이 회차의 캡처 함정
+### ⚠️ 이 회차의 캡처 함정 — 첫 촬영에서 실제로 겪은 것
 
-- **회차가 둘이다.** B-1(무효, 15:50:15Z-15:54:26Z)과 B-2(유효, 16:01:25Z-16:22:41Z). 비교
-  캡처는 두 회차를 한 창(15:48-16:25)에 담아 **가운데 골짜기를 기준으로 좌우를 나눠 읽는다.**
-- **15초 샘플러의 중앙값을 '최대' 로 쓰지 않는다.** 묶음 C 에서 두 번 틀렸다(#469 Redis
-  6.76 → 7.46%, #540 seat RSS 586 → 602 MiB). 최대값은 `timeseries-*.json` 에서 뽑는다.
-- **`RedisCommandTimeoutException` 을 Redis 장애로 읽지 않는다.** B-1 에서 25만 줄이 찍혔지만
-  Redis 컨테이너 CPU 는 3.89% 였고 `slowlog` 는 비어 있었다. Lettuce 타임아웃은 클라이언트
-  쪽에서 재는 값이라, 게이트웨이가 CPU 를 못 잡으면 서버가 즉답해도 터진다.
-- **게이트웨이 `http_server_requests` 의 `uri` 라벨은 못 쓴다.** `/**`·`UNKNOWN` 으로 뭉개진다
-  (#402 실측 카디널리티 4). 경로별 구분은 `ticketrush_queue_*` 커스텀 지표로만 가능하다.
+- **스케일이 다른 두 지표를 한 패널에 넣으면 작은 쪽이 0 에 붙는다.** Grafana Explore 는 축 설정을
+  URL 로 받지 못하므로, 이 문서의 링크는 **큰 쪽을 쿼리에서 나눠 같은 축에 얹었다**(`k6_vus / 500`,
+  `Tcp_CurrEstab / 250`). 각 장의 주의에 환산값을 적어 두었으니 그대로 읽으면 된다.
+  첫 촬영에서 예매 RPS 와 `unavailable` 이 각각 0 에 붙어 **'값이 없었다' 로 오독될 그림**이 나왔다.
+- **164배 차이는 나누기로도 못 붙인다.** 상태 확인 p95 는 B-1 5.27초 · B-2 32ms 라 **회차별 두 장**으로
+  쪼갰다. 눈금 숫자를 읽어서 비교한다(#529 파일이 못 박은 before/after 관행).
+- **라벨 이름을 덤프에서 확인하고 쓴다.** 컨테이너 메모리의 라벨은 `name=` 이 아니라 `container=` 다 —
+  첫 촬영이 `No data` 로 나왔다. `timeseries-*.json` 의 `metric` 필드가 정답지다.
+- **15초 샘플러의 중앙값을 '최대' 로 쓰지 않는다.** 묶음 C 에서 두 번 틀렸다(#469 Redis 6.76 → 7.46%,
+  #540 seat RSS 586 → 602 MiB). 최대값은 `timeseries-*.json` 에서 뽑는다.
+- **회차가 둘이다.** B-1(무효, 15:50:15Z-15:54:26Z)과 B-2(유효, 16:01:25Z-16:22:41Z). 비교 캡처는
+  두 회차를 한 창(15:48-16:25)에 담아 **가운데 골짜기를 기준으로 좌우를 나눠 읽는다.**
+- **`RedisCommandTimeoutException` 을 Redis 장애로 읽지 않는다.** B-1 에서 25만 줄이 찍혔지만 Redis
+  컨테이너 CPU 는 3.89% 였고 `slowlog` 는 비어 있었다. Lettuce 타임아웃은 클라이언트 쪽에서 재는 값이다.
 
-## 캡처 목록
+---
 
-**8장이다.**
+## 촬영 목록 (8장)
 
 ### graph-booking-rps-vs-vus-b2.png — **이 회차의 전부.** 유입(VU)이 0 → 10,000 으로 오르는데 예매 RPS 는 19.60-21.00 에 평평하다
 
 측정 창: 2026-07-31T16:01:25Z ~ 2026-07-31T16:22:41Z (UTC)
 
-> 두 축의 스케일이 관건이다. 예매 RPS 는 0-30, VU 는 0-10,000 이라 한 축에 그리면 예매 선이 바닥에 붙어 '평평함' 이 안 보인다. **좌측 축(A)을 0-40 으로 고정**하고 VU 는 우측 축으로 뺀다.
+> **`k6_vus` 를 500 으로 나눠 같은 축에 얹었다 — 그래프의 20 은 VU 10,000 이다.** 나누지 않으면 축이 0-10K 가 되어 예매선이 0 에 붙고, '평평하다' 가 아니라 '예매가 아예 없었다' 로 읽힌다(첫 촬영이 그렇게 나왔다). 두 선이 20 근처에서 만나되 **하나는 계단처럼 오르고 하나는 평평한** 것이 이 회차의 결론이다.
 
-http://localhost:3000/explore?orgId=1&schemaVersion=1&panes=%7B%22a%22%3A%7B%22datasource%22%3A%22prometheus%22%2C%22queries%22%3A%5B%7B%22refId%22%3A%22A%22%2C%22expr%22%3A%22sum%28rate%28http_server_requests_seconds_count%7Binstance%3D%5C%22booking-service%3A8090%5C%22%7D%5B1m%5D%29%29%22%2C%22datasource%22%3A%7B%22type%22%3A%22prometheus%22%2C%22uid%22%3A%22prometheus%22%7D%7D%2C%7B%22refId%22%3A%22B%22%2C%22expr%22%3A%22k6_vus%22%2C%22datasource%22%3A%7B%22type%22%3A%22prometheus%22%2C%22uid%22%3A%22prometheus%22%7D%7D%5D%2C%22range%22%3A%7B%22from%22%3A%221785513685000%22%2C%22to%22%3A%221785514961000%22%7D%7D%7D
+http://localhost:3000/explore?orgId=1&schemaVersion=1&panes=%7B%22a%22%3A%7B%22datasource%22%3A%22prometheus%22%2C%22queries%22%3A%5B%7B%22refId%22%3A%22A%22%2C%22expr%22%3A%22sum%28rate%28http_server_requests_seconds_count%7Binstance%3D%5C%22booking-service%3A8090%5C%22%7D%5B1m%5D%29%29%22%2C%22datasource%22%3A%7B%22type%22%3A%22prometheus%22%2C%22uid%22%3A%22prometheus%22%7D%7D%2C%7B%22refId%22%3A%22B%22%2C%22expr%22%3A%22k6_vus%20%2F%20500%22%2C%22datasource%22%3A%7B%22type%22%3A%22prometheus%22%2C%22uid%22%3A%22prometheus%22%7D%7D%5D%2C%22range%22%3A%7B%22from%22%3A%221785513685000%22%2C%22to%22%3A%221785514961000%22%7D%7D%7D
 
-### graph-queue-waiting-b2.png — 대기 인원 단조 감소(max 3,254 → 0)와 서버가 지시한 T(max 9초)가 그것을 따라가는 모습
-
-측정 창: 2026-07-31T16:01:25Z ~ 2026-07-31T16:22:41Z (UTC)
-
-> **대기 인원 최대가 3,254 명이다.** 1만으로 오독하기 쉽다 — '1만 명이 동시에 줄 서 있는' 조건은 재현되지 않았고(리포트 §9), 이 그래프가 그 증거다.
-
-http://localhost:3000/explore?orgId=1&schemaVersion=1&panes=%7B%22a%22%3A%7B%22datasource%22%3A%22prometheus%22%2C%22queries%22%3A%5B%7B%22refId%22%3A%22A%22%2C%22expr%22%3A%22ticketrush_queue_waiting%7Bjob%3D%5C%22gateway%5C%22%7D%22%2C%22datasource%22%3A%7B%22type%22%3A%22prometheus%22%2C%22uid%22%3A%22prometheus%22%7D%7D%2C%7B%22refId%22%3A%22B%22%2C%22expr%22%3A%22ticketrush_queue_poll_interval_seconds%7Bjob%3D%5C%22gateway%5C%22%7D%22%2C%22datasource%22%3A%7B%22type%22%3A%22prometheus%22%2C%22uid%22%3A%22prometheus%22%7D%7D%5D%2C%22range%22%3A%7B%22from%22%3A%221785513685000%22%2C%22to%22%3A%221785514961000%22%7D%7D%7D
-
-### graph-queue-admission-b2.png — 승급률과 **`unavailable` 이 0 인 것**. admitted max 20.67, waiting max 365.89, unavailable 0.00
+### graph-queue-waiting-b2.png — 대기 인원 단조 감소 — max **3,254** → 0 (승급 완료 t+8분)
 
 측정 창: 2026-07-31T16:01:25Z ~ 2026-07-31T16:22:41Z (UTC)
 
-> 범례에 `unavailable` 선이 **보이긴 하되 0 에 붙어 있어야** 한다. 아예 안 보이면 시리즈가 누락된 것인지 값이 0 인지 구분되지 않으므로, 범례 목록에서 이름을 확인한다.
+> **최대가 3,254 명이다. 1만으로 오독하지 말 것** — '1만 명이 동시에 줄 서 있는' 조건은 재현되지 않았고(리포트 §9), 이 그래프가 바로 그 증거다. 폴링 주기는 스케일이 달라 아래 별도 장으로 뺐다.
 
-http://localhost:3000/explore?orgId=1&schemaVersion=1&panes=%7B%22a%22%3A%7B%22datasource%22%3A%22prometheus%22%2C%22queries%22%3A%5B%7B%22refId%22%3A%22A%22%2C%22expr%22%3A%22sum%20by%20%28result%29%20%28rate%28ticketrush_queue_admission_total%7Bjob%3D%5C%22gateway%5C%22%7D%5B1m%5D%29%29%22%2C%22datasource%22%3A%7B%22type%22%3A%22prometheus%22%2C%22uid%22%3A%22prometheus%22%7D%7D%5D%2C%22range%22%3A%7B%22from%22%3A%221785513685000%22%2C%22to%22%3A%221785514961000%22%7D%7D%7D
+http://localhost:3000/explore?orgId=1&schemaVersion=1&panes=%7B%22a%22%3A%7B%22datasource%22%3A%22prometheus%22%2C%22queries%22%3A%5B%7B%22refId%22%3A%22A%22%2C%22expr%22%3A%22ticketrush_queue_waiting%7Bjob%3D%5C%22gateway%5C%22%7D%22%2C%22datasource%22%3A%7B%22type%22%3A%22prometheus%22%2C%22uid%22%3A%22prometheus%22%7D%7D%5D%2C%22range%22%3A%7B%22from%22%3A%221785513685000%22%2C%22to%22%3A%221785514961000%22%7D%7D%7D
 
-### graph-unavailable-compare.png — **B-1 무효의 원인축.** `unavailable` 이 동시 커넥션에 붙어 있다 — 커넥션이 4,000 아래로 떨어지자 0 이 됐다. 앞 봉우리가 B-1(커넥션 16,701), 뒤가 B-2(4,752)다
-
-측정 창: 2026-07-31T15:48:00Z ~ 2026-07-31T16:25:00Z (UTC)
-
-> 두 회차가 한 화면에 나란히 나온다 — **설정 하나(R=1400→400) 바꿔 이렇게 달라졌다**가 이 한 장에 담긴다. 커넥션(B)은 우측 축으로 뺀다(0-17,000 대 0-70).
-
-http://localhost:3000/explore?orgId=1&schemaVersion=1&panes=%7B%22a%22%3A%7B%22datasource%22%3A%22prometheus%22%2C%22queries%22%3A%5B%7B%22refId%22%3A%22A%22%2C%22expr%22%3A%22sum%28rate%28ticketrush_queue_admission_total%7Bjob%3D%5C%22gateway%5C%22%2C%20result%3D%5C%22unavailable%5C%22%7D%5B1m%5D%29%29%22%2C%22datasource%22%3A%7B%22type%22%3A%22prometheus%22%2C%22uid%22%3A%22prometheus%22%7D%7D%2C%7B%22refId%22%3A%22B%22%2C%22expr%22%3A%22node_netstat_Tcp_CurrEstab%7Bjob%3D%5C%22node%5C%22%7D%22%2C%22datasource%22%3A%7B%22type%22%3A%22prometheus%22%2C%22uid%22%3A%22prometheus%22%7D%7D%5D%2C%22range%22%3A%7B%22from%22%3A%221785512880000%22%2C%22to%22%3A%221785515100000%22%7D%7D%7D
-
-### graph-host-cpu-compare.png — B-1 max **99.20%**(avg 68.01) vs B-2 max **79.53%**(avg 35.27)
-
-측정 창: 2026-07-31T15:48:00Z ~ 2026-07-31T16:25:00Z (UTC)
-
-> 가운데 골짜기가 두 회차 사이의 정리·재기동 구간이다. 그 골을 기준으로 좌우를 나눠 읽는다.
-
-http://localhost:3000/explore?orgId=1&schemaVersion=1&panes=%7B%22a%22%3A%7B%22datasource%22%3A%22prometheus%22%2C%22queries%22%3A%5B%7B%22refId%22%3A%22A%22%2C%22expr%22%3A%22100%20%2A%20%281%20-%20avg%28rate%28node_cpu_seconds_total%7Bjob%3D%5C%22node%5C%22%2C%20mode%3D%5C%22idle%5C%22%7D%5B1m%5D%29%29%29%22%2C%22datasource%22%3A%7B%22type%22%3A%22prometheus%22%2C%22uid%22%3A%22prometheus%22%7D%7D%5D%2C%22range%22%3A%7B%22from%22%3A%221785512880000%22%2C%22to%22%3A%221785515100000%22%7D%7D%7D
-
-### graph-status-latency-compare.png — 상태 확인 p95 — B-1 **5.27s** vs B-2 **32.1ms**
-
-측정 창: 2026-07-31T15:48:00Z ~ 2026-07-31T16:25:00Z (UTC)
-
-> **로그 축으로 두어야 한다.** 5.27s 와 32ms 는 164배 차이라 선형 축이면 B-2 가 바닥에 뭉개져 '0 이었다' 처럼 보인다.
-
-http://localhost:3000/explore?orgId=1&schemaVersion=1&panes=%7B%22a%22%3A%7B%22datasource%22%3A%22prometheus%22%2C%22queries%22%3A%5B%7B%22refId%22%3A%22A%22%2C%22expr%22%3A%22k6_queue_status_duration_p95%22%2C%22datasource%22%3A%7B%22type%22%3A%22prometheus%22%2C%22uid%22%3A%22prometheus%22%7D%7D%2C%7B%22refId%22%3A%22B%22%2C%22expr%22%3A%22k6_queue_wait_to_admit_seconds_p95%22%2C%22datasource%22%3A%7B%22type%22%3A%22prometheus%22%2C%22uid%22%3A%22prometheus%22%7D%7D%5D%2C%22range%22%3A%7B%22from%22%3A%221785512880000%22%2C%22to%22%3A%221785515100000%22%7D%7D%7D
-
-### graph-redis-memory-b2.png — 무효 기준 감시축. max **13.86%** (기준 75% = 48MB/64MB)
+### graph-queue-poll-interval-b2.png — 서버가 지시한 폴링 주기 T — 대기 인원을 따라 **최대 9초**까지 올랐다가 하한 3초로 수렴
 
 측정 창: 2026-07-31T16:01:25Z ~ 2026-07-31T16:22:41Z (UTC)
 
-> `noeviction` 이라 상한에 닿으면 대기열이 아니라 **좌석 락 SET 이 거절된다**(ADR 0008). 이 회차는 여유가 5배 이상이었다.
+> 위 대기 인원 그래프와 **시간축이 같으니 나란히 놓고 읽는다.** N=3,254 일 때 T=9 는 `ceil(3254/400)` 과 정확히 맞는다 — 산식이 실제로 그렇게 동작했다는 확인이다.
 
-http://localhost:3000/explore?orgId=1&schemaVersion=1&panes=%7B%22a%22%3A%7B%22datasource%22%3A%22prometheus%22%2C%22queries%22%3A%5B%7B%22refId%22%3A%22A%22%2C%22expr%22%3A%22100%20%2A%20redis_memory_used_bytes%20%2F%20redis_memory_max_bytes%22%2C%22datasource%22%3A%7B%22type%22%3A%22prometheus%22%2C%22uid%22%3A%22prometheus%22%7D%7D%5D%2C%22range%22%3A%7B%22from%22%3A%221785513685000%22%2C%22to%22%3A%221785514961000%22%7D%7D%7D
+http://localhost:3000/explore?orgId=1&schemaVersion=1&panes=%7B%22a%22%3A%7B%22datasource%22%3A%22prometheus%22%2C%22queries%22%3A%5B%7B%22refId%22%3A%22A%22%2C%22expr%22%3A%22ticketrush_queue_poll_interval_seconds%7Bjob%3D%5C%22gateway%5C%22%7D%22%2C%22datasource%22%3A%7B%22type%22%3A%22prometheus%22%2C%22uid%22%3A%22prometheus%22%7D%7D%5D%2C%22range%22%3A%7B%22from%22%3A%221785513685000%22%2C%22to%22%3A%221785514961000%22%7D%7D%7D
+
+### graph-unavailable-compare.png — **B-1 무효의 원인축.** `unavailable` 이 동시 커넥션에 붙어 있다 — 커넥션이 4,000 아래로 떨어지자 0 이 됐다. 앞 봉우리가 B-1, 뒤가 B-2 다
+
+측정 창: 2026-07-31T15:48:00Z ~ 2026-07-31T16:25:00Z (UTC)
+
+> **커넥션을 250 으로 나눠 같은 축에 얹었다 — 그래프의 66.8 은 커넥션 16,701 이고, 16 은 4,000(임계선)이다.** 나누지 않으면 축이 0-18K 가 되어 `unavailable`(0-77)이 0 에 붙는다(첫 촬영이 그렇게 나왔다). 두 선이 **앞 구간에서만 함께 솟는 것**이 이 회차의 진단이다.
+
+http://localhost:3000/explore?orgId=1&schemaVersion=1&panes=%7B%22a%22%3A%7B%22datasource%22%3A%22prometheus%22%2C%22queries%22%3A%5B%7B%22refId%22%3A%22A%22%2C%22expr%22%3A%22sum%28rate%28ticketrush_queue_admission_total%7Bjob%3D%5C%22gateway%5C%22%2C%20result%3D%5C%22unavailable%5C%22%7D%5B1m%5D%29%29%22%2C%22datasource%22%3A%7B%22type%22%3A%22prometheus%22%2C%22uid%22%3A%22prometheus%22%7D%7D%2C%7B%22refId%22%3A%22B%22%2C%22expr%22%3A%22node_netstat_Tcp_CurrEstab%7Bjob%3D%5C%22node%5C%22%7D%20%2F%20250%22%2C%22datasource%22%3A%7B%22type%22%3A%22prometheus%22%2C%22uid%22%3A%22prometheus%22%7D%7D%5D%2C%22range%22%3A%7B%22from%22%3A%221785512880000%22%2C%22to%22%3A%221785515100000%22%7D%7D%7D
+
+### graph-status-latency-b1.png — **무효 회차의 지연.** 상태 확인 p95 가 **5.27초**까지 간다(정상은 30ms 대)
+
+측정 창: 2026-07-31T15:50:15Z ~ 2026-07-31T15:54:26Z (UTC)
+
+> 아래 B-2 장과 **쿼리가 같고 창만 다르다.** 한 그래프에 못 넣는 이유는 164배 차이라 B-2 가 바닥에 뭉개져 '0 이었다' 처럼 보이기 때문이다(#529 파일이 못 박은 before/after 관행). **두 장의 세로 눈금 값을 읽어서 비교한다** — 브라우저 창 크기는 두 장 사이에 바꾸지 말 것.
+
+http://localhost:3000/explore?orgId=1&schemaVersion=1&panes=%7B%22a%22%3A%7B%22datasource%22%3A%22prometheus%22%2C%22queries%22%3A%5B%7B%22refId%22%3A%22A%22%2C%22expr%22%3A%22k6_queue_status_duration_p95%22%2C%22datasource%22%3A%7B%22type%22%3A%22prometheus%22%2C%22uid%22%3A%22prometheus%22%7D%7D%5D%2C%22range%22%3A%7B%22from%22%3A%221785513015000%22%2C%22to%22%3A%221785513266000%22%7D%7D%7D
+
+### graph-status-latency-b2.png — **유효 회차의 지연.** 같은 쿼리로 p95 **32.1ms** — 위 B-1 의 5.27초와 164배 차이다
+
+측정 창: 2026-07-31T16:01:25Z ~ 2026-07-31T16:22:41Z (UTC)
+
+> 축 최대값이 0.03 대일 것이다. 위 장의 축 최대값(5 대)과 **눈금 숫자를 비교**한다. 선 모양만 보면 둘 다 '평평' 해 보이므로 반드시 눈금을 읽는다.
+
+http://localhost:3000/explore?orgId=1&schemaVersion=1&panes=%7B%22a%22%3A%7B%22datasource%22%3A%22prometheus%22%2C%22queries%22%3A%5B%7B%22refId%22%3A%22A%22%2C%22expr%22%3A%22k6_queue_status_duration_p95%22%2C%22datasource%22%3A%7B%22type%22%3A%22prometheus%22%2C%22uid%22%3A%22prometheus%22%7D%7D%5D%2C%22range%22%3A%7B%22from%22%3A%221785513685000%22%2C%22to%22%3A%221785514961000%22%7D%7D%7D
+
+### graph-wait-to-admit-b2.png — 사용자 체감 — 진입부터 입장까지 p95 **154.6초**(avg 86.9 / max 166.6)
+
+측정 창: 2026-07-31T16:01:25Z ~ 2026-07-31T16:22:41Z (UTC)
+
+> 고원에 도달한 뒤 평평한 것은 p95 가 누적 분포라서다. **이 값은 '얼마나 기다렸나' 이지 '얼마나 느렸나' 가 아니다** — 대기열은 기다리게 하는 것이 목적이므로 크다고 나쁜 것이 아니다.
+
+http://localhost:3000/explore?orgId=1&schemaVersion=1&panes=%7B%22a%22%3A%7B%22datasource%22%3A%22prometheus%22%2C%22queries%22%3A%5B%7B%22refId%22%3A%22A%22%2C%22expr%22%3A%22k6_queue_wait_to_admit_seconds_p95%22%2C%22datasource%22%3A%7B%22type%22%3A%22prometheus%22%2C%22uid%22%3A%22prometheus%22%7D%7D%5D%2C%22range%22%3A%7B%22from%22%3A%221785513685000%22%2C%22to%22%3A%221785514961000%22%7D%7D%7D
 
 ### graph-gateway-memory-b2.png — `mem_limit` 512m(536,870,912 B) 대비 여유. reactive Lettuce/netty 가 올라간 뒤 1만 VU 첫 부하다
 
 측정 창: 2026-07-31T16:01:25Z ~ 2026-07-31T16:22:41Z (UTC)
 
-> 바이트 단위라 눈금이 크다. 512m 선(536,870,912)을 머릿속에 두고 읽거나 패널 단위를 bytes 로 바꿔 찍는다.
+> ⚠️ **첫 촬영은 `No data` 였다** — 라벨을 `name=` 으로 썼는데 실제 라벨은 `container=` 다. 이 링크는 고친 것이다. 바이트 단위라 눈금이 크니 512m 선(536,870,912)을 기준으로 읽는다.
 
-http://localhost:3000/explore?orgId=1&schemaVersion=1&panes=%7B%22a%22%3A%7B%22datasource%22%3A%22prometheus%22%2C%22queries%22%3A%5B%7B%22refId%22%3A%22A%22%2C%22expr%22%3A%22ticketrush_container_memory_usage_bytes%7Bname%3D%5C%22gateway-service%5C%22%7D%22%2C%22datasource%22%3A%7B%22type%22%3A%22prometheus%22%2C%22uid%22%3A%22prometheus%22%7D%7D%5D%2C%22range%22%3A%7B%22from%22%3A%221785513685000%22%2C%22to%22%3A%221785514961000%22%7D%7D%7D
+http://localhost:3000/explore?orgId=1&schemaVersion=1&panes=%7B%22a%22%3A%7B%22datasource%22%3A%22prometheus%22%2C%22queries%22%3A%5B%7B%22refId%22%3A%22A%22%2C%22expr%22%3A%22ticketrush_container_memory_usage_bytes%7Bcontainer%3D%5C%22gateway-service%5C%22%7D%22%2C%22datasource%22%3A%7B%22type%22%3A%22prometheus%22%2C%22uid%22%3A%22prometheus%22%7D%7D%5D%2C%22range%22%3A%7B%22from%22%3A%221785513685000%22%2C%22to%22%3A%221785514961000%22%7D%7D%7D
+
+---
+
+## 촬영 완료 (3장) — 다시 찍지 않는다
+
+### graph-queue-admission-b2.png — 승급률과 `unavailable` 이 0 인 것. waiting ≈365, admitted ≈20 평평, unavailable 0
+
+> 세 시리즈가 모두 읽히고 `unavailable` 이 범례에 이름째 보인다. **admitted 가 20 에 평평한 것**이 완료 조건의 또 다른 표현이다.
+
+### graph-host-cpu-compare.png — B-1 max **99.20%**(avg 68.01) vs B-2 max **79.53%**(avg 35.27)
+
+> 앞 고원이 B-1, 뒤 구간이 B-2, 마지막 5% 평지가 회차 종료 후 유휴다.
+
+### graph-redis-memory-b2.png — 무효 기준 감시축. max **13.86%** (기준 75% = 48MB/64MB)
+
+> `noeviction` 이라 상한에 닿으면 대기열이 아니라 **좌석 락 SET 이 거절된다**(ADR 0008).
 
