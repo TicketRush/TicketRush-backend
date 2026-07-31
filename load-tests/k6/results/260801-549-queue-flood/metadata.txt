@@ -106,10 +106,16 @@ B1_CAUSE=대기열이 아니라 CPU 굶주림이다. RedisCommandTimeoutExceptio
 #   찍혔는데 Redis 컨테이너 CPU 는 3.89% 였고 slowlog 는 비어 있었다(1,283 ops/s). Lettuce 타임아웃은
 #   클라이언트 쪽에서 재는 값이라 게이트웨이가 자기 이벤트 루프를 못 돌리면 서버가 즉답해도 터진다.
 #   호스트 CPU max 99.20% / avg 68.01%, 게이트웨이 컨테이너 89.65%.
-B1_KEY_FINDING=unavailable 은 동시 커넥션 수에 붙어 있다(램프 속도가 아니다).
-#   TCP established >= 4,000 구간 unavailable 평균 56.0/s (표본 6)
-#   TCP established <  4,000 구간 unavailable 평균  0.6/s (표본 6)
-#   최대 동시 커넥션 16,701 — 프록시 요청 1건이 클라이언트+업스트림 2슬롯을 먹기 때문이다.
+B1_KEY_FINDING=램프 속도가 아니라 폴링 수요가 용량을 넘은 것이다. 커넥션은 증상이자 되먹임이다.
+#   B-1 안에서만 보면 TCP established >= 4,000 구간 unavailable 평균 56.0/s, < 4,000 구간 0.6/s 라
+#   '커넥션 4,000 이 선' 처럼 보인다. ⚠ 그러나 B-2 는 커넥션 4,752 까지 가고도 unavailable 0 이었다 —
+#   그 선은 B-1 내부 표본으로만 그은 것이고 회차 간에는 성립하지 않는다. 캡처
+#   graph-unavailable-compare.png 가 이 반증을 그림으로 보여 준다.
+#   실제 인과: 폴링 수요 1,250 RPS > 처리 용량 약 450 RPS -> 응답이 밀린다(p95 5.27s)
+#   -> 리틀의 법칙으로 진행 중 요청 약 6,600건 x 2슬롯(클라이언트+업스트림) ≈ 13,200
+#   -> 최대 커넥션 16,701 의 대부분이 '쌓인 요청' 이고, 그 커넥션이 다시 CPU 를 먹어 되먹임이 된다.
+#   두 회차를 가른 것은 커넥션이 아니라 R 이다(1,400 -> 400). 수요가 400 RPS 로 내려가자
+#   되먹임 자체가 시작되지 않았다(B-2 최대 커넥션 4,752, unavailable 0).
 B1_STATUS_THROUGHPUT=최대 450 RPS (queue_status_duration p95 5.27s / avg 1.6s)
 
 B2_START_UTC=2026-07-31T16:01:25Z

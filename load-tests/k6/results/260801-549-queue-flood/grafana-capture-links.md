@@ -48,13 +48,18 @@ Grafana 에 이미지 렌더러 플러그인이 없어 **PNG 를 서버가 만�
 
 ---
 
-## 촬영 목록 (8장)
+## 캡처 목록 (8장) — **촬영 완료**
+
+아래 8장은 첫 촬영이 판독 불가여서 링크를 고쳐 다시 찍은 것이다. 링크는 그대로 두어
+보존 기간(2026-08-15) 안에 재현·재촬영할 수 있게 한다.
 
 ### graph-booking-rps-vs-vus-b2.png — **이 회차의 전부.** 유입(VU)이 0 → 10,000 으로 오르는데 예매 RPS 는 19.60-21.00 에 평평하다
 
 측정 창: 2026-07-31T16:01:25Z ~ 2026-07-31T16:22:41Z (UTC)
 
-> **`k6_vus` 를 500 으로 나눠 같은 축에 얹었다 — 그래프의 20 은 VU 10,000 이다.** 나누지 않으면 축이 0-10K 가 되어 예매선이 0 에 붙고, '평평하다' 가 아니라 '예매가 아예 없었다' 로 읽힌다(첫 촬영이 그렇게 나왔다). 두 선이 20 근처에서 만나되 **하나는 계단처럼 오르고 하나는 평평한** 것이 이 회차의 결론이다.
+> **`k6_vus` 를 500 으로 나눠 같은 축에 얹었다 — 그래프의 20 은 VU 10,000 이다.** 나누지 않으면 축이 0-10K 가 되어 예매선이 0 에 붙고, '평평하다' 가 아니라 '예매가 아예 없었다' 로 읽힌다(첫 촬영이 그렇게 나왔다). 두 선이 20 근처에서 만나되 **하나는 비스듬히 오르고 하나는 처음부터 평평한** 것이 이 회차의 결론이다.
+>
+> ⚠️ **01:09:30 의 절벽을 '무너졌다' 로 읽지 말 것.** 예매선이 0 으로 떨어지는 것은 **승급이 끝나 더 예매할 사람이 없어서**다(대기 인원 0, `graph-queue-waiting-b2.png` 와 시각이 일치한다). VU 선이 20 에 그대로 남아 있는 것은 여정을 마친 VU 가 회차 끝까지 유휴로 대기하기 때문이다(1회 여정 가드). 판정 창은 **램프 종료 ~ 승급 완료(01:06:25 ~ 01:09:45)** 이고, 그 구간이 min 19.60 / max 21.00 이다.
 
 http://localhost:3000/explore?orgId=1&schemaVersion=1&panes=%7B%22a%22%3A%7B%22datasource%22%3A%22prometheus%22%2C%22queries%22%3A%5B%7B%22refId%22%3A%22A%22%2C%22expr%22%3A%22sum%28rate%28http_server_requests_seconds_count%7Binstance%3D%5C%22booking-service%3A8090%5C%22%7D%5B1m%5D%29%29%22%2C%22datasource%22%3A%7B%22type%22%3A%22prometheus%22%2C%22uid%22%3A%22prometheus%22%7D%7D%2C%7B%22refId%22%3A%22B%22%2C%22expr%22%3A%22k6_vus%20%2F%20500%22%2C%22datasource%22%3A%7B%22type%22%3A%22prometheus%22%2C%22uid%22%3A%22prometheus%22%7D%7D%5D%2C%22range%22%3A%7B%22from%22%3A%221785513685000%22%2C%22to%22%3A%221785514961000%22%7D%7D%7D
 
@@ -74,11 +79,13 @@ http://localhost:3000/explore?orgId=1&schemaVersion=1&panes=%7B%22a%22%3A%7B%22d
 
 http://localhost:3000/explore?orgId=1&schemaVersion=1&panes=%7B%22a%22%3A%7B%22datasource%22%3A%22prometheus%22%2C%22queries%22%3A%5B%7B%22refId%22%3A%22A%22%2C%22expr%22%3A%22ticketrush_queue_poll_interval_seconds%7Bjob%3D%5C%22gateway%5C%22%7D%22%2C%22datasource%22%3A%7B%22type%22%3A%22prometheus%22%2C%22uid%22%3A%22prometheus%22%7D%7D%5D%2C%22range%22%3A%7B%22from%22%3A%221785513685000%22%2C%22to%22%3A%221785514961000%22%7D%7D%7D
 
-### graph-unavailable-compare.png — **B-1 무효의 원인축.** `unavailable` 이 동시 커넥션에 붙어 있다 — 커넥션이 4,000 아래로 떨어지자 0 이 됐다. 앞 봉우리가 B-1, 뒤가 B-2 다
+### graph-unavailable-compare.png — **B-1 무효의 진단.** 앞 구간(B-1)에서만 `unavailable` 과 커넥션이 함께 솟고, 뒤 구간(B-2)은 커넥션만 오르고 `unavailable` 은 0 이다
 
 측정 창: 2026-07-31T15:48:00Z ~ 2026-07-31T16:25:00Z (UTC)
 
-> **커넥션을 250 으로 나눠 같은 축에 얹었다 — 그래프의 66.8 은 커넥션 16,701 이고, 16 은 4,000(임계선)이다.** 나누지 않으면 축이 0-18K 가 되어 `unavailable`(0-77)이 0 에 붙는다(첫 촬영이 그렇게 나왔다). 두 선이 **앞 구간에서만 함께 솟는 것**이 이 회차의 진단이다.
+> **커넥션을 250 으로 나눠 같은 축에 얹었다 — 그래프의 66.8 은 커넥션 16,701, 19 는 4,752 다.** 나누지 않으면 축이 0-18K 가 되어 `unavailable`(0-77)이 0 에 붙는다(첫 촬영이 그렇게 나왔다).
+>
+> ⚠️ **이 그래프를 '커넥션이 몇 이상이면 터진다' 로 읽지 말 것.** B-2 는 커넥션 4,752(그래프 19)까지 가고도 `unavailable` 0 이다 — 커넥션 수만으로는 두 회차가 갈리지 않는다. **커넥션은 원인이자 결과다**: 폴링 수요(1,250 RPS)가 용량(약 450 RPS)을 넘어 응답이 밀리면, 프록시 요청 1건이 2슬롯을 먹으므로 쌓인 요청이 그대로 커넥션 수가 된다(리틀의 법칙으로 약 13,200). 두 회차를 가른 것은 커넥션이 아니라 **`R`(1,400 → 400)** 이고, 이 그래프는 그 결과를 보여 준다.
 
 http://localhost:3000/explore?orgId=1&schemaVersion=1&panes=%7B%22a%22%3A%7B%22datasource%22%3A%22prometheus%22%2C%22queries%22%3A%5B%7B%22refId%22%3A%22A%22%2C%22expr%22%3A%22sum%28rate%28ticketrush_queue_admission_total%7Bjob%3D%5C%22gateway%5C%22%2C%20result%3D%5C%22unavailable%5C%22%7D%5B1m%5D%29%29%22%2C%22datasource%22%3A%7B%22type%22%3A%22prometheus%22%2C%22uid%22%3A%22prometheus%22%7D%7D%2C%7B%22refId%22%3A%22B%22%2C%22expr%22%3A%22node_netstat_Tcp_CurrEstab%7Bjob%3D%5C%22node%5C%22%7D%20%2F%20250%22%2C%22datasource%22%3A%7B%22type%22%3A%22prometheus%22%2C%22uid%22%3A%22prometheus%22%7D%7D%5D%2C%22range%22%3A%7B%22from%22%3A%221785512880000%22%2C%22to%22%3A%221785515100000%22%7D%7D%7D
 
@@ -116,7 +123,10 @@ http://localhost:3000/explore?orgId=1&schemaVersion=1&panes=%7B%22a%22%3A%7B%22d
 
 ---
 
-## 촬영 완료 (3장) — 다시 찍지 않는다
+## 캡처 목록 (3장) — 첫 촬영으로 충분했다
+
+이 3장은 스케일이 섞이지 않아 처음부터 판독 가능했다. 링크는 위 촬영분과 같은 규칙으로
+만들어져 있으나, 다시 찍을 일이 없어 본문에는 판독 지침만 남긴다.
 
 ### graph-queue-admission-b2.png — 승급률과 `unavailable` 이 0 인 것. waiting ≈365, admitted ≈20 평평, unavailable 0
 
