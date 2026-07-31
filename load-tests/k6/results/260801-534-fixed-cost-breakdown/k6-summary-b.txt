@@ -1,0 +1,43 @@
+  █ THRESHOLDS 
+
+    http_req_duration
+    ✓ 'p(95)<800' p(95)=29.29ms
+
+    http_req_failed
+    ✓ 'rate<0.01' rate=0.00%
+
+
+  █ TOTAL RESULTS 
+
+    checks_total.......: 85800   93.263662/s
+    checks_succeeded...: 100.00% 85800 out of 85800
+    checks_failed......: 0.00%   0 out of 85800
+
+    ✓ seat-counts 200
+
+    CUSTOM
+    seat_counts_duration...........: avg=13.41ms min=6.78ms med=10.55ms max=352.72ms p(90)=19.32ms p(95)=29.29ms
+    seat_counts_scale_mismatch.....: 0.00% 0 out of 85800
+
+    HTTP
+    http_req_duration..............: avg=13.41ms min=6.78ms med=10.55ms max=352.72ms p(90)=19.32ms p(95)=29.29ms
+      { expected_response:true }...: avg=13.41ms min=6.78ms med=10.55ms max=352.72ms p(90)=19.32ms p(95)=29.29ms
+    http_req_failed................: 0.00% 0 out of 85800
+    http_reqs......................: 85800 93.263662/s
+
+    EXECUTION
+    iteration_duration.............: avg=13.54ms min=6.86ms med=10.66ms max=352.87ms p(90)=19.45ms p(95)=29.66ms
+    iterations.....................: 85800 93.263662/s
+    vus............................: 2     min=0          max=26 
+    vus_max........................: 100   min=100        max=100
+
+    NETWORK
+    data_received..................: 73 MB 80 kB/s
+    data_sent......................: 13 MB 14 kB/s
+
+
+
+
+running (15m20.0s), 000/100 VUs, 85800 complete and 0 interrupted iterations
+counts ✓ [ 100% ] 000/100 VUs  15m20s  160.00 iters/s
+ROUND_B_END_UTC=2026-07-31T18:56:41Z

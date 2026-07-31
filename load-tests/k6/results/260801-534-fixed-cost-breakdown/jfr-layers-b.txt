@@ -1,0 +1,56 @@
+# 회차 B — LTC-B 3,000석 / 80 계단 구간(18:47:35Z~18:51:35Z)
+
+=== 전체 샘플 계층 분포 (n=662) ===
+  미분류                 129   19.49%
+  Tomcat/서블릿          115   17.37%
+  Spring-기타            95   14.35%
+  Hibernate/JPA        88   13.29%
+  MySQL-드라이버           81   12.24%
+  Spring-MVC           63    9.52%
+  Spring-Security      61    9.21%
+  DB-소켓                13    1.96%
+  Spring-AOP/프록시        6    0.91%
+  앱코드                   6    0.91%
+  커넥션풀                  5    0.76%
+
+=== seat-counts 경로 샘플만 (n=649) ===
+  미분류                 119   18.34%
+  Tomcat/서블릿          114   17.57%
+  Spring-기타            94   14.48%
+  Hibernate/JPA        87   13.41%
+  MySQL-드라이버           81   12.48%
+  Spring-MVC           63    9.71%
+  Spring-Security      61    9.40%
+  DB-소켓                13    2.00%
+  Spring-AOP/프록시        6    0.92%
+  앱코드                   6    0.92%
+  커넥션풀                  5    0.77%
+
+=== seat-counts 경로 top-frame 상위 15 (n=649) ===
+     50  java/util/HashMap.getNode
+     17  java/util/concurrent/ConcurrentHashMap.get
+     15  java/util/HashMap.putVal
+     14  java/lang/AbstractStringBuilder.ensureCapacityInternal
+     12  java/lang/String.hashCode
+     11  java/util/concurrent/ConcurrentHashMap$Traverser.advance
+     11  com/mysql/cj/util/StringInspector.indexOfNextChar
+     10  io/micrometer/common/KeyValues.and
+      9  java/lang/String.charAt
+      9  sun/nio/cs/ISO_8859_1$Encoder.encodeLoop
+      8  org/springframework/util/ObjectUtils.nullSafeEquals
+      8  org/springframework/web/util/pattern/SeparatorPathElement.matches
+      8  jakarta/servlet/http/HttpServletRequestWrapper._getHttpServletRequest
+      7  jakarta/servlet/http/HttpServletRequestWrapper.getMethod
+      7  java/util/AbstractCollection.addAll
+
+=== 스레드별 샘플 상위 10 ===
+      42  http-nio-8086-exec-4
+      34  http-nio-8086-exec-8
+      33  http-nio-8086-exec-16
+      33  http-nio-8086-exec-9
+      32  http-nio-8086-exec-5
+      32  http-nio-8086-exec-18
+      32  http-nio-8086-exec-2
+      31  http-nio-8086-exec-17
+      31  http-nio-8086-exec-11
+      30  http-nio-8086-exec-15

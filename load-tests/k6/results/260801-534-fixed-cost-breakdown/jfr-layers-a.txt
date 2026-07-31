@@ -1,0 +1,56 @@
+# 회차 A — LTC-A 600석 / 80 계단 구간(18:29:49Z~18:33:49Z)
+
+=== 전체 샘플 계층 분포 (n=667) ===
+  미분류                 136   20.39%
+  Tomcat/서블릿          118   17.69%
+  Spring-기타           112   16.79%
+  Hibernate/JPA        79   11.84%
+  MySQL-드라이버           67   10.04%
+  Spring-MVC           63    9.45%
+  Spring-Security      43    6.45%
+  Spring-AOP/프록시       16    2.40%
+  커넥션풀                 15    2.25%
+  DB-소켓                13    1.95%
+  앱코드                   5    0.75%
+
+=== seat-counts 경로 샘플만 (n=654) ===
+  미분류                 124   18.96%
+  Tomcat/서블릿          118   18.04%
+  Spring-기타           111   16.97%
+  Hibernate/JPA        79   12.08%
+  MySQL-드라이버           67   10.24%
+  Spring-MVC           63    9.63%
+  Spring-Security      43    6.57%
+  Spring-AOP/프록시       16    2.45%
+  커넥션풀                 15    2.29%
+  DB-소켓                13    1.99%
+  앱코드                   5    0.76%
+
+=== seat-counts 경로 top-frame 상위 15 (n=654) ===
+     57  java/util/HashMap.getNode
+     33  java/util/concurrent/ConcurrentHashMap.get
+     15  java/lang/String.hashCode
+     14  java/util/HashMap.putVal
+     14  com/mysql/cj/util/StringInspector.indexOfNextChar
+     13  org/apache/tomcat/util/buf/MessageBytes.equalsIgnoreCase
+     13  org/springframework/util/ConcurrentReferenceHashMap$Segment.findInChain
+     12  jakarta/servlet/http/HttpServletRequestWrapper.getMethod
+     12  org/apache/tomcat/util/http/MimeHeaders.getValue
+      8  io/micrometer/core/instrument/AbstractTimer.record
+      8  jakarta/servlet/http/HttpServletRequestWrapper._getHttpServletRequest
+      7  java/lang/AbstractStringBuilder.ensureCapacityInternal
+      7  io/micrometer/core/instrument/Meter$Id.equals
+      7  org/springframework/core/ReactiveAdapterRegistry.getAdapter
+      7  io/micrometer/core/instrument/distribution/TimeWindowFixedBoundaryHistogram.recordLong
+
+=== 스레드별 샘플 상위 10 ===
+      22  http-nio-8086-exec-32
+      22  http-nio-8086-exec-39
+      22  http-nio-8086-exec-3
+      21  http-nio-8086-exec-13
+      20  http-nio-8086-exec-22
+      20  http-nio-8086-exec-37
+      20  http-nio-8086-exec-29
+      19  http-nio-8086-exec-6
+      18  http-nio-8086-exec-8
+      18  http-nio-8086-exec-20
