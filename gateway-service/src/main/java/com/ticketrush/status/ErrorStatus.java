@@ -89,6 +89,11 @@ public enum ErrorStatus {
   QUEUE_ENTRY_TOKEN_REQUIRED(HttpStatus.FORBIDDEN, "QUEUE_403_001", "대기열 입장 토큰이 필요합니다."),
   QUEUE_WAITING_TOKEN_REQUIRED(HttpStatus.FORBIDDEN, "QUEUE_403_002", "대기열에 다시 진입해 주세요."),
 
+  // Queue 409
+  // 개시 시각을 진입의 부작용으로 두면 오픈 전에 미리 진입해 둔 사람이 승급 임계치를 부풀려 대기열을
+  // 무력화할 수 있다. 운영자가 연 대기열에만 줄을 세운다.
+  QUEUE_NOT_OPEN(HttpStatus.CONFLICT, "QUEUE_409_001", "아직 열리지 않은 대기열입니다."),
+
   // Queue 503
   // Redis가 죽으면 대기열도 전면 차단이다(ADR 0008 fail-closed). 대기열만 fail-open으로 두는 선택지는
   // 오픈 시각에 유입 제어가 통째로 사라진다는 뜻이라 택하지 않는다(ADR 0009 §결과).

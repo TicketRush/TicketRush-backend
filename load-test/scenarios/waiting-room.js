@@ -45,6 +45,8 @@ import { jsonField } from '../lib/json.js';
 
 const JWT_SECRET = __ENV.QUEUE_JWT_SECRET || '';
 const USER_ID_MIN = Number(__ENV.QUEUE_USER_ID_MIN || 1);
+// 대기열 개시(ADMIN) 전용. 실제 계정일 필요는 없다 — 개시는 Redis 만 건드리고 DB 를 타지 않는다.
+const ADMIN_USER_ID = Number(__ENV.QUEUE_ADMIN_USER_ID || 1);
 
 // 계단 사이 전환 램프. ramping-arrival-rate 의 stage 는 target 까지 선형 변화하므로 "계단" 을
 // 만들려면 (짧은 램프 + 유지) 두 개가 필요하다. seat-counts.js 와 같은 형태다.
@@ -109,15 +111,38 @@ const statusUnavailable = new Rate('queue_status_unavailable');
 // 안전 상한에 걸려 끝난 VU. > 0 이면 입장 허용량이 유입을 소화하지 못한 것이다.
 const pollsExhausted = new Counter('queue_polls_exhausted');
 
-function signAccessToken(userId) {
+function signAccessToken(userId, role) {
   const header = encoding.b64encode(JSON.stringify({ alg: 'HS256', typ: 'JWT' }), 'rawurl');
   const now = Math.floor(Date.now() / 1000);
   const payload = encoding.b64encode(
-    JSON.stringify({ sub: String(userId), role: 'USER', type: 'access', iat: now, exp: now + 7200 }),
+    JSON.stringify({
+      sub: String(userId),
+      role: role || 'USER',
+      type: 'access',
+      iat: now,
+      exp: now + 7200,
+    }),
     'rawurl',
   );
   const signature = crypto.hmac('sha256', JWT_SECRET, `${header}.${payload}`, 'base64rawurl');
   return `${header}.${payload}.${signature}`;
+}
+
+/**
+ * 대기열을 연다(ADMIN). 승급 임계치의 기준점을 심는 호출이라 회차 시작 전에 정확히 한 번 해야 한다.
+ *
+ * 개시 시각이 이전 회차 것으로 남아 있으면 threshold = 경과 x rate 가 이미 수십만이라 전원이 첫
+ * 폴링에서 즉시 승급한다 — 예매 RPS 가 입장 허용량에서 평평한지 보려던 회차가 그냥 스파이크가 된다.
+ * 그래서 런북 §16.4 의 리셋(queue:* 삭제)이 이 호출보다 먼저다.
+ */
+function openQueue() {
+  const res = http.post(`${BASE_URL}/api/v1/queue/${QUEUE_PERF_ID}/open`, null, {
+    headers: { Authorization: `Bearer ${signAccessToken(ADMIN_USER_ID, 'ADMIN')}` },
+    tags: { name: 'queue_open' },
+  });
+  if (res.status !== 200) {
+    fail(`대기열 개시 실패(status=${res.status}). QUEUE_ADMIN_USER_ID 가 ADMIN 계정인지 확인할 것.`);
+  }
 }
 
 /** 대기열 진입 → 응답. 실패는 jsonField 가 null 로 흡수한다(그 VU 의 여정은 성립하지 않는다). */
@@ -156,8 +181,10 @@ export function setup() {
     fail('QUEUE_JWT_SECRET 을 -e 로 주입해야 한다(게이트웨이 jwt.secret 과 같은 값, 커밋 금지).');
   }
 
+  openQueue();
+
   if (QUEUE_PROFILE !== 'status') {
-    console.log(`[setup] profile=flood perfId=${QUEUE_PERF_ID} vus=${QUEUE_FLOOD_VUS}`);
+    console.log(`[setup] profile=flood perfId=${QUEUE_PERF_ID} vus=${QUEUE_FLOOD_VUS} (대기열 개시 완료)`);
     return {};
   }
 
@@ -215,7 +242,10 @@ export function journey() {
   }
 
   pollsPerUser.add(polls);
-  admitted.add(entryToken !== null);
+  // jsonField 는 본문이 없을 때만 null 을 주고, 경로가 없으면 undefined 를 그대로 돌려준다. 대기 중
+  // 응답에는 entry_token 이 아예 없으므로(NON_NULL) `!== null` 로 판정하면 미승급 VU 가 전부 승급으로
+  // 집계돼 이 Rate 가 항상 100% 가 된다 — 회차 판정 지표 하나가 무조건 통과하는 상태가 된다.
+  admitted.add(Boolean(entryToken));
 
   if (!entryToken) {
     pollsExhausted.add(1);

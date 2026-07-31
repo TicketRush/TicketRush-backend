@@ -15,6 +15,7 @@ public final class WaitingRoomKey {
 
   private static final String WAITING_PREFIX = "queue:waiting:";
   private static final String WAITING_TOKEN_PREFIX = "queue:waiting-token:";
+  private static final String USER_TOKEN_PREFIX = "queue:user-token:";
   private static final String OPENED_AT_PREFIX = "queue:opened-at:";
   private static final String ENTRY_TOKEN_PREFIX = "queue:entry-token:";
 
@@ -30,7 +31,23 @@ public final class WaitingRoomKey {
     return WAITING_TOKEN_PREFIX + token;
   }
 
-  /** 공연별 대기열 개시 시각(epoch ms). 승급 임계치의 기준점. */
+  /**
+   * 사용자별 대기 토큰. 재진입이 <b>키 개수 관점에서도</b> 멱등하게 만든다.
+   *
+   * <p>이게 없으면 진입 호출마다 새 UUID 키가 생겨 요청 수에 비례해 Redis가 찬다. {@code maxmemory 64mb} + {@code noeviction}
+   * 이라 그 끝은 좌석 락 SET 거절 = 예매 전면 장애다(ADR 0008). 이 키가 있으면 상한이 요청 수가 아니라 <b>사용자 수</b>에 묶인다.
+   */
+  public static String userToken(Long performanceId, long userId) {
+    return USER_TOKEN_PREFIX + performanceId + ":" + userId;
+  }
+
+  /**
+   * 공연별 대기열 개시 시각(epoch ms). 승급 임계치의 기준점.
+   *
+   * <p><b>진입의 부작용으로 생기지 않는다.</b> 첫 진입자가 이 값을 정하면, 오픈 몇 시간 전에 한 번 진입해 둔 사람이 {@code (경과 × rate)} 를
+   * 임의로 부풀려 오픈 시각에 전원을 즉시 통과시킬 수 있다 — 대기열이 통째로 무력화된다. 운영자만 {@code POST /api/v1/queue/{id}/open} 으로
+   * 심는다.
+   */
   public static String openedAt(Long performanceId) {
     return OPENED_AT_PREFIX + performanceId;
   }

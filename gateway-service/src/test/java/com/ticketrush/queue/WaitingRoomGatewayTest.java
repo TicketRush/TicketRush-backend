@@ -3,6 +3,7 @@ package com.ticketrush.queue;
 import static org.assertj.core.api.Assertions.assertThat;
 
 import com.ticketrush.security.JwtTokenProvider;
+import java.net.URI;
 import java.nio.charset.StandardCharsets;
 import java.time.Duration;
 import java.util.Properties;
@@ -193,6 +194,104 @@ class WaitingRoomGatewayTest {
   }
 
   @Test
+  @DisplayName("퍼센트 인코딩으로 게이트를 우회할 수 없다")
+  void 인코딩_우회_차단() {
+    // 라우트 술어(Path=/api/v1/booking/**)와 다운스트림 @PostMapping 은 디코딩된 세그먼트로 매칭한다.
+    // 게이트가 원시 경로 문자열을 비교하면 이 요청이 라우팅은 되면서 게이트만 건너뛰어, 스크립트를 쓰는
+    // 사람이 대기열 전체를 무시할 수 있다. 라우트와 같은 PathPattern 으로 판정해야 막힌다.
+    webTestClient
+        .post()
+        .uri(URI.create("http://localhost:" + port + "/api/v1/%62ooking"))
+        .header("Authorization", "Bearer " + accessToken(USER_ID))
+        .bodyValue("{\"performance_id\":107,\"seat_id\":1}")
+        .exchange()
+        .expectStatus()
+        .isForbidden()
+        .expectBody()
+        .jsonPath("$.code")
+        .isEqualTo("QUEUE_403_001");
+  }
+
+  @Test
+  @DisplayName("matrix 파라미터가 붙은 경로는 다운스트림에 도달하지 못한다")
+  void matrix_파라미터_차단() {
+    // 이건 우리 게이트가 아니라 Spring Security 의 요청 방화벽이 400으로 먼저 끊는다(세미콜론 차단).
+    // 그래도 회귀 테스트로 남긴다 — 방화벽 설정이 완화되는 순간 이 경로가 게이트를 건너뛰는지 여부가
+    // 다시 문제가 되고, 그때 이 테스트가 400이 아닌 값을 보고 알려준다.
+    webTestClient
+        .post()
+        .uri(URI.create("http://localhost:" + port + "/api/v1/booking;x=1"))
+        .header("Authorization", "Bearer " + accessToken(USER_ID))
+        .bodyValue("{\"performance_id\":107,\"seat_id\":1}")
+        .exchange()
+        .expectStatus()
+        .isBadRequest();
+  }
+
+  @Test
+  @DisplayName("진입을 반복해도 Redis 키와 대기 토큰이 늘지 않는다")
+  void 재진입은_키를_늘리지_않는다() {
+    long performanceId = 108L;
+
+    String first = enqueue(performanceId, USER_ID);
+    long keysAfterFirst = keyCount();
+
+    String second = enqueue(performanceId, USER_ID);
+
+    // 호출마다 새 UUID 키를 만들면 Redis 사용량이 요청 수에 비례하고, maxmemory 64mb + noeviction
+    // 이라 그 끝은 좌석 락 SET 거절 = 예매 전면 장애다(ADR 0008). 상한은 사용자 수에 묶여야 한다.
+    assertThat(second).isEqualTo(first);
+    assertThat(keyCount()).isEqualTo(keysAfterFirst);
+  }
+
+  @Test
+  @DisplayName("열리지 않은 대기열에는 진입할 수 없다")
+  void 열리지_않은_대기열() {
+    webTestClient
+        .post()
+        .uri("/api/v1/queue/{performanceId}/enqueue", 109L)
+        .header("Authorization", "Bearer " + accessToken(USER_ID))
+        .exchange()
+        .expectStatus()
+        .isEqualTo(HttpStatus.CONFLICT)
+        .expectBody()
+        .jsonPath("$.code")
+        .isEqualTo("QUEUE_409_001");
+  }
+
+  @Test
+  @DisplayName("대기열 개시는 ADMIN만 할 수 있다")
+  void 개시는_관리자_전용() {
+    webTestClient
+        .post()
+        .uri("/api/v1/queue/{performanceId}/open", 110L)
+        .header("Authorization", "Bearer " + accessToken(USER_ID))
+        .exchange()
+        .expectStatus()
+        .isForbidden()
+        .expectBody()
+        .jsonPath("$.code")
+        .isEqualTo("AUTH_403_001");
+  }
+
+  @Test
+  @DisplayName("게이트 거절 응답도 전역 snake_case 계약을 따른다")
+  void 거절_응답도_snake_case() {
+    // 손으로 JSON 문자열을 쓰면 이 응답만 isSuccess 가 되어 is_success 로 판정하는 클라이언트가 깨진다.
+    webTestClient
+        .post()
+        .uri("/api/v1/booking")
+        .header("Authorization", "Bearer " + accessToken(USER_ID))
+        .bodyValue("{\"performance_id\":111,\"seat_id\":1}")
+        .exchange()
+        .expectStatus()
+        .isForbidden()
+        .expectBody()
+        .jsonPath("$.is_success")
+        .isEqualTo(false);
+  }
+
+  @Test
   @DisplayName("남의 입장 토큰으로는 통과하지 못한다")
   void 타인의_입장_토큰은_거절된다() throws InterruptedException {
     long performanceId = 105L;
@@ -241,6 +340,15 @@ class WaitingRoomGatewayTest {
         .isOk();
   }
 
+  private long keyCount() {
+    Long count =
+        redisTemplate
+            .execute(connection -> connection.serverCommands().dbSize())
+            .blockLast(Duration.ofSeconds(5));
+    assertThat(count).isNotNull();
+    return count;
+  }
+
   private void resetCommandStats() {
     redisTemplate
         .execute(connection -> connection.serverCommands().resetConfigStats())
@@ -267,7 +375,19 @@ class WaitingRoomGatewayTest {
     return 0L;
   }
 
+  /** 대기열은 운영자가 열어야 진입할 수 있다 — 개시 시각을 첫 진입자가 정하면 임계치를 부풀릴 수 있기 때문이다. */
+  private void open(long performanceId) {
+    webTestClient
+        .post()
+        .uri("/api/v1/queue/{performanceId}/open", performanceId)
+        .header("Authorization", "Bearer " + jwtTokenProvider.createAccessToken(1L, "ADMIN"))
+        .exchange()
+        .expectStatus()
+        .isOk();
+  }
+
   private String enqueue(long performanceId, long userId) {
+    open(performanceId);
     byte[] body =
         webTestClient
             .post()

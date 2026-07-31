@@ -4,9 +4,10 @@ import com.ticketrush.exception.BusinessException;
 import com.ticketrush.queue.dto.EnqueueResponse;
 import com.ticketrush.queue.dto.WaitingStatusResponse;
 import com.ticketrush.status.ErrorStatus;
+import java.util.Collections;
+import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.UUID;
-import java.util.concurrent.ConcurrentHashMap;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
 import org.springframework.data.redis.core.ReactiveStringRedisTemplate;
@@ -31,6 +32,9 @@ import reactor.core.publisher.Mono;
 @EnableConfigurationProperties(WaitingRoomProperties.class)
 public class WaitingRoomService {
 
+  /** 동시에 열려 있을 수 있는 공연 수의 넉넉한 상한. */
+  private static final int CACHE_CAPACITY = 1_000;
+
   private final ReactiveStringRedisTemplate redis;
   private final WaitingRoomProperties properties;
   private final WaitingRoomMetrics metrics;
@@ -38,13 +42,29 @@ public class WaitingRoomService {
   /**
    * 공연별 대기열 개시 시각 캐시.
    *
-   * <p>게이트웨이 인스턴스는 하나뿐이고(단일 EC2, ADR 0006) 값이 한 번 정해지면 불변이라 폴링마다 Redis를 두드릴 이유가 없다. 재시작 후 첫 요청만
+   * <p>게이트웨이 인스턴스는 하나뿐이고(단일 EC2, ADR 0006) 값이 운영자가 연 뒤로는 불변이라 폴링마다 Redis를 두드릴 이유가 없다. 재시작 후 첫 요청만
    * Redis를 탄다.
    */
-  private final Map<Long, Long> openedAtCache = new ConcurrentHashMap<>();
+  private final Map<Long, Long> openedAtCache = boundedCache();
 
   /** 공연별 총 진입 인원(ZCARD) 캐시. 25초 다이얼에 수 초 낡은 값은 무해하다. */
-  private final Map<Long, CachedCount> enqueuedCountCache = new ConcurrentHashMap<>();
+  private final Map<Long, CachedCount> enqueuedCountCache = boundedCache();
+
+  /**
+   * 접근 순서 LRU.
+   *
+   * <p>상한 없는 맵을 쓰면 게이트웨이 힙이 공연 수만큼 자라고, 인스턴스가 하나뿐이라 그 OOM은 전 서비스 관문 정지다. 만료를 값 검사로만 하면 엔트리 수는 여전히
+   * 단조 증가한다 — 축출이 있어야 한다.
+   */
+  private static <V> Map<Long, V> boundedCache() {
+    return Collections.synchronizedMap(
+        new LinkedHashMap<Long, V>(64, 0.75f, true) {
+          @Override
+          protected boolean removeEldestEntry(Map.Entry<Long, V> eldest) {
+            return size() > CACHE_CAPACITY;
+          }
+        });
+  }
 
   public WaitingRoomService(
       ReactiveStringRedisTemplate redis,
@@ -62,34 +82,77 @@ public class WaitingRoomService {
    * 유지된다.
    */
   public Mono<EnqueueResponse> enqueue(Long performanceId, Long userId) {
-    String waitingToken = newToken();
     long now = System.currentTimeMillis();
     String waitingKey = WaitingRoomKey.waiting(performanceId);
 
-    return registerIfAbsent(waitingKey, userId, now)
-        .then(redis.expire(waitingKey, properties.waitingTtl()))
-        .then(
-            redis
-                .opsForValue()
-                .setIfAbsent(
-                    WaitingRoomKey.openedAt(performanceId),
-                    String.valueOf(now),
-                    properties.waitingTtl()))
-        .then(
-            redis
-                .opsForValue()
-                .set(
-                    WaitingRoomKey.waitingToken(waitingToken),
-                    performanceId + ":" + userId,
-                    properties.waitingTtl()))
-        // 진입은 ZCARD 캐시를 무효화한다 — 방금 늘어난 인원이 응답에 반영되지 않으면 첫 화면부터 어긋난다.
-        .doOnSuccess(ignored -> enqueuedCountCache.remove(performanceId))
-        .then(snapshot(performanceId, userId))
-        .map(
-            snapshot ->
-                new EnqueueResponse(
-                    waitingToken, snapshot.rank(), snapshot.waiting(), snapshot.pollSeconds()))
+    // 열리지 않은 대기열에는 줄을 세우지 않는다. 임의 performanceId 로 Redis 키를 만들 수 있는 경로를
+    // 여기서 닫는다 — noeviction 상한에 닿으면 좌석 락 SET 까지 거절된다(ADR 0008).
+    return openedAt(performanceId)
+        .then(issueWaitingToken(performanceId, userId))
+        .flatMap(
+            waitingToken ->
+                registerIfAbsent(waitingKey, userId, now)
+                    .then(redis.expire(waitingKey, properties.waitingTtl()))
+                    // 진입은 ZCARD 캐시를 무효화한다 — 방금 늘어난 인원이 응답에 반영되지 않으면 첫 화면부터 어긋난다.
+                    .doOnSuccess(ignored -> enqueuedCountCache.remove(performanceId))
+                    .then(snapshot(performanceId, userId))
+                    .map(
+                        snapshot ->
+                            new EnqueueResponse(
+                                waitingToken,
+                                snapshot.rank(),
+                                snapshot.waiting(),
+                                snapshot.pollSeconds())))
         .onErrorMap(WaitingRoomService::isInfrastructureFailure, this::toUnavailable);
+  }
+
+  /**
+   * 운영자가 대기열을 연다 — 승급 임계치의 기준점을 심는다.
+   *
+   * <p>이 시각을 진입의 부작용으로 두면 오픈 몇 시간 전에 한 번 진입해 둔 사람이 {@code (경과 × rate)} 를 임의로 부풀려 오픈 순간 전원을 통과시킬 수
+   * 있다. 이미 열려 있으면 덮어쓰지 않는다(재호출로 줄 서 있던 사람들의 임계치가 0으로 되돌아가지 않게).
+   *
+   * @return 실제로 적용된 개시 시각(이미 열려 있었다면 그 값)
+   */
+  public Mono<Long> open(Long performanceId) {
+    long now = System.currentTimeMillis();
+    String key = WaitingRoomKey.openedAt(performanceId);
+
+    return redis
+        .opsForValue()
+        .setIfAbsent(key, String.valueOf(now), properties.waitingTtl())
+        .then(redis.opsForValue().get(key))
+        .map(Long::parseLong)
+        .doOnNext(value -> openedAtCache.put(performanceId, value))
+        .onErrorMap(WaitingRoomService::isInfrastructureFailure, this::toUnavailable);
+  }
+
+  /**
+   * 사용자·공연당 대기 토큰 하나. 재진입해도 같은 값을 돌려준다.
+   *
+   * <p>호출마다 새 UUID 키를 만들면 Redis 사용량이 <b>요청 수</b>에 비례한다. 유효 JWT 하나로 반복 호출하면 {@code maxmemory 64mb} 를
+   * 채울 수 있고 그 끝은 좌석 락 SET 거절이다. 여기서 상한을 <b>사용자 수</b>로 묶는다. 덤으로 새로고침해도 토큰이 바뀌지 않는다.
+   */
+  private Mono<String> issueWaitingToken(Long performanceId, Long userId) {
+    String userTokenKey = WaitingRoomKey.userToken(performanceId, userId);
+    String candidate = newToken();
+
+    return redis
+        .opsForValue()
+        .setIfAbsent(userTokenKey, candidate, properties.waitingTtl())
+        .flatMap(
+            created ->
+                Boolean.TRUE.equals(created)
+                    ? redis
+                        .opsForValue()
+                        .set(
+                            WaitingRoomKey.waitingToken(candidate),
+                            performanceId + ":" + userId,
+                            properties.waitingTtl())
+                        .thenReturn(candidate)
+                    // 이미 있으면(재진입·동시 진입 경합) 기존 토큰을 그대로 쓴다. candidate 는 버려지고
+                    // 아무 키도 만들지 않았다.
+                    : redis.opsForValue().get(userTokenKey));
   }
 
   /**
@@ -114,6 +177,12 @@ public class WaitingRoomService {
   }
 
   private Mono<WaitingStatusResponse> respond(String waitingToken, long userId, Snapshot snapshot) {
+    if (snapshot.rank() < 0L) {
+      // 대기 토큰은 살아 있는데 ZSET 멤버가 없다(TTL 경계, 운영 중 키 정리). 이대로면 admitted 가 영원히
+      // false 라 클라이언트가 -1 순번을 들고 무한 폴링한다. 개시 시각 부재와 같은 처리로 보낸다.
+      return Mono.error(new BusinessException(ErrorStatus.QUEUE_WAITING_TOKEN_REQUIRED));
+    }
+
     if (!snapshot.admitted()) {
       metrics.recordWaiting(snapshot.waiting(), snapshot.pollSeconds());
       return Mono.just(
@@ -212,8 +281,8 @@ public class WaitingRoomService {
         .get(WaitingRoomKey.openedAt(performanceId))
         .map(Long::parseLong)
         .doOnNext(value -> openedAtCache.put(performanceId, value))
-        // 개시 시각이 없으면 대기열 TTL이 지났거나 진입한 적이 없다. 다시 진입하게 한다.
-        .switchIfEmpty(Mono.error(new BusinessException(ErrorStatus.QUEUE_WAITING_TOKEN_REQUIRED)));
+        // 운영자가 열지 않았거나 TTL이 지났다. 진입도 폴링도 여기서 멈춘다.
+        .switchIfEmpty(Mono.error(new BusinessException(ErrorStatus.QUEUE_NOT_OPEN)));
   }
 
   private Mono<Long> enqueuedCount(Long performanceId) {

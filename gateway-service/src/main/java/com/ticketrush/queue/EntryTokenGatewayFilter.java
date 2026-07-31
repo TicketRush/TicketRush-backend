@@ -1,7 +1,7 @@
 package com.ticketrush.queue;
 
+import com.ticketrush.dto.response.ApiResponse;
 import com.ticketrush.status.ErrorStatus;
-import java.nio.charset.StandardCharsets;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.cloud.gateway.filter.GatewayFilterChain;
 import org.springframework.cloud.gateway.filter.GlobalFilter;
@@ -13,7 +13,10 @@ import org.springframework.http.server.reactive.ServerHttpRequest;
 import org.springframework.http.server.reactive.ServerHttpResponse;
 import org.springframework.stereotype.Component;
 import org.springframework.web.server.ServerWebExchange;
+import org.springframework.web.util.pattern.PathPattern;
+import org.springframework.web.util.pattern.PathPatternParser;
 import reactor.core.publisher.Mono;
+import tools.jackson.databind.ObjectMapper;
 
 /**
  * 예매 경로 입장 토큰 게이트(ADR 0009 §2).
@@ -33,28 +36,53 @@ import reactor.core.publisher.Mono;
 @Component
 public class EntryTokenGatewayFilter implements GlobalFilter, Ordered {
 
-  private static final String BOOKING_PATH = "/api/v1/booking";
+  /**
+   * 라우트 술어와 <b>같은 매칭 원시타입</b>을 쓴다.
+   *
+   * <p>문자열 비교({@code request.getPath().value().equals(...)})로 두면 게이트가 뚫린다. {@code
+   * getPath().value()} 는 디코딩 전 원시 경로인데, 라우트 술어({@code Path=/api/v1/booking/**})와 다운스트림
+   * {@code @PostMapping} 은 둘 다 <b>디코딩되고 matrix 파라미터가 제거된 세그먼트</b>로 매칭한다. 그래서 {@code POST
+   * /api/v1/booking;x=1} 이나 {@code /api/v1/%62ooking} 은 라우팅은 되면서 게이트만 건너뛴다 — 스크립트를 쓰는 사람은 대기열을
+   * 무시하고, 정직한 사용자만 줄을 선다.
+   */
+  private static final PathPattern BOOKING_PATTERN =
+      new PathPatternParser().parse("/api/v1/booking");
+
   private static final String ENTRY_TOKEN_HEADER = "X-Entry-Token";
   private static final String USER_ID_HEADER = "X-User-Id";
-
-  // 거절 응답은 기동 시 직렬화해 둔다. 1만 명이 몰리는 오픈 시각에 거절 경로가 가장 뜨거울 수 있는데,
-  // 그 자리에서 Jackson을 부르면 막으려던 부하를 거절하면서 다시 만들어 낸다.
-  // 메시지는 ErrorStatus 상수라 따옴표·이스케이프 대상 문자가 없다(추가할 때 확인할 것).
-  private static final byte[] ENTRY_TOKEN_REQUIRED_BODY =
-      body(ErrorStatus.QUEUE_ENTRY_TOKEN_REQUIRED);
-  private static final byte[] UNAVAILABLE_BODY = body(ErrorStatus.QUEUE_UNAVAILABLE);
 
   private final ReactiveStringRedisTemplate redis;
   private final WaitingRoomProperties properties;
   private final WaitingRoomMetrics metrics;
 
+  /**
+   * 거절 응답은 기동 시 직렬화해 둔다.
+   *
+   * <p>1만 명이 몰리는 오픈 시각에 거절 경로가 가장 뜨거울 수 있는데, 그 자리에서 Jackson을 부르면 막으려던 부하를 거절하면서 다시 만들어 낸다.
+   *
+   * <p>손으로 JSON 문자열을 쓰지 않고 실제 {@link ApiResponse} 를 주입된 매퍼로 직렬화한다. 앱 전역이 snake_case({@code
+   * JacksonConfig})라 손으로 쓰면 이 두 응답만 필드명이 달라지고, 봉투에 필드가 추가돼도 여기만 조용히 뒤처진다.
+   */
+  private final byte[] entryTokenRequiredBody;
+
+  private final byte[] unavailableBody;
+
   public EntryTokenGatewayFilter(
       ReactiveStringRedisTemplate redis,
       WaitingRoomProperties properties,
-      WaitingRoomMetrics metrics) {
+      WaitingRoomMetrics metrics,
+      ObjectMapper objectMapper) {
     this.redis = redis;
     this.properties = properties;
     this.metrics = metrics;
+    this.entryTokenRequiredBody = serialize(objectMapper, ErrorStatus.QUEUE_ENTRY_TOKEN_REQUIRED);
+    this.unavailableBody = serialize(objectMapper, ErrorStatus.QUEUE_UNAVAILABLE);
+  }
+
+  private static byte[] serialize(ObjectMapper objectMapper, ErrorStatus status) {
+    ApiResponse<Void> body =
+        new ApiResponse<>(false, status.getCode(), status.getMessage(), null, null);
+    return objectMapper.writeValueAsBytes(body);
   }
 
   @Override
@@ -67,7 +95,7 @@ public class EntryTokenGatewayFilter implements GlobalFilter, Ordered {
     String entryToken = exchange.getRequest().getHeaders().getFirst(ENTRY_TOKEN_HEADER);
     if (entryToken == null || entryToken.isBlank()) {
       metrics.recordEntryTokenMissing();
-      return reject(exchange, ErrorStatus.QUEUE_ENTRY_TOKEN_REQUIRED, ENTRY_TOKEN_REQUIRED_BODY);
+      return reject(exchange, ErrorStatus.QUEUE_ENTRY_TOKEN_REQUIRED, entryTokenRequiredBody);
     }
 
     String userId = exchange.getRequest().getHeaders().getFirst(USER_ID_HEADER);
@@ -94,18 +122,18 @@ public class EntryTokenGatewayFilter implements GlobalFilter, Ordered {
       }
       case INVALID -> {
         metrics.recordEntryTokenInvalid();
-        yield reject(exchange, ErrorStatus.QUEUE_ENTRY_TOKEN_REQUIRED, ENTRY_TOKEN_REQUIRED_BODY);
+        yield reject(exchange, ErrorStatus.QUEUE_ENTRY_TOKEN_REQUIRED, entryTokenRequiredBody);
       }
       case UNAVAILABLE -> {
         metrics.recordEntryTokenUnavailable();
-        yield reject(exchange, ErrorStatus.QUEUE_UNAVAILABLE, UNAVAILABLE_BODY);
+        yield reject(exchange, ErrorStatus.QUEUE_UNAVAILABLE, unavailableBody);
       }
     };
   }
 
   private static boolean isBookingRequest(ServerHttpRequest request) {
     return HttpMethod.POST.equals(request.getMethod())
-        && BOOKING_PATH.equals(request.getPath().value());
+        && BOOKING_PATTERN.matches(request.getPath().pathWithinApplication());
   }
 
   private static Mono<Void> reject(
@@ -114,15 +142,6 @@ public class EntryTokenGatewayFilter implements GlobalFilter, Ordered {
     response.setStatusCode(status.getHttpStatus());
     response.getHeaders().setContentType(MediaType.APPLICATION_JSON);
     return response.writeWith(Mono.just(response.bufferFactory().wrap(serializedBody)));
-  }
-
-  private static byte[] body(ErrorStatus status) {
-    return ("{\"isSuccess\":false,\"code\":\""
-            + status.getCode()
-            + "\",\"message\":\""
-            + status.getMessage()
-            + "\"}")
-        .getBytes(StandardCharsets.UTF_8);
   }
 
   @Override

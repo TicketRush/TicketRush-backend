@@ -1941,6 +1941,9 @@ ticket-service:8090    4,692 → 6,033 ↑ → 4,713 → 6,248 ↑        (Prome
 | G4 | Redis 여유 | `redis_memory_used_bytes` < 48 MB. `maxmemory 64mb` + `noeviction`이라 상한에 닿으면 좌석 락 SET까지 거절된다 |
 | G5 | Prometheus targets | `job='gateway'` up |
 | G6 | 생성기 EC2 | [ADR 0010](adr/0010-in-aws-load-generator-for-ten-thousand-vu.md) — 같은 리전, spot, 회차 후 **종료** |
+| G7 | **대기열 키 리셋** | `redis-cli --scan --pattern 'queue:*' \| xargs -r redis-cli del` 후 0건 확인. **회차 A·B 양쪽 모두 필수** — 이전 회차의 `queue:opened-at:{pid}`(TTL 6h)가 남아 있으면 `threshold = 경과 × rate` 가 이미 수십만이라 전원이 첫 폴링에서 즉시 승급한다. "유입 제어가 되는가"를 보려던 회차가 그냥 스파이크가 된다 |
+
+> **대기열 개시는 시나리오의 `setup()` 이 한다** — `POST /api/v1/queue/{pid}/open`(ADMIN). 개시 시각을 진입의 부작용으로 두면 오픈 전에 미리 진입해 둔 사람이 임계치를 부풀려 대기열을 무력화할 수 있어서, 운영자만 심도록 되어 있다. **G7 리셋이 이 호출보다 먼저**여야 새 기준점이 잡힌다.
 
 **회차 A (R 실측)**
 
@@ -1955,7 +1958,7 @@ docker run --rm -v $PWD/load-test:/scripts:ro \
   /scripts/scenarios/waiting-room.js
 ```
 
-1. 리셋 — Redis 대기열 키 삭제 (`redis-cli --scan --pattern 'queue:*' | xargs redis-cli del`), 0건 확인
+1. 리셋 — G7 (대기열 개시 시각까지 함께 지운다)
 2. 스모크 — 수치 폐기 전제(§6.1 규칙 4)
 3. 본 회차 — 계단 유지 5분(Prometheus 15초 스크랩 × 20표본)
 4. **nginx `keepalive_timeout` A/B** — 같은 계단을 `75s`(기본)와 `15s`로 각 1회. 호스트 CPU·메모리·`k6_http_req_connecting_p95`로 §16.1의 판단을 가른다
@@ -1991,6 +1994,7 @@ docker run --rm -v $PWD/load-test:/scripts:ro \
 | `dropped_iterations` | 해석 대상 | `status` 회차에서는 포화 신호이지 실패가 아니다 |
 | `queue_polls_exhausted` | 0 | >0이면 입장 허용량이 유입을 소화하지 못했다 |
 | `queue_booking_forbidden` | 0 | 승급 직후 예매라 0이어야 한다. >0이면 폴링→예매 지연이 입장 토큰 TTL(5m)을 넘었다 |
+| `queue_admitted` | 해석 대상 | 0과 1 사이여야 한다. 정확히 1.000이면 지표가 아니라 스크립트를 의심한다 |
 | 생성기 종료 | 필수 | CD가 건드리지 않아 "떠 있는 줄 몰랐다"가 가능하다(ADR 0010) |
 
 **§6.1 재현성 규칙이 여기서 한 겹 더 걸린다.** [ADR 0010](adr/0010-in-aws-load-generator-for-ten-thousand-vu.md)이 생성기를 로컬에서 AWS로 옮겼으므로 **이 회차 수치를 ADR 0004 토폴로지 회차(#348·#403·#529 등)와 절대값으로 직접 잇지 않는다.** 비교가 필요하면 그 사실을 리포트 한계에 적는다.
