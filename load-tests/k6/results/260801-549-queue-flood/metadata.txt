@@ -94,10 +94,78 @@ SANITY=queue_admitted 가 정확히 1.000 이면 지표가 아니라 스크립�
 POST_CHECK=오버셀 0행 (#344 검증 SQL)
 #   ⚠ 이 기준은 회차 전에 확정했다. 결과를 보고 고치지 않는다.
 
-# ── 실측 (회차 후 채운다) ──────────────────────────────────────────────────
-START_UTC=
-END_UTC=
-RESULT=
+# ── 실측 ────────────────────────────────────────────────────────────────────
+# 회차를 두 번 돌았다. B-1 은 회차 전에 정한 무효 기준에 걸려 폐기하고, 그 원인을 고쳐 B-2 를 돌렸다.
+
+B1_START_UTC=2026-07-31T15:50:15Z
+B1_END_UTC=2026-07-31T15:54:26Z (중단)
+B1_CONFIG=QUEUE_STATUS_RPS_CAPACITY=1400(회차 A 실측값) / 램프 2m
+B1_RESULT=무효. queue_status_unavailable 15.55%(13141/84469), entry_token unavailable 300.
+#   무효 기준 2개 동시 위반 → 남은 13분을 돌리지 않고 중단했다.
+B1_CAUSE=대기열이 아니라 CPU 굶주림이다. RedisCommandTimeoutException(GET, 1초)이 5분간 25만 줄
+#   찍혔는데 Redis 컨테이너 CPU 는 3.89% 였고 slowlog 는 비어 있었다(1,283 ops/s). Lettuce 타임아웃은
+#   클라이언트 쪽에서 재는 값이라 게이트웨이가 자기 이벤트 루프를 못 돌리면 서버가 즉답해도 터진다.
+#   호스트 CPU max 99.20% / avg 68.01%, 게이트웨이 컨테이너 89.65%.
+B1_KEY_FINDING=unavailable 은 동시 커넥션 수에 붙어 있다(램프 속도가 아니다).
+#   TCP established >= 4,000 구간 unavailable 평균 56.0/s (표본 6)
+#   TCP established <  4,000 구간 unavailable 평균  0.6/s (표본 6)
+#   최대 동시 커넥션 16,701 — 프록시 요청 1건이 클라이언트+업스트림 2슬롯을 먹기 때문이다.
+B1_STATUS_THROUGHPUT=최대 450 RPS (queue_status_duration p95 5.27s / avg 1.6s)
+
+B2_START_UTC=2026-07-31T16:01:25Z
+B2_END_UTC=2026-07-31T16:22:41Z (20m58.6s, 정상 종료)
+B2_CONFIG=QUEUE_STATUS_RPS_CAPACITY=400 / 램프 5m / 유지 15m
+B2_RESULT=유효. queue_status_unavailable 0.00%(0/147,807),
+#   entry_token unavailable/invalid/missing 전부 0, redis 최대 13.86%(무효 기준 75% 의 아래),
+#   queue_polls_exhausted 0, queue_booking_forbidden 0%, 생성기 swap 무손상.
+B2_PRIMARY=예매 서버 RPS — 판정 창 t+300s~t+500s(램프 종료~승급 완료) 표본 14
+#   min 19.60 / max 21.00 / 평균 20.17 → 선언 밴드(10-30) 이탈 0건. 허용량 20 대비 ±5% 안.
+B2_INFLOW=VU 2,317 → 10,000 (4.3배) 동안 예매 RPS 19.5-21.0 유지
+B2_STAGES=t+1m VU2317/RPS19.8 · t+3m VU6384/19.5 · t+5m VU10000/20.3 · t+7m VU10000/20.0 · t+8m 대기 0
+B2_ADMISSION=admitted 100.00%(9,276/9,276) / booking_ok 100.00%(9,276/9,276) / booking_forbidden 0%
+B2_LATENCY=queue_status_duration avg 14.42ms p95 32.1ms (B-1 은 avg 1.6s p95 5.27s)
+B2_WAIT=queue_wait_to_admit_seconds avg 86.9s p95 154.6s max 166.6s
+B2_POLLS=queue_polls_per_user avg 15.9 max 39 (상한 300 에 한참 못 미침)
+B2_HOST=CPU max 79.53% avg 35.27% (B-1: max 99.20% avg 68.01%) / 대기 인원 max 3,254 / T max 9초
+B2_NETWORK=data_sent 51 MB (41 kB/s) — 대역은 이 회차에서도 무관했다
+B2_OVERSELL=0행. 예매 9,276 = 좌석 9,276 = 사용자 9,276 (1:1:1, #344 검증 SQL)
+
+# ── 온전성 검사 발동 → 조사 후 기각 ────────────────────────────────────────
+SANITY_TRIGGERED=queue_admitted 가 정확히 1.000 이라 회차 전에 정한 검사가 발동했다.
+SANITY_VERDICT=지표가 아니라 회차 조건 때문이다 — 진짜 100% 다.
+#   근거 ① queue_polls_per_user max 39 << 상한 300 → 상한에 걸려 끊긴 VU 가 없다
+#        ② queue_polls_exhausted 가 0 (요약에 출력조차 안 됨)
+#        ③ 회차 20m58s > 승급 완료 8m20s → 줄 선 사람은 모두 차례가 왔다
+#   #544 에서 잡은 버그(!== null 로 전원 승급 집계)와는 다른 상황이다.
+
+# ── 실효 코호트 ─────────────────────────────────────────────────────────────
+EFFECTIVE_COHORT=9,276명 (1만이 아니다)
+#   724명이 진입(enqueue)에서 실패했다 — http_req_failed 724 와 정확히 일치한다.
+#   ⚠ 계측 구멍: 시나리오가 `if (!waitingToken) return;` 으로 조용히 넘어가고 서버에도 enqueue 결과
+#     카운터가 없다. B-1 때는 '대기 3,420 + 임계치 3,000 = 진입 6,420' 으로 역산해서야 알았다.
+#     다음 회차 전에 k6 queue_enqueue_failed + 서버측 카운터를 넣는다.
+
+# ── 이 회차가 답하지 못한 것 ───────────────────────────────────────────────
+LIMIT_CONCURRENT_WAITING=대기 인원 최대가 3,254명이다 — '1만 명이 동시에 줄 서 있는' 조건은
+#   이번에도 재현되지 않았다. 승급이 20명/초로 빠지는 동안 5분에 걸쳐 채웠기 때문이다.
+#   회차 A 가 남긴 같은 숙제가 그대로 남아 있다. 재현하려면 램프가 배수보다 빨라야 하는데,
+#   그게 바로 B-1 이고 B-1 은 CPU 에서 무너졌다 — 이 하드웨어에서는 둘을 동시에 만족할 수 없다.
+LIMIT_R_IS_NOT_CONSTANT=아래 R_DEPENDS_ON_CONCURRENCY 는 두 점(1,600 커넥션 / 16,701 커넥션)으로만
+#   그은 선이다. 함수 형태를 재려면 커넥션을 계단으로 올리는 별도 회차가 필요하다.
+LIMIT_TOPOLOGY=단일 EC2(2 vCPU)에 앱 8개 + Kafka·MySQL·Redis·관측 스택 동거. '대기열 경로의 한계'가
+#   아니라 '이 구성에서 도달한 지점' 이다.
+
+# ── 이 회차의 설계적 발견 ──────────────────────────────────────────────────
+R_DEPENDS_ON_CONCURRENCY=ADR 0009 §3 의 T = ceil(N/R) 은 R 을 상수로 쓰는데, R 은 동시 커넥션의
+#   함수다. 같은 경로·같은 호스트·같은 이미지에서:
+#     커넥션 약 1,600 (회차 A, VU 783)    → 1,400 RPS
+#     커넥션    16,701 (회차 B-1, VU 1만) →   450 RPS   (3.1배 차이)
+#   대기 인원이 많을수록 커넥션이 늘어 R 이 떨어지는데 산식은 한산할 때 잰 R 을 쓰므로,
+#   정확히 붐빌 때 주기를 너무 짧게 지시한다 — 대기열이 스스로를 무너뜨린다.
+#     N=10,000 · R=1,400 → T=8초 → 폴링 수요 1,250 RPS vs 그 동시성의 실제 용량 450 RPS (2.8배)
+#   ADR 0009 의 원래 보수값(R>=400, T=25초)이 옳았고, 회차 A 가 그것을 '3.5배 보수적이었다' 고
+#   정정한 것이 오히려 위험한 방향이었다. R=400 으로 되돌린 B-2 가 유효 회차가 됐다.
+
 
 # ── 이 회차가 답하지 못하는 것 (회차 전에 적는다) ──────────────────────────
 LIMIT_COMBINATION=커넥션 1만과 1,400 RPS 를 같이 재본 적이 없다. 회차 A 가 1,400 RPS(커넥션 783)를,
