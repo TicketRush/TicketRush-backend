@@ -45,8 +45,18 @@ import { jsonField } from '../lib/json.js';
 
 const JWT_SECRET = __ENV.QUEUE_JWT_SECRET || '';
 const USER_ID_MIN = Number(__ENV.QUEUE_USER_ID_MIN || 1);
+// 좌석 id 오프셋. flood 의 예매는 (seat_id, performance_id) 쌍으로 검증되는데(BookingValidateReferences
+// UseCase), prod 는 seat_id 가 이미 13만대까지 소진돼 있어 user id 와 같은 번호대를 쓸 수 없다.
+// seed_queue_flood.sql 이 만든 실제 좌석 id 범위를 -e 로 주입한다(기본값은 user id 와 1:1 = 종전 동작).
+const SEAT_ID_MIN = Number(__ENV.QUEUE_SEAT_ID_MIN || USER_ID_MIN);
 // 대기열 개시(ADMIN) 전용. 실제 계정일 필요는 없다 — 개시는 Redis 만 건드리고 DB 를 타지 않는다.
 const ADMIN_USER_ID = Number(__ENV.QUEUE_ADMIN_USER_ID || 1);
+// 여정을 마친 VU 가 다시 줄을 서지 않게 하는 표식. k6 는 VU 마다 JS 런타임이 분리되므로 이 값은
+// 그 VU 만의 상태다(공유 변수가 아니다).
+let journeyDone = false;
+// 여정을 마친 VU 가 회차 끝까지 머무는 간격. 요청을 보내지 않으므로 비용은 타이머뿐이고, 회차 종료
+// 시점의 대기는 gracefulStop 이 끊는다.
+const IDLE_SLEEP_SECONDS = 30;
 
 // 계단 사이 전환 램프. ramping-arrival-rate 의 stage 는 target 까지 선형 변화하므로 "계단" 을
 // 만들려면 (짧은 램프 + 유지) 두 개가 필요하다. seat-counts.js 와 같은 형태다.
@@ -221,8 +231,27 @@ export function pollOnly(data) {
   statusAdmittedLeak.add(Boolean(jsonField(res, 'result.entry_token')));
 }
 
-/** flood 회차 — 진입 → 서버 지시 폴링 → 입장 → 예매의 전 여정. */
+/**
+ * flood 회차 — 진입 → 서버 지시 폴링 → 입장 → 예매의 전 여정. <b>VU 하나가 정확히 한 번 탄다.</b>
+ *
+ * ramping-vus 는 exec 가 리턴하면 같은 VU 로 즉시 다음 이터레이션을 시작한다. 그런데 userId 가 VU 에
+ * 고정이고 재진입해도 순번이 보존되므로(WaitingRoomService.registerIfAbsent), 두 번째 이터레이션의 VU 는
+ * 이미 임계치 아래라 첫 폴링에서 즉시 승급해 또 예매한다. 한 바퀴에 sleep 이 하나뿐이라 T 가 하한
+ * 3초까지 내려간 구간에서는 VU 당 3초에 예매 1건 — 1만 VU 면 약 3,300 RPS 로, #344 실측(booking 단독
+ * 258 RPS 에서 호스트 CPU 99.87%)의 13배다.
+ *
+ * 그러면 '예매 RPS 가 유입 규모와 무관하게 평평한가' 를 보려던 회차에서 <b>평평하지 않은 이유가
+ * 대기열이 아니라 생성기</b>가 된다. 위 flood 정의가 선언한 모델(VU 1개 = 대기자 1명)을 여기서 지킨다.
+ */
 export function journey() {
+  if (journeyDone) {
+    sleep(IDLE_SLEEP_SECONDS);
+    return;
+  }
+  // 진입 실패·폴링 상한 소진도 '한 명의 결과' 다. 재시도하면 그 VU 가 두 명으로 집계돼 유입 규모가
+  // 흐려지므로, 성공 여부와 무관하게 시도는 1회로 못 박는다.
+  journeyDone = true;
+
   const userId = USER_ID_MIN + exec.vu.idInTest;
   const enqueued = enqueue(userId);
   const waitingToken = jsonField(enqueued, 'result.waiting_token');
@@ -263,7 +292,7 @@ export function journey() {
 
   const res = http.post(
     `${BASE_URL}/api/v1/booking`,
-    JSON.stringify({ performance_id: QUEUE_PERF_ID, seat_id: seatFor(userId) }),
+    JSON.stringify({ performance_id: QUEUE_PERF_ID, seat_id: seatFor() }),
     {
       headers: {
         'Content-Type': 'application/json',
@@ -281,6 +310,9 @@ export function journey() {
 
 // 좌석은 비가역 소모라 VU 마다 다른 좌석을 노린다. 경합 자체는 이 회차의 관측 대상이 아니다
 // (오버셀 0건은 #344 검증 SQL 이 회차 후에 확인한다).
-function seatFor(userId) {
-  return userId;
+//
+// user id 가 아니라 VU 번호로 매긴다 — 좌석과 계정은 서로 다른 AUTO_INCREMENT 라 prod 에서 번호대가
+// 겹치지 않는다. 두 오프셋이 각자 자기 범위의 시작점을 가리키고, VU 번호가 둘을 1:1 로 잇는다.
+function seatFor() {
+  return SEAT_ID_MIN + exec.vu.idInTest;
 }

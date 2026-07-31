@@ -223,4 +223,11 @@ export const QUEUE_JITTER = Number(__ENV.QUEUE_JITTER || 0.2);
 
 // VU 하나가 무한 폴링에 갇히는 것을 막는 안전 상한. 이 값에 걸린 VU 는 queue_polls_exhausted 로
 // 집계된다 — 0 이 아니면 입장 허용량이 유입을 소화하지 못한 것이므로 회차 해석의 입력이다.
-export const QUEUE_MAX_POLLS = Number(__ENV.QUEUE_MAX_POLLS || 60);
+//
+// ⚠ 이 상한은 T 에 종속이라 회차 A(#546)가 T 를 바꾸면서 함께 올라갔다. 직전 값 60 은 T=25초
+// (R=400 가정) 기준이었는데, 실측 R=1,400 으로 T 가 8초가 됐고 대기 인원이 줄면 하한 3초까지 더
+// 내려간다 — 같은 대기 시간에 폴링이 4-8배 필요해진다. R=1,400 · admit-rate=20 · 램프 2분에서
+// 순번 9,999 는 106회가 필요하고 순번 6,900 부터 60 을 넘겨, 60 이면 약 31% 가 상한에 걸린다.
+// 그러면 '클라이언트가 먼저 포기한 것' 이 '입장 허용량이 유입을 못 따라갔다' 로 오독된다.
+// 300 은 최악(106회)의 약 3배 여유다. R 이나 min-poll-seconds 를 바꾸면 이 값도 다시 계산한다.
+export const QUEUE_MAX_POLLS = Number(__ENV.QUEUE_MAX_POLLS || 300);
