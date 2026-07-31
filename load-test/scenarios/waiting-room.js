@@ -1,0 +1,248 @@
+// (i) 대기열 — 상태 확인 경로 용량(R) 실측 + 1만 VU 유입 제어 검증 (#472 / ADR 0009).
+//
+// ── 이 시나리오가 답해야 하는 것 ─────────────────────────────────────────────
+// ADR 0009 §3 은 폴링 주기 하한을 `T ≥ N / R` 로 정하고, R(상태 확인 경로가 감당하는 RPS)을
+// **아직 실측하지 못했다**고 명시한다. #470 은 "#348 에서 실측한 폴링 경로 무릎" 을 입력으로 쓰라고
+// 적었지만 #348 은 회선 제약에 막혀 앱의 무릎에 도달조차 못 했다 — 그 수치는 존재하지 않는다.
+// 지금 쓰는 R=400 은 #529 seat-counts 포화점 396.75 RPS 를 빌린 보수적 하한이다.
+//   status 회차 = R 을 실측해 T 를 확정한다(그 결과로 ADR §3 을 갱신한다).
+//   flood  회차 = 예매 경로 RPS 가 유입 규모와 무관하게 입장 허용량에서 평평한지 본다.
+//
+// ── 서버 지시 폴링 — 저장소에 선례가 없는 패턴 ───────────────────────────────
+// 다른 시나리오는 sleep(고정값)으로 자지만 여기서는 **서버가 응답에 담아 준 주기**로 잔다. 그래서
+// 응답이 깨졌을 때의 폴백이 안전장치가 아니라 필수다 — 아래 nextPollSeconds() 주석 참조.
+//
+// ── 인증을 왜 로그인으로 하지 않는가 ─────────────────────────────────────────
+// 대기열은 "서로 다른 1만 명" 이 전제인데, 1만 번 로그인은 bcrypt(cost 10) 비용이 2 vCPU 를
+// 통째로 먹어 측정 대상이 아니라 auth-service 를 재게 된다. 게이트웨이와 같은 시크릿으로 k6 가
+// 직접 서명한다(시크릿은 커밋하지 않고 -e 로 주입 — 비밀번호와 같은 규율).
+// ⚠ user_id 는 실제로 시딩된 범위여야 한다. 대기열 자체는 DB 를 타지 않지만 flood 의 마지막
+//   단계인 예매는 탄다. 코호트 규모는 회차 A 결과에 달려 있어 런북 §16 에서 확정한다.
+import http from 'k6/http';
+import crypto from 'k6/crypto';
+import encoding from 'k6/encoding';
+import exec from 'k6/execution';
+import { sleep, fail } from 'k6';
+import { Rate, Trend, Counter } from 'k6/metrics';
+import {
+  BASE_URL,
+  QUEUE_PROFILE,
+  QUEUE_PERF_ID,
+  QUEUE_STATUS_STAGE_RATES,
+  QUEUE_STATUS_STAGE_DURATION,
+  QUEUE_STATUS_PRE_ALLOCATED_VUS,
+  QUEUE_STATUS_MAX_VUS,
+  QUEUE_PRELOAD_SIZE,
+  QUEUE_FLOOD_VUS,
+  QUEUE_FLOOD_RAMP,
+  QUEUE_FLOOD_DURATION,
+  QUEUE_FALLBACK_POLL,
+  QUEUE_JITTER,
+  QUEUE_MAX_POLLS,
+} from '../config/env.js';
+import { baseOptions } from '../config/options.js';
+import { jsonField } from '../lib/json.js';
+
+const JWT_SECRET = __ENV.QUEUE_JWT_SECRET || '';
+const USER_ID_MIN = Number(__ENV.QUEUE_USER_ID_MIN || 1);
+
+// 계단 사이 전환 램프. ramping-arrival-rate 의 stage 는 target 까지 선형 변화하므로 "계단" 을
+// 만들려면 (짧은 램프 + 유지) 두 개가 필요하다. seat-counts.js 와 같은 형태다.
+const STEP_RAMP = '10s';
+
+function statusStages() {
+  const rates = QUEUE_STATUS_STAGE_RATES; // 오타·빈 값은 config/env.js 가 로드 시점에 끊는다
+  const stages = [{ target: rates[0], duration: QUEUE_STATUS_STAGE_DURATION }];
+  for (let i = 1; i < rates.length; i++) {
+    stages.push({ target: rates[i], duration: STEP_RAMP });
+    stages.push({ target: rates[i], duration: QUEUE_STATUS_STAGE_DURATION });
+  }
+  return stages;
+}
+
+const SCENARIOS = {
+  status: {
+    poll: {
+      executor: 'ramping-arrival-rate',
+      timeUnit: '1s',
+      startRate: QUEUE_STATUS_STAGE_RATES[0],
+      preAllocatedVUs: QUEUE_STATUS_PRE_ALLOCATED_VUS,
+      maxVUs: QUEUE_STATUS_MAX_VUS,
+      stages: statusStages(),
+      exec: 'pollOnly',
+    },
+  },
+  flood: {
+    // VU 1개 = 대기자 1명. 진입 후에는 서버가 지시한 주기로만 깨어나므로 커넥션을 물고 있지 않다 —
+    // 폴링을 택한 이유가 정확히 이것이다(ADR 0009 기각안 1).
+    flood: {
+      executor: 'ramping-vus',
+      startVUs: 0,
+      stages: [
+        { target: QUEUE_FLOOD_VUS, duration: QUEUE_FLOOD_RAMP },
+        { target: QUEUE_FLOOD_VUS, duration: QUEUE_FLOOD_DURATION },
+        { target: 0, duration: '30s' },
+      ],
+      exec: 'journey',
+    },
+  },
+};
+
+export const options = {
+  scenarios: SCENARIOS[QUEUE_PROFILE],
+  // 값은 재정의하지 않는다(seat-counts.js 와 같은 선) — 포화 구간에서 p(95)<800 이 깨지는 것 자체가
+  // 관측 대상이다. dropped_iterations 도 threshold 에 넣지 않는다(포화 신호이지 실패가 아니다).
+  thresholds: baseOptions.thresholds,
+  // setup 이 대기열을 미리 채운다. 1만 건이면 수십 초가 걸리므로 기본값 60s 로는 부족하다.
+  setupTimeout: '15m',
+};
+
+const statusDuration = new Trend('queue_status_duration', true);
+const waitToAdmit = new Trend('queue_wait_to_admit_seconds');
+const pollsPerUser = new Trend('queue_polls_per_user');
+const admitted = new Rate('queue_admitted');
+const bookingOk = new Rate('queue_booking_ok');
+const bookingForbidden = new Rate('queue_booking_forbidden');
+// > 0 이면 fail-closed(ADR 0008)가 발동한 것이다. 이 회차는 대기열 성능이 아니라 Redis 장애를
+// 측정한 것이므로 무효다.
+const statusUnavailable = new Rate('queue_status_unavailable');
+// 안전 상한에 걸려 끝난 VU. > 0 이면 입장 허용량이 유입을 소화하지 못한 것이다.
+const pollsExhausted = new Counter('queue_polls_exhausted');
+
+function signAccessToken(userId) {
+  const header = encoding.b64encode(JSON.stringify({ alg: 'HS256', typ: 'JWT' }), 'rawurl');
+  const now = Math.floor(Date.now() / 1000);
+  const payload = encoding.b64encode(
+    JSON.stringify({ sub: String(userId), role: 'USER', type: 'access', iat: now, exp: now + 7200 }),
+    'rawurl',
+  );
+  const signature = crypto.hmac('sha256', JWT_SECRET, `${header}.${payload}`, 'base64rawurl');
+  return `${header}.${payload}.${signature}`;
+}
+
+/** 대기열 진입 → 응답. 실패는 jsonField 가 null 로 흡수한다(그 VU 의 여정은 성립하지 않는다). */
+function enqueue(userId) {
+  return http.post(`${BASE_URL}/api/v1/queue/${QUEUE_PERF_ID}/enqueue`, null, {
+    headers: { Authorization: `Bearer ${signAccessToken(userId)}` },
+    tags: { name: 'queue_enqueue' },
+  });
+}
+
+/**
+ * 서버가 지시한 다음 폴링까지의 초 + 지터.
+ *
+ * 응답이 깨졌을 때(5xx·타임아웃·본문 파싱 실패) 0 이나 undefined 로 떨어지면 k6 가 sleep 없이
+ * 재폴링해 스스로 DDoS 가 된다 — 하필 대상이 죽어가는 구간에서 정확히 그렇게 되므로, 폴백은
+ * 반드시 ADR 0009 §3 의 보수적 T(25초) 이상이어야 한다.
+ */
+function nextPollSeconds(res) {
+  const next = jsonField(res, 'result.next_poll_after_seconds');
+  const base = Number.isFinite(next) && next > 0 ? next : QUEUE_FALLBACK_POLL;
+  return base * (1 - QUEUE_JITTER + Math.random() * 2 * QUEUE_JITTER);
+}
+
+function pollStatus(waitingToken) {
+  const res = http.get(`${BASE_URL}/api/v1/queue/${QUEUE_PERF_ID}/status`, {
+    headers: { 'X-Waiting-Token': waitingToken, 'Accept-Encoding': 'gzip' },
+    tags: { name: 'queue_status' },
+  });
+  statusDuration.add(res.timings.duration);
+  statusUnavailable.add(res.status === 503);
+  return res;
+}
+
+export function setup() {
+  if (!JWT_SECRET) {
+    fail('QUEUE_JWT_SECRET 을 -e 로 주입해야 한다(게이트웨이 jwt.secret 과 같은 값, 커밋 금지).');
+  }
+
+  if (QUEUE_PROFILE !== 'status') {
+    console.log(`[setup] profile=flood perfId=${QUEUE_PERF_ID} vus=${QUEUE_FLOOD_VUS}`);
+    return {};
+  }
+
+  // ZRANK 는 skiplist 탐색이라 ZSET 크기에 로그 비례한다. 빈 대기열을 재면 실회차보다 낙관적인
+  // 값이 나와 R 을 과대평가하고, 그 값이 그대로 폴링 주기 하한이 되어 운영에서 터진다.
+  console.log(`[setup] 대기열 사전 적재 ${QUEUE_PRELOAD_SIZE}명 (perfId=${QUEUE_PERF_ID})`);
+  let lastToken = null;
+  for (let i = 0; i < QUEUE_PRELOAD_SIZE; i++) {
+    const token = jsonField(enqueue(USER_ID_MIN + i), 'result.waiting_token');
+    if (token) {
+      lastToken = token;
+    }
+  }
+  if (!lastToken) {
+    fail('사전 적재가 대기 토큰을 하나도 얻지 못했다 — QUEUE_ENABLED / Redis 상태를 확인할 것.');
+  }
+
+  // 폴링에 쓰는 토큰은 마지막에 진입한 사람 것이다 = 순번이 가장 뒤 = ZRANK 탐색 비용이 가장 큰
+  // 지점. 회차가 보수적인 방향으로 틀리게 만든다.
+  console.log(`[setup] 적재 완료. 폴링 대상 순번 ≈ ${QUEUE_PRELOAD_SIZE}`);
+  return { waitingToken: lastToken };
+}
+
+/** status 회차 — 상태 확인 경로만 두드려 R 을 잰다. 사용자 행동이 아니라 경로 용량 측정이라 sleep 이 없다. */
+export function pollOnly(data) {
+  pollStatus(data.waitingToken);
+}
+
+/** flood 회차 — 진입 → 서버 지시 폴링 → 입장 → 예매의 전 여정. */
+export function journey() {
+  const userId = USER_ID_MIN + exec.vu.idInTest;
+  const enqueued = enqueue(userId);
+  const waitingToken = jsonField(enqueued, 'result.waiting_token');
+  if (!waitingToken) {
+    return;
+  }
+
+  const startedAt = Date.now();
+  let entryToken = null;
+  let polls = 0;
+
+  // 진입 응답도 다음 폴링 주기를 지시한다. 이걸 무시하고 곧장 폴링하면 램프 구간의 1만 VU 가
+  // 진입 직후 한 번씩 더 두드려, 서버가 주기를 지시하는 의미가 그 구간에서만 사라진다.
+  sleep(nextPollSeconds(enqueued));
+
+  while (polls < QUEUE_MAX_POLLS) {
+    const res = pollStatus(waitingToken);
+    polls++;
+
+    entryToken = jsonField(res, 'result.entry_token');
+    if (entryToken) {
+      break;
+    }
+    sleep(nextPollSeconds(res));
+  }
+
+  pollsPerUser.add(polls);
+  admitted.add(entryToken !== null);
+
+  if (!entryToken) {
+    pollsExhausted.add(1);
+    return;
+  }
+  waitToAdmit.add((Date.now() - startedAt) / 1000);
+
+  const res = http.post(
+    `${BASE_URL}/api/v1/booking`,
+    JSON.stringify({ performance_id: QUEUE_PERF_ID, seat_id: seatFor(userId) }),
+    {
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${signAccessToken(userId)}`,
+        'X-Entry-Token': entryToken,
+      },
+      tags: { name: 'queue_booking' },
+    },
+  );
+  // 403 이 나오면 게이트가 입장 토큰을 거절한 것이다 — 승급 직후라 0 이어야 정상이고, 0 이 아니면
+  // 입장 토큰 TTL(5m)보다 폴링→예매 지연이 길었다는 뜻이다.
+  bookingForbidden.add(res.status === 403);
+  bookingOk.add(res.status === 200 || res.status === 201);
+}
+
+// 좌석은 비가역 소모라 VU 마다 다른 좌석을 노린다. 경합 자체는 이 회차의 관측 대상이 아니다
+// (오버셀 0건은 #344 검증 SQL 이 회차 후에 확인한다).
+function seatFor(userId) {
+  return userId;
+}
