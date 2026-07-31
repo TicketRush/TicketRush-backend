@@ -83,6 +83,23 @@ public enum ErrorStatus {
   FILE_INVALID_EXTENSION(HttpStatus.BAD_REQUEST, "FILE_400_002", "파일 확장자가 올바르지 않습니다."),
   FILE_EXTENSION_NOT_ALLOWED(HttpStatus.BAD_REQUEST, "FILE_400_003", "허용되지 않은 파일 형식입니다."),
 
+  // Queue 403
+  // 401이 아니라 403인 이유: 사용자는 JWT로 이미 인증됐다. 401을 주면 클라이언트가 토큰 리프레시를
+  // 시도해 무한 리프레시 루프가 된다. 유효하지 않은 토큰과 남의 토큰을 코드로 구분하지 않는다(정보 노출).
+  QUEUE_ENTRY_TOKEN_REQUIRED(HttpStatus.FORBIDDEN, "QUEUE_403_001", "대기열 입장 토큰이 필요합니다."),
+  QUEUE_WAITING_TOKEN_REQUIRED(HttpStatus.FORBIDDEN, "QUEUE_403_002", "대기열에 다시 진입해 주세요."),
+
+  // Queue 409
+  // 개시 시각을 진입의 부작용으로 두면 오픈 전에 미리 진입해 둔 사람이 승급 임계치를 부풀려 대기열을
+  // 무력화할 수 있다. 운영자가 연 대기열에만 줄을 세운다.
+  QUEUE_NOT_OPEN(HttpStatus.CONFLICT, "QUEUE_409_001", "아직 열리지 않은 대기열입니다."),
+
+  // Queue 503
+  // Redis가 죽으면 대기열도 전면 차단이다(ADR 0008 fail-closed). 대기열만 fail-open으로 두는 선택지는
+  // 오픈 시각에 유입 제어가 통째로 사라진다는 뜻이라 택하지 않는다(ADR 0009 §결과).
+  QUEUE_UNAVAILABLE(
+      HttpStatus.SERVICE_UNAVAILABLE, "QUEUE_503_001", "대기열을 확인할 수 없습니다. 잠시 후 다시 시도해 주세요."),
+
   // User 400
   USER_SOCIAL_PROVIDER_REQUIRED(HttpStatus.BAD_REQUEST, "USER_400_001", "socialProvider는 필수입니다."),
   USER_SOCIAL_ID_REQUIRED(HttpStatus.BAD_REQUEST, "USER_400_002", "socialId는 필수입니다."),

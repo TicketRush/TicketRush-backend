@@ -1,3 +1,9 @@
+spring:
+  data:
+    redis:
+      host: ${REDIS_HOST:localhost}
+      port: ${REDIS_PORT:6379}
+
 custom:
   swagger:
     serverUrl: ${SWAGGER_SERVER_URL:http://localhost:8080}

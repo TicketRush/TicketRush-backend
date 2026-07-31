@@ -171,3 +171,56 @@ export const SSE_MUTATE_RATE = Number(__ENV.SSE_MUTATE_RATE || 5);
 export const SSE_PROBE_PER_MINUTE = Number(__ENV.SSE_PROBE_PER_MINUTE || 2);
 // probe 가 자기 이벤트를 이 시간 안에 못 받으면 포기하고 커넥션을 닫는다(미수신으로 집계).
 export const SSE_PROBE_TIMEOUT_MS = Number(__ENV.SSE_PROBE_TIMEOUT_MS || 20000);
+
+// ---- #472 대기열 (waiting-room.js) -----------------------------------------
+// 회차 프로파일. 두 회차의 목적이 완전히 다르다 — 오타로 엉뚱한 회차를 20분 돌리지 않도록 로드
+// 시점에 끊는다(E2E_PROFILE 과 같은 선).
+//   status : 상태 확인 경로 단독 부하로 R(경로 용량)을 실측한다. ADR 0009 §3 이 "R 은 아직
+//            실측되지 않았다" 고 적어 둔 그 값이고, 이 회차가 T 를 확정해 ADR 을 갱신한다.
+//   flood  : 1만 VU 유입 제어 검증. 예매 경로 RPS 가 입장 허용량에서 평평한지를 본다.
+const QUEUE_PROFILES = ['status', 'flood'];
+export const QUEUE_PROFILE = __ENV.QUEUE_PROFILE || 'status';
+if (!QUEUE_PROFILES.includes(QUEUE_PROFILE)) {
+  throw new Error(`QUEUE_PROFILE 은 ${QUEUE_PROFILES.join('|')} 중 하나여야 한다: '${QUEUE_PROFILE}'`);
+}
+
+// 대기열을 붙일 공연. 지표가 공연별로 쪼개지지 않으므로(ID 태그 금지) 회차당 공연 하나만 쓴다.
+export const QUEUE_PERF_ID = Number(__ENV.QUEUE_PERF_ID || PERF_ID);
+
+// --- status 회차 -------------------------------------------------------------
+// 계단 시작점 근거: 이 경로는 GET(대기 토큰) + ZRANK 두 번이고 DB 를 타지 않는다. 게이트웨이 홉 +
+// DB 집계를 포함한 #529 seat-counts 포화점 396.75 RPS 보다 빠를 수밖에 없으므로 그 위에서 시작한다.
+export const QUEUE_STATUS_STAGE_RATES = parsePositiveList(
+  'QUEUE_STATUS_STAGE_RATES',
+  __ENV.QUEUE_STATUS_STAGE_RATES || '200,400,800,1600',
+  '200,400,800,1600',
+);
+export const QUEUE_STATUS_STAGE_DURATION = __ENV.QUEUE_STATUS_STAGE_DURATION || '5m';
+export const QUEUE_STATUS_PRE_ALLOCATED_VUS = Number(__ENV.QUEUE_STATUS_PRE_ALLOCATED_VUS || 100);
+export const QUEUE_STATUS_MAX_VUS = Number(__ENV.QUEUE_STATUS_MAX_VUS || 800);
+
+// ZRANK 는 skiplist 탐색이라 ZSET 크기에 로그 비례한다. 빈 대기열을 재면 실회차보다 낙관적인
+// 값이 나오므로, setup() 이 이만큼을 미리 채운 뒤 계단을 시작한다.
+export const QUEUE_PRELOAD_SIZE = Number(__ENV.QUEUE_PRELOAD_SIZE || 10000);
+// 사전 적재 동시성. 진입은 1인 1회라 이 구간 자체는 측정 대상이 아니다(회차 시작 전에 끝난다).
+export const QUEUE_PRELOAD_CONCURRENCY = Number(__ENV.QUEUE_PRELOAD_CONCURRENCY || 50);
+
+// --- flood 회차 --------------------------------------------------------------
+// VU 1개 = 대기자 1명. 진입 후에는 서버가 지시한 주기로만 폴링하므로 커넥션을 물고 있지 않다.
+export const QUEUE_FLOOD_VUS = Number(__ENV.QUEUE_FLOOD_VUS || 10000);
+export const QUEUE_FLOOD_RAMP = __ENV.QUEUE_FLOOD_RAMP || '2m';
+export const QUEUE_FLOOD_DURATION = __ENV.QUEUE_FLOOD_DURATION || '15m';
+
+// --- 폴링 모델 ---------------------------------------------------------------
+// 서버가 next_poll_after_seconds 를 못 준 경우(5xx·타임아웃·본문 파싱 실패)의 폴백. 이 값이 없거나
+// 0 이면 k6 가 sleep 없이 재폴링해 스스로 DDoS 가 된다 — 대상이 죽어가는 구간에서 정확히 그렇게
+// 되므로, 폴백은 반드시 ADR 0009 §3 의 보수적 T(25초) 이상이어야 한다.
+export const QUEUE_FALLBACK_POLL = Number(__ENV.QUEUE_FALLBACK_POLL || 25);
+
+// 클라이언트 지터(±비율). 서버가 주기를 지시해도 1만 명이 같은 순간에 깨어나면 버스트가 그대로
+// 남는다. 동기화를 깨는 몫은 클라이언트 책임이다(ADR 0009 §3).
+export const QUEUE_JITTER = Number(__ENV.QUEUE_JITTER || 0.2);
+
+// VU 하나가 무한 폴링에 갇히는 것을 막는 안전 상한. 이 값에 걸린 VU 는 queue_polls_exhausted 로
+// 집계된다 — 0 이 아니면 입장 허용량이 유입을 소화하지 못한 것이므로 회차 해석의 입력이다.
+export const QUEUE_MAX_POLLS = Number(__ENV.QUEUE_MAX_POLLS || 60);

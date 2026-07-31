@@ -1,0 +1,198 @@
+SERIES_ID=260731-539-seatmap-cache
+ISSUE=#539 (#469 귀속) / #540 은 SSE 역압 재현 회차로 분리
+RELATED=#512 묶음 C / #535(편승) / #532(별도 회차)
+DATE=2026-07-31 (KST)
+TARGET_HOST=EC2 54.116.243.250 (탄력 IP) — https://api.ticketrush.store
+TOPOLOGY=k6 local (docker compose, ADR 0004) --SSH tunnel(9090)--> EC2 deploy stack (Prometheus/Grafana EC2 로컬, ADR 0007)
+INSTANCE_TYPE=m7i-flex.large
+INSTANCE_VCPU=2
+RUNBOOK=docs/load-test-guide.md §13
+SCENARIO=load-test/scenarios/openrun-e2e.js (E2E_PROFILE=ramp)
+SEED=재시딩 없음 — 기존 LOADTEST 코호트 재사용(reset_e2e.sql 로 리셋만)
+K6_IMAGE=grafana/k6:latest
+PROM_SCRAPE_INTERVAL=15s
+
+# ── before/after 이미지 대조 ────────────────────────────────────────────────
+BEFORE_IMAGE_TAG=342a8ef5e910b6c2c55648fcd2b38dc5d8b7741a  (= #529 를 돌린 이미지와 동일)
+AFTER_IMAGE_TAG=<묶음 C 배포 후 채운다>
+# 캐시에 런타임 토글이 없어(SeatMapCacheRepository 무조건 배선) before 를 배포 전에 떴다.
+# after 이미지에는 #469 캐싱 외에 #532(SSE executor 거부 정책)가 함께 실린다 — 축이 다르지만 섞인 것은 사실이다.
+
+# ── 사전 게이트 (2026-07-31 05:38~05:44Z 실측) ─────────────────────────────
+G0_EC2_BOOT=05:38Z 기동, 컨테이너 16개, 앱 actuator 200
+G1_IMAGE_TAG=342a8ef5… (seat/gateway/booking 전부 동일)
+G2_SEAT_INDEX=idx_seat_performance_id_status_hold_expired_at 존재 / 구 idx_seat_performance_id 없음 (#521 적용 상태)
+G3_REDIS=seat:lock:* 0건, seat:seat-map:* 0건(캐시 미배포 확인), used 1.18M / maxmemory 64M / noeviction
+G4_PROM_TARGETS=up 11/11
+G5_CONTAINER_SERIES=count(ticketrush_container_memory_usage_bytes)=16 (게이트 하한 8)
+G6_COHORT=perf 4..13 각 2,080석 전부 AVAILABLE, distinct_steps=1 step=10 (재시딩 불필요)
+
+# ── 코호트 ──────────────────────────────────────────────────────────────────
+LOADTEST_PERF_IDS=4..13 (LOADTEST-000001..000010), 공연당 2,080석 / 총 20,800석
+BROWSE_PERF_ID=4 (조회 집중 = 핫 로우 = 캐시 대상 키 seat:seat-map:4)
+PURCHASE_PERF_IDS=4..13
+SEAT_ID_RANGE=perf 4: 26121..46911 (step 10)
+LOAD_USER=loadtest@ticketrush.local — 평문은 저장소·증적에 남기지 않음
+
+# ── 계단 확정 근거 ──────────────────────────────────────────────────────────
+SMOKE_STAGES=10,30,60 x 1m (수치 폐기, 부팅 직후 워밍업 겸)
+SMOKE_VERDICT=60 iters/s 에서 호스트 CPU 95.67% / dropped_iterations 195 / seat-layouts p95 4.84s
+              -> 본 회차 상한 60 확정. #505(260728-505-gzip-remeasure)가 정한 20,40,60 과 일치
+RAMP_STAGES=20,40,60 x 5m (before/after 동일 계단)
+REQUIRED_SEATS=약 7,300 (Σ rate x 0.2 x 300s + 램프) < 20,800 확보분
+
+# ── 회차 전 처치 ────────────────────────────────────────────────────────────
+RESET=reset_e2e.sql (guard ok / leftover_app_bookings=0 / non_available_seats=0)
+REDIS_LOCK_PURGE=1,330건 삭제 -> 0건 확인
+SEAT_SERVICE_RESTART=예 — 스모크 후 RSS 542.3/640MiB(84.7%) -> 재시작 후 399.7MiB(62.5%)
+                     docker restart(재생성 아님)라 IMAGE_TAG 불변 확인
+
+# ── 실측 ────────────────────────────────────────────────────────────────────
+# 1차 회차 (20,40,60 x 5m) — 미포화로 끝났다
+BEFORE_RAMP1_START=2026-07-31T05:49:30Z
+BEFORE_RAMP1_END=2026-07-31T06:05:23Z
+BEFORE_RAMP1_RESULT=완주 15m20s / 실패 0.00%(0/117,771) / dropped 0 / 좌석 7,360 소모
+BEFORE_RAMP1_STAGE_MEDIANS=CPU 40.77 -> 73.00 -> 90.51 % | k6 RPS 64 -> 128 -> 192 |
+                           seat-layouts 서버 avg 9.59 -> 28.38 -> 96.17 ms
+BEFORE_RAMP1_VERDICT=미포화. 도착률에 RPS 가 정확히 비례하고 dropped 0 이다. 다만 서버 avg 가
+                     28 -> 96ms 로 3.4 배 꺾였고 CPU 90.5% 라 무릎 '직전' 이다.
+BEFORE_RAMP1_P95=seat-layouts p95 504.95ms / http_req_duration p95 164.68ms
+# 2차 회차 (60,80,100 x 5m) — 무릎 확보용
+BEFORE_RAMP2_START=2026-07-31T06:08:39Z
+BEFORE_RAMP2_END=
+BEFORE_KNEE_RPS=
+BEFORE_SEAT_LAYOUTS_P95=
+BEFORE_HOST_CPU_PEAK=
+
+# ── 회차 2개를 이어붙이는 근거와 판정 기준 (회차 전에 정한다) ────────────────
+# 1차(20,40,60)가 60 에서 미포화로 끝나 2차(60,80,100)를 같은 이미지·같은 세션에서 이어 돌렸다.
+# 60 계단을 겹치게 둔 것은 두 회차가 같은 곡선 위에 있는지 검산하기 위해서다
+# (#529 가 다른 계단으로 두 점 적합을 교차검증한 것과 같은 논법).
+#
+# 판정 기준 — 겹치는 60 계단의 '마지막 3분' 중앙값 기준:
+#   - 호스트 CPU 차이 <= 5%p
+#   - seat-layouts 서버 avg 차이 <= 20%
+#   둘 다 만족하면 두 회차를 한 곡선으로 이어 읽는다.
+#   하나라도 벗어나면 이어붙이지 않고 2차 회차만으로 무릎을 판정하며, 그 사실을 리포트에 적는다.
+#
+# ⚠ 2차 회차는 seat-service 재시작 직후 60/s 로 진입해 초반에 콜드 JIT 구간이 있다.
+#   시작 1분 안에 dropped_iterations 124 건이 발생했고 그 뒤 멈췄다 — 포화 신호가 아니라
+#   워밍업 신호로 읽는다. 그래서 판정에 '마지막 3분' 만 쓴다.
+
+# ── 이어붙이기 판정 결과 ────────────────────────────────────────────────────
+# 미리 정한 기준(겹치는 60 계단의 '마지막 3분' 중앙값, CPU 차 <= 5%p)은 **초과했다.**
+# 2차 회차의 60 계단 CPU 가 99.6% 로 시작해 90.0% 로 내려왔기 때문이고, 그 3분 창에
+# 콜드 JIT 구간이 통째로 들어간다.
+#
+# 초과의 원인은 수렴 곡선으로 규명됐다 — 같은 처리량(app_rps 384 vs 377)에 CPU 만
+# 더 드는 형태였고, 시간이 지나며 단조 감소해 1차 값으로 수렴했다.
+#   06:09:50  99.59%   <- 재시작 직후, 콜드
+#   06:10:52  99.76%
+#   06:11:54  98.98%
+#   06:12:56  92.38%
+#   06:13:43  90.03%   <- 계단 종료 직전
+# 1차 회차 60 계단 중앙값 90.51% 와의 차이가 **0.48%p** 다.
+#
+# 판정: 기준 초과를 그대로 기록하되, 두 회차를 이어 읽는다. 근거는 '기준을 다시 정해서'가
+# 아니라 '초과분이 워밍업이라는 것이 수렴으로 증명돼서' 다. 다만 2차 회차의 60 계단
+# 앞 3분은 어떤 표에도 넣지 않는다(워밍업으로 폐기).
+#
+# ⚠ 다음 회차에 적용할 것: 재시작 직후 회차는 첫 계단을 '워밍업 전용'으로 따로 두고,
+#   그 계단의 수치는 처음부터 폐기 전제로 잡는다. 이번엔 겹침 검산용으로 넣은 60 계단이
+#   워밍업까지 겸하게 되어 검산 창이 절반으로 줄었다.
+BEFORE_RAMP2_END=2026-07-31T06:24:48Z
+BEFORE_RAMP2_RESULT=완주 15m51s / 실패율 4.92%(10,189/206,810) / dropped 9,648 / VU peak 1,045(상한 1,051)
+BEFORE_RAMP2_P95=seat-layouts p95 12.6s / http_req_duration p95 10.98s / browse journey p95 16.43s
+
+# ── before 곡선 (1차 + 2차, 계단별 중앙값) ─────────────────────────────────
+# 소화율 = seat-layouts 서버 RPS / 도착률. 도착률 1 iter = seat-layouts 1 요청이다.
+#  계단     CPU%    k6RPS  seat-layouts서버RPS(소화율)  서버avg    p95      dropped
+#  20/s     40.77    64      20.0 (100%)                 9.59ms    0.05s      0
+#  40/s     73.00   128      40.0 (100%)                28.38ms    0.22s      0
+#  60/s     90.51   192      60.0 (100%)                96.17ms    0.54s      0     <- 무릎
+#  60/s(2차) 93.29  192      60.0 (100%)                73.81ms      -       124(워밍업분)
+#  80/s     99.74   218      66.9 ( 84%)               741.04ms   13.27s    853
+# 100/s     99.83   260      75.7 ( 76%)               649.96ms   12.82s   3,030
+#
+BEFORE_KNEE=60 iters/s (= seat-layouts 60 RPS). 여기까지 도착률을 100% 소화하고 실패 0.
+BEFORE_KNEE_EVIDENCE=80 계단부터 소화율 84%로 떨어지고 서버 avg 가 96 -> 741ms(7.7배),
+                     dropped 발생, 호스트 CPU 99.7% 수렴 — 런북 §13.5 포화 판정 3요건 충족
+BEFORE_MAX_THROUGHPUT=seat-layouts 약 76 RPS (100 계단, 포화 상태의 소화 상한)
+BEFORE_HOST_CPU_PEAK=99.88%
+#
+# ⚠ 100 계단에서 VU 가 1,045/1,051 로 상한에 붙었다. dropped 가 VU 부족 때문이라는 반론이
+#   가능하지만, 같은 창에서 호스트 CPU 99.8% 고정 + 실패율 4.92% 라 대상 포화로 읽는다
+#   (런북 §13.5: "preAllocated 를 넉넉히 잡고도 dropped 가 나면 대상 포화").
+#   80 계단은 VU 여유가 있는 상태에서 이미 소화율 84% 였다 — 이쪽이 더 깨끗한 포화 증적이다.
+#
+# ⚠ k6_http_req_failed_rate 시계열의 계단 중앙값이 1.0 으로 나오는데 이는 순간 rate 게이지의
+#   특성이고, 회차 실패율의 SSOT 는 k6 요약의 4.92% 다. 표에 옮길 때 이 값을 쓴다.
+
+# ══ #535 편승 회차 (샘플러 정지 + seat-counts 80 계단) ═══════════════════════
+S535_COHORT_RESTORE=seed_seat_counts.sql @mode='refresh' — performance_id 14·15 보존.
+                    복원 후 A 600석(360/120/120), B 3,000석(1800/600/600).
+                    /seat-counts 응답이 expect_* 와 정확히 일치함을 curl 로 대조 확인.
+S535_SAMPLER=docker stop ticketrush-container-mem-sampler (06:28:23Z ~ 06:41:18Z)
+S535_WARMUP=A 40 계단 2m (수치 폐기, scale_mismatch 0%)
+S535_ROUNDS=A 80x5m -> B 80x5m -> A 재측정 80x5m. 전 회차 도착률 100% 소화·실패 0.00%
+#
+# 서버 축(#529 와 같은 축) 실측 — k6 클라이언트 avg 는 왕복 지연이 지배해 좌석 수 차이가
+# 안 보인다(A 13.72ms vs B 13.97ms). 좌석당 비용은 반드시 서버 축으로 뽑는다.
+#   A 1차 (600석)   2.236 ms   CPU 37.9%   <- 워밍업 직후, 콜드 성분 있음
+#   B     (3,000석) 3.039 ms   CPU 27.3%
+#   A 재측정(600석)  2.058 ms   CPU 23.4%   <- B 와 같은 열 상태
+#
+# 적합(A 재측정 · B 두 점):
+S535_SEAT_COST=0.4091 µs/석   (#529 A-post 0.396 대비 +3.3%)
+S535_FIXED_TERM=1.812 ms      (#529 A-post 1.472 대비 +23.1%)
+#
+S535_VERDICT=**사이드카(#515) 가설 기각.** 샘플러를 끈 상태의 좌석당 비용이 샘플러가 켜져 있던
+             #529 A-post 와 3.3% 안에서 일치한다. 15초마다 cgroup 을 훑는 프로세스가 2 vCPU 를
+             갉아 집계 비용을 올렸다는 가설은 실측으로 성립하지 않는다.
+S535_RESIDUAL=고정항 +23.1% 는 남는다. 다만 같은 세션 안에서도 A 가 콜드/웜에 따라 2.236 ->
+              2.058 ms(8%) 흔들렸으므로 이 크기는 재현성 오차 범위로 읽는다.
+S535_REMAINING=원인 후보 중 '사이드카' 만 배제됐다. 코드(#519/#520) 와 호스트 상태는 이 회차로
+               가르지 못한다 — #535 완료조건 3의 답은 '사이드카 아님 + 나머지 미확인' 이다.
+               이슈가 스스로 허용한 결말대로 재현성 한계를 런북에 문서화하고 닫는다.
+#
+# ⚠ 이 회차가 만든 방법론 교훈: 좌석당 비용의 두 점(A·B)은 **같은 열 상태**에서 떠야 한다.
+#   A 를 워밍업 직후에 뜨면 콜드 성분이 A 를 부풀려 기울기가 과소평가된다
+#   (1차 적합 0.335 µs -> 열 맞춘 재적합 0.409 µs, 22% 차이).
+
+# ══ after 회차 (묶음 C 배포 후) ═══════════════════════════════════════════════
+AFTER_IMAGE_TAG=e0b42dc633e841af1fb4a3ba47dd27b1c2fce7bf
+CD_RUN=30611066857 (success, 06:54:33Z -> 07:13:54Z = 19분 21초)
+CD_GATE_TARGETS=up 11/11
+CD_GATE_CONTAINER_SERIES=16 (하한 8)
+DEPLOY_VERIFY=캐시 카운터 3종(hit/miss/failure)·역압 카운터 시계열 생성 확인, RestartCount=0
+#
+# before 와 대칭 조건: 워밍업 스모크(수치 폐기) -> 리셋 -> seat-service 재시작 -> 본 회차
+AFTER_SMOKE=10,30,60 x 1m — seat-layouts p95 355ms / dropped 0 (before 스모크는 4.84s / 195)
+AFTER_RAMP_START=2026-07-31T07:20:10Z
+AFTER_RAMP_END=2026-07-31T07:46:07Z
+AFTER_RAMP_STAGES=20,40,60,80,100 x 5m (한 회차)
+AFTER_RESULT=완주 25m40s / **실패율 0.00%(0/294,881)** / dropped 273 / 좌석 18,474 소모
+AFTER_P95=seat-layouts p95 815ms / http_req_duration p95 710ms
+AFTER_VU_PEAK=431 / 453 (before 는 1,045 / 1,051 로 상한 접촉)
+#
+#  계단     CPU%    seat-layouts서버RPS(소화율)  서버avg    p95     dropped  히트율   Redis%
+#  20/s     35.15    20.0 (100%)                 4.89ms   0.05s      0      92.06    3.81
+#  40/s     59.30    40.0 (100%)                 9.01ms   0.10s      0      91.22    4.96
+#  60/s     72.75    60.0 (100%)                 5.26ms   0.07s      0      99.57    4.99
+#  80/s     85.34    80.0 (100%)                10.11ms   0.08s      0      99.90    5.63
+# 100/s     98.01   100.1 (100%)                76.14ms   0.88s    132      99.80    6.76
+#
+AFTER_KNEE=**미확정 — 100 계단에서도 소화율 100%.** 수치로 말할 수 있는 것은 "60 -> 100 이상".
+AFTER_KNEE_LIMIT=계단을 더 올리려면 좌석이 부족하다. 20-100 계단이 이미 18,500석을 쓰고
+                 확보분이 20,800석이다. seed_load.sql 의 @perf_count 를 키워야 한다.
+#
+# ── #469 완료조건 판정 ──────────────────────────────────────────────────────
+C1_KNEE=충족(하한). 무릎 60 -> 100 이상 = **최소 1.67배**. before 가 무너진 80 계단을
+        after 는 손실 없이 통과했고 그 지점 서버 avg 가 741 -> 10.11ms(**73배**)
+C2_REDIS=충족. **최대 사용률 7.46% = 4.78 MiB / maxmemory 64mb**, 여유 약 13배.
+         (100 계단 창 중앙값은 6.76% — 최대는 회차 종료 직전에 나온다)
+         failure 카운터 전 구간 0 -> noeviction 상한에 닿아 좌석 락 SET 이 거절되는
+         경로는 한 번도 열리지 않았다
+C3_HITRATE=히트율 92.06%(20 계단) -> 99.90%(80 계단). 미스 원인(TTL 30s 만료·evict)이
+           도착률에 비례하지 않아 조회가 몰릴수록 히트율이 오른다 — 캐시가 가장 필요한
+           구간에서 가장 잘 듣는다

@@ -14,6 +14,8 @@ TicketRush의 아키텍처 결정을 번호 매긴 Markdown으로 축적하는 �
 - [6. 8 GiB 단일 인스턴스에서 컨테이너별 메모리 상한을 적용한다](0006-eight-gib-container-memory-limits.md)
 - [7. 관측 스택을 측정 대상과 같은 EC2에 두고, 관측 포트는 SSH 터널로만 연다](0007-observability-stack-colocation.md)
 - [8. Redis 단일 인스턴스 SPOF를 수용하고, 장애 시 전면 차단(fail-closed)한다](0008-accept-redis-spof-with-fail-closed.md)
+- [9. 대기열을 게이트웨이 안의 모듈로 두고, 서버가 지시하는 폴링으로 1만 VU 유입을 제어한다](0009-virtual-waiting-room-with-server-directed-polling.md)
+- [10. 1만 VU 회차의 부하 생성기를 AWS 안의 임시 EC2로 옮긴다](0010-in-aws-load-generator-for-ten-thousand-vu.md)
 
 ## 사용법
 

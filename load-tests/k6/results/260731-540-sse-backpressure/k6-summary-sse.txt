@@ -1,0 +1,36 @@
+    sse_connect_duration...........: avg=54.5ms   min=24ms    med=41ms    max=1.06s    p(90)=82ms     p(95)=112.14ms
+    sse_connected..................: 600     0.951637/s
+    sse_event......................: 3909248 6200.310715/s
+    sse_events_received............: 3906760 6196.364592/s
+    sse_mutate_conflict............: 2.12%   67 out of 3150
+    sse_mutate_created.............: 97.87%  3083 out of 3150
+    sse_mutate_exhausted...........: 0.00%   0 out of 3150
+    sse_probe_booked...............: 100.00% 21 out of 21
+    sse_probe_booking_duration.....: avg=53.27ms  min=18.65ms med=20.54ms max=261.53ms p(90)=199.16ms p(95)=217.56ms
+    sse_probe_matched..............: 18      0.028549/s
+    sse_probe_timeout..............: 3       0.004758/s
+    sse_propagation_ms.............: avg=2.47s    min=1.06s   med=2.01s   max=9.81s    p(90)=3.02s    p(95)=4.14s   
+
+    HTTP
+    http_req_duration..............: avg=176.66ms min=11.27ms med=42.22ms max=20.35s   p(90)=418.14ms p(95)=678.29ms
+      { expected_response:true }...: avg=144.09ms min=11.27ms med=41.74ms max=2.57s    p(90)=394.78ms p(95)=617.86ms
+    http_req_failed................: 0.00%   0 out of 3173
+    http_reqs......................: 3194    5.065883/s
+
+    EXECUTION
+    iteration_duration.............: avg=177.79ms min=11.53ms med=43.67ms max=20.35s   p(90)=420.73ms p(95)=679.68ms
+    iterations.....................: 3171    5.029403/s
+    vus............................: 600     min=8            max=607
+    vus_max........................: 619     min=619          max=619
+
+    NETWORK
+    data_received..................: 745 MB  1.2 MB/s
+    data_sent......................: 2.6 MB  4.1 kB/s
+
+
+
+
+running (10m30.5s), 000/619 VUs, 3171 complete and 601 interrupted iterations
+mutators    ✓ [ 100% ] 000/015 VUs  10m30s  5.00 iters/s
+probe       ✓ [ 100% ] 01/04 VUs    10m30s  0.03 iters/s
+subscribers ✓ [ 100% ] 576/600 VUs  10m30s 

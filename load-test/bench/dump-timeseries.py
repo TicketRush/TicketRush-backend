@@ -87,6 +87,24 @@ QUERIES = [
     # 게이트웨이
     ("gateway-rps", 'sum(rate(http_server_requests_seconds_count{job="gateway"}[1m]))'),
     ("gateway-5xx-rps", 'sum(rate(http_server_requests_seconds_count{job="gateway", status=~"5.."}[1m]))'),
+    # 대기열 (#472 / ADR 0009). 게이트웨이의 http_server_requests 는 uri 라벨이 /** · UNKNOWN 으로
+    # 뭉개져(#402 실측 카디널리티 4) 폴링 경로를 따로 볼 수 없다 — 아래 커스텀 지표가 유일한 수단이다.
+    ("queue-waiting", 'ticketrush_queue_waiting{job="gateway"}'),
+    # 상태 확인 RPS = 이 카운터의 합. 폴링 1회가 정확히 1증가라 별도 미터를 두지 않았다.
+    ("queue-admission-rps", 'sum by (result) (rate(ticketrush_queue_admission_total{job="gateway"}[1m]))'),
+    ("queue-admit-ratio", 'sum(rate(ticketrush_queue_admission_total{job="gateway", result="admitted"}[1m])) / sum(rate(ticketrush_queue_admission_total{job="gateway"}[1m]))'),
+    ("queue-poll-interval", 'ticketrush_queue_poll_interval_seconds{job="gateway"}'),
+    # result="unavailable" 이 0 이 아니면 fail-closed(ADR 0008)가 발동한 것이다 = 회차 무효.
+    ("queue-entry-token", 'sum by (result) (rate(ticketrush_queue_entry_token_total{job="gateway"}[1m]))'),
+    # 완료 조건의 핵심 축 — 유입이 1만이든 10만이든 이 값이 admit-rate 부근에서 평평해야 한다.
+    ("booking-server-rps", 'sum(rate(http_server_requests_seconds_count{instance="booking-service:8090"}[1m]))'),
+    # Redis 는 maxmemory 64mb + noeviction 이라 대기열이 예산을 넘기면 좌석 락 SET 까지 거절된다.
+    # 지금까지 QUERIES 에 Redis 축이 없었는데, 대기열부터는 이게 회차 무효 판정 기준이다(48 MB).
+    ("redis-mem-used", 'redis_memory_used_bytes'),
+    ("k6-queue-status-p95", 'k6_queue_status_duration_p95'),
+    ("k6-queue-wait-to-admit-p95", 'k6_queue_wait_to_admit_seconds_p95'),
+    ("k6-queue-admitted-rate", 'k6_queue_admitted_rate'),
+    ("k6-queue-status-unavailable-rate", 'k6_queue_status_unavailable_rate'),
     # 병목 후보
     ("hikari-pending", 'hikaricp_connections_pending{job="ticketrush-services"}'),
     ("hikari-active", 'hikaricp_connections_active{job="ticketrush-services"}'),
@@ -136,6 +154,29 @@ QUERIES = [
     ("k6-sse-connected-rate", 'rate(k6_sse_connected_total[1m])'),
     ("k6-sse-connection-closed-rate", 'rate(k6_sse_connection_closed_total[1m])'),
     ("k6-sse-mutate-created-rate", 'k6_sse_mutate_created_rate'),
+    # ── #469 좌석맵 JSON 캐싱 ──────────────────────────────────────────────
+    # 히트율의 분모에 failure 를 넣지 않는다 — 캐시 리포지토리가 장애를 miss 와 분리해 세는
+    # 이유가 그것이다(SeatMapCacheRepository:43). 셋을 따로 떠서 리포트에서 조립한다.
+    # ⚠ before 회차에서는 셋 다 비는 것이 정상이다 — 캐시가 아직 배포되지 않았다는 증적이다.
+    ("seatmap-cache-rate", 'sum by (result) (rate(ticketrush_seat_seatmap_cache_total[1m]))'),
+    ("seatmap-cache-total", 'sum by (result) (ticketrush_seat_seatmap_cache_total)'),
+    # seat-counts 와 대칭으로 seat-layouts 서버 축을 뜬다. 캐시 히트는 DB·직렬화를 건너뛰므로
+    # 개선은 k6 클라이언트 축보다 이 서버 축에서 먼저 보인다(회선 지연이 섞이지 않는다).
+    ("seat-layouts-server-rps", 'sum(rate(http_server_requests_seconds_count{instance="seat-service:8090", uri=~".*seat-layouts"}[1m]))'),
+    ("seat-layouts-server-avg-ms", '1000 * sum(rate(http_server_requests_seconds_sum{instance="seat-service:8090", uri=~".*seat-layouts"}[1m])) / sum(rate(http_server_requests_seconds_count{instance="seat-service:8090", uri=~".*seat-layouts"}[1m]))'),
+    ("seat-layouts-server-p95", 'histogram_quantile(0.95, sum by (le) (rate(http_server_requests_seconds_bucket{instance="seat-service:8090", uri=~".*seat-layouts"}[1m])))'),
+    # Redis 예산(#469 완료조건). maxmemory 64mb + noeviction 이라 상한에 닿으면 캐시 SET 이
+    # 거절되는 데서 그치지 않고 좌석 락 SET 까지 막힌다(fail-closed 503, ADR 0008).
+    # used 만 보면 그 위험이 안 보이므로 max 와 캐시 failure 카운터를 같은 창에 둔다.
+    ("redis-memory-used", 'redis_memory_used_bytes'),
+    ("redis-memory-max", 'redis_memory_max_bytes'),
+    ("redis-memory-used-pct", '100 * redis_memory_used_bytes / redis_memory_max_bytes'),
+    # ── #532 SSE 큐 역압 ──────────────────────────────────────────────────
+    # rejected 는 '0 이어야 정상'이라 no data 와 0 을 구분해야 한다 — 카운터가 생성자에서
+    # 등록돼 있어 시계열 자체는 존재하고 값이 0 으로 평평한 것이 통과 증적이다.
+    ("sse-rejected-total", 'ticketrush_seat_sse_event_rejected_total'),
+    ("sse-caller-runs-total", 'ticketrush_seat_sse_event_caller_runs_total'),
+    ("sse-caller-runs-rate", 'rate(ticketrush_seat_sse_event_caller_runs_total[1m])'),
 ]
 
 
