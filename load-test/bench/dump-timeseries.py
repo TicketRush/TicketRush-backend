@@ -136,6 +136,29 @@ QUERIES = [
     ("k6-sse-connected-rate", 'rate(k6_sse_connected_total[1m])'),
     ("k6-sse-connection-closed-rate", 'rate(k6_sse_connection_closed_total[1m])'),
     ("k6-sse-mutate-created-rate", 'k6_sse_mutate_created_rate'),
+    # ── #469 좌석맵 JSON 캐싱 ──────────────────────────────────────────────
+    # 히트율의 분모에 failure 를 넣지 않는다 — 캐시 리포지토리가 장애를 miss 와 분리해 세는
+    # 이유가 그것이다(SeatMapCacheRepository:43). 셋을 따로 떠서 리포트에서 조립한다.
+    # ⚠ before 회차에서는 셋 다 비는 것이 정상이다 — 캐시가 아직 배포되지 않았다는 증적이다.
+    ("seatmap-cache-rate", 'sum by (result) (rate(ticketrush_seat_seatmap_cache_total[1m]))'),
+    ("seatmap-cache-total", 'sum by (result) (ticketrush_seat_seatmap_cache_total)'),
+    # seat-counts 와 대칭으로 seat-layouts 서버 축을 뜬다. 캐시 히트는 DB·직렬화를 건너뛰므로
+    # 개선은 k6 클라이언트 축보다 이 서버 축에서 먼저 보인다(회선 지연이 섞이지 않는다).
+    ("seat-layouts-server-rps", 'sum(rate(http_server_requests_seconds_count{instance="seat-service:8090", uri=~".*seat-layouts"}[1m]))'),
+    ("seat-layouts-server-avg-ms", '1000 * sum(rate(http_server_requests_seconds_sum{instance="seat-service:8090", uri=~".*seat-layouts"}[1m])) / sum(rate(http_server_requests_seconds_count{instance="seat-service:8090", uri=~".*seat-layouts"}[1m]))'),
+    ("seat-layouts-server-p95", 'histogram_quantile(0.95, sum by (le) (rate(http_server_requests_seconds_bucket{instance="seat-service:8090", uri=~".*seat-layouts"}[1m])))'),
+    # Redis 예산(#469 완료조건). maxmemory 64mb + noeviction 이라 상한에 닿으면 캐시 SET 이
+    # 거절되는 데서 그치지 않고 좌석 락 SET 까지 막힌다(fail-closed 503, ADR 0008).
+    # used 만 보면 그 위험이 안 보이므로 max 와 캐시 failure 카운터를 같은 창에 둔다.
+    ("redis-memory-used", 'redis_memory_used_bytes'),
+    ("redis-memory-max", 'redis_memory_max_bytes'),
+    ("redis-memory-used-pct", '100 * redis_memory_used_bytes / redis_memory_max_bytes'),
+    # ── #532 SSE 큐 역압 ──────────────────────────────────────────────────
+    # rejected 는 '0 이어야 정상'이라 no data 와 0 을 구분해야 한다 — 카운터가 생성자에서
+    # 등록돼 있어 시계열 자체는 존재하고 값이 0 으로 평평한 것이 통과 증적이다.
+    ("sse-rejected-total", 'ticketrush_seat_sse_event_rejected_total'),
+    ("sse-caller-runs-total", 'ticketrush_seat_sse_event_caller_runs_total'),
+    ("sse-caller-runs-rate", 'rate(ticketrush_seat_sse_event_caller_runs_total[1m])'),
 ]
 
 
