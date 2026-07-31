@@ -40,7 +40,7 @@ G7_QUEUE_RESET=queue:* 0 개 확인 후 시작
 #   본 회차 전에 삭제했다. 컨테이너명이 ticketrush-redis 라 'redis' 로 조회하면 조용히 0 이 나온다.
 
 # ── 회차 전 처치 ───────────────────────────────────────────────────────────
-GATEWAY_RECREATE=2026-07-31T13:0x:xxZ (env_file 반영 위해 restart 가 아니라 --force-recreate)
+GATEWAY_RECREATE=2026-07-31T13:05Z (env_file 반영 위해 restart 가 아니라 --force-recreate)
 SMOKE=PRELOAD 500 / 계단 100,200 × 30s → 실패 0, unavailable 0%, admitted_leak 0%,
 #      p95 24.05ms, avg 10.79ms, 138.7 RPS. 수치는 폐기(§6.1 규칙 4), 계단 하한 근거로만 쓴다.
 
@@ -71,13 +71,48 @@ INVALID_IF=redis_memory_used_bytes ≥ 48MB (noeviction 상한 근접 — 좌석
 # ── 실측 (회차 후 채운다) ──────────────────────────────────────────────────
 A1_KEEPALIVE=75s (nginx 설정에 keepalive_timeout 지시자가 없어 컴파일 기본값)
 A1_START_UTC=2026-07-31T13:08:52Z
-A1_END_UTC=
-A1_RESULT=
-A2_KEEPALIVE=15s
-A2_START_UTC=
-A2_END_UTC=
-A2_RESULT=
-KNEE_R=
-POLL_INTERVAL_T=
-VERDICT=
-WINDOW_END_SOURCE=
+A1_END_UTC=2026-07-31T13:31:46Z
+A1_RESULT=유효. unavailable 0%(0/875,692) / admitted_leak 0%(0/875,692) / redis max 8.69%
+A1_STAGES=200→191.6rps(CPUmax 18.6%) / 400→376.1(28.1%) / 800→759.4(48.9%) / 1600→1399.8(90.7%)
+A1_DROPPED=45,305 (1600 계단에서 39,634 집중)
+A1_VU_MAX=783 / maxVUs 800
+A1_P95=650.64ms (전 구간) — 1600 계단에서 급증, 800 이하에서는 10ms 대
+
+A2_KEEPALIVE=15s (http 블록에 keepalive_timeout 15; 삽입 → reload)
+A2_START_UTC=2026-07-31T13:36:32Z
+A2_END_UTC=2026-07-31T13:58:37Z
+A2_RESULT=유효. unavailable 0%(0/872,205) / admitted_leak 0%(0/872,205) / redis max 8.73%
+A2_STAGES=200→195.7rps(CPUmax 18.5%) / 400→386.3(28.6%) / 800→779.7(50.3%) / 1600→1412.7(91.7%)
+A2_DROPPED=48,794
+A2_VU_MAX=800 / maxVUs 800
+
+# ── 판정 ───────────────────────────────────────────────────────────────────
+KNEE_R=약 1,400 RPS
+#   1600 계단에서 실제 RPS 가 목표의 87.5% 로 정체(200~800 계단은 94~96% 소화).
+#   회차 전 확정한 세 신호가 모두 1600 을 가리켰다 — 실제 RPS 정체 + dropped 39,634 급증
+#   + 호스트 CPU 90.7%(이 구성의 확정된 벽은 99%, #509·#518).
+#   A-1 1399.8 / A-2 1412.7 → 보수적으로 1,400 을 채택한다.
+POLL_INTERVAL_T=8초  (T = ceil(10,000 / 1,400))
+#   ADR 0009 §3 의 보수값은 25초(R=400 가정)였다. R 이 3.5배 컸으므로 T 가 3배 짧아진다.
+#   #529 seat-counts 396.75 RPS 를 하한으로 빌린 판단이 '안전한 방향으로' 크게 틀렸다 —
+#   DB 를 타지 않는 경로라 그럴 수밖에 없다는 예상이 수치로 확인됐다.
+
+AB_VERDICT=keepalive_timeout 75초(기본값) 유지
+#   회차 전 확정한 순서를 그대로 적용했다.
+#   1순위 호스트 CPU: A-1 avg 40.89% vs A-2 41.18% → 차이 +0.29%p (5%p 이내 → 2순위로)
+#   2순위 메모리: 게이트웨이 avg 318.0 → 368.6 MiB (+50.6 MiB, +15.9%) → 10% 초과 → 여기서 판정
+#                호스트 메모리도 4.65 → 4.79 GiB (+0.14)
+#   (참고) 3순위 재핸드셰이크: connecting p95 7.27→15.41ms(2.1배), TLS p95 4.83→16.59ms(3.4배)
+#   → 15초 단축은 CPU 이득이 없으면서 메모리·핸드셰이크 비용만 늘었다.
+VERDICT=회차 유효. R=1,400 / T=8초 확정. keepalive 75초 유지.
+WINDOW_END_SOURCE=k6 프로세스 종료 시각(UTC) — 이 회차는 비동기 드레인 대상이 없다(대기열은 Redis 동기 경로)
+
+# ── 이 회차가 답하지 못한 것 ───────────────────────────────────────────────
+LIMIT_AB=이 A/B 는 '1만 명이 유휴 커넥션을 물고 있는' 조건을 재현하지 못했다.
+#   status 프로파일은 VU 최대 783 이고 k6 가 커넥션을 재사용하므로, keepalive 단축의 진짜 이점
+#   (유휴 커넥션 메모리·fd 절감)이 드러나는 조건이 아니다. 회차 B(1만 VU)에서 다시 본다.
+LIMIT_ORDER=A-1 → A-2 를 연속 실행했다. 게이트웨이 메모리 +50.6 MiB 는 keepalive 효과가 아니라
+#   JVM 힙의 시간 경과 증가(순서 효과)일 수 있다. 두 회차 사이에 게이트웨이를 재시작하지 않았다.
+LIMIT_VU=1600 계단에서 VU 가 maxVUs 800 에 닿았다(A-1 783, A-2 800). dropped 의 일부가 서버 포화가
+#   아니라 생성기 VU 상한 때문일 수 있다. 다만 같은 계단에서 CPU 90.7% + p95 급증이 동반됐으므로
+#   서버 포화가 주 원인이라고 읽는다. 더 위를 보려면 maxVUs 를 올려 계단 연장 회차가 필요하다.

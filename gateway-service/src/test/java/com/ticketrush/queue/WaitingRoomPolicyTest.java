@@ -95,8 +95,16 @@ class WaitingRoomPolicyTest {
     private static final int MAX = 60;
 
     @Test
-    @DisplayName("ADR 0009 §3의 값을 재현한다 — N=10,000 · R=400이면 25초")
+    @DisplayName("ADR 0009 §3의 실측값을 재현한다 — N=10,000 · R=1,400이면 8초")
     void adr_수치() {
+      // #546 에서 R 을 실측했다(약 1,400 RPS). 이 값이 곧 운영의 폴링 주기이므로 여기서 고정한다.
+      assertThat(WaitingRoomPolicy.pollSeconds(10_000L, 1_400, MIN, MAX)).isEqualTo(8);
+    }
+
+    @Test
+    @DisplayName("실측 전 보수값(R=400)이었다면 25초였다 — ADR 갱신 전후를 함께 남긴다")
+    void adr_직전_보수값() {
+      // #529 seat-counts 포화점을 빌린 하한이었고 실측치보다 3.5배 보수적이었다.
       assertThat(WaitingRoomPolicy.pollSeconds(10_000L, 400, MIN, MAX)).isEqualTo(25);
     }
 
