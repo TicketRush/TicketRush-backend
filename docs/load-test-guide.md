@@ -1943,6 +1943,8 @@ ticket-service:8090    4,692 → 6,033 ↑ → 4,713 → 6,248 ↑        (Prome
 | G6 | 생성기 EC2 | [ADR 0010](adr/0010-in-aws-load-generator-for-ten-thousand-vu.md) — 같은 리전, spot, 회차 후 **종료** |
 | G7 | **대기열 키 리셋** | `redis-cli --scan --pattern 'queue:*' \| xargs -r redis-cli del` 후 0건 확인. **회차 A·B 양쪽 모두 필수** — 이전 회차의 `queue:opened-at:{pid}`(TTL 6h)가 남아 있으면 `threshold = 경과 × rate` 가 이미 수십만이라 전원이 첫 폴링에서 즉시 승급한다. "유입 제어가 되는가"를 보려던 회차가 그냥 스파이크가 된다 |
 
+> **회차 A는 `QUEUE_ADMIT_RATE` 를 낮춘다(권장 `1`).** 승급 임계치는 `경과 × admit-rate` 라 기본값 20이면 PRELOAD 1만 기준 **8분 20초에 폴링 대상이 승급해 버린다.** 회차가 20분(4계단 × 5분)이라 반드시 걸린다. 승급 후 폴링은 입장 토큰 `SET` 이 붙어 Redis 명령이 2회(`GET`+`ZRANK`)에서 3회로 늘고 `noeviction` Redis 에 쓰기까지 생긴다 — **재려던 "대기 중인 사용자의 폴링" 이 아니라 다른 경로를 재게 되어 `R` 이 과소평가된다.** `1` 이면 1만에 도달하는 데 2.8시간이라 회차 내내 대기 상태가 유지된다. 시나리오의 `queue_status_admitted_leak` 이 이 사고를 감지한다(§16.6).
+>
 > **대기열 개시는 시나리오의 `setup()` 이 한다** — `POST /api/v1/queue/{pid}/open`(ADMIN). 개시 시각을 진입의 부작용으로 두면 오픈 전에 미리 진입해 둔 사람이 임계치를 부풀려 대기열을 무력화할 수 있어서, 운영자만 심도록 되어 있다. **G7 리셋이 이 호출보다 먼저**여야 새 기준점이 잡힌다.
 
 **회차 A (R 실측)**
@@ -1995,6 +1997,7 @@ docker run --rm -v $PWD/load-test:/scripts:ro \
 | `queue_polls_exhausted` | 0 | >0이면 입장 허용량이 유입을 소화하지 못했다 |
 | `queue_booking_forbidden` | 0 | 승급 직후 예매라 0이어야 한다. >0이면 폴링→예매 지연이 입장 토큰 TTL(5m)을 넘었다 |
 | `queue_admitted` | 해석 대상 | 0과 1 사이여야 한다. 정확히 1.000이면 지표가 아니라 스크립트를 의심한다 |
+| **`queue_status_admitted_leak`** (회차 A) | **0** | >0이면 폴링 대상이 회차 도중 승급해 측정 경로가 2회에서 3회로 바뀌었다. `R` 을 재지 못한 회차이므로 **폐기하고 `QUEUE_ADMIT_RATE` 를 낮춰 다시 돈다** |
 | 생성기 종료 | 필수 | CD가 건드리지 않아 "떠 있는 줄 몰랐다"가 가능하다(ADR 0010) |
 
 **§6.1 재현성 규칙이 여기서 한 겹 더 걸린다.** [ADR 0010](adr/0010-in-aws-load-generator-for-ten-thousand-vu.md)이 생성기를 로컬에서 AWS로 옮겼으므로 **이 회차 수치를 ADR 0004 토폴로지 회차(#348·#403·#529 등)와 절대값으로 직접 잇지 않는다.** 비교가 필요하면 그 사실을 리포트 한계에 적는다.
