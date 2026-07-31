@@ -87,6 +87,24 @@ QUERIES = [
     # 게이트웨이
     ("gateway-rps", 'sum(rate(http_server_requests_seconds_count{job="gateway"}[1m]))'),
     ("gateway-5xx-rps", 'sum(rate(http_server_requests_seconds_count{job="gateway", status=~"5.."}[1m]))'),
+    # 대기열 (#472 / ADR 0009). 게이트웨이의 http_server_requests 는 uri 라벨이 /** · UNKNOWN 으로
+    # 뭉개져(#402 실측 카디널리티 4) 폴링 경로를 따로 볼 수 없다 — 아래 커스텀 지표가 유일한 수단이다.
+    ("queue-waiting", 'ticketrush_queue_waiting{job="gateway"}'),
+    # 상태 확인 RPS = 이 카운터의 합. 폴링 1회가 정확히 1증가라 별도 미터를 두지 않았다.
+    ("queue-admission-rps", 'sum by (result) (rate(ticketrush_queue_admission_total{job="gateway"}[1m]))'),
+    ("queue-admit-ratio", 'sum(rate(ticketrush_queue_admission_total{job="gateway", result="admitted"}[1m])) / sum(rate(ticketrush_queue_admission_total{job="gateway"}[1m]))'),
+    ("queue-poll-interval", 'ticketrush_queue_poll_interval_seconds{job="gateway"}'),
+    # result="unavailable" 이 0 이 아니면 fail-closed(ADR 0008)가 발동한 것이다 = 회차 무효.
+    ("queue-entry-token", 'sum by (result) (rate(ticketrush_queue_entry_token_total{job="gateway"}[1m]))'),
+    # 완료 조건의 핵심 축 — 유입이 1만이든 10만이든 이 값이 admit-rate 부근에서 평평해야 한다.
+    ("booking-server-rps", 'sum(rate(http_server_requests_seconds_count{instance="booking-service:8090"}[1m]))'),
+    # Redis 는 maxmemory 64mb + noeviction 이라 대기열이 예산을 넘기면 좌석 락 SET 까지 거절된다.
+    # 지금까지 QUERIES 에 Redis 축이 없었는데, 대기열부터는 이게 회차 무효 판정 기준이다(48 MB).
+    ("redis-mem-used", 'redis_memory_used_bytes'),
+    ("k6-queue-status-p95", 'k6_queue_status_duration_p95'),
+    ("k6-queue-wait-to-admit-p95", 'k6_queue_wait_to_admit_seconds_p95'),
+    ("k6-queue-admitted-rate", 'k6_queue_admitted_rate'),
+    ("k6-queue-status-unavailable-rate", 'k6_queue_status_unavailable_rate'),
     # 병목 후보
     ("hikari-pending", 'hikaricp_connections_pending{job="ticketrush-services"}'),
     ("hikari-active", 'hikaricp_connections_active{job="ticketrush-services"}'),

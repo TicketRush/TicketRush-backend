@@ -34,13 +34,21 @@ dependencies {
     implementation 'org.springframework.boot:spring-boot-starter-security'
     compileOnly 'org.projectlombok:lombok'
     developmentOnly 'org.springframework.boot:spring-boot-devtools'
-    runtimeOnly 'com.mysql:mysql-connector-j'
     annotationProcessor 'org.springframework.boot:spring-boot-configuration-processor'
     annotationProcessor 'org.projectlombok:lombok'
     testImplementation 'org.springframework.boot:spring-boot-starter-actuator-test'
-    testImplementation 'org.springframework.boot:spring-boot-starter-data-jpa-test'
     testImplementation 'org.springframework.boot:spring-boot-starter-security-test'
+    // WebTestClient — 대기열 통합 테스트. 게이트웨이는 WebFlux 라 webmvc-test(다른 서비스)가 아니다.
+    testImplementation 'org.springframework.boot:spring-boot-starter-webflux-test'
     testRuntimeOnly 'org.junit.platform:junit-platform-launcher'
+
+    // Redis (대기열, #472 / ADR 0009)
+    // 게이트웨이는 WebFlux 라 블로킹 Lettuce(다른 서비스가 쓰는 spring-boot-starter-data-redis)를 쓸 수 없다.
+    // 이벤트 루프 스레드를 막으면 게이트웨이 전체 처리량이 무너진다.
+    implementation 'org.springframework.boot:spring-boot-starter-data-redis-reactive'
+    // 버전은 Boot BOM(testcontainers-bom 2.x)이 관리한다. 1.x 구 좌표(org.testcontainers:junit-jupiter)는
+    // 해석되지 않는다 — payment #422 / performance #177 선례와 같은 좌표를 쓴다.
+    testImplementation 'org.testcontainers:testcontainers-junit-jupiter'
 
     // WebFlux
     implementation 'org.springframework.boot:spring-boot-starter-webflux'

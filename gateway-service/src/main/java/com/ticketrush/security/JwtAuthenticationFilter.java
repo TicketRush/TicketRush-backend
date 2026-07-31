@@ -3,7 +3,6 @@ package com.ticketrush.security;
 import com.ticketrush.exception.BusinessException;
 import com.ticketrush.status.ErrorStatus;
 import lombok.RequiredArgsConstructor;
-import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.cloud.gateway.filter.GatewayFilterChain;
 import org.springframework.cloud.gateway.filter.GlobalFilter;
@@ -13,7 +12,6 @@ import org.springframework.stereotype.Component;
 import org.springframework.web.server.ServerWebExchange;
 import reactor.core.publisher.Mono;
 
-@Slf4j
 @Component
 @RequiredArgsConstructor
 public class JwtAuthenticationFilter implements GlobalFilter, Ordered {
@@ -31,8 +29,9 @@ public class JwtAuthenticationFilter implements GlobalFilter, Ordered {
   @Override
   public Mono<Void> filter(ServerWebExchange exchange, GatewayFilterChain chain) {
 
-    log.info("🔥 JwtAuthenticationFilter 실행");
-
+    // 요청당 로그를 남기지 않는다. 이 필터는 모든 라우트가 지나므로 INFO 한 줄이 곧 전 트래픽의 디스크·CPU
+    // 비용이고, #403이 로그 폭주로 이미 한 번 겪은 실패 모드다(ADR 0009 §4). 검증 실패는 JwtTokenProvider가
+    // WARN으로 남긴다.
     String token = resolveToken(exchange);
 
     ServerHttpRequest.Builder requestBuilder =
@@ -67,9 +66,6 @@ public class JwtAuthenticationFilter implements GlobalFilter, Ordered {
 
     Long userId = jwtTokenProvider.getUserId(token);
     String role = jwtTokenProvider.getRole(token);
-
-    log.info("🔥 userId = {}", userId);
-    log.info("🔥 role = {}", role);
 
     ServerHttpRequest request =
         requestBuilder

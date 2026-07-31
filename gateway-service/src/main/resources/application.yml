@@ -7,6 +7,14 @@ spring:
   profiles:
     active: ${SPRING_PROFILES_ACTIVE:local}
 
+  data:
+    redis:
+      # Lettuce 기본 커맨드 타임아웃(60s)은 hang형 Redis 장애 시 요청을 60초 물린다. fail-closed는
+      # '거절'이지 '무한 대기'가 아니다(ADR 0008). 게이트웨이는 전 서비스의 관문이라 여기서 물리면
+      # 예매·좌석·티켓이 함께 멈춘다 — seat/performance-service가 같은 이유로 먼저 적용한 값이다.
+      timeout: 1s
+      connect-timeout: 1s
+
   cloud:
     gateway:
       server:
@@ -99,6 +107,36 @@ jwt:
 
 gateway:
   internal-token: ${GATEWAY_INTERNAL_TOKEN:test-token}
+
+# 대기열 (#472 / ADR 0009 — 1만 VU 유입 제어)
+queue:
+  # 켜는 순간 POST /api/v1/booking 이 입장 토큰 없는 기존 클라이언트에 전부 403이 된다. 프런트 연동
+  # 전까지는 꺼 둔다. prod 롤백도 이 값 하나로 끝난다(재배포·DDL 없음).
+  enabled: ${QUEUE_ENABLED:false}
+
+  # 초당 입장 허용량. #344 실측(booking 단독 258 RPS에서 호스트 CPU 99.87%)의 한참 아래로 잡는다 —
+  # 예매 경로 부하를 유입 규모와 무관하게 이 값으로 고정하는 것이 대기열의 목적이다.
+  admit-rate-per-second: ${QUEUE_ADMIT_RATE:20}
+
+  # 폴링 주기 하한 산식 T ≥ N / R 의 R (ADR 0009 §3).
+  # ⚠️ 이 값은 아직 실측이 아니다. #348은 회선 제약에 막혀 폴링 경로의 무릎에 도달하지 못했고, 지금 쓰는
+  # 400은 #529 seat-counts 포화점 396.75 RPS(게이트웨이 홉 + DB 집계 포함)를 빌린 보수적 하한이다.
+  # DB를 타지 않는 이 경로는 그보다 빠를 수밖에 없으므로 안전한 방향으로 틀렸다. #472 측정 회차 A에서
+  # 상태 확인 경로 단독 부하로 실측해 이 값을 교체하고 ADR §3을 갱신한다.
+  status-rps-capacity: ${QUEUE_STATUS_RPS_CAPACITY:400}
+
+  # N=10,000 · R=400 이면 T=25초로 ADR §3과 일치한다. 대기 인원이 적을 때는 하한까지 줄여 체감을 개선한다.
+  min-poll-seconds: 3
+  max-poll-seconds: 60
+
+  # prod Redis는 maxmemory 64mb + noeviction 이라 잔류 키가 곧 좌석 락 SET 거절이다(ADR 0008).
+  # 6h = 오픈런 한 회차의 상한.
+  waiting-ttl: 6h
+  entry-token-ttl: 5m
+
+  # 대기 인원(ZCARD) 로컬 캐시. 25초 다이얼에 수 초 낡은 값은 무해하고, 이 캐시가 없으면 폴링마다
+  # Redis 명령이 하나 더 는다.
+  waiting-count-cache-ttl: 10s
 
 custom:
   security:
