@@ -1,0 +1,181 @@
+# =============================================================================
+# #534 좌석 집계 고정항 분해 — 인덱스로 못 줄이는 몫이 무엇인가
+# 이 파일이 수치의 SSOT 다. report.md 와 어긋나면 이 파일이 옳다.
+# =============================================================================
+
+ISSUE=#534
+KIND=규명 회차 (최적화 아님)
+IMAGE_TAG=21d2da2d6fc2e3bfdaf27f2b1440beccaad337bf
+RUNBOOK=docs/load-test-guide.md §14.4
+SCENARIO=load-test/scenarios/seat-counts.js
+SEED=load-test/seed/seed_seat_counts.sql
+K6_IMAGE=grafana/k6:latest
+PROM_SCRAPE_INTERVAL=15s
+
+# -----------------------------------------------------------------------------
+# 계측 — CD 배포 없이 켰다
+# -----------------------------------------------------------------------------
+# 새 Timer 를 심어 배포하는 대신 (1) 이미 노출된 Hikari 메트릭과 (2) JFR 을 썼다.
+# JFR 은 deploy/docker-compose.prod.yml 의 JAVA_TOOL_OPTIONS 에 override 파일로 얹고
+# 컨테이너만 재시작했다(같은 이미지, CD 미실행).
+PROFILER=JFR (-XX:StartFlightRecording:settings=profile,filename=/tmp/seat-counts.jfr,
+         dumponexit=true,maxsize=400m,jdk.SocketRead#threshold=1ms,jdk.SocketWrite#threshold=1ms)
+PROFILER_APPLIED_VIA=deploy/jfr.override.yml (EC2 로컬 생성 -> 측정 후 삭제·원복 확인)
+NEW_PROM_QUERIES=seat-counts-hikari-acquire-avg-ms, seat-counts-hikari-usage-avg-ms
+                 (load-test/bench/dump-timeseries.py 에 추가)
+CODE_CHANGE_TO_SERVICES=없음
+
+# -----------------------------------------------------------------------------
+# 코호트 — #529 와 같은 20/20/60 비율. @mode='seed' 로 재생성했다.
+# (@mode='refresh' 는 미만료 HOLD 의 만료 시각만 미는 모드라, HOLD 가 0 건이던
+#  이번에는 아무 효과가 없었다. #529 때와 상태가 달랐다.)
+# -----------------------------------------------------------------------------
+SEED_MODE=seed (2026-07-31T18:20:18Z, app_now_used=2026-07-31 18:20:18)
+SEED_A_TITLE=LTC-A / SEED_A_PERF_ID=28 / SEED_A_SEATS=600
+             AVAILABLE 360 / SOLD 120 / HOLD_live 120 / HOLD_expired 0
+SEED_B_TITLE=LTC-B / SEED_B_PERF_ID=29 / SEED_B_SEATS=3000
+             AVAILABLE 1800 / SOLD 600 / HOLD_live 600 / HOLD_expired 0
+SEED_STATUS_RATIO=SOLD 20% / HOLD 20% / AVAILABLE 60% (A·B 동일, #403·#529 와 같다)
+INDEX_VERIFIED=idx_seat_performance_id_status_hold_expired_at 존재 확인(SHOW INDEX FROM seat)
+
+# -----------------------------------------------------------------------------
+# 회차 — 계단을 40,80,160 으로 줄였다
+# -----------------------------------------------------------------------------
+# #529 는 40,80,160,240,320,480 이었다. 이번 목적은 포화점 탐색이 아니라 미포화 구간의
+# 고정항 분해이고, 적합에 쓰는 것은 80 계단(교차검증 160)이다. 240 이상은 포화 근처라
+# 분해에 쓸모가 없어 뺐다. 겹치는 계단(40/80/160)은 그대로라 #529 와 대조된다.
+STAGES=40,80,160 iters/s
+STAGE_DURATION=5m
+PRE_ALLOCATED_VUS=100 / MAX_VUS=800
+ROUND_A_UTC=2026-07-31T18:23:34Z ~ 2026-07-31T18:39:00Z (15m20s)
+ROUND_B_UTC=2026-07-31T18:41:20Z ~ 2026-07-31T18:56:41Z (15m20s)
+ROUND_A_REQS=85799 / 실패 0 / scale_mismatch 0.00%
+ROUND_B_REQS=85800 / 실패 0 / scale_mismatch 0.00%
+ROUND_A_CLIENT=avg 12.89ms / med 9.85ms / p95 27.47ms / max 1.28s
+ROUND_B_CLIENT=avg 13.41ms / med 10.55ms / p95 29.29ms / max 352.72ms
+RESTART_BETWEEN=회차 사이 seat-service stop/start (부하 후 RSS 미회수 대응 + JFR dumponexit 회수)
+
+# 계단 경계는 rps 시계열에서 직접 읽었다. 구간평균은 앞뒤 30초를 제외한다(#529 와 같은 방식).
+WIN_A_80=2026-07-31T18:29:49Z ~ 18:33:49Z
+WIN_B_80=2026-07-31T18:47:35Z ~ 18:51:35Z
+WIN_A_160=2026-07-31T18:34:49Z ~ 18:38:49Z
+WIN_B_160=2026-07-31T18:52:35Z ~ 18:56:35Z
+
+# =============================================================================
+# 결과 1 — 구간별 2점 적합 (cost = 고정항 + 좌석당 x 좌석수)
+# =============================================================================
+# 80 계단
+FIT80_TOTAL_A=1.9376 ms / FIT80_TOTAL_B=2.9406 ms
+FIT80_TOTAL_INTERCEPT=1.6869 ms / FIT80_TOTAL_SLOPE=0.4179 us
+FIT80_ACQUIRE_A=0.0029 ms / FIT80_ACQUIRE_B=0.0471 ms
+FIT80_ACQUIRE_INTERCEPT=-0.0082 ms / FIT80_ACQUIRE_SLOPE=0.0184 us
+FIT80_USAGE_A=1.0876 ms / FIT80_USAGE_B=1.9341 ms
+FIT80_USAGE_INTERCEPT=0.8760 ms / FIT80_USAGE_SLOPE=0.3527 us
+FIT80_FRAMEWORK_INTERCEPT=0.8191 ms / FIT80_FRAMEWORK_SLOPE=0.0468 us   # 잔차
+
+# 160 계단 (교차검증)
+FIT160_TOTAL_INTERCEPT=1.4969 ms / FIT160_TOTAL_SLOPE=0.4373 us
+FIT160_ACQUIRE_INTERCEPT=-0.0039 ms
+FIT160_USAGE_INTERCEPT=0.9559 ms
+FIT160_FRAMEWORK_INTERCEPT=0.5448 ms
+
+# #529 A-post 대조
+REF_529_INTERCEPT_80=1.472 ms / REF_529_SLOPE_80=0.396 us
+REF_529_INTERCEPT_160=1.685 ms / REF_529_SLOPE_160=0.408 us
+SLOPE_REPRODUCED=좌석당 0.396 -> 0.418(80) / 0.437(160) us. 5~10% 안에서 재현된다.
+INTERCEPT_UNSTABLE=고정항은 계단에 따라 1.47~1.69 사이에서 흔들린다. #529 도 같았고
+                   (80:1.472 / 160:1.685) 방향만 반대다. 2점 적합의 한계다.
+
+# =============================================================================
+# 결과 2 — JFR ExecutionSample 계층 분포 (80 계단 구간, 워커 스레드만)
+# =============================================================================
+# ⚠ 스택 depth 가 5 로 잘려 있어 컨트롤러/UseCase 프레임이 남지 않는다. 그래서
+#   "이 샘플이 seat-counts 요청인가" 를 스택으로 판별할 수 없어, 회차 구간의
+#   http-nio-8086-exec-* 샘플만 골랐다 — 그 구간 워커는 seat-counts 만 처리하므로 등가다.
+#   관리 포트(8090) 워커는 Prometheus 스크랩이라 제외했다.
+# 귀속 방식: top frame 이 HashMap·String 같은 저수준이면 호출자 프레임을 훑어
+#   처음 만나는 실계층에 귀속한다. 그래도 못 찾는 것이 "미분류" 다.
+JFR_A_N=654 / JFR_B_N=649
+                     #  A(600석)   B(3000석)
+JFR_TOMCAT_SERVLET=     18.04%     17.57%
+JFR_SPRING_ETC=         16.97%     14.48%
+JFR_HIBERNATE_JPA=      12.08%     13.41%
+JFR_MYSQL_DRIVER=       10.24%     12.48%
+JFR_SPRING_MVC=          9.63%      9.71%
+JFR_SPRING_SECURITY=     6.57%      9.40%
+JFR_SPRING_AOP=          2.45%      0.92%
+JFR_HIKARI_POOL=         2.29%      0.77%
+JFR_DB_SOCKET=           1.99%      2.00%
+JFR_APP_CODE=            0.76%      0.92%
+JFR_JACKSON=             0.00%      0.00%      # 회차 전체로도 1 샘플(0.03%)
+JFR_UNCLASSIFIED=       18.96%     18.34%
+JFR_FRAMEWORK_SUM=      53.66%     54.08%     # Tomcat + Spring-etc + MVC + Security + AOP
+JFR_DB_SUM=             26.60%     28.66%     # Hibernate + driver + socket + pool
+
+CPU_INVARIANT_TO_SEATS=좌석이 5배인데 CPU 분포가 거의 같다(프레임워크 53.7 vs 54.1%,
+                       DB 26.6 vs 28.7%). 늘어나는 것은 DB 내부 스캔 시간(앱은 대기)이며
+                       앱 CPU 는 좌석 수와 무관하다. 좌석당 0.418us 가 순수 DB 몫인 근거다.
+
+# =============================================================================
+# 결과 3 — jdk.SocketRead (mysql:3306 왕복, threshold 1ms)
+# =============================================================================
+SOCKETREAD_A_80=490건 / 19,200 요청 = 발생률 2.55% / 합 895.0 ms / 건당 1.826 ms
+                -> 요청당 0.0466 ms
+SOCKETREAD_B_80=19,350건 / 19,200 요청 = 발생률 100.78% / 합 28,515.2 ms / 건당 1.474 ms
+                -> 요청당 1.4852 ms
+SOCKETREAD_READING=600석에서는 DB 왕복의 97.5% 가 1ms 미만이라 안 잡힌다. 3,000석에서는
+                   사실상 모든 요청이 1ms 를 넘는다. 좌석당 비용이 DB 왕복임을 확인해주지만,
+                   threshold 가 고정항 구간(sub-ms)을 통째로 자르므로 고정항의 DB 왕복 몫은
+                   이 이벤트로 못 잰다.
+
+# =============================================================================
+# 결과 4 — 최종 분해 표 (고정항 1.687 ms, 80 계단)
+# =============================================================================
+# 산출 방식: 프레임워크는 순수 CPU(대기 없음)라고 두고 총 CPU 를 역산한다.
+#   총 CPU = 프레임워크 wall 0.819 / 프레임워크 CPU 비율 0.5366 = 1.526 ms
+#   각 계층 = 총 CPU x 해당 비율. 대기 = 고정항 wall - 총 CPU.
+# ⚠ 이 가정 위의 환산값이다. 구간별 Timer 로 직접 잰 값이 아니다.
+BREAKDOWN_FRAMEWORK_CPU=0.819 ms (48.6%)
+BREAKDOWN_DB_CPU=0.406 ms (24.1%)
+BREAKDOWN_UNCLASSIFIED=0.289 ms (17.1%)
+BREAKDOWN_DB_WAIT=0.162 ms (9.6%)
+BREAKDOWN_APP_CODE=0.012 ms (0.7%)
+BREAKDOWN_CONN_ACQUIRE=0.000 ms (0.0%)
+BREAKDOWN_SUM=1.688 ms   # 고정항 1.687 에 수렴
+
+# =============================================================================
+# 판정
+# =============================================================================
+VERDICT_BIGGEST=프레임워크 0.819 ms (48.6%). 내역은 서블릿 컨테이너·MVC 디스패치·필터 체인이다.
+VERDICT_ACQUIRE_CLEARED=커넥션 획득은 범인이 아니다. 고정항 -0.008 ms, 실측 A 0.003 / B 0.047 ms.
+                        #534 가 후보 1번으로 꼽았으나 표에서 지운다.
+VERDICT_JACKSON_CLEARED=결과 매핑·직렬화도 아니다. Jackson 은 회차 전체 3,444 샘플 중 1 개.
+                        응답이 숫자 4 개(record 4 필드)뿐이라 당연한 결과다.
+VERDICT_REDUCIBLE=사실상 없다. 손댈 수 있는 유일한 항목이 Spring Security 6.57%(약 0.11 ms)인데,
+                  SecurityConfig 상 seat-counts 는 이미 anyRequest().permitAll() 이다.
+                  permitAll 도 "허용" 을 판정하려면 필터 체인을 통과해야 하므로 비용이 든다.
+                  없애려면 web.ignoring() 으로 체인 자체를 우회해야 하고 그러면 CORS·CSRF 설정도
+                  함께 빠진다. 고정항의 6.5% 를 위해 보안 경계를 바꾸는 것은 수지가 맞지 않는다.
+VERDICT_LOWER_BOUND=고정항 약 1.5~1.7 ms 는 이 구성(Spring MVC + 서블릿 + JPA)에서 집계 요청의
+                    하한이다. 요청이 앱에 도달하는 순간 확정되는 비용이며 코드로 줄일 수 있는
+                    몫(앱 코드)은 0.7% 뿐이다.
+NEXT_AXIS=캐싱. 고정항을 줄이는 것이 아니라 요청을 앱까지 오지 않게 하는 방향이다.
+          #469(좌석맵 JSON 캐싱)의 선례가 있고, 무효화도 SeatStatusEventPublisher 가
+          이미 담당한다. 다만 이 회차의 범위 밖이므로 백로그로만 남긴다.
+
+# =============================================================================
+# 한계 — 리포트에 그대로 옮길 것
+# =============================================================================
+LIMIT_1=JFR 스택 depth 가 5 로 잘렸다(stackdepth 를 안 늘렸다). 미분류 17.1% 가 그 대가다.
+        다음에 프로파일링하면 -XX:FlightRecorderOptions=stackdepth=256 을 함께 준다.
+LIMIT_2=SocketRead threshold 1ms 가 고정항 구간을 잘랐다. 600석 왕복의 97.5% 가 미포착이다.
+LIMIT_3=JFR 오버헤드를 분리하지 못했다. 같은 이미지의 무계측 회차가 없다. 고정항이 #529 의
+        1.472 -> 1.687(80계단) 로 올랐으나 그중 얼마가 JFR 몫인지 가를 수 없다
+        (160 계단은 1.497 로 오히려 #529 와 1.7% 안에서 일치한다).
+        settings=profile 의 공표 오버헤드는 약 2% 다.
+LIMIT_4=좌석 규모는 여전히 두 점이다. 선형성 자체는 세 번째 규모가 있어야 검증된다(#529 와 동일).
+LIMIT_5=분해 표의 계층별 절대값은 "프레임워크는 순수 CPU" 가정 위의 환산값이다.
+        구간별 Timer 로 직접 잰 값이 아니다.
+LIMIT_6=배포본이 #529 와 다르다(342a8ef5 vs 21d2da2d). 분해 대상 경로 코드는 무변경임을
+        확인했으나(SeatGetStatusCountsUseCase·SeatRepository·Seat·SeatFacade 해당 메서드 diff 0),
+        같은 JVM 에 #469 캐싱과 #532 SSE 역압이 들어와 GC·메모리 프로파일이 다르다.

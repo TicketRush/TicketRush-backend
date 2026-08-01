@@ -133,6 +133,13 @@ QUERIES = [
     ("seat-counts-server-rps", 'sum(rate(http_server_requests_seconds_count{instance="seat-service:8090", uri=~".*seat-counts"}[1m]))'),
     ("seat-counts-server-avg-ms", '1000 * sum(rate(http_server_requests_seconds_sum{instance="seat-service:8090", uri=~".*seat-counts"}[1m])) / sum(rate(http_server_requests_seconds_count{instance="seat-service:8090", uri=~".*seat-counts"}[1m]))'),
     ("seat-counts-server-p95", 'histogram_quantile(0.95, sum by (le) (rate(http_server_requests_seconds_bucket{instance="seat-service:8090", uri=~".*seat-counts"}[1m])))'),
+    # #534 고정항 분해용. 위 server-avg-ms 에서 아래 둘을 빼면 프레임워크 몫(MVC 필터·직렬화)이 남는다.
+    #   acquire = 풀에서 커넥션을 받아오기까지. 포화 전에는 거의 0 이고, 무릎에서 치솟는 값이다.
+    #   usage   = getConnection ~ close 사이. 쿼리 실행 + 결과 매핑이 여기 들어간다.
+    # ⚠ usage 는 seat-service 전체 경로가 섞인다(seatmap·hold 등). 부하 회차 중에는 seat-counts 가
+    #   압도적이라 근사로 쓰지만, 다른 경로가 함께 도는 회차에서는 그대로 믿지 않는다.
+    ("seat-counts-hikari-acquire-avg-ms", '1000 * sum(rate(hikaricp_connections_acquire_seconds_sum{instance="seat-service:8090"}[1m])) / sum(rate(hikaricp_connections_acquire_seconds_count{instance="seat-service:8090"}[1m]))'),
+    ("seat-counts-hikari-usage-avg-ms", '1000 * sum(rate(hikaricp_connections_usage_seconds_sum{instance="seat-service:8090"}[1m])) / sum(rate(hikaricp_connections_usage_seconds_count{instance="seat-service:8090"}[1m]))'),
     ("k6-seat-counts-p95", 'k6_seat_counts_duration_p95'),
     ("k6-seat-counts-p99", 'k6_seat_counts_duration_p99'),
     ("k6-seat-counts-scale-mismatch", 'k6_seat_counts_scale_mismatch_rate'),
