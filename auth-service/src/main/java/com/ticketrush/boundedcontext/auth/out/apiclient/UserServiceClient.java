@@ -42,38 +42,73 @@ public class UserServiceClient {
   public UserServiceSocialLoginResponse socialLogin(UserServiceSocialLoginRequest request) {
 
     log.info("🔥 user-service로 보내는 request = {}", request);
+
     try {
       log.info("🔥 JSON = {}", new ObjectMapper().writeValueAsString(request));
     } catch (JsonProcessingException e) {
       log.error("JSON 변환 실패", e);
     }
 
-    UserServiceSocialLoginResponse response =
-        restClient
-            .post()
-            .uri(userServiceBaseUrl + SOCIAL_LOGIN_PATH)
-            .contentType(MediaType.APPLICATION_JSON)
-            .body(request)
-            .retrieve()
-            .onStatus(
-                HttpStatusCode::is4xxClientError,
-                (req, res) -> {
-                  log.error("user-service 4xx 에러 발생: status={}", res.getStatusCode());
-                  throw new BusinessException(ErrorStatus.AUTH_USER_BAD_REQUEST);
-                })
-            .onStatus(
-                HttpStatusCode::is5xxServerError,
-                (req, res) -> {
-                  log.error("user-service 5xx 에러 발생: status={}", res.getStatusCode());
-                  throw new BusinessException(ErrorStatus.AUTH_USER_SERVER_ERROR);
-                })
-            .body(UserServiceSocialLoginResponse.class);
+    try {
+      /*
+       * user-service 응답은 아래와 같은 ApiResponse 래퍼 구조입니다.
+       *
+       * {
+       *   "is_success": true,
+       *   "code": "COMMON_200",
+       *   "message": "성공입니다.",
+       *   "result": {
+       *     "user_id": 1,
+       *     "name": "사용자 이름",
+       *     "is_new_user": true
+       *   }
+       * }
+       *
+       * 따라서 UserServiceSocialLoginResponse로 바로 역직렬화하지 않고,
+       * UserServiceApiResponse<UserServiceSocialLoginResponse>로 받은 뒤
+       * result를 꺼내야 합니다.
+       */
+      UserServiceApiResponse<UserServiceSocialLoginResponse> response =
+          restClient
+              .post()
+              .uri(userServiceBaseUrl + SOCIAL_LOGIN_PATH)
+              .contentType(MediaType.APPLICATION_JSON)
+              .body(request)
+              .retrieve()
+              .onStatus(
+                  HttpStatusCode::is4xxClientError,
+                  (req, res) -> {
+                    log.error("user-service 소셜 로그인 4xx 에러 발생: status={}", res.getStatusCode());
 
-    if (response == null) {
+                    throw new BusinessException(ErrorStatus.AUTH_USER_BAD_REQUEST);
+                  })
+              .onStatus(
+                  HttpStatusCode::is5xxServerError,
+                  (req, res) -> {
+                    log.error("user-service 소셜 로그인 5xx 에러 발생: status={}", res.getStatusCode());
+
+                    throw new BusinessException(ErrorStatus.AUTH_USER_SERVER_ERROR);
+                  })
+              .body(
+                  new ParameterizedTypeReference<
+                      UserServiceApiResponse<UserServiceSocialLoginResponse>>() {});
+
+      if (response == null || response.result() == null) {
+        log.error("user-service 소셜 로그인 응답이 비어 있습니다. response={}", response);
+
+        throw new BusinessException(ErrorStatus.AUTH_USER_COMMUNICATION_FAILED);
+      }
+
+      return response.result();
+
+    } catch (BusinessException e) {
+      throw e;
+
+    } catch (Exception e) {
+      log.error("user-service 소셜 로그인 통신 또는 응답 파싱 실패 request={}", request, e);
+
       throw new BusinessException(ErrorStatus.AUTH_USER_COMMUNICATION_FAILED);
     }
-
-    return response;
   }
 
   // 존재하는 이메일 검증
@@ -92,12 +127,14 @@ public class UserServiceClient {
                   HttpStatusCode::is4xxClientError,
                   (req, res) -> {
                     log.error("user-service 이메일 중복 확인 4xx 에러 발생: status={}", res.getStatusCode());
+
                     throw new BusinessException(ErrorStatus.AUTH_EMAIL_EXISTS_CHECK_BAD_REQUEST);
                   })
               .onStatus(
                   HttpStatusCode::is5xxServerError,
                   (req, res) -> {
                     log.error("user-service 이메일 중복 확인 5xx 에러 발생: status={}", res.getStatusCode());
+
                     throw new BusinessException(ErrorStatus.AUTH_EMAIL_EXISTS_CHECK_SERVER_ERROR);
                   })
               .body(
@@ -105,6 +142,7 @@ public class UserServiceClient {
                       UserServiceApiResponse<UserServiceEmailExistsResponse>>() {});
 
       if (response == null || response.result() == null || response.result().exists() == null) {
+
         throw new BusinessException(ErrorStatus.AUTH_EMAIL_EXISTS_CHECK_COMMUNICATION_FAILED);
       }
 
@@ -112,8 +150,10 @@ public class UserServiceClient {
 
     } catch (BusinessException e) {
       throw e;
+
     } catch (Exception e) {
       log.error("user-service 이메일 중복 확인 통신 실패 email={}", email, e);
+
       throw new BusinessException(ErrorStatus.AUTH_EMAIL_EXISTS_CHECK_COMMUNICATION_FAILED);
     }
   }
@@ -140,6 +180,7 @@ public class UserServiceClient {
                   (req, res) -> {
                     log.error(
                         "user-service 로그인용 회원 정보 조회 4xx 에러 발생: status={}", res.getStatusCode());
+
                     throw new BusinessException(ErrorStatus.AUTH_LOGIN_FAILED);
                   })
               .onStatus(
@@ -147,6 +188,7 @@ public class UserServiceClient {
                   (req, res) -> {
                     log.error(
                         "user-service 로그인용 회원 정보 조회 5xx 에러 발생: status={}", res.getStatusCode());
+
                     throw new BusinessException(ErrorStatus.AUTH_USER_SERVER_ERROR);
                   })
               .body(
@@ -161,8 +203,10 @@ public class UserServiceClient {
 
     } catch (BusinessException e) {
       throw e;
+
     } catch (Exception e) {
       log.error("user-service 로그인용 회원 정보 조회 통신 실패 email={}", email, e);
+
       throw new BusinessException(ErrorStatus.AUTH_USER_COMMUNICATION_FAILED);
     }
   }
@@ -185,6 +229,7 @@ public class UserServiceClient {
                   (req, res) -> {
                     log.error(
                         "user-service 테스트 토큰용 회원 정보 조회 4xx 에러 발생: status={}", res.getStatusCode());
+
                     throw new BusinessException(ErrorStatus.AUTH_LOGIN_FAILED);
                   })
               .onStatus(
@@ -192,6 +237,7 @@ public class UserServiceClient {
                   (req, res) -> {
                     log.error(
                         "user-service 테스트 토큰용 회원 정보 조회 5xx 에러 발생: status={}", res.getStatusCode());
+
                     throw new BusinessException(ErrorStatus.AUTH_USER_SERVER_ERROR);
                   })
               .body(
@@ -206,8 +252,10 @@ public class UserServiceClient {
 
     } catch (BusinessException e) {
       throw e;
+
     } catch (Exception e) {
       log.error("user-service 테스트 토큰용 회원 정보 조회 통신 실패 userId={}", userId, e);
+
       throw new BusinessException(ErrorStatus.AUTH_USER_COMMUNICATION_FAILED);
     }
   }
