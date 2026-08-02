@@ -1,5 +1,6 @@
 package com.ticketrush.boundedcontext.ticket.in.api.v1;
 
+import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.BDDMockito.given;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
@@ -122,6 +123,45 @@ class EntryControllerTest {
         .andExpect(jsonPath("$.code").value(ErrorStatus.FORBIDDEN.getCode()));
 
     verifyNoInteractions(entryVerifyUseCase, entryCheckInUseCase);
+  }
+
+  /**
+   * 401·403 본문은 한글이라 응답이 UTF-8을 <b>명시적으로 선언</b>해야 한다. 선언하지 않으면 실제 서블릿 컨테이너가 기본값 ISO-8859-1로 써서 메시지가
+   * '?'로 파괴된다.
+   *
+   * <p>본문 바이트를 비교하는 방식으로는 이 회귀를 못 잡는다 — MockMvc의 가짜 응답은 컨테이너와 달리 기본 인코딩이 UTF-8이라 수정이 없어도 통과한다(실제로
+   * 확인했다). 컨테이너와 무관하게 갈리는 지점은 응답이 charset을 선언했는지 여부뿐이라 그것을 검증한다.
+   */
+  @Test
+  @DisplayName("401·403 응답이 charset=UTF-8을 명시한다 — 미지정 시 컨테이너 기본값으로 한글이 파괴된다")
+  void error_responses_declare_utf8_charset() throws Exception {
+    String unauthorizedContentType =
+        mockMvc
+            .perform(
+                post("/api/v1/entries/verify")
+                    .contentType(MediaType.APPLICATION_JSON)
+                    .content(BODY))
+            .andExpect(status().isUnauthorized())
+            .andReturn()
+            .getResponse()
+            .getContentType();
+
+    String forbiddenContentType =
+        mockMvc
+            .perform(
+                post("/api/v1/entries/verify")
+                    .contentType(MediaType.APPLICATION_JSON)
+                    .content(BODY)
+                    .header("X-Gateway-Token", INTERNAL_TOKEN)
+                    .header("X-User-Id", 1L)
+                    .header("X-User-Role", "USER"))
+            .andExpect(status().isForbidden())
+            .andReturn()
+            .getResponse()
+            .getContentType();
+
+    assertThat(unauthorizedContentType).containsIgnoringCase("charset=utf-8");
+    assertThat(forbiddenContentType).containsIgnoringCase("charset=utf-8");
   }
 
   @Test

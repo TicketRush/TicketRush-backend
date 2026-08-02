@@ -1,5 +1,6 @@
 package com.ticketrush.boundedcontext.booking.in.api.v1;
 
+import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.BDDMockito.given;
 import static org.mockito.Mockito.verify;
@@ -11,17 +12,21 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 import com.ticketrush.boundedcontext.booking.app.dto.response.BookingCountResponse;
+import com.ticketrush.boundedcontext.booking.app.dto.response.BookingDetailResponse;
+import com.ticketrush.boundedcontext.booking.app.dto.response.BookingMySummaryResponse;
 import com.ticketrush.boundedcontext.booking.app.dto.response.BookingPendingResponse;
-import com.ticketrush.boundedcontext.booking.app.dto.response.BookingSummaryResponse;
 import com.ticketrush.boundedcontext.booking.app.facade.BookingFacade;
 import com.ticketrush.boundedcontext.booking.domain.types.BookingStatus;
 import com.ticketrush.global.config.CustomSecurityProperties;
 import com.ticketrush.global.config.JacksonConfig;
 import com.ticketrush.global.config.SecurityConfig;
 import com.ticketrush.global.dto.request.OffsetPageRequest;
+import com.ticketrush.global.exception.BusinessException;
 import com.ticketrush.global.filter.GatewayHeaderFilter;
 import com.ticketrush.global.status.ErrorStatus;
+import java.time.LocalDate;
 import java.time.LocalDateTime;
+import java.time.LocalTime;
 import java.util.List;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -87,12 +92,12 @@ class BookingControllerTest {
   }
 
   @Test
-  @DisplayName("인증 principal의 userId로 내 예매 내역을 조회한다")
+  @DisplayName("인증 principal의 userId로 내 예매 내역을 조회한다 — 공연·좌석·금액 보강 필드 포함")
   void getMyBookings_uses_authenticated_user_id() throws Exception {
     // given
     Long userId = 1L;
-    BookingSummaryResponse response =
-        new BookingSummaryResponse(
+    BookingMySummaryResponse response =
+        new BookingMySummaryResponse(
             100L,
             "BOOK-1234",
             userId,
@@ -102,7 +107,12 @@ class BookingControllerTest {
             LocalDateTime.of(2026, 5, 22, 10, 30),
             null,
             null,
-            null);
+            null,
+            "오페라의 유령",
+            LocalDate.of(2026, 5, 22),
+            "서울 예술의전당 오페라극장",
+            "A-1",
+            150000L);
 
     given(
             bookingFacade.getMyBookings(
@@ -124,6 +134,11 @@ class BookingControllerTest {
         .andExpect(jsonPath("$.result[0].seat_id").value(3))
         .andExpect(jsonPath("$.result[0].booking_status").value("CONFIRMED"))
         .andExpect(jsonPath("$.result[0].confirmed_at").value("2026-05-22 10:30:00"))
+        .andExpect(jsonPath("$.result[0].performance_title").value("오페라의 유령"))
+        .andExpect(jsonPath("$.result[0].performance_date").value("2026-05-22"))
+        .andExpect(jsonPath("$.result[0].performance_address").value("서울 예술의전당 오페라극장"))
+        .andExpect(jsonPath("$.result[0].seat_number").value("A-1"))
+        .andExpect(jsonPath("$.result[0].payment_amount").value(150000))
         .andExpect(jsonPath("$.pagination_info.page_index").value(0))
         .andExpect(jsonPath("$.pagination_info.size").value(10))
         .andExpect(jsonPath("$.pagination_info.total_elements").value(1))
@@ -131,6 +146,158 @@ class BookingControllerTest {
 
     verify(bookingFacade)
         .getMyBookings(eq(userId), eq(BookingStatus.CONFIRMED), eq(new OffsetPageRequest(0, 10)));
+  }
+
+  @Test
+  @DisplayName("인증 principal의 userId로 예매 단건을 조회한다 — 공연·좌석 보강 필드 포함")
+  void getMyBooking_uses_authenticated_user_id() throws Exception {
+    // given
+    Long userId = 1L;
+    String bookingNumber = "X7B29-KLPW1";
+    BookingDetailResponse response =
+        new BookingDetailResponse(
+            100L,
+            bookingNumber,
+            BookingStatus.CONFIRMED,
+            2L,
+            "오페라의 유령",
+            LocalDate.of(2026, 5, 22),
+            LocalTime.of(19, 30),
+            "서울 예술의전당 오페라극장",
+            3L,
+            "A-1",
+            LocalDateTime.of(2026, 5, 22, 10, 30),
+            null,
+            150000L);
+
+    given(bookingFacade.getMyBooking(userId, bookingNumber)).willReturn(response);
+
+    // when & then
+    mockMvc
+        .perform(
+            get("/api/v1/booking/{bookingNumber}", bookingNumber)
+                .header("X-Gateway-Token", INTERNAL_TOKEN)
+                .header("X-User-Id", userId)
+                .header("X-User-Role", "USER"))
+        .andExpect(status().isOk())
+        .andExpect(jsonPath("$.is_success").value(true))
+        .andExpect(jsonPath("$.result.booking_id").value(100))
+        .andExpect(jsonPath("$.result.booking_number").value(bookingNumber))
+        .andExpect(jsonPath("$.result.booking_status").value("CONFIRMED"))
+        .andExpect(jsonPath("$.result.performance_id").value(2))
+        .andExpect(jsonPath("$.result.performance_title").value("오페라의 유령"))
+        .andExpect(jsonPath("$.result.performance_date").value("2026-05-22"))
+        .andExpect(jsonPath("$.result.performance_time").value("19:30:00"))
+        .andExpect(jsonPath("$.result.performance_address").value("서울 예술의전당 오페라극장"))
+        .andExpect(jsonPath("$.result.seat_id").value(3))
+        .andExpect(jsonPath("$.result.seat_number").value("A-1"))
+        .andExpect(jsonPath("$.result.confirmed_at").value("2026-05-22 10:30:00"))
+        .andExpect(jsonPath("$.result.payment_amount").value(150000));
+
+    verify(bookingFacade).getMyBooking(eq(userId), eq(bookingNumber));
+  }
+
+  @Test
+  @DisplayName("부분 응답: 공연 조회가 실패해도 booking 코어 필드와 좌석 번호는 내려간다")
+  void getMyBooking_returns_partial_response_when_performance_missing() throws Exception {
+    // given
+    Long userId = 1L;
+    String bookingNumber = "X7B29-KLPW1";
+    BookingDetailResponse response =
+        new BookingDetailResponse(
+            100L,
+            bookingNumber,
+            BookingStatus.CONFIRMED,
+            2L,
+            null,
+            null,
+            null,
+            null,
+            3L,
+            "A-1",
+            LocalDateTime.of(2026, 5, 22, 10, 30),
+            null,
+            null);
+
+    given(bookingFacade.getMyBooking(userId, bookingNumber)).willReturn(response);
+
+    // when & then
+    mockMvc
+        .perform(
+            get("/api/v1/booking/{bookingNumber}", bookingNumber)
+                .header("X-Gateway-Token", INTERNAL_TOKEN)
+                .header("X-User-Id", userId)
+                .header("X-User-Role", "USER"))
+        .andExpect(status().isOk())
+        .andExpect(jsonPath("$.result.booking_id").value(100))
+        .andExpect(jsonPath("$.result.performance_id").value(2))
+        .andExpect(jsonPath("$.result.performance_title").doesNotExist())
+        .andExpect(jsonPath("$.result.payment_amount").doesNotExist())
+        .andExpect(jsonPath("$.result.seat_number").value("A-1"));
+  }
+
+  @Test
+  @DisplayName("타인 예매·미존재 예매는 동일하게 404를 반환한다")
+  void getMyBooking_returns_404_for_missing_or_others_booking() throws Exception {
+    // given
+    Long userId = 1L;
+    String bookingNumber = "X7B29-KLPW1";
+    given(bookingFacade.getMyBooking(userId, bookingNumber))
+        .willThrow(new BusinessException(ErrorStatus.BOOKING_NOT_FOUND));
+
+    // when & then
+    mockMvc
+        .perform(
+            get("/api/v1/booking/{bookingNumber}", bookingNumber)
+                .header("X-Gateway-Token", INTERNAL_TOKEN)
+                .header("X-User-Id", userId)
+                .header("X-User-Role", "USER"))
+        .andExpect(status().isNotFound())
+        .andExpect(jsonPath("$.is_success").value(false))
+        .andExpect(jsonPath("$.code").value(ErrorStatus.BOOKING_NOT_FOUND.getCode()));
+  }
+
+  @Test
+  @DisplayName("인증 principal이 없으면 예매 단건 조회는 401 Unauthorized를 반환한다")
+  void getMyBooking_fails_when_principal_missing() throws Exception {
+    mockMvc
+        .perform(get("/api/v1/booking/{bookingNumber}", "X7B29-KLPW1"))
+        .andExpect(status().isUnauthorized())
+        .andExpect(jsonPath("$.code").value(ErrorStatus.UNAUTHORIZED.getCode()));
+
+    verifyNoInteractions(bookingFacade);
+  }
+
+  @Test
+  @DisplayName("인증 principal이 없으면 내 예매 내역 조회는 401 Unauthorized를 반환한다 — 매처 확대(#560) 검증")
+  void getMyBookings_fails_when_principal_missing() throws Exception {
+    mockMvc
+        .perform(get("/api/v1/booking/me"))
+        .andExpect(status().isUnauthorized())
+        .andExpect(jsonPath("$.code").value(ErrorStatus.UNAUTHORIZED.getCode()));
+
+    verifyNoInteractions(bookingFacade);
+  }
+
+  /**
+   * 401 본문은 한글이라 응답이 UTF-8을 <b>명시적으로 선언</b>해야 한다. 선언하지 않으면 실제 서블릿 컨테이너가 기본값 ISO-8859-1로 써서 메시지가
+   * '?'로 파괴된다(로컬 시연에서 실제로 확인했다).
+   *
+   * <p>본문 바이트를 비교하는 방식으로는 이 회귀를 못 잡는다 — MockMvc의 가짜 응답은 컨테이너와 달리 기본 인코딩이 UTF-8이라 수정이 없어도 통과한다.
+   * 컨테이너와 무관하게 갈리는 지점은 응답이 charset을 선언했는지 여부뿐이라 그것을 검증한다.
+   */
+  @Test
+  @DisplayName("401 응답이 charset=UTF-8을 명시한다 — 미지정 시 컨테이너 기본값으로 한글이 파괴된다")
+  void unauthorized_response_declares_utf8_charset() throws Exception {
+    String contentType =
+        mockMvc
+            .perform(get("/api/v1/booking/me"))
+            .andExpect(status().isUnauthorized())
+            .andReturn()
+            .getResponse()
+            .getContentType();
+
+    assertThat(contentType).containsIgnoringCase("charset=utf-8");
   }
 
   @Test

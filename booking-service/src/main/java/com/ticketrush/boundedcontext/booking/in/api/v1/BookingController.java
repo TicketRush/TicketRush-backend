@@ -2,8 +2,9 @@ package com.ticketrush.boundedcontext.booking.in.api.v1;
 
 import com.ticketrush.boundedcontext.booking.app.dto.request.BookingPendingRequest;
 import com.ticketrush.boundedcontext.booking.app.dto.response.BookingCountResponse;
+import com.ticketrush.boundedcontext.booking.app.dto.response.BookingDetailResponse;
+import com.ticketrush.boundedcontext.booking.app.dto.response.BookingMySummaryResponse;
 import com.ticketrush.boundedcontext.booking.app.dto.response.BookingPendingResponse;
-import com.ticketrush.boundedcontext.booking.app.dto.response.BookingSummaryResponse;
 import com.ticketrush.boundedcontext.booking.app.facade.BookingFacade;
 import com.ticketrush.boundedcontext.booking.domain.types.BookingStatus;
 import com.ticketrush.global.dto.request.OffsetPageRequest;
@@ -11,6 +12,7 @@ import com.ticketrush.global.dto.response.ApiResponse;
 import com.ticketrush.global.security.CustomUserDetails;
 import com.ticketrush.global.status.SuccessStatus;
 import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import java.util.List;
@@ -53,14 +55,45 @@ public class BookingController {
 
   @Operation(
       summary = "내 예매 내역 조회",
-      description = "로그인한 사용자의 예매 내역을 조회합니다. 좌석 번호와 공연 상세 정보는 각 모듈 API에서 조회합니다.")
+      description =
+          """
+          로그인한 사용자의 예매 내역을 조회합니다. 공연 이름·날짜·장소, 좌석 번호, 결제 금액을 함께
+          내려줍니다(#560). 해당 필드는 각 서비스 장애 시 응답에서 빠질 수 있으며(부분 응답), 그때는
+          `performance_id`/`seat_id`로 재조회하십시오.
+          """)
   @GetMapping("/me")
-  public ResponseEntity<ApiResponse<List<BookingSummaryResponse>>> getMyBookings(
+  public ResponseEntity<ApiResponse<List<BookingMySummaryResponse>>> getMyBookings(
       @AuthenticationPrincipal CustomUserDetails user,
       @RequestParam(defaultValue = "CONFIRMED") BookingStatus status,
       @ModelAttribute OffsetPageRequest pageRequest) {
-    Page<BookingSummaryResponse> response =
+    Page<BookingMySummaryResponse> response =
         bookingFacade.getMyBookings(user.getUserId(), status, pageRequest);
+
+    return ApiResponse.onSuccess(SuccessStatus.OK, response);
+  }
+
+  @Operation(
+      summary = "내 예매 단건 조회",
+      description =
+          """
+          로그인한 사용자 본인의 예매를 예매번호로 조회합니다. 예매번호는 `X7B29-KLPW1`처럼
+          영문 대문자·숫자 10자리를 5자리씩 하이픈으로 연결한 형식입니다.
+
+          `booking_id`는 입장권 QR 조회(`GET /api/v1/ticket/bookings/{bookingId}/qr`)의 키입니다 —
+          예매번호만 든 화면(딥링크·새로고침)에서 이 API로 되찾을 수 있습니다.
+
+          공연·좌석 필드는 해당 서비스 장애 시 응답에서 빠질 수 있습니다(부분 응답). 그때는
+          `performance_id`/`seat_id`로 각 서비스에 재조회하십시오. 예매자 이름·이메일은 본인 조회이므로
+          `GET /api/v1/user/me`로 조합합니다.
+
+          타인 예매와 존재하지 않는 예매는 동일하게 404(`BOOKING_404_001`)입니다 — 응답 코드로
+          타인 예매의 존재 여부를 노출하지 않습니다.
+          """)
+  @GetMapping("/{bookingNumber}")
+  public ResponseEntity<ApiResponse<BookingDetailResponse>> getMyBooking(
+      @AuthenticationPrincipal CustomUserDetails user,
+      @Parameter(description = "예매 번호") @PathVariable String bookingNumber) {
+    BookingDetailResponse response = bookingFacade.getMyBooking(user.getUserId(), bookingNumber);
 
     return ApiResponse.onSuccess(SuccessStatus.OK, response);
   }
