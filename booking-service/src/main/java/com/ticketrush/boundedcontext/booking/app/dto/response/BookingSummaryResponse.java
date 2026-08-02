@@ -21,7 +21,14 @@ public record BookingSummaryResponse(
     @Schema(
             description = "마지막 변경 시각. REFUNDING이면 환불 요청이 시작된 시각이다 (#397).",
             example = "2026-05-23 11:00:00")
-        LocalDateTime updatedAt) {
+        LocalDateTime updatedAt,
+    @Schema(
+            description =
+                "PENDING 예매의 결제 마감 시각. PENDING이 아니면 null이다. 새로고침 후에도 이 값으로 카운트다운을 복원할 수 있다 (#559). "
+                    + "좌석 배치 응답의 holdExpiredAt과는 값이 다르다 — 좌석 선점이 비동기라 그쪽이 더 늦으며, "
+                    + "예매를 실제로 만료시키는 기준은 이 값이다.",
+            example = "2026-05-22 10:35:00")
+        LocalDateTime expiresAt) {
 
   public static BookingSummaryResponse from(Booking booking) {
     return new BookingSummaryResponse(
@@ -33,6 +40,7 @@ public record BookingSummaryResponse(
         booking.getBookingStatus(),
         booking.getConfirmedAt(),
         booking.getRefundFailedAt(),
-        booking.getUpdatedAt());
+        booking.getUpdatedAt(),
+        booking.paymentExpiresAt());
   }
 }

@@ -79,10 +79,16 @@ public class BookingController {
       summary = "내 예매 취소",
       description =
           """
-          로그인한 사용자의 확정 예매를 취소하고 좌석 반환 이벤트를 발행합니다.
+          로그인한 사용자의 예매를 취소합니다. 예매 상태에 따라 처리가 갈립니다.
+
+          - `PENDING` (결제 전): 즉시 취소(`CANCELED`)하고 선점 좌석을 곧바로 `AVAILABLE`로 반납합니다.
+            응답을 받은 시점에 좌석은 이미 반납돼 있습니다.
+          - `CONFIRMED` (결제 완료): 환불을 요청합니다(`REFUNDING`). 좌석 반환과 예매 종결은 환불 성공 이후입니다.
 
           이미 입장을 완료한(입장권 사용됨) 예매는 취소할 수 없습니다(409 `BOOKING_409_006`). 착석한 좌석이
           재판매되는 것을 막기 위한 정책이며, 이때 예매는 확정 상태 그대로 유지됩니다.
+
+          그 밖의 상태(EXPIRED·CANCELED·REFUNDED)는 409 `BOOKING_409_001`입니다.
           """)
   @DeleteMapping("/{bookingNumber}")
   public ResponseEntity<ApiResponse<Void>> cancelMyBooking(

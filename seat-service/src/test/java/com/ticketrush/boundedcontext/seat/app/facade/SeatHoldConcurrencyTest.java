@@ -153,6 +153,7 @@ class SeatHoldConcurrencyTest {
             null,
             null,
             null,
+            null,
             seatHoldUseCase,
             new SeatLockUseCase(redissonClient, meterRegistry),
             new SeatUnlockUseCase(redissonClient),

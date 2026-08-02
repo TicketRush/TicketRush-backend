@@ -108,6 +108,7 @@ class SeatMapCacheIntegrationTest {
             null,
             null,
             null,
+            null,
             seatMapCacheRepository,
             new JsonConverter(objectMapper));
   }

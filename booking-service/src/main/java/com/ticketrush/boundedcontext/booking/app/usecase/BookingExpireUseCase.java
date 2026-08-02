@@ -1,5 +1,6 @@
 package com.ticketrush.boundedcontext.booking.app.usecase;
 
+import com.ticketrush.boundedcontext.booking.domain.entity.Booking;
 import com.ticketrush.boundedcontext.booking.domain.types.BookingStatus;
 import com.ticketrush.boundedcontext.booking.out.repository.BookingRepository;
 import com.ticketrush.global.eventpublisher.EventPublisher;
@@ -19,7 +20,6 @@ import org.springframework.transaction.support.TransactionTemplate;
 @RequiredArgsConstructor
 public class BookingExpireUseCase {
 
-  private static final int PAYMENT_WAIT_MINUTES = 5;
   private static final int EXPIRE_BATCH_SIZE = 100;
   private static final int MAX_BATCH_ITERATIONS = 200;
   private static final Pageable EXPIRE_BATCH_REQUEST = PageRequest.of(0, EXPIRE_BATCH_SIZE);
@@ -31,7 +31,7 @@ public class BookingExpireUseCase {
 
   public int execute() {
     LocalDateTime expiredAt = LocalDateTime.now(clock);
-    LocalDateTime cutoff = expiredAt.minusMinutes(PAYMENT_WAIT_MINUTES);
+    LocalDateTime cutoff = expiredAt.minusMinutes(Booking.PAYMENT_WAIT_MINUTES);
     int totalExpiredCount = 0;
 
     for (int iteration = 0; iteration < MAX_BATCH_ITERATIONS; iteration++) {

@@ -39,7 +39,14 @@ public enum SeatEventSource {
    * 환불 반환 — Kafka {@code PaymentCanceledEvent} → SOLD를 AVAILABLE로({@code
    * SeatReleaseSoldSeatUseCase}).
    */
-  REFUND_RELEASE("refund_release");
+  REFUND_RELEASE("refund_release"),
+
+  /**
+   * 즉시 취소 반환 — 내부 API {@code SeatInternalController} → {@code SeatReleaseHoldUseCase} (#559). 사용자가
+   * PENDING 예매를 직접 취소해 <b>만료 전</b> HOLD를 되돌린 경우다. {@link #EXPIRE_SINGLE}과 결과 상태는 같지만 도착 분포가 다르다 —
+   * 만료는 예매 5분 뒤에 고르게 퍼지는 반면 이것은 사용자 행동 시점에 몰린다.
+   */
+  CANCEL_RELEASE("cancel_release");
 
   private final String tagValue;
 

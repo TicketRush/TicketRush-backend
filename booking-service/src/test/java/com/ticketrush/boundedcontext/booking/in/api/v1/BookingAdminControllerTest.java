@@ -61,7 +61,8 @@ class BookingAdminControllerTest {
             BookingStatus.CONFIRMED,
             LocalDateTime.of(2026, 5, 22, 10, 30),
             FAILED_AT,
-            FAILED_AT);
+            FAILED_AT,
+            null);
 
     given(bookingFacade.getRefundFailedBookings(new OffsetPageRequest(0, 10)))
         .willReturn(new PageImpl<>(List.of(response), PageRequest.of(0, 10), 1));
@@ -99,7 +100,8 @@ class BookingAdminControllerTest {
             BookingStatus.REFUNDING,
             LocalDateTime.of(2026, 5, 22, 10, 30),
             null,
-            stuckSince);
+            stuckSince,
+            null);
 
     given(bookingFacade.getRefundingStuckBookings(new OffsetPageRequest(0, 10)))
         .willReturn(new PageImpl<>(List.of(response), PageRequest.of(0, 10), 1));
