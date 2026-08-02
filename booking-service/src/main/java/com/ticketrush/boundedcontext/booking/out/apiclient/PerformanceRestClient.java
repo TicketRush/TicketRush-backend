@@ -6,8 +6,9 @@ import java.util.Collection;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.Optional;
-import lombok.RequiredArgsConstructor;
+import java.util.concurrent.TimeUnit;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
 import org.springframework.web.client.HttpClientErrorException;
 import org.springframework.web.client.RestClient;
@@ -21,10 +22,17 @@ import org.springframework.web.client.RestClientException;
  */
 @Slf4j
 @Component
-@RequiredArgsConstructor
 public class PerformanceRestClient {
 
   private final RestClient performanceServiceRestClient;
+  private final long bulkBudgetMs;
+
+  public PerformanceRestClient(
+      RestClient performanceServiceRestClient,
+      @Value("${service.performance.bulk-budget-ms:3000}") long bulkBudgetMs) {
+    this.performanceServiceRestClient = performanceServiceRestClient;
+    this.bulkBudgetMs = bulkBudgetMs;
+  }
 
   /** 단건 조회. 4xx·5xx·타임아웃·본문 결손 등 모든 실패는 {@code Optional.empty()}로 수렴한다. */
   public Optional<PerformanceInfoResponse> getPerformance(Long performanceId) {
@@ -40,14 +48,31 @@ public class PerformanceRestClient {
   }
 
   /**
-   * 벌크 조회. 공개 API에 벌크 엔드포인트가 없어 순차 호출한다(호출 측이 distinct 보장, 페이지 기본 10건).
+   * 벌크 조회. 공개 API에 벌크 엔드포인트가 없어 순차 호출한다(호출 측이 distinct 보장).
    *
-   * <p>4xx(삭제된 공연 등)는 해당 건만 비우고 계속 가지만, 그 외 실패(5xx·타임아웃)는 서비스 장애로 보고 잔여 호출을 중단한다 — 장애 중 남은 건들이
-   * 타임아웃을 반복하며 톰캣 스레드를 n×2초씩 붙잡는 것을 막는다. 실패한 공연은 맵에서 빠진다.
+   * <p>중단 조건이 둘이다. <b>통신 실패(5xx·타임아웃)</b>는 서비스 장애로 보고 잔여 호출을 접는다 — 장애 중 남은 건들이 타임아웃을 반복하며 톰캣 스레드를
+   * 건당 예산만큼 더 붙잡는 것을 막는다. 4xx(삭제된 공연 등)는 해당 건만 비우고 계속 간다.
+   *
+   * <p><b>벽시계 예산</b>은 그것만으로 부족해서 둔다. performance-service가 살아 있으면서 느리기만 하면(건당 read 예산 미만) 예외가 나지 않아
+   * 위 중단이 돌지 않고, 페이지 상한 50건이 그대로 누적돼 요청 하나가 스레드를 수십 초 붙잡는다. 예산을 넘기면 잔여 공연 필드를 비운 채 응답한다 — 부분 응답 정책이
+   * 이미 허용하는 결과다.
+   *
+   * <p>실패했거나 예산에 걸려 건너뛴 공연은 맵에서 빠진다.
    */
   public Map<Long, PerformanceInfoResponse> getPerformances(Collection<Long> performanceIds) {
     Map<Long, PerformanceInfoResponse> result = new HashMap<>();
+    long deadline = System.nanoTime() + TimeUnit.MILLISECONDS.toNanos(bulkBudgetMs);
+
     for (Long performanceId : performanceIds) {
+      if (System.nanoTime() >= deadline) {
+        log.warn(
+            "[PerformanceRestClient] 보강 예산({}ms) 초과, 잔여 공연 필드를 비웁니다. 조회 성공 {}/{}건",
+            bulkBudgetMs,
+            result.size(),
+            performanceIds.size());
+        break;
+      }
+
       try {
         PerformanceInfoResponse info = fetch(performanceId);
         if (info != null) {

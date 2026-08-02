@@ -26,6 +26,7 @@ class PerformanceRestClientTest {
 
   private static final String BASE_URL = "http://localhost:8083";
   private static final long PERFORMANCE_ID = 10L;
+  private static final long BULK_BUDGET_MS = 3000;
 
   private MockRestServiceServer mockServer;
   private PerformanceRestClient client;
@@ -35,7 +36,7 @@ class PerformanceRestClientTest {
     RestClient.Builder builder = RestClient.builder().baseUrl(BASE_URL);
     mockServer = MockRestServiceServer.bindTo(builder).build();
 
-    client = new PerformanceRestClient(builder.build());
+    client = new PerformanceRestClient(builder.build(), BULK_BUDGET_MS);
   }
 
   private static String requestUrl(long performanceId) {
@@ -150,5 +151,21 @@ class PerformanceRestClientTest {
 
     assertThat(result).containsOnlyKeys(1L);
     mockServer.verify();
+  }
+
+  @Test
+  @DisplayName("성공: 벽시계 예산이 소진되면 호출 없이 잔여 공연 필드를 비운다 — 느린(예외 없는) 응답에서도 스레드를 놓아준다")
+  void getPerformances_stops_when_budget_exhausted() {
+    // given — 예산 0이면 첫 건부터 예산 초과다. 기대를 등록하지 않아 요청이 나가면 즉시 실패한다.
+    RestClient.Builder builder = RestClient.builder().baseUrl(BASE_URL);
+    MockRestServiceServer strictServer = MockRestServiceServer.bindTo(builder).build();
+    PerformanceRestClient budgetlessClient = new PerformanceRestClient(builder.build(), 0);
+
+    // when
+    Map<Long, PerformanceInfoResponse> result = budgetlessClient.getPerformances(List.of(1L, 2L));
+
+    // then
+    assertThat(result).isEmpty();
+    strictServer.verify();
   }
 }
