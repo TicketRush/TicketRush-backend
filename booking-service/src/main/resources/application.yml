@@ -25,6 +25,10 @@ spring:
 service:
   seat:
     url: ${SEAT_SERVICE_URL:http://localhost:8086}
+    # 예매 조회 보강(좌석 번호) 전용. 쓰기 경로(SOLD 확정·반납)의 공용 예산(3s/10s)과 분리한다 —
+    # 같은 요청 안에서 공연 보강 예산 위에 얹혀, 합치면 조회 하나가 톰캣 스레드를 13초까지 붙잡는다.
+    query-connect-timeout-ms: ${SEAT_QUERY_CONNECT_TIMEOUT_MS:1000}
+    query-read-timeout-ms: ${SEAT_QUERY_READ_TIMEOUT_MS:2000}
   performance:
     url: ${PERFORMANCE_SERVICE_URL:http://localhost:8083}
     # 예매 조회 보강(공연 필드) 전용 (#560). 실패해도 부분 응답(null)으로 계속 가는 경로라 빨리 포기한다 —

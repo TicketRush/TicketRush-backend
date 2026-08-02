@@ -10,7 +10,7 @@ import com.ticketrush.boundedcontext.booking.app.usecase.BookingAdminRetryRefund
 import com.ticketrush.boundedcontext.booking.app.usecase.BookingCancelMyBookingUseCase;
 import com.ticketrush.boundedcontext.booking.app.usecase.BookingCountUseCase;
 import com.ticketrush.boundedcontext.booking.app.usecase.BookingCreateUseCase;
-import com.ticketrush.boundedcontext.booking.app.usecase.BookingGetMyBookingUseCase;
+import com.ticketrush.boundedcontext.booking.app.usecase.BookingGetMyBookingDetailUseCase;
 import com.ticketrush.boundedcontext.booking.app.usecase.BookingGetMyBookingsUseCase;
 import com.ticketrush.boundedcontext.booking.app.usecase.BookingGetRefundFailedBookingsUseCase;
 import com.ticketrush.boundedcontext.booking.app.usecase.BookingGetRefundingStuckBookingsUseCase;
@@ -24,6 +24,7 @@ import com.ticketrush.boundedcontext.booking.out.apiclient.PerformanceRestClient
 import com.ticketrush.boundedcontext.booking.out.apiclient.SeatRestClient;
 import com.ticketrush.boundedcontext.booking.out.apiclient.dto.PerformanceInfoResponse;
 import com.ticketrush.global.dto.request.OffsetPageRequest;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
@@ -39,7 +40,7 @@ public class BookingFacade {
 
   private final BookingIssueNumberUseCase bookingIssueNumberUseCase;
   private final BookingCreateUseCase bookingCreateUseCase;
-  private final BookingGetMyBookingUseCase bookingGetMyBookingUseCase;
+  private final BookingGetMyBookingDetailUseCase bookingGetMyBookingDetailUseCase;
   private final BookingGetMyBookingsUseCase bookingGetMyBookingsUseCase;
   private final PerformanceRestClient performanceRestClient;
   private final BookingCountUseCase bookingCountUseCase;
@@ -76,7 +77,7 @@ public class BookingFacade {
    * <p>보강 실패는 각 클라이언트가 빈 값으로 흡수하므로(부분 응답) 여기에는 catch가 없다. 한 도메인의 실패가 다른 도메인 필드에 닿는 경로도 없다.
    */
   public BookingDetailResponse getMyBooking(Long userId, String bookingNumber) {
-    Booking booking = bookingGetMyBookingUseCase.execute(userId, bookingNumber);
+    Booking booking = bookingGetMyBookingDetailUseCase.execute(userId, bookingNumber);
 
     PerformanceInfoResponse performance =
         performanceRestClient.getPerformance(booking.getPerformanceId()).orElse(null);
@@ -96,11 +97,13 @@ public class BookingFacade {
         bookingGetMyBookingsUseCase.execute(userId, bookingStatus, pageRequest);
     List<BookingSummaryResponse> content = page.getContent();
 
+    // 순서를 페이지 순서로 고정한다(LinkedHashSet). 보강이 예산·장애로 중간에 끊길 때 HashSet이면 어느 행이
+    // 채워질지가 매 요청 달라져, 새로고침마다 다른 행의 공연 정보가 나타났다 사라진다.
     Map<Long, PerformanceInfoResponse> performances =
         performanceRestClient.getPerformances(
             content.stream()
                 .map(BookingSummaryResponse::performanceId)
-                .collect(Collectors.toSet()));
+                .collect(Collectors.toCollection(LinkedHashSet::new)));
     Map<Long, String> seatNumbers =
         seatRestClient.getSeatNumbers(
             content.stream().map(BookingSummaryResponse::seatId).distinct().toList());

@@ -5,6 +5,7 @@ import static org.springframework.test.web.client.match.MockRestRequestMatchers.
 import static org.springframework.test.web.client.match.MockRestRequestMatchers.method;
 import static org.springframework.test.web.client.match.MockRestRequestMatchers.requestTo;
 import static org.springframework.test.web.client.response.MockRestResponseCreators.withServerError;
+import static org.springframework.test.web.client.response.MockRestResponseCreators.withStatus;
 import static org.springframework.test.web.client.response.MockRestResponseCreators.withSuccess;
 
 import com.ticketrush.global.config.CustomSecurityProperties;
@@ -14,6 +15,7 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.http.HttpMethod;
+import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.test.web.client.MockRestServiceServer;
 import org.springframework.web.client.RestClient;
@@ -34,7 +36,7 @@ class SeatRestClientTest {
     CustomSecurityProperties customSecurityProperties = new CustomSecurityProperties();
     customSecurityProperties.setInternalToken("test-token");
 
-    client = new SeatRestClient(builder.build(), customSecurityProperties);
+    client = new SeatRestClient(builder.build(), builder.build(), customSecurityProperties);
   }
 
   private static String successBody() {
@@ -83,5 +85,61 @@ class SeatRestClientTest {
   void getSeatNumbers_returns_empty_map_without_call_for_empty_input() {
     assertThat(client.getSeatNumbers(List.of())).isEmpty();
     mockServer.verify(); // 등록된 기대가 없으므로 어떤 요청도 나가지 않았음을 검증
+  }
+
+  @Test
+  @DisplayName("성공: 좌석 한 건이 없어 seat이 404로 전체 실패시키면 빈 맵으로 수렴한다 — all-or-nothing 거동 고정")
+  void getSeatNumbers_returns_empty_map_when_any_seat_missing() {
+    // seat-service는 요청 seatId 중 하나라도 없으면 SEAT_NOT_FOUND로 전체를 실패시킨다.
+    mockServer
+        .expect(requestTo(REQUEST_URL))
+        .andExpect(method(HttpMethod.GET))
+        .andRespond(
+            withStatus(HttpStatus.NOT_FOUND)
+                .contentType(MediaType.APPLICATION_JSON)
+                .body("{\"is_success\": false, \"code\": \"SEAT_404_001\"}"));
+
+    assertThat(client.getSeatNumbers(List.of(100L, 101L))).isEmpty();
+    mockServer.verify();
+  }
+
+  @Test
+  @DisplayName("성공: 200이지만 result가 비어 있으면 빈 맵으로 수렴한다")
+  void getSeatNumbers_returns_empty_map_on_null_result() {
+    mockServer
+        .expect(requestTo(REQUEST_URL))
+        .andRespond(
+            withSuccess(
+                "{\"is_success\": true, \"code\": \"COMMON_200\", \"result\": null}",
+                MediaType.APPLICATION_JSON));
+
+    assertThat(client.getSeatNumbers(List.of(100L, 101L))).isEmpty();
+    mockServer.verify();
+  }
+
+  @Test
+  @DisplayName("성공: 본문이 JSON이 아니어도 원시 예외가 새지 않고 빈 맵으로 수렴한다")
+  void getSeatNumbers_returns_empty_map_on_unparsable_body() {
+    mockServer
+        .expect(requestTo(REQUEST_URL))
+        .andRespond(withSuccess("<html>gateway error</html>", MediaType.TEXT_HTML));
+
+    assertThat(client.getSeatNumbers(List.of(100L, 101L))).isEmpty();
+    mockServer.verify();
+  }
+
+  @Test
+  @DisplayName("성공: 중복 seatId는 클라이언트가 접어 한 번만 요청하고 매핑도 깨지지 않는다")
+  void getSeatNumbers_collapses_duplicate_seat_ids() {
+    mockServer
+        .expect(requestTo(REQUEST_URL))
+        .andExpect(method(HttpMethod.GET))
+        .andRespond(withSuccess(successBody(), MediaType.APPLICATION_JSON));
+
+    // 같은 seatId가 두 번 들어와도 쿼리는 "100,101" 하나이며 toMap 중복 키 예외도 나지 않는다.
+    Map<Long, String> result = client.getSeatNumbers(List.of(100L, 101L, 100L));
+
+    assertThat(result).containsExactlyInAnyOrderEntriesOf(Map.of(100L, "A-1", 101L, "A-2"));
+    mockServer.verify();
   }
 }

@@ -33,7 +33,16 @@ public record BookingDetailResponse(
     @Schema(description = "좌석 번호. seat-service 장애 시 null.", example = "A-1") String seatNumber,
     @Schema(description = "예매 확정일", example = "2026-05-22 10:30:00") LocalDateTime confirmedAt,
     @Schema(
-            description = "결제 금액. 공연당 단일가·1인 1매라 공연 가격과 같다. performance-service 장애 시 null.",
+            description =
+                "PENDING 예매의 결제 마감 시각. PENDING이 아니면 null이다. 예매번호만 든 화면(딥링크·새로고침)에서도 "
+                    + "이 값으로 카운트다운을 복원할 수 있다 (#559).",
+            example = "2026-05-22 10:35:00")
+        LocalDateTime expiresAt,
+    @Schema(
+            description =
+                "결제 금액. 공연당 단일가·1인 1매라 공연 가격과 같다. performance-service 장애 시 null. "
+                    + "출처가 현재 공연 가격이므로, 예매 후 관리자가 가격을 바꾸면 이 값도 함께 바뀐다 — "
+                    + "실제 결제액의 SSOT는 payment-service다.",
             example = "150000")
         Long paymentAmount) {
 
@@ -52,6 +61,7 @@ public record BookingDetailResponse(
         booking.getSeatId(),
         seatNumber,
         booking.getConfirmedAt(),
+        booking.paymentExpiresAt(),
         (performance == null) ? null : performance.price());
   }
 }

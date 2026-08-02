@@ -21,7 +21,7 @@ import com.ticketrush.boundedcontext.booking.app.usecase.BookingAdminRetryRefund
 import com.ticketrush.boundedcontext.booking.app.usecase.BookingCancelMyBookingUseCase;
 import com.ticketrush.boundedcontext.booking.app.usecase.BookingCountUseCase;
 import com.ticketrush.boundedcontext.booking.app.usecase.BookingCreateUseCase;
-import com.ticketrush.boundedcontext.booking.app.usecase.BookingGetMyBookingUseCase;
+import com.ticketrush.boundedcontext.booking.app.usecase.BookingGetMyBookingDetailUseCase;
 import com.ticketrush.boundedcontext.booking.app.usecase.BookingGetMyBookingsUseCase;
 import com.ticketrush.boundedcontext.booking.app.usecase.BookingGetRefundingStuckBookingsUseCase;
 import com.ticketrush.boundedcontext.booking.app.usecase.BookingIssueNumberUseCase;
@@ -59,7 +59,7 @@ class BookingFacadeTest {
 
   @Mock private BookingIssueNumberUseCase bookingIssueNumberUseCase;
   @Mock private BookingCreateUseCase bookingCreateUseCase;
-  @Mock private BookingGetMyBookingUseCase bookingGetMyBookingUseCase;
+  @Mock private BookingGetMyBookingDetailUseCase bookingGetMyBookingDetailUseCase;
   @Mock private BookingGetMyBookingsUseCase bookingGetMyBookingsUseCase;
   @Mock private PerformanceRestClient performanceRestClient;
   @Mock private BookingCountUseCase bookingCountUseCase;
@@ -92,7 +92,7 @@ class BookingFacadeTest {
     // given
     Long userId = 1L;
     String bookingNumber = "X7B29-KLPW1";
-    given(bookingGetMyBookingUseCase.execute(userId, bookingNumber))
+    given(bookingGetMyBookingDetailUseCase.execute(userId, bookingNumber))
         .willReturn(myBooking(userId, bookingNumber));
     given(performanceRestClient.getPerformance(2L)).willReturn(Optional.of(performanceInfo()));
     given(seatRestClient.getSeatNumbers(List.of(3L))).willReturn(Map.of(3L, "A-1"));
@@ -116,7 +116,7 @@ class BookingFacadeTest {
     // given
     Long userId = 1L;
     String bookingNumber = "X7B29-KLPW1";
-    given(bookingGetMyBookingUseCase.execute(userId, bookingNumber))
+    given(bookingGetMyBookingDetailUseCase.execute(userId, bookingNumber))
         .willReturn(myBooking(userId, bookingNumber));
     given(performanceRestClient.getPerformance(2L)).willReturn(Optional.empty());
     given(seatRestClient.getSeatNumbers(List.of(3L))).willReturn(Map.of(3L, "A-1"));
@@ -138,7 +138,7 @@ class BookingFacadeTest {
     // given
     Long userId = 1L;
     String bookingNumber = "X7B29-KLPW1";
-    given(bookingGetMyBookingUseCase.execute(userId, bookingNumber))
+    given(bookingGetMyBookingDetailUseCase.execute(userId, bookingNumber))
         .willReturn(myBooking(userId, bookingNumber));
     given(performanceRestClient.getPerformance(2L)).willReturn(Optional.of(performanceInfo()));
     given(seatRestClient.getSeatNumbers(List.of(3L))).willReturn(Map.of());
@@ -150,6 +150,30 @@ class BookingFacadeTest {
     assertThat(response.seatNumber()).isNull();
     assertThat(response.seatId()).isEqualTo(3L); // 프론트 재조회 키는 유지
     assertThat(response.performanceTitle()).isEqualTo("오페라의 유령");
+  }
+
+  @Test
+  @DisplayName("부분 응답: 공연·좌석이 동시에 실패해도 booking 코어 필드는 전부 살아남는다")
+  void getMyBooking_keeps_core_fields_when_all_enrichment_fails() {
+    // given
+    Long userId = 1L;
+    String bookingNumber = "X7B29-KLPW1";
+    given(bookingGetMyBookingDetailUseCase.execute(userId, bookingNumber))
+        .willReturn(myBooking(userId, bookingNumber));
+    given(performanceRestClient.getPerformance(2L)).willReturn(Optional.empty());
+    given(seatRestClient.getSeatNumbers(List.of(3L))).willReturn(Map.of());
+
+    // when
+    BookingDetailResponse response = bookingFacade.getMyBooking(userId, bookingNumber);
+
+    // then — 보강 필드는 모두 비지만 코어와 재조회 키는 남는다
+    assertThat(response.performanceTitle()).isNull();
+    assertThat(response.seatNumber()).isNull();
+    assertThat(response.paymentAmount()).isNull();
+    assertThat(response.bookingNumber()).isEqualTo(bookingNumber);
+    assertThat(response.bookingStatus()).isEqualTo(BookingStatus.CONFIRMED);
+    assertThat(response.performanceId()).isEqualTo(2L);
+    assertThat(response.seatId()).isEqualTo(3L);
   }
 
   @Test

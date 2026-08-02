@@ -18,12 +18,12 @@ import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
 @ExtendWith(MockitoExtension.class)
-class BookingGetMyBookingUseCaseTest {
+class BookingGetMyBookingDetailUseCaseTest {
 
   private static final Long USER_ID = 1L;
   private static final String BOOKING_NUMBER = "X7B29-KLPW1";
 
-  @InjectMocks private BookingGetMyBookingUseCase useCase;
+  @InjectMocks private BookingGetMyBookingDetailUseCase useCase;
 
   @Mock private BookingRepository bookingRepository;
 

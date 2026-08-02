@@ -166,6 +166,7 @@ class BookingControllerTest {
             3L,
             "A-1",
             LocalDateTime.of(2026, 5, 22, 10, 30),
+            null,
             150000L);
 
     given(bookingFacade.getMyBooking(userId, bookingNumber)).willReturn(response);
@@ -214,6 +215,7 @@ class BookingControllerTest {
             3L,
             "A-1",
             LocalDateTime.of(2026, 5, 22, 10, 30),
+            null,
             null);
 
     given(bookingFacade.getMyBooking(userId, bookingNumber)).willReturn(response);

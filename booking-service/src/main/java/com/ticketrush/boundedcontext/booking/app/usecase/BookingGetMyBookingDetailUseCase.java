@@ -16,11 +16,11 @@ import org.springframework.transaction.annotation.Transactional;
  */
 @Service
 @RequiredArgsConstructor
-public class BookingGetMyBookingUseCase {
+@Transactional(readOnly = true)
+public class BookingGetMyBookingDetailUseCase {
 
   private final BookingRepository bookingRepository;
 
-  @Transactional(readOnly = true)
   public Booking execute(Long userId, String bookingNumber) {
     return bookingRepository
         .findByBookingNumberAndUserId(bookingNumber, userId)

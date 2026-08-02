@@ -154,6 +154,17 @@ class PerformanceRestClientTest {
   }
 
   @Test
+  @DisplayName("성공: 본문이 JSON이 아니어도 원시 예외가 새지 않고 빈 Optional로 수렴한다")
+  void getPerformance_returns_empty_on_unparsable_body() {
+    mockServer
+        .expect(requestTo(requestUrl(PERFORMANCE_ID)))
+        .andRespond(withSuccess("<html>gateway error</html>", MediaType.TEXT_HTML));
+
+    assertThat(client.getPerformance(PERFORMANCE_ID)).isEmpty();
+    mockServer.verify();
+  }
+
+  @Test
   @DisplayName("성공: 벽시계 예산이 소진되면 호출 없이 잔여 공연 필드를 비운다 — 느린(예외 없는) 응답에서도 스레드를 놓아준다")
   void getPerformances_stops_when_budget_exhausted() {
     // given — 예산 0이면 첫 건부터 예산 초과다. 기대를 등록하지 않아 요청이 나가면 즉시 실패한다.

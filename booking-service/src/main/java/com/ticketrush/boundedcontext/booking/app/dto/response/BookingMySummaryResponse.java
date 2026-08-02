@@ -44,7 +44,10 @@ public record BookingMySummaryResponse(
         String performanceAddress,
     @Schema(description = "좌석 번호. seat-service 장애 시 null.", example = "A-1") String seatNumber,
     @Schema(
-            description = "결제 금액. 공연당 단일가·1인 1매라 공연 가격과 같다. performance-service 장애 시 null.",
+            description =
+                "결제 금액. 공연당 단일가·1인 1매라 공연 가격과 같다. performance-service 장애 시 null. "
+                    + "출처가 현재 공연 가격이므로, 예매 후 관리자가 가격을 바꾸면 이 값도 함께 바뀐다 — "
+                    + "실제 결제액의 SSOT는 payment-service다.",
             example = "150000")
         Long paymentAmount) {
 

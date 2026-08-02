@@ -5,8 +5,10 @@ import com.ticketrush.boundedcontext.booking.app.dto.request.SeatSoldConfirmRequ
 import com.ticketrush.boundedcontext.booking.out.apiclient.dto.SeatNumberInfoResponse;
 import com.ticketrush.boundedcontext.booking.out.apiclient.dto.SeatNumbersApiResponse;
 import com.ticketrush.global.config.CustomSecurityProperties;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.stream.Collectors;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -22,6 +24,10 @@ public class SeatRestClient {
   private static final String INTERNAL_TOKEN_HEADER = "X-Internal-Token";
 
   private final RestClient seatServiceRestClient;
+
+  /** 조회 전용 클라이언트. 쓰기(SOLD 확정·반납)와 타임아웃 예산이 다르다 — {@code RestClientConfig} 참고. */
+  private final RestClient seatQueryRestClient;
+
   private final CustomSecurityProperties customSecurityProperties;
 
   /**
@@ -80,15 +86,17 @@ public class SeatRestClient {
    * 없으면 seat-service가 404(SEAT_NOT_FOUND)로 전체 실패시키므로 그때도 빈 맵이다 — 해당 페이지의 좌석 번호가 전부 비지만, 프론트는
    * seatId로 재조회할 수 있다.
    */
-  // ponytail: 공용 3s/10s 빈 재사용(요청당 1회 호출이라 곱해지지 않음) — 이 경로가 p99를 끌면 전용 1s/2s 빈 분리
   public Map<Long, String> getSeatNumbers(List<Long> seatIds) {
-    if (seatIds.isEmpty()) {
+    // 중복 제거를 호출 측에 맡기지 않는다 — 중복이 오면 seat-service 요청만 길어지고, 응답 매핑도 같은 키를
+    // 두 번 만난다. 계약을 이 안에서 닫아 둔다.
+    List<Long> distinctSeatIds = seatIds.stream().filter(Objects::nonNull).distinct().toList();
+    if (distinctSeatIds.isEmpty()) {
       return Map.of();
     }
 
     try {
       SeatNumbersApiResponse response =
-          seatServiceRestClient
+          seatQueryRestClient
               .get()
               .uri(
                   uriBuilder ->
@@ -96,7 +104,7 @@ public class SeatRestClient {
                           .path("/api/v1/seat/numbers")
                           .queryParam(
                               "seatIds",
-                              seatIds.stream()
+                              distinctSeatIds.stream()
                                   .map(String::valueOf)
                                   .collect(Collectors.joining(",")))
                           .build())
@@ -108,9 +116,16 @@ public class SeatRestClient {
         return Map.of();
       }
 
-      return response.result().stream()
-          .collect(
-              Collectors.toMap(SeatNumberInfoResponse::seatId, SeatNumberInfoResponse::seatNumber));
+      // 계약을 이 안에서 닫는다. toMap은 키 중복이면 IllegalStateException, 키·값이 null이면 NPE를 던지는데
+      // 둘 다 RestClientException이 아니라 아래 catch를 뚫고 500이 된다 — 부분 응답 정책이 여기서만 깨진다.
+      // 지금 안 터지는 건 seat 스키마가 NOT NULL이고 호출 측이 distinct를 주기 때문일 뿐이라, 그 전제에 기대지 않는다.
+      Map<Long, String> seatNumbers = new HashMap<>();
+      for (SeatNumberInfoResponse seat : response.result()) {
+        if (seat.seatId() != null && seat.seatNumber() != null) {
+          seatNumbers.put(seat.seatId(), seat.seatNumber());
+        }
+      }
+      return seatNumbers;
     } catch (RestClientException e) {
       log.warn("[SeatRestClient] 좌석 번호 조회 실패, seat_number는 null로 응답합니다. seatIds={}", seatIds, e);
       return Map.of();
