@@ -3,8 +3,8 @@ package com.ticketrush.boundedcontext.booking.in.api.v1;
 import com.ticketrush.boundedcontext.booking.app.dto.request.BookingPendingRequest;
 import com.ticketrush.boundedcontext.booking.app.dto.response.BookingCountResponse;
 import com.ticketrush.boundedcontext.booking.app.dto.response.BookingDetailResponse;
+import com.ticketrush.boundedcontext.booking.app.dto.response.BookingMySummaryResponse;
 import com.ticketrush.boundedcontext.booking.app.dto.response.BookingPendingResponse;
-import com.ticketrush.boundedcontext.booking.app.dto.response.BookingSummaryResponse;
 import com.ticketrush.boundedcontext.booking.app.facade.BookingFacade;
 import com.ticketrush.boundedcontext.booking.domain.types.BookingStatus;
 import com.ticketrush.global.dto.request.OffsetPageRequest;
@@ -55,13 +55,18 @@ public class BookingController {
 
   @Operation(
       summary = "내 예매 내역 조회",
-      description = "로그인한 사용자의 예매 내역을 조회합니다. 좌석 번호와 공연 상세 정보는 각 모듈 API에서 조회합니다.")
+      description =
+          """
+          로그인한 사용자의 예매 내역을 조회합니다. 공연 이름·날짜·장소, 좌석 번호, 결제 금액을 함께
+          내려줍니다(#560). 해당 필드는 각 서비스 장애 시 응답에서 빠질 수 있으며(부분 응답), 그때는
+          `performance_id`/`seat_id`로 재조회하십시오.
+          """)
   @GetMapping("/me")
-  public ResponseEntity<ApiResponse<List<BookingSummaryResponse>>> getMyBookings(
+  public ResponseEntity<ApiResponse<List<BookingMySummaryResponse>>> getMyBookings(
       @AuthenticationPrincipal CustomUserDetails user,
       @RequestParam(defaultValue = "CONFIRMED") BookingStatus status,
       @ModelAttribute OffsetPageRequest pageRequest) {
-    Page<BookingSummaryResponse> response =
+    Page<BookingMySummaryResponse> response =
         bookingFacade.getMyBookings(user.getUserId(), status, pageRequest);
 
     return ApiResponse.onSuccess(SuccessStatus.OK, response);

@@ -14,6 +14,7 @@ import static org.mockito.Mockito.verifyNoInteractions;
 import com.ticketrush.boundedcontext.booking.app.dto.request.BookingCreateRequest;
 import com.ticketrush.boundedcontext.booking.app.dto.response.BookingCountResponse;
 import com.ticketrush.boundedcontext.booking.app.dto.response.BookingDetailResponse;
+import com.ticketrush.boundedcontext.booking.app.dto.response.BookingMySummaryResponse;
 import com.ticketrush.boundedcontext.booking.app.dto.response.BookingPendingResponse;
 import com.ticketrush.boundedcontext.booking.app.dto.response.BookingSummaryResponse;
 import com.ticketrush.boundedcontext.booking.app.usecase.BookingAdminRetryRefundUseCase;
@@ -40,6 +41,7 @@ import java.time.LocalTime;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.Set;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -228,37 +230,79 @@ class BookingFacadeTest {
     verifyNoInteractions(bookingIssueNumberUseCase, bookingCreateUseCase);
   }
 
+  private static BookingSummaryResponse summary(Long bookingId, Long performanceId, Long seatId) {
+    return new BookingSummaryResponse(
+        bookingId,
+        "BOOK-" + bookingId,
+        1L,
+        performanceId,
+        seatId,
+        BookingStatus.CONFIRMED,
+        LocalDateTime.of(2026, 5, 22, 10, 30),
+        null,
+        null,
+        null);
+  }
+
   @Test
-  @DisplayName("성공: 회원 예매 내역 조회를 위임한다")
-  void getMyBookings_success() {
+  @DisplayName("성공: 회원 예매 내역을 공연·좌석으로 보강한다 — 같은 공연은 distinct로 묶어 한 번만 조회한다")
+  void getMyBookings_enriches_with_distinct_performance_ids() {
     // given
     Long userId = 1L;
-    BookingSummaryResponse response =
-        new BookingSummaryResponse(
-            100L,
-            "BOOK-1234",
-            userId,
-            2L,
-            3L,
-            BookingStatus.CONFIRMED,
-            LocalDateTime.of(2026, 5, 22, 10, 30),
-            null,
-            null,
-            null);
+    List<BookingSummaryResponse> summaries =
+        List.of(summary(100L, 2L, 3L), summary(101L, 2L, 4L), summary(102L, 2L, 5L));
 
     given(
             bookingGetMyBookingsUseCase.execute(
                 userId, BookingStatus.CONFIRMED, new OffsetPageRequest(0, 10)))
-        .willReturn(new PageImpl<>(List.of(response)));
+        .willReturn(new PageImpl<>(summaries));
+    given(performanceRestClient.getPerformances(Set.of(2L)))
+        .willReturn(Map.of(2L, performanceInfo()));
+    given(seatRestClient.getSeatNumbers(List.of(3L, 4L, 5L)))
+        .willReturn(Map.of(3L, "A-1", 4L, "A-2", 5L, "A-3"));
 
     // when
-    Page<BookingSummaryResponse> result =
+    Page<BookingMySummaryResponse> result =
+        bookingFacade.getMyBookings(userId, BookingStatus.CONFIRMED, new OffsetPageRequest(0, 10));
+
+    // then — 같은 공연 3건이 distinct 1개로 묶여 전달됐는지는 위 given의 Set.of(2L) 매칭이 검증한다
+    assertThat(result.getContent()).hasSize(3);
+    assertThat(result.getContent().get(0).performanceTitle()).isEqualTo("오페라의 유령");
+    assertThat(result.getContent().get(0).performanceDate()).isEqualTo(LocalDate.of(2026, 5, 22));
+    assertThat(result.getContent().get(0).performanceAddress()).isEqualTo("서울 예술의전당 오페라극장");
+    assertThat(result.getContent().get(0).paymentAmount()).isEqualTo(150000L);
+    assertThat(result.getContent().get(0).seatNumber()).isEqualTo("A-1");
+    assertThat(result.getContent().get(1).seatNumber()).isEqualTo("A-2");
+    assertThat(result.getContent().get(2).seatNumber()).isEqualTo("A-3");
+    verify(performanceRestClient).getPerformances(Set.of(2L));
+    verify(seatRestClient).getSeatNumbers(List.of(3L, 4L, 5L));
+  }
+
+  @Test
+  @DisplayName("부분 응답: 벌크 조회에서 누락된 공연만 해당 건의 공연 필드가 비고 나머지는 채워진다")
+  void getMyBookings_fills_only_resolved_performances() {
+    // given
+    Long userId = 1L;
+    List<BookingSummaryResponse> summaries = List.of(summary(100L, 2L, 3L), summary(101L, 7L, 4L));
+
+    given(
+            bookingGetMyBookingsUseCase.execute(
+                userId, BookingStatus.CONFIRMED, new OffsetPageRequest(0, 10)))
+        .willReturn(new PageImpl<>(summaries));
+    // 공연 7은 조회 실패(fail-fast 중단 등)로 맵에서 빠졌다
+    given(performanceRestClient.getPerformances(Set.of(2L, 7L)))
+        .willReturn(Map.of(2L, performanceInfo()));
+    given(seatRestClient.getSeatNumbers(List.of(3L, 4L))).willReturn(Map.of(3L, "A-1", 4L, "A-2"));
+
+    // when
+    Page<BookingMySummaryResponse> result =
         bookingFacade.getMyBookings(userId, BookingStatus.CONFIRMED, new OffsetPageRequest(0, 10));
 
     // then
-    assertThat(result.getContent()).containsExactly(response);
-    verify(bookingGetMyBookingsUseCase)
-        .execute(userId, BookingStatus.CONFIRMED, new OffsetPageRequest(0, 10));
+    assertThat(result.getContent().get(0).performanceTitle()).isEqualTo("오페라의 유령");
+    assertThat(result.getContent().get(1).performanceTitle()).isNull();
+    assertThat(result.getContent().get(1).performanceId()).isEqualTo(7L); // 프론트 재조회 키는 유지
+    assertThat(result.getContent().get(1).seatNumber()).isEqualTo("A-2"); // 좌석은 실패 격리로 생존
   }
 
   @Test

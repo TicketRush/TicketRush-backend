@@ -12,8 +12,8 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 
 import com.ticketrush.boundedcontext.booking.app.dto.response.BookingCountResponse;
 import com.ticketrush.boundedcontext.booking.app.dto.response.BookingDetailResponse;
+import com.ticketrush.boundedcontext.booking.app.dto.response.BookingMySummaryResponse;
 import com.ticketrush.boundedcontext.booking.app.dto.response.BookingPendingResponse;
-import com.ticketrush.boundedcontext.booking.app.dto.response.BookingSummaryResponse;
 import com.ticketrush.boundedcontext.booking.app.facade.BookingFacade;
 import com.ticketrush.boundedcontext.booking.domain.types.BookingStatus;
 import com.ticketrush.global.config.CustomSecurityProperties;
@@ -91,12 +91,12 @@ class BookingControllerTest {
   }
 
   @Test
-  @DisplayName("인증 principal의 userId로 내 예매 내역을 조회한다")
+  @DisplayName("인증 principal의 userId로 내 예매 내역을 조회한다 — 공연·좌석·금액 보강 필드 포함")
   void getMyBookings_uses_authenticated_user_id() throws Exception {
     // given
     Long userId = 1L;
-    BookingSummaryResponse response =
-        new BookingSummaryResponse(
+    BookingMySummaryResponse response =
+        new BookingMySummaryResponse(
             100L,
             "BOOK-1234",
             userId,
@@ -106,7 +106,12 @@ class BookingControllerTest {
             LocalDateTime.of(2026, 5, 22, 10, 30),
             null,
             null,
-            null);
+            null,
+            "오페라의 유령",
+            LocalDate.of(2026, 5, 22),
+            "서울 예술의전당 오페라극장",
+            "A-1",
+            150000L);
 
     given(
             bookingFacade.getMyBookings(
@@ -128,6 +133,11 @@ class BookingControllerTest {
         .andExpect(jsonPath("$.result[0].seat_id").value(3))
         .andExpect(jsonPath("$.result[0].booking_status").value("CONFIRMED"))
         .andExpect(jsonPath("$.result[0].confirmed_at").value("2026-05-22 10:30:00"))
+        .andExpect(jsonPath("$.result[0].performance_title").value("오페라의 유령"))
+        .andExpect(jsonPath("$.result[0].performance_date").value("2026-05-22"))
+        .andExpect(jsonPath("$.result[0].performance_address").value("서울 예술의전당 오페라극장"))
+        .andExpect(jsonPath("$.result[0].seat_number").value("A-1"))
+        .andExpect(jsonPath("$.result[0].payment_amount").value(150000))
         .andExpect(jsonPath("$.pagination_info.page_index").value(0))
         .andExpect(jsonPath("$.pagination_info.size").value(10))
         .andExpect(jsonPath("$.pagination_info.total_elements").value(1))

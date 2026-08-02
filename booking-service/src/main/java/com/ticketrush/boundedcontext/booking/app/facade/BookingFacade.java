@@ -3,6 +3,7 @@ package com.ticketrush.boundedcontext.booking.app.facade;
 import com.ticketrush.boundedcontext.booking.app.dto.request.BookingCreateRequest;
 import com.ticketrush.boundedcontext.booking.app.dto.response.BookingCountResponse;
 import com.ticketrush.boundedcontext.booking.app.dto.response.BookingDetailResponse;
+import com.ticketrush.boundedcontext.booking.app.dto.response.BookingMySummaryResponse;
 import com.ticketrush.boundedcontext.booking.app.dto.response.BookingPendingResponse;
 import com.ticketrush.boundedcontext.booking.app.dto.response.BookingSummaryResponse;
 import com.ticketrush.boundedcontext.booking.app.usecase.BookingAdminRetryRefundUseCase;
@@ -24,6 +25,8 @@ import com.ticketrush.boundedcontext.booking.out.apiclient.SeatRestClient;
 import com.ticketrush.boundedcontext.booking.out.apiclient.dto.PerformanceInfoResponse;
 import com.ticketrush.global.dto.request.OffsetPageRequest;
 import java.util.List;
+import java.util.Map;
+import java.util.stream.Collectors;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.domain.Page;
@@ -83,9 +86,31 @@ public class BookingFacade {
     return BookingDetailResponse.of(booking, performance, seatNumber);
   }
 
-  public Page<BookingSummaryResponse> getMyBookings(
+  /**
+   * 내 예매 목록 조회 (#560). 단건 조회와 같은 축으로 공연·좌석을 보강한다 — distinct 공연 묶음 조회 + 좌석 벌크 1회. 보강 실패는 각 클라이언트가
+   * 흡수해 해당 도메인 필드만 null이다(부분 응답).
+   */
+  public Page<BookingMySummaryResponse> getMyBookings(
       Long userId, BookingStatus bookingStatus, OffsetPageRequest pageRequest) {
-    return bookingGetMyBookingsUseCase.execute(userId, bookingStatus, pageRequest);
+    Page<BookingSummaryResponse> page =
+        bookingGetMyBookingsUseCase.execute(userId, bookingStatus, pageRequest);
+    List<BookingSummaryResponse> content = page.getContent();
+
+    Map<Long, PerformanceInfoResponse> performances =
+        performanceRestClient.getPerformances(
+            content.stream()
+                .map(BookingSummaryResponse::performanceId)
+                .collect(Collectors.toSet()));
+    Map<Long, String> seatNumbers =
+        seatRestClient.getSeatNumbers(
+            content.stream().map(BookingSummaryResponse::seatId).distinct().toList());
+
+    return page.map(
+        summary ->
+            BookingMySummaryResponse.from(
+                summary,
+                performances.get(summary.performanceId()),
+                seatNumbers.get(summary.seatId())));
   }
 
   public BookingCountResponse countMyBookings(Long userId, BookingStatus bookingStatus) {
