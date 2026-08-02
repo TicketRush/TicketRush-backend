@@ -24,7 +24,6 @@ import com.ticketrush.global.dto.request.OffsetPageRequest;
 import com.ticketrush.global.exception.BusinessException;
 import com.ticketrush.global.filter.GatewayHeaderFilter;
 import com.ticketrush.global.status.ErrorStatus;
-import java.nio.charset.StandardCharsets;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.LocalTime;
@@ -280,20 +279,25 @@ class BookingControllerTest {
     verifyNoInteractions(bookingFacade);
   }
 
+  /**
+   * 401 본문은 한글이라 응답이 UTF-8을 <b>명시적으로 선언</b>해야 한다. 선언하지 않으면 실제 서블릿 컨테이너가 기본값 ISO-8859-1로 써서 메시지가
+   * '?'로 파괴된다(로컬 시연에서 실제로 확인했다).
+   *
+   * <p>본문 바이트를 비교하는 방식으로는 이 회귀를 못 잡는다 — MockMvc의 가짜 응답은 컨테이너와 달리 기본 인코딩이 UTF-8이라 수정이 없어도 통과한다.
+   * 컨테이너와 무관하게 갈리는 지점은 응답이 charset을 선언했는지 여부뿐이라 그것을 검증한다.
+   */
   @Test
-  @DisplayName("401 본문의 한글 메시지가 깨지지 않는다 — charset 미지정 시 ISO-8859-1로 나가 '?'가 된다")
-  void unauthorized_response_body_is_utf8() throws Exception {
-    byte[] body =
+  @DisplayName("401 응답이 charset=UTF-8을 명시한다 — 미지정 시 컨테이너 기본값으로 한글이 파괴된다")
+  void unauthorized_response_declares_utf8_charset() throws Exception {
+    String contentType =
         mockMvc
             .perform(get("/api/v1/booking/me"))
             .andExpect(status().isUnauthorized())
             .andReturn()
             .getResponse()
-            .getContentAsByteArray();
+            .getContentType();
 
-    // jsonPath는 code(ASCII)만 봐서 이 회귀를 놓친다. 실제 바이트를 UTF-8로 읽어 메시지를 비교한다.
-    assertThat(new String(body, StandardCharsets.UTF_8))
-        .contains(ErrorStatus.UNAUTHORIZED.getMessage());
+    assertThat(contentType).containsIgnoringCase("charset=utf-8");
   }
 
   @Test
