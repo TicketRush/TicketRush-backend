@@ -13,12 +13,14 @@ import static org.mockito.Mockito.verifyNoInteractions;
 
 import com.ticketrush.boundedcontext.booking.app.dto.request.BookingCreateRequest;
 import com.ticketrush.boundedcontext.booking.app.dto.response.BookingCountResponse;
+import com.ticketrush.boundedcontext.booking.app.dto.response.BookingDetailResponse;
 import com.ticketrush.boundedcontext.booking.app.dto.response.BookingPendingResponse;
 import com.ticketrush.boundedcontext.booking.app.dto.response.BookingSummaryResponse;
 import com.ticketrush.boundedcontext.booking.app.usecase.BookingAdminRetryRefundUseCase;
 import com.ticketrush.boundedcontext.booking.app.usecase.BookingCancelMyBookingUseCase;
 import com.ticketrush.boundedcontext.booking.app.usecase.BookingCountUseCase;
 import com.ticketrush.boundedcontext.booking.app.usecase.BookingCreateUseCase;
+import com.ticketrush.boundedcontext.booking.app.usecase.BookingGetMyBookingUseCase;
 import com.ticketrush.boundedcontext.booking.app.usecase.BookingGetMyBookingsUseCase;
 import com.ticketrush.boundedcontext.booking.app.usecase.BookingGetRefundingStuckBookingsUseCase;
 import com.ticketrush.boundedcontext.booking.app.usecase.BookingIssueNumberUseCase;
@@ -27,11 +29,17 @@ import com.ticketrush.boundedcontext.booking.app.usecase.BookingValidateSeatAvai
 import com.ticketrush.boundedcontext.booking.app.usecase.BookingValidateTicketNotUsedUseCase;
 import com.ticketrush.boundedcontext.booking.domain.entity.Booking;
 import com.ticketrush.boundedcontext.booking.domain.types.BookingStatus;
+import com.ticketrush.boundedcontext.booking.out.apiclient.PerformanceRestClient;
 import com.ticketrush.boundedcontext.booking.out.apiclient.SeatRestClient;
+import com.ticketrush.boundedcontext.booking.out.apiclient.dto.PerformanceInfoResponse;
 import com.ticketrush.global.dto.request.OffsetPageRequest;
 import com.ticketrush.global.exception.BusinessException;
+import java.time.LocalDate;
 import java.time.LocalDateTime;
+import java.time.LocalTime;
 import java.util.List;
+import java.util.Map;
+import java.util.Optional;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -49,7 +57,9 @@ class BookingFacadeTest {
 
   @Mock private BookingIssueNumberUseCase bookingIssueNumberUseCase;
   @Mock private BookingCreateUseCase bookingCreateUseCase;
+  @Mock private BookingGetMyBookingUseCase bookingGetMyBookingUseCase;
   @Mock private BookingGetMyBookingsUseCase bookingGetMyBookingsUseCase;
+  @Mock private PerformanceRestClient performanceRestClient;
   @Mock private BookingCountUseCase bookingCountUseCase;
   @Mock private BookingCancelMyBookingUseCase bookingCancelMyBookingUseCase;
   @Mock private BookingValidateReferencesUseCase bookingValidateReferencesUseCase;
@@ -58,6 +68,87 @@ class BookingFacadeTest {
   @Mock private BookingValidateTicketNotUsedUseCase bookingValidateTicketNotUsedUseCase;
   @Mock private BookingAdminRetryRefundUseCase bookingAdminRetryRefundUseCase;
   @Mock private SeatRestClient seatRestClient;
+
+  private static Booking myBooking(Long userId, String bookingNumber) {
+    return Booking.builder()
+        .userId(userId)
+        .performanceId(2L)
+        .seatId(3L)
+        .bookingNumber(bookingNumber)
+        .bookingStatus(BookingStatus.CONFIRMED)
+        .build();
+  }
+
+  private static PerformanceInfoResponse performanceInfo() {
+    return new PerformanceInfoResponse(
+        "오페라의 유령", LocalDate.of(2026, 5, 22), LocalTime.of(19, 30), "서울 예술의전당 오페라극장", 150000L);
+  }
+
+  @Test
+  @DisplayName("성공: 단건 조회는 공연·좌석을 보강해 모든 필드를 채운다")
+  void getMyBooking_enriches_all_fields() {
+    // given
+    Long userId = 1L;
+    String bookingNumber = "X7B29-KLPW1";
+    given(bookingGetMyBookingUseCase.execute(userId, bookingNumber))
+        .willReturn(myBooking(userId, bookingNumber));
+    given(performanceRestClient.getPerformance(2L)).willReturn(Optional.of(performanceInfo()));
+    given(seatRestClient.getSeatNumbers(List.of(3L))).willReturn(Map.of(3L, "A-1"));
+
+    // when
+    BookingDetailResponse response = bookingFacade.getMyBooking(userId, bookingNumber);
+
+    // then
+    assertThat(response.bookingNumber()).isEqualTo(bookingNumber);
+    assertThat(response.performanceTitle()).isEqualTo("오페라의 유령");
+    assertThat(response.performanceDate()).isEqualTo(LocalDate.of(2026, 5, 22));
+    assertThat(response.performanceTime()).isEqualTo(LocalTime.of(19, 30));
+    assertThat(response.performanceAddress()).isEqualTo("서울 예술의전당 오페라극장");
+    assertThat(response.paymentAmount()).isEqualTo(150000L);
+    assertThat(response.seatNumber()).isEqualTo("A-1");
+  }
+
+  @Test
+  @DisplayName("부분 응답: 공연 조회 실패는 공연 필드·결제 금액만 비우고 좌석 번호는 남긴다 — 실패 격리")
+  void getMyBooking_isolates_performance_failure() {
+    // given
+    Long userId = 1L;
+    String bookingNumber = "X7B29-KLPW1";
+    given(bookingGetMyBookingUseCase.execute(userId, bookingNumber))
+        .willReturn(myBooking(userId, bookingNumber));
+    given(performanceRestClient.getPerformance(2L)).willReturn(Optional.empty());
+    given(seatRestClient.getSeatNumbers(List.of(3L))).willReturn(Map.of(3L, "A-1"));
+
+    // when
+    BookingDetailResponse response = bookingFacade.getMyBooking(userId, bookingNumber);
+
+    // then
+    assertThat(response.performanceTitle()).isNull();
+    assertThat(response.paymentAmount()).isNull();
+    assertThat(response.performanceId()).isEqualTo(2L); // 프론트 재조회 키는 유지
+    assertThat(response.seatNumber()).isEqualTo("A-1");
+    assertThat(response.bookingNumber()).isEqualTo(bookingNumber);
+  }
+
+  @Test
+  @DisplayName("부분 응답: 좌석 조회 실패는 좌석 번호만 비운다")
+  void getMyBooking_isolates_seat_failure() {
+    // given
+    Long userId = 1L;
+    String bookingNumber = "X7B29-KLPW1";
+    given(bookingGetMyBookingUseCase.execute(userId, bookingNumber))
+        .willReturn(myBooking(userId, bookingNumber));
+    given(performanceRestClient.getPerformance(2L)).willReturn(Optional.of(performanceInfo()));
+    given(seatRestClient.getSeatNumbers(List.of(3L))).willReturn(Map.of());
+
+    // when
+    BookingDetailResponse response = bookingFacade.getMyBooking(userId, bookingNumber);
+
+    // then
+    assertThat(response.seatNumber()).isNull();
+    assertThat(response.seatId()).isEqualTo(3L); // 프론트 재조회 키는 유지
+    assertThat(response.performanceTitle()).isEqualTo("오페라의 유령");
+  }
 
   @Test
   @DisplayName("성공: 참조 검증 후 예약번호를 발급하고 예매를 생성한다")
