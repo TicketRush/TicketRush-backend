@@ -1,5 +1,6 @@
 package com.ticketrush.boundedcontext.booking.in.api.v1;
 
+import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.BDDMockito.given;
 import static org.mockito.Mockito.verify;
@@ -23,6 +24,7 @@ import com.ticketrush.global.dto.request.OffsetPageRequest;
 import com.ticketrush.global.exception.BusinessException;
 import com.ticketrush.global.filter.GatewayHeaderFilter;
 import com.ticketrush.global.status.ErrorStatus;
+import java.nio.charset.StandardCharsets;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.LocalTime;
@@ -276,6 +278,22 @@ class BookingControllerTest {
         .andExpect(jsonPath("$.code").value(ErrorStatus.UNAUTHORIZED.getCode()));
 
     verifyNoInteractions(bookingFacade);
+  }
+
+  @Test
+  @DisplayName("401 본문의 한글 메시지가 깨지지 않는다 — charset 미지정 시 ISO-8859-1로 나가 '?'가 된다")
+  void unauthorized_response_body_is_utf8() throws Exception {
+    byte[] body =
+        mockMvc
+            .perform(get("/api/v1/booking/me"))
+            .andExpect(status().isUnauthorized())
+            .andReturn()
+            .getResponse()
+            .getContentAsByteArray();
+
+    // jsonPath는 code(ASCII)만 봐서 이 회귀를 놓친다. 실제 바이트를 UTF-8로 읽어 메시지를 비교한다.
+    assertThat(new String(body, StandardCharsets.UTF_8))
+        .contains(ErrorStatus.UNAUTHORIZED.getMessage());
   }
 
   @Test
