@@ -17,6 +17,7 @@ import com.ticketrush.boundedcontext.booking.app.usecase.BookingValidateSeatAvai
 import com.ticketrush.boundedcontext.booking.app.usecase.BookingValidateTicketNotUsedUseCase;
 import com.ticketrush.boundedcontext.booking.domain.entity.Booking;
 import com.ticketrush.boundedcontext.booking.domain.types.BookingStatus;
+import com.ticketrush.boundedcontext.booking.out.apiclient.SeatRestClient;
 import com.ticketrush.global.dto.request.OffsetPageRequest;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -33,6 +34,7 @@ public class BookingFacade {
   private final BookingGetMyBookingsUseCase bookingGetMyBookingsUseCase;
   private final BookingCountUseCase bookingCountUseCase;
   private final BookingCancelMyBookingUseCase bookingCancelMyBookingUseCase;
+  private final SeatRestClient seatRestClient;
   private final BookingValidateReferencesUseCase bookingValidateReferencesUseCase;
   private final BookingValidateSeatAvailableUseCase bookingValidateSeatAvailableUseCase;
   private final BookingValidateTicketNotUsedUseCase bookingValidateTicketNotUsedUseCase;
@@ -66,11 +68,27 @@ public class BookingFacade {
     return bookingCountUseCase.execute(userId, bookingStatus);
   }
 
+  /**
+   * 사용자의 예매 취소. 예매 상태로 경로가 갈린다 (#559).
+   *
+   * <ul>
+   *   <li><b>PENDING</b> — 결제 전 이탈이다. 즉시 CANCELED로 종결하고 선점 좌석을 반납한다.
+   *   <li><b>그 외(CONFIRMED)</b> — 기존 환불 플로우 그대로. CONFIRMED→REFUNDING 전이 후 환불 성공 이벤트에 좌석 반환을
+   *       매단다(#91).
+   * </ul>
+   *
+   * <p>좌석 반납을 취소 트랜잭션 <b>밖</b>에서 하는 것이 중요하다. seat가 되쏘는 {@code SeatHoldExpiredEvent}를 booking이 받아
+   * 예매를 EXPIRED로 전이시키려 하는데, CANCELED 커밋이 먼저 끝나 있어야 {@code WHERE bookingStatus = PENDING} 가드가 그것을
+   * no-op으로 막는다.
+   */
   public void cancelMyBooking(Long userId, String bookingNumber) {
     // 입장 완료 예매의 환불 차단 (#399). 소유권을 함께 검증해 비소유자에게 타인 예매의 입장 여부가 새지 않게 한다.
+    // PENDING은 환불이 성사될 수 없어 isRefundable()에서 제외되므로 ticket-service 왕복이 일어나지 않는다.
     bookingValidateTicketNotUsedUseCase.execute(userId, bookingNumber);
 
-    bookingCancelMyBookingUseCase.execute(userId, bookingNumber);
+    bookingCancelMyBookingUseCase
+        .execute(userId, bookingNumber)
+        .ifPresent(seatId -> seatRestClient.releaseHold(bookingNumber, seatId));
   }
 
   public Page<BookingSummaryResponse> getRefundFailedBookings(OffsetPageRequest pageRequest) {

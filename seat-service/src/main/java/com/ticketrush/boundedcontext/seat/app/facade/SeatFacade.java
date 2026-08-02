@@ -11,6 +11,7 @@ import com.ticketrush.boundedcontext.seat.app.usecase.SeatGetSeatMapUseCase;
 import com.ticketrush.boundedcontext.seat.app.usecase.SeatGetStatusCountsUseCase;
 import com.ticketrush.boundedcontext.seat.app.usecase.SeatHoldUseCase;
 import com.ticketrush.boundedcontext.seat.app.usecase.SeatLockUseCase;
+import com.ticketrush.boundedcontext.seat.app.usecase.SeatReleaseHoldUseCase;
 import com.ticketrush.boundedcontext.seat.app.usecase.SeatUnlockUseCase;
 import com.ticketrush.boundedcontext.seat.out.repository.SeatLayoutRepository;
 import com.ticketrush.boundedcontext.seat.out.repository.SeatMapCacheRepository;
@@ -36,6 +37,7 @@ public class SeatFacade {
   private final SeatGetNumbersUseCase seatGetNumbersUseCase;
   private final SeatCreateDefaultLayoutUseCase seatCreateDefaultLayoutUseCase;
   private final SeatConfirmSoldUseCase seatConfirmSoldUseCase;
+  private final SeatReleaseHoldUseCase seatReleaseHoldUseCase;
   private final SeatHoldUseCase seatHoldUseCase;
   private final SeatLockUseCase seatLockUseCase;
   private final SeatUnlockUseCase seatUnlockUseCase;
@@ -100,6 +102,11 @@ public class SeatFacade {
 
   public void confirmSold(String bookingNumber, Long seatId) {
     seatConfirmSoldUseCase.execute(bookingNumber, seatId);
+  }
+
+  /** PENDING 예매가 즉시 취소돼 선점 좌석을 만료 전에 되돌린다 (#559). */
+  public void releaseHold(String bookingNumber, Long seatId) {
+    seatReleaseHoldUseCase.execute(bookingNumber, seatId);
   }
 
   /**

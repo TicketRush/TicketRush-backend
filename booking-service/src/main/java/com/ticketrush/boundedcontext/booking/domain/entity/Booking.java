@@ -58,6 +58,14 @@ import lombok.NoArgsConstructor;
 @AttributeOverride(name = "id", column = @Column(name = "booking_id"))
 public class Booking extends AutoIdBaseEntity {
 
+  /**
+   * PENDING 예매가 결제를 기다리는 시간(분). 이 시간이 지나면 {@code BookingExpireUseCase}가 EXPIRED로 전이시킨다.
+   *
+   * <p>화면에 내리는 마감 시각({@link #paymentExpiresAt()})과 실제 만료 판정이 같은 값을 봐야 하므로 도메인에 둔다. 둘이 갈라지면 사용자가 보는
+   * 타이머와 서버의 만료가 어긋난다 (#559).
+   */
+  public static final int PAYMENT_WAIT_MINUTES = 5;
+
   @Column(name = "user_id", nullable = false)
   private Long userId;
 
@@ -112,6 +120,21 @@ public class Booking extends AutoIdBaseEntity {
 
   public void cancelPendingPayment() {
     cancelIfStatus(BookingStatus.PENDING);
+  }
+
+  /**
+   * PENDING 예매가 결제를 마쳐야 하는 시각. PENDING이 아니면 {@code null}이다 (#559).
+   *
+   * <p><b>seat의 {@code holdExpiredAt}과 값이 다르다.</b> 좌석 HOLD는 {@code BookingCreatedEvent}를 거쳐 비동기로
+   * 걸리므로 seat의 만료 시각은 Kafka 소비 지연만큼 이 값보다 늦다. 그런데 예매를 실제로 만료시키는 것은 {@code BookingExpireUseCase}이고 그
+   * 기준이 {@code createdAt + PAYMENT_WAIT_MINUTES}다. 즉 <b>이쪽이 실효 마감이자 보수적인 값</b>이며, seat 값을 화면에 쓰면
+   * 실제보다 늦은 시각을 보여 사용자가 결제 도중 예매를 잃는다.
+   */
+  public LocalDateTime paymentExpiresAt() {
+    if (this.bookingStatus != BookingStatus.PENDING) {
+      return null;
+    }
+    return getCreatedAt().plusMinutes(PAYMENT_WAIT_MINUTES);
   }
 
   /**

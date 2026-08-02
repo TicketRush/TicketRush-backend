@@ -27,6 +27,7 @@ import com.ticketrush.boundedcontext.booking.app.usecase.BookingValidateSeatAvai
 import com.ticketrush.boundedcontext.booking.app.usecase.BookingValidateTicketNotUsedUseCase;
 import com.ticketrush.boundedcontext.booking.domain.entity.Booking;
 import com.ticketrush.boundedcontext.booking.domain.types.BookingStatus;
+import com.ticketrush.boundedcontext.booking.out.apiclient.SeatRestClient;
 import com.ticketrush.global.dto.request.OffsetPageRequest;
 import com.ticketrush.global.exception.BusinessException;
 import java.time.LocalDateTime;
@@ -56,6 +57,7 @@ class BookingFacadeTest {
   @Mock private BookingGetRefundingStuckBookingsUseCase bookingGetRefundingStuckBookingsUseCase;
   @Mock private BookingValidateTicketNotUsedUseCase bookingValidateTicketNotUsedUseCase;
   @Mock private BookingAdminRetryRefundUseCase bookingAdminRetryRefundUseCase;
+  @Mock private SeatRestClient seatRestClient;
 
   @Test
   @DisplayName("성공: 참조 검증 후 예약번호를 발급하고 예매를 생성한다")
@@ -150,6 +152,7 @@ class BookingFacadeTest {
             BookingStatus.CONFIRMED,
             LocalDateTime.of(2026, 5, 22, 10, 30),
             null,
+            null,
             null);
 
     given(
@@ -197,7 +200,8 @@ class BookingFacadeTest {
             BookingStatus.REFUNDING,
             LocalDateTime.of(2026, 5, 22, 10, 30),
             null,
-            LocalDateTime.of(2026, 7, 13, 11, 0));
+            LocalDateTime.of(2026, 7, 13, 11, 0),
+            null);
 
     given(bookingGetRefundingStuckBookingsUseCase.execute(new OffsetPageRequest(0, 10)))
         .willReturn(new PageImpl<>(List.of(response)));
@@ -225,6 +229,29 @@ class BookingFacadeTest {
     InOrder inOrder = inOrder(bookingValidateTicketNotUsedUseCase, bookingCancelMyBookingUseCase);
     inOrder.verify(bookingValidateTicketNotUsedUseCase).execute(userId, bookingNumber);
     inOrder.verify(bookingCancelMyBookingUseCase).execute(userId, bookingNumber);
+
+    // PENDING이 아니었으므로 좌석 즉시 반납은 일어나지 않는다 (#559).
+    verifyNoInteractions(seatRestClient);
+  }
+
+  @Test
+  @DisplayName("성공: PENDING 즉시 취소로 좌석 ID가 돌아오면 seat-service에 반납을 요청한다 (#559)")
+  void cancelMyBooking_pending_releases_seat() {
+    // given
+    Long userId = 1L;
+    String bookingNumber = "BOOK-1234";
+    Long seatId = 3L;
+    given(bookingCancelMyBookingUseCase.execute(userId, bookingNumber))
+        .willReturn(java.util.Optional.of(seatId));
+
+    // when
+    bookingFacade.cancelMyBooking(userId, bookingNumber);
+
+    // then: 좌석 반납은 취소 커밋 '이후'여야 한다. seat가 되쏘는 SeatHoldExpiredEvent가 도착해도
+    // 이미 CANCELED라 EXPIRED로 뒤집히지 않게 하는 순서다.
+    InOrder inOrder = inOrder(bookingCancelMyBookingUseCase, seatRestClient);
+    inOrder.verify(bookingCancelMyBookingUseCase).execute(userId, bookingNumber);
+    inOrder.verify(seatRestClient).releaseHold(bookingNumber, seatId);
   }
 
   @Test
