@@ -2,7 +2,12 @@ package com.ticketrush.boundedcontext.booking.out.apiclient;
 
 import com.ticketrush.boundedcontext.booking.app.dto.request.SeatHoldReleaseRequest;
 import com.ticketrush.boundedcontext.booking.app.dto.request.SeatSoldConfirmRequest;
+import com.ticketrush.boundedcontext.booking.out.apiclient.dto.SeatNumberInfoResponse;
+import com.ticketrush.boundedcontext.booking.out.apiclient.dto.SeatNumbersApiResponse;
 import com.ticketrush.global.config.CustomSecurityProperties;
+import java.util.List;
+import java.util.Map;
+import java.util.stream.Collectors;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
@@ -65,6 +70,50 @@ public class SeatRestClient {
           bookingNumber,
           seatId,
           e);
+    }
+  }
+
+  /**
+   * 예매 조회 응답 보강용 좌석 번호 벌크 조회 (#560). seat-service의 <b>공개</b> API라 내부 토큰이 없다.
+   *
+   * <p><b>실패해도 예외를 밖으로 내지 않는다(부분 응답 정책).</b> 실패 시 빈 맵으로 수렴해 좌석 번호 필드만 null이 된다. 요청 seatId 중 하나라도
+   * 없으면 seat-service가 404(SEAT_NOT_FOUND)로 전체 실패시키므로 그때도 빈 맵이다 — 해당 페이지의 좌석 번호가 전부 비지만, 프론트는
+   * seatId로 재조회할 수 있다.
+   */
+  // ponytail: 공용 3s/10s 빈 재사용(요청당 1회 호출이라 곱해지지 않음) — 이 경로가 p99를 끌면 전용 1s/2s 빈 분리
+  public Map<Long, String> getSeatNumbers(List<Long> seatIds) {
+    if (seatIds.isEmpty()) {
+      return Map.of();
+    }
+
+    try {
+      SeatNumbersApiResponse response =
+          seatServiceRestClient
+              .get()
+              .uri(
+                  uriBuilder ->
+                      uriBuilder
+                          .path("/api/v1/seat/numbers")
+                          .queryParam(
+                              "seatIds",
+                              seatIds.stream()
+                                  .map(String::valueOf)
+                                  .collect(Collectors.joining(",")))
+                          .build())
+              .retrieve()
+              .body(SeatNumbersApiResponse.class);
+
+      if (response == null || response.result() == null) {
+        log.warn("[SeatRestClient] 좌석 번호 조회 200 응답이나 result가 비어 있음 seatIds={}", seatIds);
+        return Map.of();
+      }
+
+      return response.result().stream()
+          .collect(
+              Collectors.toMap(SeatNumberInfoResponse::seatId, SeatNumberInfoResponse::seatNumber));
+    } catch (RestClientException e) {
+      log.warn("[SeatRestClient] 좌석 번호 조회 실패, seat_number는 null로 응답합니다. seatIds={}", seatIds, e);
+      return Map.of();
     }
   }
 }

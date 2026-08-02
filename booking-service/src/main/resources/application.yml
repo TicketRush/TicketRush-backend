@@ -25,6 +25,12 @@ spring:
 service:
   seat:
     url: ${SEAT_SERVICE_URL:http://localhost:8086}
+  performance:
+    url: ${PERFORMANCE_SERVICE_URL:http://localhost:8083}
+    # 예매 조회 보강(공연 필드) 전용 (#560). 실패해도 부분 응답(null)으로 계속 가는 경로라 빨리 포기한다 —
+    # 목록 조회는 공연 수만큼 순차 호출이라 건당 예산이 그대로 곱해지므로 공용 예산(3s/10s)을 쓰지 않는다.
+    connect-timeout-ms: ${PERFORMANCE_HTTP_CONNECT_TIMEOUT_MS:1000}
+    read-timeout-ms: ${PERFORMANCE_HTTP_READ_TIMEOUT_MS:2000}
   ticket:
     url: ${TICKET_SERVICE_URL:http://localhost:8087}
     # 취소 경로의 입장권 판정 전용. 단일 행 조회이므로 공용 예산(3s/10s)을 쓰지 않는다 —
