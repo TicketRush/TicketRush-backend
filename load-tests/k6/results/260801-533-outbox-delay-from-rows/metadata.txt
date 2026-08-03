@@ -1,0 +1,155 @@
+# =============================================================================
+# #533 선결 조건 규명 — outbox 원본 행에서 릴레이 지연을 직접 잰다
+# 이 파일이 수치의 SSOT 다. report.md 와 어긋나면 이 파일이 옳다.
+# =============================================================================
+
+ISSUE=#533 (완료 조건 5개 중 "#403 의 1.25s 와 5 초 폴링의 불일치를 먼저 가린다" 만 처리)
+KIND=조회 회차 (부하 없음 / 배포 없음 / 새 계측 없음)
+EXECUTED_UTC=2026-07-31T18:17:00Z ~ 18:20:00Z
+EXECUTED_BY=DB 직접 조회 (k6 미사용)
+
+# -----------------------------------------------------------------------------
+# 방법
+# -----------------------------------------------------------------------------
+# outbox 테이블의 두 시각 차이가 곧 릴레이 대기 지연이다.
+#   created_at   = BookingCreateUseCase 트랜잭션에서 booking INSERT 와 한 커밋
+#                  (OutboxEventPublisher 가 활성 트랜잭션 밖 호출을 예외로 막는다)
+#   published_at = Kafka 발행 성공 콜백 (OutboxStatusTransition.markSuccess
+#                  -> OutboxEntity.markSent(LocalDateTime.now()))
+# retention 이 publishedAt < now-72h 인 SENT 만 지우므로(retention-hours: 72)
+# #528 회차(2026-07-30)의 행이 조회 시점에 아직 살아 있었다.
+METHOD=published_at - created_at (원본 행 전수, 히스토그램 근사 아님)
+QUERY_FILE=query.sql
+QUERY_OUTPUT=query-output.txt
+
+# -----------------------------------------------------------------------------
+# ⚠ 시간대 — 처음에 틀렸다가 0 행을 받았다
+# -----------------------------------------------------------------------------
+# MySQL 서버 프로세스는 KST 인데 created_at/published_at 은 JPA auditing 이 찍으므로
+# JVM TZ 를 따르고 그 컨테이너는 UTC 다. 쿼리의 시각 리터럴은 UTC 로 쓴다.
+TZ_MYSQL_PROCESS=KST        # docker exec ticketrush-mysql date -> Sat Aug 1 03:18:06 KST 2026
+TZ_MYSQL_SESSION=SYSTEM     # SELECT NOW() -> 2026-08-01 03:17:03 / UTC_TIMESTAMP() -> 2026-07-31 18:17:03
+TZ_EC2_HOST=UTC             # date -> Fri Jul 31 18:18:05 UTC 2026
+TZ_BOOKING_JVM=UTC          # docker exec booking-service date -> Fri Jul 31 06:18:05 PM UTC 2026
+TZ_STORED_COLUMNS=UTC       # 즉 created_at/published_at 은 UTC
+
+# -----------------------------------------------------------------------------
+# 대조 대상 회차 (창은 그 회차의 metadata.txt 에서 그대로 가져왔다)
+# -----------------------------------------------------------------------------
+REF_528_DIR=load-tests/k6/results/260730-528-sse-source-tag
+REF_528_RUN_A_UTC=2026-07-30T09:46:19Z ~ 2026-07-30T10:17:52Z
+REF_528_RUN_B2_UTC=2026-07-30T10:28:48Z ~ 2026-07-30T10:37:24Z
+REF_528_IMAGE_TAG=342a8ef5e910b6c2c55648fcd2b38dc5d8b7741a
+REF_403_DIR=load-tests/k6/results/260728-403-seat-counts-sse
+REF_403_IMAGE_TAG=1f2ed5d27ec7dd9cb92d72aba6b2e9b92a6ce110
+
+# -----------------------------------------------------------------------------
+# 데이터 생존 확인 (조회 시점 전체)
+# -----------------------------------------------------------------------------
+OUTBOX_BOOKING_SENT_TOTAL=159665
+OUTBOX_BOOKING_CREATED_RANGE=2026-07-29 04:53:41.590459 ~ 2026-07-31 16:15:15.455426
+OUTBOX_SEAT_SENT_TOTAL=80389
+OUTBOX_SEAT_CREATED_RANGE=2026-07-29 05:01:43.361788 ~ 2026-07-31 16:15:19.422054
+
+# 07-30 시간대별 (창 특정 전 탐색용. avg_ms = published_at - created_at)
+HOUR_0730_07_BOOKING=n 7000 / avg 42361.4 ms
+HOUR_0730_07_SEAT=n 7000 / avg 14398.7 ms
+HOUR_0730_09_BOOKING=n 6632 / avg 2568.7 ms
+HOUR_0730_09_SEAT=n 2543 / avg 2369.2 ms
+HOUR_0730_10_BOOKING=n 17457 / avg 2183.5 ms
+HOUR_0730_10_SEAT=n 9512 / avg 2502.9 ms
+
+# =============================================================================
+# 결과 1 — #528 RUN_A 창 (UTC 09:46:19 ~ 10:17:52)
+# =============================================================================
+RUN_A_BOOKING_N=17437
+RUN_A_BOOKING_MIN_MS=96.1
+RUN_A_BOOKING_AVG_MS=2371.2
+RUN_A_BOOKING_MAX_MS=6217.2
+RUN_A_BOOKING_SD_MS=1272.7
+RUN_A_BOOKING_SPAN_MS=6121.0
+RUN_A_BOOKING_P50_MS=2068.2
+RUN_A_BOOKING_P90_MS=4378.2
+RUN_A_BOOKING_P95_MS=4832.6
+RUN_A_BOOKING_P99_MS=5277.4
+
+RUN_A_SEAT_N=7935
+RUN_A_SEAT_MIN_MS=71.6
+RUN_A_SEAT_AVG_MS=2403.0
+RUN_A_SEAT_MAX_MS=5532.3
+RUN_A_SEAT_SD_MS=1335.4
+RUN_A_SEAT_SPAN_MS=5460.7
+
+# 500ms 버킷 (Booking, RUN_A). 합 = 17437 로 N 과 일치한다.
+BUCKET_0.0=341
+BUCKET_0.5=2084
+BUCKET_1.0=2599
+BUCKET_1.5=3265
+BUCKET_2.0=2219
+BUCKET_2.5=1959
+BUCKET_3.0=1363
+BUCKET_3.5=1071
+BUCKET_4.0=1043
+BUCKET_4.5=952
+BUCKET_5.0=466
+BUCKET_5.5=67
+BUCKET_6.0=8
+
+# =============================================================================
+# 결과 2 — #528 RUN_B2 창 (버스트, UTC 10:28:48 ~ 10:37:24)
+# =============================================================================
+RUN_B2_BOOKING_N=3543
+RUN_B2_BOOKING_MIN_MS=85.4
+RUN_B2_BOOKING_AVG_MS=2646.9
+RUN_B2_BOOKING_MAX_MS=5892.2
+RUN_B2_SEAT_N=969
+RUN_B2_SEAT_MIN_MS=95.6
+RUN_B2_SEAT_AVG_MS=2636.7
+RUN_B2_SEAT_MAX_MS=5767.6
+
+# =============================================================================
+# 판정 — 균등분포(0, 5s) 대조
+# =============================================================================
+UNIFORM_EXPECT_AVG_MS=2500        # 관측 2371.2 (-5.2%)
+UNIFORM_EXPECT_P95_MS=4750        # 관측 4832.6 (+1.7%)
+UNIFORM_EXPECT_SD_MS=1443         # 관측 1272.7 (-11.8%) = 5000/sqrt(12)
+VERDICT_POLLING_DOMINANT=확정. 폴링 주기가 전파 지연의 지배항이라는 #528 의 결론이 원본 데이터로 확인된다.
+VERDICT_NOT_PURE_UNIFORM=완전한 균등분포는 아니다. 피크가 1.5s 이고 왼쪽으로 치우쳤으며 span 이 주기보다 22% 크다.
+
+# =============================================================================
+# 판정 — #403 과의 "불일치"
+# =============================================================================
+# 세 값이 겹친다
+AVG_403_OVERALL=2.34 s            # k6-summary-sse.txt:42 (회차 전체)
+AVG_528_OVERALL=2.31 s            # 260730-528 metadata RUN_A_PROPAGATION_DIST
+AVG_OUTBOX_ROWS=2.371 s           # 이 회차 (원본 행 전수)
+
+# 1,250ms 의 정체
+SRC_1250MS=260728-403 metadata.txt:178-186 / stage-stats-sse.txt — "100 구독자 구간의
+           k6_sse_propagation_ms_p95(15초 시계열) 를 시간평균한 값". 구간최댓값은 1565ms 로 별도.
+P95_403_OVERALL=3.87 s            # 같은 회차의 전체 p95. 1.25s 는 회차 전체 값이 아니다.
+CENSORING_403=probe 63건 중 7건(11.1%) 이 20초 타임아웃으로 표본에서 절단됨
+CENSORING_528=63/63 무절단
+# -> 꼬리가 11% 잘린 분포의 구간별 p95 를 무절단 분포의 p95 와 비교한 것이다.
+
+# "#403 은 kafka 직발행이라 빨랐다" 가설은 기각된다
+PUBLISHER_403=outbox (IMAGE_TAG 1f2ed5d2 커밋의 booking/seat application.yml, batch-size 300)
+EVIDENCE_403_RELAY_RUNNING=timeseries-outbox-backlog-sse.json —
+                           booking-service:8090 max 119 / avg 54.6, seat-service:8090 max 89 / avg 21.3
+SCENARIO_UNCHANGED=load-test/scenarios/seat-sse-fanout.js 는 98df0933 이후 수정 커밋 없음
+                   (= #403 과 #528 이 같은 파일로 쟀다)
+
+VERDICT_403=불일치는 실재하지 않았다. 인용 축약에서 온 오독이다.
+            이로써 260730-528 report.md §7 의 "미해명으로 남긴다" 항목도 닫힌다.
+
+# =============================================================================
+# 이 회차가 처리하지 않은 것 (#533 잔여 완료 조건 4개)
+# =============================================================================
+REMAINING_1=fixedDelay 를 줄였을 때의 DB 폴링 비용 실측
+REMAINING_2=커밋 훅 즉시 트리거 대안 검토·기각 근거
+REMAINING_3=#528 과 같은 조건 재측정
+REMAINING_4=변경 범위(어느 서비스의 릴레이) 명시
+BLOCKER_1=주기는 @Scheduled(fixedDelay = 5000) 정수 리터럴이고 OutboxProperties 에 필드가 없다.
+          프로파일·docker-compose·.env 어디에도 오버라이드가 없다 -> 코드 변경 + 배포 필수.
+BLOCKER_2=lockAtLeastFor="3s" 가 3 초 바닥을 만든다. fixedDelay 만 낮추면 실효가 없다
+          (OutboxRelayScheduler.java:23-27 주석이 이미 경고).

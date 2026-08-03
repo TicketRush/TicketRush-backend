@@ -1,0 +1,69 @@
+# query.sql 실행 결과 원문 (2026-07-31T18:17Z ~ 18:20Z)
+# 실행: cat query.sql | tr -d '\r' | ssh ... 'docker exec -i ticketrush-mysql sh -c "exec mysql ..."'
+
+########## [0] 시간대 확인 ##########
+g_tz	s_tz	db_now	db_utc
+SYSTEM	SYSTEM	2026-08-01 03:17:03	2026-07-31 18:17:03
+
+# 컨테이너별 date (별도 실행)
+host:        Fri Jul 31 18:18:05 UTC 2026
+booking JVM: Fri Jul 31 06:18:05 PM UTC 2026
+mysql:       Sat Aug  1 03:18:06 KST 2026
+# -> MySQL 프로세스만 KST. created_at/published_at 은 JVM(UTC) 기준으로 저장된다.
+
+########## [0] 데이터 생존 확인 ##########
+aggregate_type	status	n	min_created	max_created	min_published	max_published
+Booking	SENT	159665	2026-07-29 04:53:41.590459	2026-07-31 16:15:15.455426	2026-07-29 04:53:46.012065	2026-07-31 16:15:17.842965
+Seat	SENT	80389	2026-07-29 05:01:43.361788	2026-07-31 16:15:19.422054	2026-07-29 05:01:48.489560	2026-07-31 16:15:20.846839
+
+########## [0] 07-30 시간대별 탐색 ##########
+hr	aggregate_type	n	avg_ms
+07-30 07	Booking	7000	42361.4
+07-30 07	Seat	7000	14398.7
+07-30 09	Booking	6632	2568.7
+07-30 09	Seat	2543	2369.2
+07-30 10	Booking	17457	2183.5
+07-30 10	Seat	9512	2502.9
+# -> #528 회차(09~10시 UTC) 구간이 avg 2.2~2.6초로 드러난다.
+#    07시대의 42.4초는 다른 회차의 적체 구간이다(이 회차의 분석 대상 아님).
+
+########## [1] 요약 통계 — #528 RUN_A 창 (UTC 09:46:19 ~ 10:17:52) ##########
+win	n	min_ms	avg_ms	max_ms	sd_ms	span_ms
+RUN_A-Booking	17437	96.1	2371.2	6217.2	1272.7	6121.0
+RUN_A-Seat	7935	71.6	2403.0	5532.3	1335.4	5460.7
+
+########## [2] 분포 — 500ms 버킷 (Booking, RUN_A) ##########
+bucket_s	n
+0.0	341
+0.5	2084
+1.0	2599
+1.5	3265
+2.0	2219
+2.5	1959
+3.0	1363
+3.5	1071
+4.0	1043
+4.5	952
+5.0	466
+5.5	67
+6.0	8
+# 합 17437 = [1] 의 n 과 일치한다.
+
+########## [3] 퍼센타일 (Booking, RUN_A) ##########
+p50_ms	p90_ms	p95_ms	p99_ms
+2068.2	4378.2	4832.6	5277.4
+
+########## [4] 버스트 구간 — #528 RUN_B2 (UTC 10:28:48 ~ 10:37:24) ##########
+win	n	min_ms	avg_ms	max_ms
+RUN_B2-Booking	3543	85.4	2646.9	5892.2
+RUN_B2-Seat	969	95.6	2636.7	5767.6
+# -> 2,000건 일괄 만료를 주입한 구간에서도 outbox 는 5~6초 안에 처리했다.
+#    #528 이 버스트에서 본 p95 8.98s / max 19.4s 는 outbox 가 아니라 SSE 큐 쪽이며,
+#    #532 가 이미 그렇게 결론내고 역압으로 처리했다.
+
+########## 참고 — 처음에 틀렸던 실행 ##########
+# MySQL 이 KST 를 보고하기에 창을 KST(18:46:19~19:17:52)로 옮겼더니 전부 0 행이었다.
+win	n	min_ms	avg_ms	max_ms	sd_ms	span_ms
+RUN_A-Booking	0	NULL	NULL	NULL	NULL	NULL
+RUN_A-Seat	0	NULL	NULL	NULL	NULL	NULL
+# created_at 은 JPA auditing 이 JVM TZ 로 찍는다. MySQL 세션 TZ 와 무관하다.

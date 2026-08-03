@@ -3,6 +3,7 @@ package com.ticketrush.global.config;
 import com.ticketrush.global.filter.GatewayHeaderFilter;
 import com.ticketrush.global.security.InternalApiTokenFilter;
 import com.ticketrush.global.status.ErrorStatus;
+import java.nio.charset.StandardCharsets;
 import lombok.RequiredArgsConstructor;
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
 import org.springframework.boot.security.autoconfigure.SecurityProperties;
@@ -49,6 +50,8 @@ public class SecurityConfig {
                         (request, response, authException) -> {
                           response.setStatus(ErrorStatus.UNAUTHORIZED.getHttpStatus().value());
                           response.setContentType(MediaType.APPLICATION_JSON_VALUE);
+                          // 지정하지 않으면 서블릿 기본값 ISO-8859-1로 나가 한글 메시지가 '?'로 파괴된다.
+                          response.setCharacterEncoding(StandardCharsets.UTF_8.name());
                           response
                               .getWriter()
                               .write(
@@ -63,6 +66,8 @@ public class SecurityConfig {
                         (request, response, accessDeniedException) -> {
                           response.setStatus(ErrorStatus.FORBIDDEN.getHttpStatus().value());
                           response.setContentType(MediaType.APPLICATION_JSON_VALUE);
+                          // 위와 같은 이유. 403 본문도 한글이라 charset을 지정해야 한다.
+                          response.setCharacterEncoding(StandardCharsets.UTF_8.name());
                           response
                               .getWriter()
                               .write(

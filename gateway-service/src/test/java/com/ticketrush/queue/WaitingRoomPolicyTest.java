@@ -95,9 +95,20 @@ class WaitingRoomPolicyTest {
     private static final int MAX = 60;
 
     @Test
-    @DisplayName("ADR 0009 §3의 값을 재현한다 — N=10,000 · R=400이면 25초")
+    @DisplayName("ADR 0009 §3의 운영값을 재현한다 — N=10,000 · R=400이면 25초")
     void adr_수치() {
+      // 운영 기본값이다(application.yml status-rps-capacity). #549 B-2 가 이 값으로 유효 회차를 냈다.
       assertThat(WaitingRoomPolicy.pollSeconds(10_000L, 400, MIN, MAX)).isEqualTo(25);
+    }
+
+    @Test
+    @DisplayName("R=1,400이면 8초 — 저부하에서만 성립하는 값이라 기본값으로 쓰지 않는다")
+    void 저부하_실측값() {
+      // #546 이 커넥션 약 1,600 조건에서 잰 값이다. 산식 자체는 이 입력에도 맞게 동작해야 하므로
+      // 함께 고정하되, R 이 동시 커넥션의 함수라 폴링 주기의 입력으로는 쓸 수 없다 —
+      // #549 B-1 에서 커넥션 16,701 일 때 실제 용량은 450 RPS 였고, T=8초는 수요를 용량의
+      // 2.8배로 만들어 회차를 무효로 끌고 갔다(queue_status_unavailable 15.55%).
+      assertThat(WaitingRoomPolicy.pollSeconds(10_000L, 1_400, MIN, MAX)).isEqualTo(8);
     }
 
     @Test

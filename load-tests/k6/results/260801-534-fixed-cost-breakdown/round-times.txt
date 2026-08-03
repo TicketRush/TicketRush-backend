@@ -1,0 +1,22 @@
+# #534 회차·계단 구간 시각 (전부 UTC). timeseries-*.json 을 읽을 때의 기준선이다.
+# 계단 경계는 seat-counts-server-rps 시계열에서 직접 읽었다(rate[1m] 이라 경계가 흐릿하므로
+# 구간평균은 앞뒤 30초를 잘라낸다 — #529 와 같은 방식).
+
+ROUND_A  LTC-A 600석 (perf_id 28)   2026-07-31T18:23:34Z ~ 18:39:00Z
+  계단 40    18:24:19Z ~ 18:29:19Z
+  계단 80    18:29:19Z ~ 18:34:19Z      구간평균 창: 18:29:49Z ~ 18:33:49Z
+  계단 160   18:34:19Z ~ 18:39:00Z      구간평균 창: 18:34:49Z ~ 18:38:49Z
+
+ROUND_B  LTC-B 3,000석 (perf_id 29)  2026-07-31T18:41:20Z ~ 18:56:41Z
+  계단 40    18:42:05Z ~ 18:47:05Z
+  계단 80    18:47:05Z ~ 18:52:05Z      구간평균 창: 18:47:35Z ~ 18:51:35Z
+  계단 160   18:52:05Z ~ 18:56:41Z      구간평균 창: 18:52:35Z ~ 18:56:35Z
+
+# 회차 사이 seat-service stop/start (18:39:00Z ~ 18:41:20Z)
+#   - 부하 후 RSS 미회수 대응
+#   - JFR dumponexit 로 회차 A 녹화를 확정하고 회수
+#   ⚠ docker compose up -d 는 컨테이너를 recreate 하므로 /tmp 의 .jfr 이 사라진다.
+#     stop -> docker cp -> start 여야 한다.
+
+# JFR 원복: 18:57Z, deploy/jfr.override.yml 삭제 후 --force-recreate.
+#   docker inspect 로 JAVA_TOOL_OPTIONS 가 원래 4개 옵션만 남은 것을 확인했다.

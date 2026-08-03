@@ -67,6 +67,7 @@ class SeatFacadeTest {
         null,
         null,
         null,
+        null,
         seatMapCacheRepository,
         new JsonConverter(JsonMapper.builder().build()));
   }

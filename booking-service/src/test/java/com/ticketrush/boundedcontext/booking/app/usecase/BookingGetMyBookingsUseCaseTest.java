@@ -31,6 +31,41 @@ class BookingGetMyBookingsUseCaseTest {
   @Mock private BookingRepository bookingRepository;
 
   @Test
+  @DisplayName("성공: PENDING 목록은 결제 마감 시각(createdAt + 5분)을 함께 내린다 (#559)")
+  void execute_pending_includes_payment_deadline() {
+    // given: 새로고침 후 타이머를 복원하려면 조회 응답에 마감 시각이 있어야 한다.
+    // seat의 holdExpiredAt은 좌석 선점이 비동기라 이 값보다 늦으므로 쓰지 않는다.
+    Long userId = 1L;
+    LocalDateTime createdAt = LocalDateTime.of(2026, 8, 2, 10, 30);
+    Booking booking =
+        Booking.builder()
+            .userId(userId)
+            .performanceId(2L)
+            .seatId(3L)
+            .bookingNumber("X7B29-KLPW1")
+            .bookingStatus(BookingStatus.PENDING)
+            .build();
+    ReflectionTestUtils.setField(booking, "id", 100L);
+    ReflectionTestUtils.setField(booking, "createdAt", createdAt);
+
+    given(
+            bookingRepository.findByUserIdAndBookingStatus(
+                userId,
+                BookingStatus.PENDING,
+                PageRequest.of(0, 10, Sort.by(Sort.Order.desc("createdAt")))))
+        .willReturn(new PageImpl<>(List.of(booking), PageRequest.of(0, 10), 1));
+
+    // when
+    Page<BookingSummaryResponse> result =
+        bookingGetMyBookingsUseCase.execute(
+            userId, BookingStatus.PENDING, new OffsetPageRequest(0, 10));
+
+    // then
+    assertThat(result.getContent().getFirst().expiresAt())
+        .isEqualTo(createdAt.plusMinutes(Booking.PAYMENT_WAIT_MINUTES));
+  }
+
+  @Test
   @DisplayName("성공: 회원 ID와 상태로 예매 요약 목록을 조회한다")
   void execute_success() {
     // given

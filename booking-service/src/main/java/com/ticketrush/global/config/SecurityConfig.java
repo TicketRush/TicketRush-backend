@@ -3,12 +3,12 @@ package com.ticketrush.global.config;
 import com.ticketrush.global.filter.GatewayHeaderFilter;
 import com.ticketrush.global.security.InternalApiTokenFilter;
 import com.ticketrush.global.status.ErrorStatus;
+import java.nio.charset.StandardCharsets;
 import lombok.RequiredArgsConstructor;
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
 import org.springframework.boot.security.autoconfigure.SecurityProperties;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
-import org.springframework.http.HttpMethod;
 import org.springframework.http.MediaType;
 import org.springframework.security.config.annotation.method.configuration.EnableMethodSecurity;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
@@ -51,6 +51,8 @@ public class SecurityConfig {
                     (request, response, authException) -> {
                       response.setStatus(ErrorStatus.UNAUTHORIZED.getHttpStatus().value());
                       response.setContentType(MediaType.APPLICATION_JSON_VALUE);
+                      // 지정하지 않으면 서블릿 기본값 ISO-8859-1로 나가 한글 메시지가 '?'로 파괴된다.
+                      response.setCharacterEncoding(StandardCharsets.UTF_8.name());
                       response
                           .getWriter()
                           .write(
@@ -61,13 +63,14 @@ public class SecurityConfig {
         .authorizeHttpRequests(
             auth ->
                 auth.requestMatchers("/v3/api-docs/**", "/swagger-ui/**", "/swagger-ui.html")
-                    // TODO: 인증 이후 허용 범위 수정
                     .permitAll()
                     .requestMatchers("/api/v1/internal/booking/**")
                     .hasRole("INTERNAL")
                     .requestMatchers("/api/v1/booking/admin/**")
                     .hasRole("ADMIN")
-                    .requestMatchers(HttpMethod.POST, "/api/v1/booking")
+                    // BookingController의 모든 엔드포인트가 user.getUserId()를 즉시 참조한다 — 개별 매처(기존 POST 하나)로
+                    // 열거하면 빠진 경로가 미인증 통과 후 NPE(500)로 터진다(#560). internal·admin은 앞 매처가 선점한다.
+                    .requestMatchers("/api/v1/booking/**")
                     .authenticated()
                     .anyRequest()
                     .permitAll());

@@ -56,7 +56,7 @@ public class UserController {
     return ApiResponse.onSuccess(SuccessStatus.OK, response);
   }
 
-  @Operation(summary = "내 회원 정보 조회", description = "로그인한 회원의 이름, 이메일, 가입일을 조회합니다.")
+  @Operation(summary = "내 회원 정보 조회", description = "로그인한 회원의 이름, 이메일, 가입일, 권한을 조회합니다.")
   @GetMapping("/me")
   public ResponseEntity<ApiResponse<UserMeResponse>> getMyInfo(
       @AuthenticationPrincipal CustomUserDetails userDetails) {
