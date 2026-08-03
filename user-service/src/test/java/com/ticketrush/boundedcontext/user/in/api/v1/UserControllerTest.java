@@ -37,7 +37,13 @@ class UserControllerTest {
 
   private static final String GATEWAY_TOKEN = "test-gateway-token";
   private static final Long USER_ID = 5L;
+
+  // Gateway 인증 헤더에서 사용하는 권한
   private static final String USER_ROLE = "USER";
+
+  // /api/v1/user/me 응답에서 사용하는 실제 사용자 권한
+  private static final String RESPONSE_ROLE = "MEMBER";
+
   private static final String USER_NAME = "테스트유저";
   private static final String USER_EMAIL = "test@test.com";
   private static final LocalDateTime CREATED_AT = LocalDateTime.of(2026, 5, 30, 7, 0);
@@ -51,7 +57,7 @@ class UserControllerTest {
   void getMyInfo_success() throws Exception {
     // given
     given(userFacade.getMyInfo(USER_ID))
-        .willReturn(new UserMeResponse(USER_NAME, USER_EMAIL, CREATED_AT));
+        .willReturn(new UserMeResponse(USER_NAME, USER_EMAIL, CREATED_AT, RESPONSE_ROLE));
 
     // when & then
     mockMvc
@@ -67,6 +73,7 @@ class UserControllerTest {
         .andExpect(jsonPath("$.message").value("성공입니다."))
         .andExpect(jsonPath("$.result.name").value(USER_NAME))
         .andExpect(jsonPath("$.result.email").value(USER_EMAIL))
-        .andExpect(jsonPath("$.result.created_at").exists());
+        .andExpect(jsonPath("$.result.created_at").exists())
+        .andExpect(jsonPath("$.result.role").value(RESPONSE_ROLE));
   }
 }
