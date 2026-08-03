@@ -22,6 +22,7 @@ public class GetUserMeUseCase {
             .findById(userId)
             .orElseThrow(() -> new BusinessException(ErrorStatus.USER_NOT_FOUND));
 
-    return new UserMeResponse(user.getName(), user.getEmail(), user.getCreatedAt());
+    return new UserMeResponse(
+        user.getName(), user.getEmail(), user.getCreatedAt(), user.getUserRole().name());
   }
 }
