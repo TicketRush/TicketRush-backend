@@ -203,6 +203,8 @@ public enum ErrorStatus {
       HttpStatus.SERVICE_UNAVAILABLE, "PAYMENT_503_001", "PG사와 통신에 실패했습니다."),
   PAYMENT_TICKET_COMMUNICATION_FAILED(
       HttpStatus.SERVICE_UNAVAILABLE, "PAYMENT_503_002", "입장권 정보 조회에 실패했습니다. 잠시 후 다시 시도해 주세요."),
+  PAYMENT_BOOKING_COMMUNICATION_FAILED(
+      HttpStatus.SERVICE_UNAVAILABLE, "PAYMENT_503_003", "예매 정보 조회에 실패했습니다. 잠시 후 다시 시도해 주세요."),
 
   // Ticket 400
   TICKET_QR_INVALID(HttpStatus.BAD_REQUEST, "TICKET_400_001", "유효하지 않은 QR입니다."),

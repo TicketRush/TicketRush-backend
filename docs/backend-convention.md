@@ -169,9 +169,10 @@ GitHub 마크다운은 `~텍스트~`를 **취소선**으로 렌더링합니다. 
     * `<name>` 은 호출 대상 서비스의 **단축명**(`-service` 접미사 제외): `auth`, `user`, `seat` 등
     * 값은 **환경변수 오버라이드** 형태: `${<NAME>_SERVICE_URL:http://localhost:<port>}`
     * 예: `service.auth.url: ${AUTH_SERVICE_URL:http://localhost:8082}`
-* **공통 타임아웃 키:** 모듈당 호출 대상이 1개이므로 모듈 공통 1쌍으로 둡니다.
+* **공통 타임아웃 키:** 호출 대상이 1개인 모듈은 모듈 공통 1쌍으로 둡니다.
     * `service.http.connect-timeout-ms: ${SERVICE_HTTP_CONNECT_TIMEOUT_MS:3000}`
     * `service.http.read-timeout-ms: ${SERVICE_HTTP_READ_TIMEOUT_MS:10000}`
+* **호출 대상이 2개 이상인 모듈은 대상별 키(`service.<name>.connect-timeout-ms` / `read-timeout-ms`)를 둡니다.** 위 공통 1쌍은 "모듈당 대상 1개"를 전제로 한 단축이며, 대상이 늘면 그 전제가 깨집니다. 대상마다 지연 특성과 실패 시 정책(fail-open/fail-closed)이 달라 한쪽만 조일 수 있어야 합니다. 예: payment-service 는 ticket(취소 경로 판정)과 booking(결제 확정 전 상태 확인, [#490](https://github.com/TicketRush/TicketRush-backend/issues/490))을 각각 호출하므로 `service.ticket.*` / `service.booking.*` 로 나눕니다.
 * **타임아웃 적용:** `RestClient` 빈은 공통 모듈의 `RestClientFactorySupport.withTimeouts(connectMs, readMs)`(`common/.../global/config`)로 생성한 `ClientHttpRequestFactory` 를 반드시 적용합니다. 타임아웃 미설정 시 상대 서비스 지연이 Kafka 컨슈머 스레드 등을 장시간 블로킹할 수 있습니다.
 * **타임아웃 값은 실측 근거가 있으면 서비스별로 낮출 수 있습니다.** 위 3000/10000 은 근거가 없을 때의 출발점이지 상한이 아닙니다. read-timeout 은 곧 요청당 톰캣 스레드 점유 시간이라 값이 클수록 상대 서비스 지연이 이쪽 스레드 고갈로 번지기 쉽습니다. 낮출 때는 **근거가 된 실측치를 yml 주석에 남깁니다**(예: ticket-service 는 #402 실측 왕복 3.20ms 를 근거로 1000/1000, [#496](https://github.com/TicketRush/TicketRush-backend/issues/496)).
 

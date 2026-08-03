@@ -66,4 +66,27 @@ public class RestClientConfig {
         .requestFactory(RestClientFactorySupport.withTimeouts(connectTimeoutMs, readTimeoutMs))
         .build();
   }
+
+  /**
+   * 결제 확정 경로의 예매 상태 판정 전용 클라이언트 (#490). 단일 행 조회 하나라 ticket 클라이언트와 같은 짧은 예산을 쓴다.
+   *
+   * <p>URL이 비면 <b>기동을 실패시킨다.</b> {@code env_file}로 빈 값이 주입되면 변수는 "정의됨"이라 {@code
+   * ${BOOKING_SERVICE_URL:...}}의 기본값 대체가 일어나지 않는데, 이 클라이언트는 fail-closed라 그 상태가 곧 <b>결제 확정 전건
+   * 503</b>이 된다. 런타임에 조용히 새는 것보다 기동 시점에 드러나는 편이 낫다(toss 클라이언트와 같은 규율).
+   */
+  @Bean
+  public RestClient bookingServiceRestClient(
+      @Value("${service.booking.url:}") String bookingServiceUrl,
+      @Value("${service.booking.connect-timeout-ms:1000}") long connectTimeoutMs,
+      @Value("${service.booking.read-timeout-ms:1000}") long readTimeoutMs) {
+    if (!StringUtils.hasText(bookingServiceUrl)) {
+      throw new IllegalStateException(
+          "service.booking.url 이 비어있습니다. BOOKING_SERVICE_URL 환경변수를 "
+              + "booking-service '직접' 주소로 설정하세요(게이트웨이는 내부 API를 라우팅하지 않습니다).");
+    }
+    return RestClient.builder()
+        .baseUrl(bookingServiceUrl)
+        .requestFactory(RestClientFactorySupport.withTimeouts(connectTimeoutMs, readTimeoutMs))
+        .build();
+  }
 }
