@@ -61,7 +61,7 @@ public class TokenReissueUseCase {
 
   private String validateRole(String role) {
     if (!"MEMBER".equals(role) && !"ADMIN".equals(role)) {
-      throw new IllegalArgumentException("지원하지 않는 사용자 역할입니다: " + role);
+      throw new BusinessException(ErrorStatus.BAD_REQUEST, "지원하지 않는 사용자 역할입니다: " + role);
     }
 
     return role;

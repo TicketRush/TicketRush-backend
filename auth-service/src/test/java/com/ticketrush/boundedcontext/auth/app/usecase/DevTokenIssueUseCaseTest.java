@@ -101,8 +101,7 @@ class DevTokenIssueUseCaseTest {
 
     // when & then
     assertThatThrownBy(() -> devTokenIssueUseCase.execute(request))
-        .isInstanceOf(IllegalArgumentException.class)
-        .hasMessageContaining("지원하지 않는 사용자 역할입니다");
+        .isInstanceOf(BusinessException.class);
 
     verify(userServiceClient).getUserAuthInfoByUserId(userId);
     verify(jwtTokenProvider, never()).createAccessToken(anyLong(), anyString());

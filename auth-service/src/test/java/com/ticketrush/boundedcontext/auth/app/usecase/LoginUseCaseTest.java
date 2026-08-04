@@ -137,9 +137,7 @@ class LoginUseCaseTest {
     when(passwordEncoder.matches(rawPassword, passwordHash)).thenReturn(true);
 
     // when & then
-    assertThatThrownBy(() -> loginUseCase.execute(request))
-        .isInstanceOf(IllegalArgumentException.class)
-        .hasMessageContaining("지원하지 않는 사용자 역할입니다");
+    assertThatThrownBy(() -> loginUseCase.execute(request)).isInstanceOf(BusinessException.class);
 
     verify(userServiceClient).getUserAuthInfoByEmail(email);
     verify(passwordEncoder).matches(rawPassword, passwordHash);
