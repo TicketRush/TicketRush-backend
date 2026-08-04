@@ -24,6 +24,7 @@ import com.ticketrush.boundedcontext.booking.app.usecase.BookingAdminRetryRefund
 import com.ticketrush.boundedcontext.booking.app.usecase.BookingCancelMyBookingUseCase;
 import com.ticketrush.boundedcontext.booking.app.usecase.BookingCountUseCase;
 import com.ticketrush.boundedcontext.booking.app.usecase.BookingCreateUseCase;
+import com.ticketrush.boundedcontext.booking.app.usecase.BookingGetAdminBookingUseCase;
 import com.ticketrush.boundedcontext.booking.app.usecase.BookingGetAdminBookingsUseCase;
 import com.ticketrush.boundedcontext.booking.app.usecase.BookingGetAdminStatsUseCase;
 import com.ticketrush.boundedcontext.booking.app.usecase.BookingGetMyBookingDetailUseCase;
@@ -78,6 +79,7 @@ class BookingFacadeTest {
   @Mock private BookingAdminRetryRefundUseCase bookingAdminRetryRefundUseCase;
   @Mock private SeatRestClient seatRestClient;
   @Mock private BookingGetAdminBookingsUseCase bookingGetAdminBookingsUseCase;
+  @Mock private BookingGetAdminBookingUseCase bookingGetAdminBookingUseCase;
   @Mock private BookingGetAdminStatsUseCase bookingGetAdminStatsUseCase;
   @Mock private BookingAdminRefundUseCase bookingAdminRefundUseCase;
   @Mock private UserRestClient userRestClient;
@@ -586,6 +588,48 @@ class BookingFacadeTest {
 
     // then
     BookingAdminSummaryResponse response = page.getContent().get(0);
+    assertThat(response.bookerName()).isNull();
+    assertThat(response.bookerEmail()).isNull();
+    assertThat(response.userId()).isEqualTo(5L); // 프론트 재조회 키는 남는다
+    assertThat(response.performanceTitle()).isEqualTo("오페라의 유령");
+    assertThat(response.seatNumber()).isEqualTo("A-1");
+  }
+
+  @Test
+  @DisplayName("성공: 관리자 단건 조회도 공연·좌석·예매자 세 축을 보강한다")
+  void getAdminBooking_enriches_all_three_axes() {
+    // given: 좌석 관리자 화면이 booking_number로 예매자를 조합하는 경로 (#562)
+    Booking booking = confirmedAdminBooking(5L, 2L, 3L);
+    given(bookingGetAdminBookingUseCase.execute("BK-5")).willReturn(booking);
+    given(performanceRestClient.getPerformance(2L)).willReturn(Optional.of(performanceInfo()));
+    given(seatRestClient.getSeatNumbers(List.of(3L))).willReturn(Map.of(3L, "A-1"));
+    given(userRestClient.getUsers(List.of(5L)))
+        .willReturn(Map.of(5L, new UserSummaryInfoResponse(5L, "김소희", "user@example.com")));
+
+    // when
+    BookingAdminSummaryResponse response = bookingFacade.getAdminBooking(ADMIN_ID, "BK-5");
+
+    // then
+    assertThat(response.bookingNumber()).isEqualTo("BK-5");
+    assertThat(response.performanceTitle()).isEqualTo("오페라의 유령");
+    assertThat(response.seatNumber()).isEqualTo("A-1");
+    assertThat(response.bookerName()).isEqualTo("김소희");
+    assertThat(response.paymentAmount()).isEqualTo(150000L);
+  }
+
+  @Test
+  @DisplayName("성공: 관리자 단건 조회에서 예매자 조회가 실패해도 그 필드만 비고 나머지는 살아 있다")
+  void getAdminBooking_isolates_user_failure() {
+    // given: user-service만 실패해 빈 맵을 돌려준다(부분 응답)
+    given(bookingGetAdminBookingUseCase.execute("BK-5")).willReturn(adminBooking(5L, 2L, 3L));
+    given(performanceRestClient.getPerformance(2L)).willReturn(Optional.of(performanceInfo()));
+    given(seatRestClient.getSeatNumbers(List.of(3L))).willReturn(Map.of(3L, "A-1"));
+    given(userRestClient.getUsers(List.of(5L))).willReturn(Map.of());
+
+    // when
+    BookingAdminSummaryResponse response = bookingFacade.getAdminBooking(ADMIN_ID, "BK-5");
+
+    // then
     assertThat(response.bookerName()).isNull();
     assertThat(response.bookerEmail()).isNull();
     assertThat(response.userId()).isEqualTo(5L); // 프론트 재조회 키는 남는다
