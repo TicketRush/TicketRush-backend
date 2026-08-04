@@ -1,11 +1,15 @@
 package com.ticketrush.boundedcontext.seat.app.facade;
 
+import com.ticketrush.boundedcontext.seat.app.dto.response.SeatAdminMonitoringResponse;
+import com.ticketrush.boundedcontext.seat.app.dto.response.SeatAdminSeatDetailResponse;
 import com.ticketrush.boundedcontext.seat.app.dto.response.SeatMapItemResponse;
 import com.ticketrush.boundedcontext.seat.app.dto.response.SeatNumberResponse;
 import com.ticketrush.boundedcontext.seat.app.dto.response.SeatStatusCountsResponse;
 import com.ticketrush.boundedcontext.seat.app.support.SeatStatusStreamSubscriber;
+import com.ticketrush.boundedcontext.seat.app.usecase.SeatAdminForceReleaseHoldUseCase;
 import com.ticketrush.boundedcontext.seat.app.usecase.SeatConfirmSoldUseCase;
 import com.ticketrush.boundedcontext.seat.app.usecase.SeatCreateDefaultLayoutUseCase;
+import com.ticketrush.boundedcontext.seat.app.usecase.SeatGetAdminSeatDetailUseCase;
 import com.ticketrush.boundedcontext.seat.app.usecase.SeatGetNumbersUseCase;
 import com.ticketrush.boundedcontext.seat.app.usecase.SeatGetSeatMapUseCase;
 import com.ticketrush.boundedcontext.seat.app.usecase.SeatGetStatusCountsUseCase;
@@ -35,6 +39,8 @@ public class SeatFacade {
   private final SeatGetStatusCountsUseCase seatGetStatusCountsUseCase;
   private final SeatGetSeatMapUseCase seatGetSeatMapUseCase;
   private final SeatGetNumbersUseCase seatGetNumbersUseCase;
+  private final SeatGetAdminSeatDetailUseCase seatGetAdminSeatDetailUseCase;
+  private final SeatAdminForceReleaseHoldUseCase seatAdminForceReleaseHoldUseCase;
   private final SeatCreateDefaultLayoutUseCase seatCreateDefaultLayoutUseCase;
   private final SeatConfirmSoldUseCase seatConfirmSoldUseCase;
   private final SeatReleaseHoldUseCase seatReleaseHoldUseCase;
@@ -77,6 +83,28 @@ public class SeatFacade {
 
   public List<SeatNumberResponse> getSeatNumbers(List<Long> seatIds) {
     return seatGetNumbersUseCase.execute(seatIds);
+  }
+
+  /**
+   * 관리자 좌석 현황 모니터링 (#562). 요약과 좌석 맵을 한 응답으로 묶는다.
+   *
+   * <p><b>좌석 맵 캐시({@link #getPerformanceSeatMap})를 경유하지 않는다.</b> 그 캐시는 TTL 30초인데 관리자 화면의 갱신 정책이
+   * "새로고침 버튼·관리자 작업 실행·좌석 선택"이라, 관리자가 방금 강제 해제한 좌석이 최대 30초간 HOLD로 보이는 것은 그대로 결함이 된다. 캐시가 막으려던 것은
+   * 오픈런 트래픽의 CPU 비용인데(#469) 관리자 경로는 그 규모가 아니다.
+   */
+  public SeatAdminMonitoringResponse getAdminMonitoring(Long performanceId) {
+    return new SeatAdminMonitoringResponse(
+        seatGetStatusCountsUseCase.execute(performanceId),
+        seatGetSeatMapUseCase.execute(performanceId));
+  }
+
+  public SeatAdminSeatDetailResponse getAdminSeatDetail(Long performanceId, Long seatId) {
+    return seatGetAdminSeatDetailUseCase.execute(performanceId, seatId);
+  }
+
+  /** 관리자의 HOLD 좌석 강제 해제 (#562). 예매 정합은 유스케이스가 발행하는 {@code SeatHoldExpiredEvent}가 맡는다. */
+  public void forceReleaseHold(Long adminId, Long performanceId, Long seatId) {
+    seatAdminForceReleaseHoldUseCase.execute(adminId, performanceId, seatId);
   }
 
   public SeatStatusCountsResponse getPerformanceSeatStatusCounts(Long performanceId) {

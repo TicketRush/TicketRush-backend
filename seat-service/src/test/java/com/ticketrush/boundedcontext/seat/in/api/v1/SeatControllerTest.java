@@ -11,6 +11,7 @@ import com.ticketrush.boundedcontext.seat.app.dto.response.SeatStatusCountsRespo
 import com.ticketrush.boundedcontext.seat.app.facade.SeatFacade;
 import com.ticketrush.global.config.CustomSecurityProperties;
 import com.ticketrush.global.config.SecurityConfig;
+import com.ticketrush.global.filter.GatewayHeaderFilter;
 import com.ticketrush.support.WebMvcSliceTest;
 import java.util.List;
 import org.junit.jupiter.api.DisplayName;
@@ -18,12 +19,14 @@ import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.context.annotation.Import;
 import org.springframework.security.test.context.support.WithMockUser;
+import org.springframework.test.context.TestPropertySource;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
 
 @WebMvcSliceTest(SeatController.class)
-@Import({SecurityConfig.class, CustomSecurityProperties.class})
+@Import({SecurityConfig.class, CustomSecurityProperties.class, GatewayHeaderFilter.class})
+@TestPropertySource(properties = "gateway.internal-token=test-token")
 class SeatControllerTest {
 
   @Autowired private MockMvc mockMvc;

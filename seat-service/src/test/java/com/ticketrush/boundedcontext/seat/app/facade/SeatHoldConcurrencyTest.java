@@ -142,12 +142,14 @@ class SeatHoldConcurrencyTest {
                 meterRegistry),
             meterRegistry);
 
-    // ponytail: SeatFacade의 생성자 13개 중 홀드 경로가 쓰는 4개만 채우고 나머지 9개는 null로 둔다.
+    // ponytail: SeatFacade의 생성자 인자 중 홀드 경로가 쓰는 4개만 채우고 나머지는 null로 둔다.
     //           @Import + @MockitoBean 7개보다 짧고, 타입이 전부 달라 오배치는 컴파일러가 잡는다.
     //           EventPublisher도 람다 — Outbox 테이블도 Kafka도 필요 없고 호출 횟수가 곧 차단 수다
     //           (Mockito verify는 멀티스레드 카운팅에서 신뢰도가 낮다).
     seatFacade =
         new SeatFacade(
+            null,
+            null,
             null,
             null,
             null,

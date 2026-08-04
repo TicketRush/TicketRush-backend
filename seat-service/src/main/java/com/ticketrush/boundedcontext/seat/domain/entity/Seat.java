@@ -93,6 +93,15 @@ import lombok.NoArgsConstructor;
 @AttributeOverride(name = "id", column = @Column(name = "seat_id"))
 public class Seat extends AutoIdBaseEntity {
 
+  /**
+   * 좌석 선점 유지 시간(분). {@code SeatLockUseCase}가 Redis 락 TTL과 {@code holdExpiredAt}을 이 값으로 함께 정한다.
+   *
+   * <p><b>도메인에 두는 이유</b>는 {@code Booking.PAYMENT_WAIT_MINUTES}(#559)와 같다 — 선점 시작 시각을 별도 컬럼 없이
+   * {@code holdExpiredAt - TTL}로 유도하는 곳(관리자 좌석 상세, #562)이 생겼고, TTL이 두 곳에서 갈라지면 관리자 화면의 "예약 시작 시간"이
+   * 실제와 어긋난다.
+   */
+  public static final int HOLD_TTL_MINUTES = 5;
+
   @Column(nullable = false)
   private Long seatLayoutId;
 

@@ -1,6 +1,7 @@
 package com.ticketrush.boundedcontext.seat.app.usecase;
 
 import com.ticketrush.boundedcontext.seat.domain.constant.SeatLockKey;
+import com.ticketrush.boundedcontext.seat.domain.entity.Seat;
 import com.ticketrush.global.constants.MetricNames;
 import io.micrometer.core.instrument.Counter;
 import io.micrometer.core.instrument.MeterRegistry;
@@ -21,7 +22,9 @@ public class SeatLockUseCase {
   private final RedissonClient redissonClient;
   private final MeterRegistry meterRegistry;
 
-  private static final int LOCK_TTL_MINUTES = 5;
+  // 선점 유지 시간의 SSOT는 도메인이다(#562). 관리자 좌석 상세가 holdExpiredAt - TTL로 선점 시작 시각을 유도하므로,
+  // 여기에 사본을 두면 두 값이 갈라진 순간 화면의 "예약 시작 시간"이 조용히 틀어진다.
+  private static final int LOCK_TTL_MINUTES = Seat.HOLD_TTL_MINUTES;
 
   public Optional<LocalDateTime> execute(Long seatId, Long userId) {
     String lockKey = SeatLockKey.of(seatId);

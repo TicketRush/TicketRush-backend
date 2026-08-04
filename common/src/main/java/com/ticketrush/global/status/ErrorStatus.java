@@ -115,6 +115,11 @@ public enum ErrorStatus {
   // 해제됐거나 다른 예매가 쥐고 있어, 결제는 끝났는데 좌석이 없는 상태다 — SEAT_409_001 로 뭉개면
   // 호출자가 정상 중복으로 읽고 삼킨다.
   SEAT_CONFIRM_NOT_OWNED(HttpStatus.CONFLICT, "SEAT_409_003", "해당 예매의 좌석이 아니어서 판매 확정할 수 없습니다."),
+  // 관리자 강제 해제 전용(#562). 해제 경로들(만료 리스너·스케줄러·즉시 취소)이 비HOLD 좌석을 조용한 no-op으로
+  // 넘기는 것과 갈린다 — 그쪽은 호출자가 이미 결과를 확정한 뒤라 되돌릴 것이 없지만, 관리자는 버튼을 누른
+  // 결과를 화면에서 알아야 한다. 이미 해제됐거나 판매된 좌석을 성공으로 응답하면 관리자가 자기 조작이 먹혔다고
+  // 오해한다.
+  SEAT_NOT_HELD(HttpStatus.CONFLICT, "SEAT_409_004", "선점 중인 좌석이 아니어서 강제 해제할 수 없습니다."),
 
   // Performance 400
   PERFORMANCE_MAIN_IMAGE_MISSING(HttpStatus.BAD_REQUEST, "PERFORMANCE_400_001", "메인 이미지는 필수입니다."),
