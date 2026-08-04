@@ -34,9 +34,12 @@ import org.springframework.stereotype.Component;
  * 방지)이 타 예매의 좌석을 건드리지 않는다.
  *
  * <p><b>티켓 사용 여부를 보지 않는다.</b> 결제 취소 API({@code PaymentCancelUseCase})는 USED 면 환불을 막지만(#416), 그 가드는
- * <i>사용자가 요청한 취소</i>의 계약이다. 여기서 같은 가드를 걸면 USED 건이 환불도 못 받고 {@code refundFailedAt} 도 없이 남아 관리자 재환불
- * API({@code BOOKING_REFUND_RETRY_NOT_ALLOWED})까지 봉쇄된다 — 사고 건에서 복구 수단을 빼앗는 셈이다. 좌석 재판매 위험도 여기엔 없다(이
- * 예매의 좌석이 아니라 ABA 교차검증이 막는다).
+ * <i>사용자가 요청한 취소</i>의 계약이다. 이 경로는 시스템이 자기 사고를 되돌리는 것이라 계약이 다르다. 가드를 걸면 USED 건은 환불이 시도조차 되지 않는데, 관리자
+ * 재환불 API 역시 입장한 예매를 거부하므로({@code BookingValidateTicketNotUsedUseCase#executeForAdmin}) 남는 복구 수단이
+ * 수동 DB 조작뿐이 된다. 가드가 없으면 최소한 자동 환불이 시도되고 대개 성공한다.
+ *
+ * <p>좌석 재판매 위험은 여기엔 없다 — 이 예매의 좌석이 아니라 {@code bookingNumber} ABA 교차검증이 막는다. ADR 0005 가 트레이드오프로 적어둔
+ * "실제로 착석한 좌석이 재판매 가능해진다"는 사용자 취소 경로의 이야기다.
  *
  * <p><b>Inbox(#110) 미사용 근거</b>: {@code InboxService.runIfFirst} 는 {@code @Transactional} 로 트랜잭션을 열고
  * 콜백을 그 안에서 실행하는데, PG 취소는 외부 왕복이라 트랜잭션에 들일 수 없다({@code RefundRequestedEventListener} 와 같은 이유). 멱등은
@@ -90,7 +93,8 @@ public class SeatConfirmFailedEventListener {
     } catch (BusinessException e) {
       handleBusinessFailure(e, envelope, event, ack);
     } catch (Exception e) {
-      // 역직렬화 실패 등 대상 식별 불가 또는 일시(인프라) 실패 → 재시도→DLT 로 보존한다(#269).
+      // 일시(인프라) 실패 → 재시도→DLT 로 보존한다(#269). 역직렬화 실패는 DeserializationException 이
+      // BusinessException 하위라 위 분기가 먼저 잡지만, 거기서도 결정적 거절이 아니라 rethrow 된다.
       // 이 토픽의 DLT 는 곧 "환불되지 않은 과금 건"이라 다른 DLT 보다 운영 우선순위가 높다.
       log.warn(
           "좌석 확정 실패 보상 처리 중 일시적 오류. 재시도합니다. eventId: {}, bookingId: {}",

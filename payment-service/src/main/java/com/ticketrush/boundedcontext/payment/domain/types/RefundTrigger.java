@@ -1,5 +1,6 @@
 package com.ticketrush.boundedcontext.payment.domain.types;
 
+import java.util.Locale;
 import lombok.AllArgsConstructor;
 import lombok.Getter;
 
@@ -23,7 +24,8 @@ public enum RefundTrigger {
 
   private final String reason;
 
+  /* 로케일에 따라 값이 달라지면 안 되는 태그다(tr_TR 은 I 를 dotless ı 로 내린다). */
   public String tag() {
-    return name().toLowerCase();
+    return name().toLowerCase(Locale.ROOT);
   }
 }
