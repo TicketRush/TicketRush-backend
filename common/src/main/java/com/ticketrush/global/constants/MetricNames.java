@@ -49,10 +49,12 @@ public class MetricNames {
   // 결제 확정 전 예매 상태 동기 확인이 PG 승인을 차단한 횟수(#490). 이 가드가 막는 건은 원래
   // "과금됐는데 좌석이 없는" 상태로 끝나던 것이라, 차단 건수가 곧 방지한 사고 건수다. 로그로는
   // 대량 만료 구간의 규모를 집계할 수 없어 이 카운터가 유일한 관측 축이다(서킷브레이커 미도입).
-  // reason 태그는 세 갈래이며 모두 유한 집합이다 — booking-service BookingStatus 이름(상태 때문에
+  // reason 태그는 네 갈래이며 모두 유한 집합이다 — booking-service BookingStatus 이름(상태 때문에
   // 막힌 건), unknown(모르는 상태 문자열·null), lookup_failed/not_found(상태 판정에 도달하지 못하고
-  // 조회 단계에서 막힌 건). 마지막 갈래를 함께 세지 않으면 booking 장애로 결제가 전건 거부되는
-  // 구간에서 이 카운터가 0으로 평평해 장애가 관측되지 않는다.
+  // 조회 단계에서 막힌 건), owner_mismatch/owner_unknown(소유자 대조에서 막힌 건, #572). 세 번째
+  // 갈래를 함께 세지 않으면 booking 장애로 결제가 전건 거부되는 구간에서 이 카운터가 0으로 평평해
+  // 장애가 관측되지 않는다. 네 번째 갈래는 응답이 "예매 없음"·"통신 실패"로 동일화돼 있어(#572)
+  // 이 태그가 소유자 차단을 구분하는 유일한 축이다.
   public static final String PAYMENT_CONFIRM_BOOKING_GUARD_BLOCKED =
       "ticketrush.payment.confirm.booking_guard.blocked";
 

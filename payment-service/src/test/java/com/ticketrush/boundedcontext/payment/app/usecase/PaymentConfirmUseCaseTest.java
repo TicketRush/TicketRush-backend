@@ -47,6 +47,9 @@ import org.mockito.junit.jupiter.MockitoExtension;
 @ExtendWith(MockitoExtension.class)
 class PaymentConfirmUseCaseTest {
 
+  /** 픽스처가 세우는 예매의 소유자. 모든 기존 케이스가 이 값으로 결제를 요청한다. */
+  private static final Long DEFAULT_OWNER_ID = 10L;
+
   @Mock private PaymentRepository paymentRepository;
   @Mock private PaymentApprovalClientRouter paymentApprovalClientRouter;
   @Mock private PaymentEventPublisher paymentEventPublisher;
@@ -79,10 +82,26 @@ class PaymentConfirmUseCaseTest {
    * 통과하는 상황이 이 가드(#490)가 실제로 겨냥한 창이다.
    */
   private void givenPreConfirmGuards(Long bookingId, String bookingStatus) {
+    givenPreConfirmGuards(bookingId, DEFAULT_OWNER_ID, bookingStatus);
+  }
+
+  /**
+   * 예매 소유자까지 지정해야 하는 케이스(#572)를 위한 오버로드.
+   *
+   * <p>기본 오버로드는 소유자를 {@link #DEFAULT_OWNER_ID}로 고정하고 모든 기존 케이스가 그 값으로 요청하므로, 소유자 가드는 기존 케이스의 판정에
+   * 영향을 주지 않는다.
+   */
+  private void givenPreConfirmGuards(Long bookingId, Long ownerUserId, String bookingStatus) {
     given(paymentRepository.existsByBookingIdAndStatus(bookingId, PaymentStatus.COMPLETED))
         .willReturn(false);
     given(bookingRestClient.getBooking(bookingId))
-        .willReturn(new BookingInfoResponse(bookingId, 10L, bookingStatus));
+        .willReturn(new BookingInfoResponse(bookingId, ownerUserId, bookingStatus));
+  }
+
+  private double guardBlockedCount(String reason) {
+    return meterRegistry
+        .counter(MetricNames.PAYMENT_CONFIRM_BOOKING_GUARD_BLOCKED, MetricNames.TAG_REASON, reason)
+        .count();
   }
 
   @Test
@@ -659,6 +678,79 @@ class PaymentConfirmUseCaseTest {
                     "lookup_failed")
                 .count())
         .isEqualTo(1.0);
+  }
+
+  @Test
+  @DisplayName("예매 소유자가 아니면 BOOKING_404_001로 막고 PG 승인·저장·이벤트가 모두 없다")
+  void execute_fail_when_booking_owner_mismatch() {
+    // given: 인증 주체(99L)와 예매 소유자(10L)가 다르다. 상태는 정상(PENDING)이라 소유자 가드만이 이 요청을 막는다.
+    Long requesterId = 99L;
+    Long bookingId = 100L;
+    PaymentConfirmRequest request =
+        new PaymentConfirmRequest(bookingId, 200L, PaymentProvider.TOSS, 55_000L, "pgKey_xyz");
+
+    givenPreConfirmGuards(bookingId, DEFAULT_OWNER_ID, "PENDING");
+
+    // when & then: 남의 예매 존재가 새지 않도록 "없는 예매"와 같은 응답으로 수렴한다.
+    assertThatThrownBy(() -> paymentConfirmUseCase.execute(requesterId, request))
+        .isInstanceOf(BusinessException.class)
+        .extracting("errorStatus")
+        .isEqualTo(ErrorStatus.BOOKING_NOT_FOUND);
+
+    // 과금·귀속이 시작조차 되지 않아야 한다. 하나라도 새면 이 이슈가 막으려던 결과가 그대로 만들어진다.
+    verify(paymentApprovalClientRouter, never()).approve(any());
+    verify(paymentRepository, never()).saveAndFlush(any(Payment.class));
+    verify(paymentEventPublisher, never())
+        .publishConfirmed(any(), any(), any(), any(), any(), any());
+    // 응답이 "예매 없음"으로 동일화됐으므로 소유자 차단을 구분하는 축은 이 태그뿐이다.
+    assertThat(guardBlockedCount("owner_mismatch")).isEqualTo(1.0);
+  }
+
+  @Test
+  @DisplayName("남의 예매가 EXPIRED여도 404로 막는다 — 상태를 먼저 보면 예매의 존재와 상태가 함께 샌다")
+  void execute_fail_when_owner_mismatch_precedes_status_check() {
+    // given: 소유자도 다르고 상태도 결제 불가(EXPIRED)라, 어느 가드가 먼저 끊는지가 응답으로 드러난다.
+    Long requesterId = 99L;
+    Long bookingId = 100L;
+    PaymentConfirmRequest request =
+        new PaymentConfirmRequest(bookingId, 200L, PaymentProvider.TOSS, 55_000L, "pgKey_xyz");
+
+    givenPreConfirmGuards(bookingId, DEFAULT_OWNER_ID, "EXPIRED");
+
+    // when & then: BOOKING_EXPIRED("만료된 예매입니다")가 나가면 남의 예매가 존재하고 만료됐다는 사실이 새어 나간다.
+    assertThatThrownBy(() -> paymentConfirmUseCase.execute(requesterId, request))
+        .isInstanceOf(BusinessException.class)
+        .extracting("errorStatus")
+        .isEqualTo(ErrorStatus.BOOKING_NOT_FOUND);
+
+    verify(paymentApprovalClientRouter, never()).approve(any());
+    // 상태 갈래로는 세지 않는다 — 소유자 대조가 먼저 끊었기 때문이다. 순서가 뒤집히면 이 단언이 깨진다.
+    assertThat(guardBlockedCount("EXPIRED")).isEqualTo(0.0);
+    assertThat(guardBlockedCount("owner_mismatch")).isEqualTo(1.0);
+  }
+
+  @Test
+  @DisplayName("예매 응답에 소유자가 없으면 503으로 끊는다 — 계약 결함을 '예매 없음'으로 감추지 않는다")
+  void execute_fail_when_booking_owner_unknown() {
+    // given: booking이 user_id 필드를 바꾸거나 지우면 ignoreUnknown 매핑이라 예외 없이 조용히 null이 된다.
+    Long requesterId = 99L;
+    Long bookingId = 100L;
+    PaymentConfirmRequest request =
+        new PaymentConfirmRequest(bookingId, 200L, PaymentProvider.TOSS, 55_000L, "pgKey_xyz");
+
+    givenPreConfirmGuards(bookingId, null, "PENDING");
+
+    // when & then: 대조가 불가능한 것이지 예매가 없는 게 아니다. 404로 접으면 전건 실패가 예매 데이터 문제로 오진단된다.
+    assertThatThrownBy(() -> paymentConfirmUseCase.execute(requesterId, request))
+        .isInstanceOf(BusinessException.class)
+        .extracting("errorStatus")
+        .isEqualTo(ErrorStatus.PAYMENT_BOOKING_COMMUNICATION_FAILED);
+
+    verify(paymentApprovalClientRouter, never()).approve(any());
+    verify(paymentRepository, never()).saveAndFlush(any(Payment.class));
+    // 사용자 오류(owner_mismatch)와 갈라 세야 배포 사고가 사용자 오류 시계열에 묻히지 않는다.
+    assertThat(guardBlockedCount("owner_unknown")).isEqualTo(1.0);
+    assertThat(guardBlockedCount("owner_mismatch")).isEqualTo(0.0);
   }
 
   @Test
