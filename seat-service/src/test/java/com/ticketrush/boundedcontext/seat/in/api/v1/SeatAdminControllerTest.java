@@ -45,6 +45,7 @@ class SeatAdminControllerTest {
   private static final Long PERFORMANCE_ID = 1L;
   private static final Long SEAT_ID = 100L;
   private static final Long ADMIN_ID = 42L;
+  private static final String BOOKING_NUMBER = "X7B29-KLPW1";
 
   @Autowired private MockMvc mockMvc;
 
@@ -151,12 +152,26 @@ class SeatAdminControllerTest {
     mockMvc
         .perform(
             asAdmin(
-                delete(
-                    "/api/v1/seat/admin/{performanceId}/{seatId}/hold", PERFORMANCE_ID, SEAT_ID)))
+                delete("/api/v1/seat/admin/{performanceId}/{seatId}/hold", PERFORMANCE_ID, SEAT_ID)
+                    .param("bookingNumber", BOOKING_NUMBER)))
         .andExpect(status().isOk())
         .andExpect(jsonPath("$.is_success").value(true));
 
-    verify(seatFacade).forceReleaseHold(ADMIN_ID, PERFORMANCE_ID, SEAT_ID);
+    verify(seatFacade).forceReleaseHold(ADMIN_ID, PERFORMANCE_ID, SEAT_ID, BOOKING_NUMBER);
+  }
+
+  @Test
+  @DisplayName("예매 번호 없이 강제 해제를 요청하면 파사드에 닿기 전에 거절된다")
+  void forceReleaseHold_requires_booking_number() throws Exception {
+    // given: 전제조건이 선택이면 '안 보내면 무검사'가 사실상 기본값이 되어 가드가 무력해진다 (#562)
+    mockMvc
+        .perform(
+            asAdmin(
+                delete(
+                    "/api/v1/seat/admin/{performanceId}/{seatId}/hold", PERFORMANCE_ID, SEAT_ID)))
+        .andExpect(status().isBadRequest());
+
+    verifyNoInteractions(seatFacade);
   }
 
   @ParameterizedTest(name = "{0}")
@@ -167,14 +182,14 @@ class SeatAdminControllerTest {
     // given
     willThrow(new BusinessException(errorStatus))
         .given(seatFacade)
-        .forceReleaseHold(ADMIN_ID, PERFORMANCE_ID, SEAT_ID);
+        .forceReleaseHold(ADMIN_ID, PERFORMANCE_ID, SEAT_ID, BOOKING_NUMBER);
 
     // when & then
     mockMvc
         .perform(
             asAdmin(
-                delete(
-                    "/api/v1/seat/admin/{performanceId}/{seatId}/hold", PERFORMANCE_ID, SEAT_ID)))
+                delete("/api/v1/seat/admin/{performanceId}/{seatId}/hold", PERFORMANCE_ID, SEAT_ID)
+                    .param("bookingNumber", BOOKING_NUMBER)))
         .andExpect(status().isConflict())
         .andExpect(jsonPath("$.is_success").value(false))
         .andExpect(jsonPath("$.code").value(errorStatus.getCode()));
@@ -218,8 +233,8 @@ class SeatAdminControllerTest {
     mockMvc
         .perform(
             asUser(
-                delete(
-                    "/api/v1/seat/admin/{performanceId}/{seatId}/hold", PERFORMANCE_ID, SEAT_ID)))
+                delete("/api/v1/seat/admin/{performanceId}/{seatId}/hold", PERFORMANCE_ID, SEAT_ID)
+                    .param("bookingNumber", BOOKING_NUMBER)))
         .andExpect(status().isForbidden());
 
     verifyNoInteractions(seatFacade);

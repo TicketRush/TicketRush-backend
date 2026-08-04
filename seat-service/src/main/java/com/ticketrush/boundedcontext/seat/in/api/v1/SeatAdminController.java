@@ -9,6 +9,7 @@ import com.ticketrush.global.status.SuccessStatus;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.tags.Tag;
+import jakarta.validation.constraints.NotBlank;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
@@ -18,6 +19,7 @@ import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 @Tag(name = "Seat Admin", description = "좌석 관리자 API")
@@ -88,9 +90,14 @@ public class SeatAdminController {
           실패하고 자동 환불 보상으로 이어집니다. 예매 상태는 응답에서 추론하지 말고 예매 목록을 다시 조회해 확인하십시오.
           사용자가 스스로 취소한 경우(CANCELED)와는 상태로 구분됩니다.
 
+          **화면에서 본 예매 번호를 `bookingNumber`로 함께 보내야 합니다.** 좌석을 쥔 예매가 그 값과 다르면
+          `SEAT_409_006`으로 거절합니다. 관리자 화면은 수동 갱신이라 목록을 조회한 시점과 버튼을 누르는 시점 사이가
+          길 수 있는데, 그 사이 원래 선점이 만료되고 다른 사용자가 같은 좌석을 다시 선점하면 화면에 보이지 않는 제3자의
+          예매를 종결시키게 됩니다. 거절되면 좌석을 다시 조회해 **새 선점자를 확인한 뒤** 다시 실행하십시오.
+
           거절 사유는 코드로 구분됩니다. 이미 해제된 좌석은 `SEAT_409_004`, 판매 완료 좌석은 `SEAT_409_005`(환불로
-          처리해야 합니다), 요청 처리 중 결제 확정·재선점으로 선점이 바뀐 경우는 `SEAT_409_006`(다시 조회한 뒤
-          재시도하면 됩니다)입니다.
+          처리해야 합니다), 예매 번호가 어긋나거나 요청 처리 중 결제 확정·재선점으로 선점이 바뀐 경우는
+          `SEAT_409_006`(다시 조회한 뒤 재시도하면 됩니다)입니다.
 
           **판매 완료 좌석은 이 API의 대상이 아닙니다.** 결제된 좌석을 되돌리는 것은 환불이며
           `POST /api/v1/booking/admin/{bookingNumber}/refund`가 담당합니다. 좌석은 환불이 성공한 뒤 자동으로 반환됩니다.
@@ -99,8 +106,15 @@ public class SeatAdminController {
   public ResponseEntity<ApiResponse<Void>> forceReleaseHold(
       @AuthenticationPrincipal CustomUserDetails admin,
       @Parameter(description = "공연 ID") @PathVariable Long performanceId,
-      @Parameter(description = "좌석 ID") @PathVariable Long seatId) {
-    seatFacade.forceReleaseHold(admin.getUserId(), performanceId, seatId);
+      @Parameter(description = "좌석 ID") @PathVariable Long seatId,
+      // 사실상 필수다. required=true로 두지 않는 이유는 응답 코드 때문이다 — 누락 시 던져지는
+      // MissingServletRequestParameterException은 전역 핸들러에 매핑돼 있지 않아 500으로 나간다.
+      // required=false로 받아 @NotBlank(클래스의 @Validated가 발화)에 걸리게 하면 400으로 응답한다.
+      @Parameter(description = "좌석 상세 조회에서 확인한 예매 번호(필수). 현재 좌석을 쥔 예매와 다르면 거절합니다.", required = true)
+          @RequestParam(required = false)
+          @NotBlank
+          String bookingNumber) {
+    seatFacade.forceReleaseHold(admin.getUserId(), performanceId, seatId, bookingNumber);
 
     return ApiResponse.onSuccess(SuccessStatus.OK);
   }

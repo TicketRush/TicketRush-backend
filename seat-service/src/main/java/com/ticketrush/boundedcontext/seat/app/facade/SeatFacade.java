@@ -103,8 +103,9 @@ public class SeatFacade {
   }
 
   /** 관리자의 HOLD 좌석 강제 해제 (#562). 예매 정합은 유스케이스가 발행하는 {@code SeatHoldExpiredEvent}가 맡는다. */
-  public void forceReleaseHold(Long adminId, Long performanceId, Long seatId) {
-    seatAdminForceReleaseHoldUseCase.execute(adminId, performanceId, seatId);
+  public void forceReleaseHold(
+      Long adminId, Long performanceId, Long seatId, String expectedBookingNumber) {
+    seatAdminForceReleaseHoldUseCase.execute(adminId, performanceId, seatId, expectedBookingNumber);
   }
 
   public SeatStatusCountsResponse getPerformanceSeatStatusCounts(Long performanceId) {

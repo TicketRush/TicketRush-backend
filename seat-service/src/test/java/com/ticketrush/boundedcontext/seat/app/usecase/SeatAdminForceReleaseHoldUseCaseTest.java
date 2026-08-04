@@ -72,7 +72,7 @@ class SeatAdminForceReleaseHoldUseCaseTest {
         .willReturn(1);
 
     // when
-    seatAdminForceReleaseHoldUseCase.execute(ADMIN_ID, PERFORMANCE_ID, SEAT_ID);
+    seatAdminForceReleaseHoldUseCase.execute(ADMIN_ID, PERFORMANCE_ID, SEAT_ID, BOOKING_NUMBER);
 
     // then
     assertThat(seat.getSeatStatus()).isEqualTo(SeatStatus.AVAILABLE);
@@ -99,7 +99,7 @@ class SeatAdminForceReleaseHoldUseCaseTest {
         .willReturn(1);
 
     // when
-    seatAdminForceReleaseHoldUseCase.execute(ADMIN_ID, PERFORMANCE_ID, SEAT_ID);
+    seatAdminForceReleaseHoldUseCase.execute(ADMIN_ID, PERFORMANCE_ID, SEAT_ID, BOOKING_NUMBER);
 
     // then: publish가 먼저, 그다음 상태 변경 이벤트
     InOrder inOrder = inOrder(seatHoldExpiredPublisher, seatStatusEventPublisher);
@@ -125,7 +125,7 @@ class SeatAdminForceReleaseHoldUseCaseTest {
         .willReturn(1);
 
     // when
-    seatAdminForceReleaseHoldUseCase.execute(ADMIN_ID, PERFORMANCE_ID, SEAT_ID);
+    seatAdminForceReleaseHoldUseCase.execute(ADMIN_ID, PERFORMANCE_ID, SEAT_ID, BOOKING_NUMBER);
 
     // then
     verify(seatRepository)
@@ -143,7 +143,9 @@ class SeatAdminForceReleaseHoldUseCaseTest {
 
     // when & then
     assertThatThrownBy(
-            () -> seatAdminForceReleaseHoldUseCase.execute(ADMIN_ID, PERFORMANCE_ID, SEAT_ID))
+            () ->
+                seatAdminForceReleaseHoldUseCase.execute(
+                    ADMIN_ID, PERFORMANCE_ID, SEAT_ID, BOOKING_NUMBER))
         .isInstanceOf(BusinessException.class)
         .hasFieldOrPropertyWithValue("errorStatus", ErrorStatus.SEAT_SOLD_NOT_RELEASABLE);
 
@@ -162,11 +164,67 @@ class SeatAdminForceReleaseHoldUseCaseTest {
 
     // when & then
     assertThatThrownBy(
-            () -> seatAdminForceReleaseHoldUseCase.execute(ADMIN_ID, PERFORMANCE_ID, SEAT_ID))
+            () ->
+                seatAdminForceReleaseHoldUseCase.execute(
+                    ADMIN_ID, PERFORMANCE_ID, SEAT_ID, BOOKING_NUMBER))
         .isInstanceOf(BusinessException.class)
         .hasFieldOrPropertyWithValue("errorStatus", ErrorStatus.SEAT_NOT_HELD);
 
     verifyNoInteractions(seatHoldExpiredPublisher, seatStatusEventPublisher, seatUnlockUseCase);
+  }
+
+  @Test
+  @DisplayName("거절: 관리자가 조회한 예매와 다른 예매가 좌석을 쥐고 있으면 해제하지 않는다")
+  void execute_rejects_when_another_booking_took_over_the_seat() {
+    /*
+     * 이 이슈의 핵심 실패 모드다. 관리자 화면은 수동 갱신이라 조회와 클릭 사이가 길 수 있는데,
+     * 그 사이 원래 선점이 만료되고 다른 사용자가 같은 좌석을 다시 잡을 수 있다. 이 가드가 없으면
+     * 관리자는 BK-A를 지우려고 눌렀는데 아무 잘못 없는 BK-B의 결제 진행 중 예매가 EXPIRED로 끝난다.
+     */
+    LocalDateTime notExpiredYet = LocalDateTime.now().plusMinutes(4);
+    Seat seat = seat(SeatStatus.HOLD, notExpiredYet, "BK-B-재선점");
+    given(seatRepository.findByIdAndPerformanceId(SEAT_ID, PERFORMANCE_ID))
+        .willReturn(Optional.of(seat));
+
+    // when & then: 관리자가 화면에서 본 것은 BOOKING_NUMBER(=BK-A)다
+    assertThatThrownBy(
+            () ->
+                seatAdminForceReleaseHoldUseCase.execute(
+                    ADMIN_ID, PERFORMANCE_ID, SEAT_ID, BOOKING_NUMBER))
+        .isInstanceOf(BusinessException.class)
+        .hasFieldOrPropertyWithValue("errorStatus", ErrorStatus.SEAT_RELEASE_CONFLICT);
+
+    // 좌석은 그대로 HOLD이고 어떤 이벤트도 나가지 않는다
+    assertThat(seat.getSeatStatus()).isEqualTo(SeatStatus.HOLD);
+    verify(seatRepository, never())
+        .releaseExpiredHoldById(anyLong(), any(LocalDateTime.class), any(), any());
+    verifyNoInteractions(seatHoldExpiredPublisher, seatStatusEventPublisher, seatUnlockUseCase);
+  }
+
+  @Test
+  @DisplayName("성공: 예매 번호가 없는 HOLD 좌석은 전제조건 검사를 건너뛰고 해제한다")
+  void execute_releases_ownerless_hold_without_precondition_check() {
+    /*
+     * 가드의 목적은 관리자가 모르는 제3의 예매를 종결시키지 않는 것인데, 좌석이 예매를 가리키지
+     * 않으면 종결될 예매 자체가 없다. #95 이전에 만들어진 그런 좌석은 오히려 관리자가 풀어 줘야 할
+     * 대상이라, 여기서 막으면 유일한 탈출구가 사라진다.
+     */
+    LocalDateTime notExpiredYet = LocalDateTime.now().plusMinutes(4);
+    Seat seat = seat(SeatStatus.HOLD, notExpiredYet, null);
+
+    given(seatRepository.findByIdAndPerformanceId(SEAT_ID, PERFORMANCE_ID))
+        .willReturn(Optional.of(seat));
+    given(
+            seatRepository.releaseExpiredHoldById(
+                eq(SEAT_ID), eq(notExpiredYet), eq(SeatStatus.HOLD), eq(SeatStatus.AVAILABLE)))
+        .willReturn(1);
+
+    // when: 어떤 예매 번호를 보내도 통과한다 — 대조할 소유자가 없다
+    seatAdminForceReleaseHoldUseCase.execute(ADMIN_ID, PERFORMANCE_ID, SEAT_ID, BOOKING_NUMBER);
+
+    // then
+    assertThat(seat.getSeatStatus()).isEqualTo(SeatStatus.AVAILABLE);
+    verify(seatUnlockUseCase).forceRelease(SEAT_ID);
   }
 
   @Test
@@ -188,7 +246,7 @@ class SeatAdminForceReleaseHoldUseCaseTest {
         .forceRelease(SEAT_ID);
 
     // when & then: 던지지 않는다
-    seatAdminForceReleaseHoldUseCase.execute(ADMIN_ID, PERFORMANCE_ID, SEAT_ID);
+    seatAdminForceReleaseHoldUseCase.execute(ADMIN_ID, PERFORMANCE_ID, SEAT_ID, BOOKING_NUMBER);
 
     assertThat(seat.getSeatStatus()).isEqualTo(SeatStatus.AVAILABLE);
     verify(seatUnlockUseCase).forceRelease(SEAT_ID);
@@ -211,7 +269,9 @@ class SeatAdminForceReleaseHoldUseCaseTest {
 
     // when & then
     assertThatThrownBy(
-            () -> seatAdminForceReleaseHoldUseCase.execute(ADMIN_ID, PERFORMANCE_ID, SEAT_ID))
+            () ->
+                seatAdminForceReleaseHoldUseCase.execute(
+                    ADMIN_ID, PERFORMANCE_ID, SEAT_ID, BOOKING_NUMBER))
         .isInstanceOf(BusinessException.class)
         .hasFieldOrPropertyWithValue("errorStatus", ErrorStatus.SEAT_RELEASE_CONFLICT);
 
@@ -228,7 +288,9 @@ class SeatAdminForceReleaseHoldUseCaseTest {
 
     // when & then
     assertThatThrownBy(
-            () -> seatAdminForceReleaseHoldUseCase.execute(ADMIN_ID, PERFORMANCE_ID, SEAT_ID))
+            () ->
+                seatAdminForceReleaseHoldUseCase.execute(
+                    ADMIN_ID, PERFORMANCE_ID, SEAT_ID, BOOKING_NUMBER))
         .isInstanceOf(BusinessException.class)
         .hasFieldOrPropertyWithValue("errorStatus", ErrorStatus.SEAT_NOT_FOUND);
 

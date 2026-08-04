@@ -27,8 +27,14 @@ import org.springframework.transaction.support.TransactionSynchronizationManager
  * 전부 조용한 no-op으로 삼킨다. 강제 해제는 <b>만료 전</b>이라 락 키가 살아 있어 명시적으로 지워야 하고(안 그러면 DB는 AVAILABLE인데 잔여 TTL 동안
  * 재선점이 막힌다), 관리자에게는 조용한 성공이 아니라 409가 필요하다.
  *
- * <p><b>소유권({@code bookingNumber})을 묻지 않는다.</b> 관리자는 예매가 아니라 좌석을 기준으로 행위한다. 대신 조건부 UPDATE의 {@code
- * holdExpiredAt} 동등 비교가 "내가 본 그 선점 그대로일 때만" 해제하도록 ABA를 막는다.
+ * <p><b>관리자가 화면에서 본 {@code bookingNumber}를 전제조건으로 받는다.</b> 조건부 UPDATE의 {@code holdExpiredAt} 동등
+ * 비교만으로는 부족하다 — 그 값은 이 트랜잭션에서 방금 읽은 것이라 보호하는 창이 read→UPDATE 사이 수 밀리초뿐이고, <b>관리자가 화면에서 그 선점을 본 시점부터
+ * 버튼을 누르기까지의 수십 초~수 분은 전혀 보호하지 않는다.</b>
+ *
+ * <p>그 창에서 원래 선점이 만료되고 다른 사용자가 좌석을 재선점하면, 관리자는 A를 지우려고 눌렀는데 아무 잘못 없는 B의 결제 진행 중 예매가 EXPIRED로 종결된다.
+ * 관리자 화면은 기획상 수동 갱신(새로고침·관리자 작업·좌석 선택)이라 이 창이 구조적으로 길고, 오픈런에서는 풀린 인기 좌석이 곧바로 다시 잡힌다. 전제조건이 어긋나면
+ * {@link ErrorStatus#SEAT_RELEASE_CONFLICT}로 거절해 관리자가 새로 조회한 뒤 <b>새 선점자를 인지하고</b> 다시 누르게 한다. #559의
+ * 즉시 취소가 같은 가드를 갖는 것과 같은 이유다.
  */
 @Slf4j
 @Service
@@ -41,7 +47,7 @@ public class SeatAdminForceReleaseHoldUseCase {
   private final SeatUnlockUseCase seatUnlockUseCase;
 
   @Transactional
-  public void execute(Long adminId, Long performanceId, Long seatId) {
+  public void execute(Long adminId, Long performanceId, Long seatId, String expectedBookingNumber) {
     Seat seat =
         seatRepository
             .findByIdAndPerformanceId(seatId, performanceId)
@@ -56,6 +62,8 @@ public class SeatAdminForceReleaseHoldUseCase {
     if (seat.getSeatStatus() != SeatStatus.HOLD) {
       throw new BusinessException(ErrorStatus.SEAT_NOT_HELD);
     }
+
+    ensureStillTheSameHold(seat, expectedBookingNumber, seatId);
 
     // 조회 스냅샷의 만료 시각을 가드로 넘겨 "내가 본 그 선점 그대로일 때만" 해제한다. 만료 여부는 묻지 않는다 —
     // 강제 해제는 정의상 만료 전 HOLD를 되돌리는 것이므로 now() 비교를 넣으면 아무것도 해제하지 못한다.
@@ -101,6 +109,27 @@ public class SeatAdminForceReleaseHoldUseCase {
     seat.releaseHold();
     seatStatusEventPublisher.publishAfterCommit(seat, SeatEventSource.ADMIN_FORCE_RELEASE);
     forceReleaseAfterCommit(seatId);
+  }
+
+  /**
+   * 관리자가 화면에서 본 선점이 지금도 그대로인지 확인한다.
+   *
+   * <p><b>{@code bookingNumber}가 없는 HOLD 좌석은 이 검사를 건너뛴다.</b> 가드의 목적은 "관리자가 모르는 제3의 예매를 실수로 종결시키지 않는
+   * 것"인데, 좌석이 예매를 가리키지 않으면 종결될 예매 자체가 없다({@code SeatHoldExpiredPublisher}도 이 경우 발행을 스킵한다). #95 이전에
+   * 만들어진 그런 좌석은 오히려 관리자가 풀어 줘야 할 대상이라, 여기서 막으면 유일한 탈출구가 사라진다.
+   */
+  private void ensureStillTheSameHold(Seat seat, String expectedBookingNumber, Long seatId) {
+    String actual = seat.getBookingNumber();
+    if (actual == null || actual.equals(expectedBookingNumber)) {
+      return;
+    }
+
+    log.warn(
+        "관리자 강제 해제: 좌석 {}을(를) 쥔 예매가 관리자가 조회한 것과 달라 해제하지 않습니다. 요청: {}, 현재: {}",
+        seatId,
+        expectedBookingNumber,
+        actual);
+    throw new BusinessException(ErrorStatus.SEAT_RELEASE_CONFLICT);
   }
 
   /**
