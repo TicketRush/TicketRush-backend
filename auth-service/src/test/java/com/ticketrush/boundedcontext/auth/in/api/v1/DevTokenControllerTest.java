@@ -49,7 +49,7 @@ class DevTokenControllerTest {
     Long userId = 1L;
 
     LoginResponse response =
-        new LoginResponse(userId, "test@example.com", "USER", "access-token", "refresh-token");
+        new LoginResponse(userId, "test@example.com", "MEMBER", "access-token", "refresh-token");
 
     given(devAuthFacade.issueDevToken(any(DevTokenIssueRequest.class))).willReturn(response);
 
@@ -72,7 +72,7 @@ class DevTokenControllerTest {
         .andExpect(jsonPath("$.message").value("성공입니다."))
         .andExpect(jsonPath("$.result.user_id").value(userId))
         .andExpect(jsonPath("$.result.email").value("test@example.com"))
-        .andExpect(jsonPath("$.result.role").value("USER"))
+        .andExpect(jsonPath("$.result.role").value("MEMBER"))
         .andExpect(jsonPath("$.result.access_token").value("access-token"))
         .andExpect(jsonPath("$.result.refresh_token").value("refresh-token"));
   }

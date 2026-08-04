@@ -35,24 +35,23 @@ class LoginUseCaseTest {
   @InjectMocks private LoginUseCase loginUseCase;
 
   @Test
-  @DisplayName("이메일과 비밀번호가 일치하면 로그인에 성공하고 토큰을 반환한다")
+  @DisplayName("이메일과 비밀번호가 일치하면 실제 권한으로 로그인 토큰을 발급한다")
   void login_success() {
     // given
     String email = "test@example.com";
     String rawPassword = "Password123!";
     String passwordHash = "$2a$10$encoded-password";
     Long userId = 1L;
-    String userServiceRole = "MEMBER";
-    String tokenRole = "USER";
+    String role = "MEMBER";
 
     LoginRequest request = new LoginRequest(email, rawPassword);
 
     UserServiceAuthInfoResponse userInfo =
-        new UserServiceAuthInfoResponse(userId, email, passwordHash, userServiceRole);
+        new UserServiceAuthInfoResponse(userId, email, passwordHash, role);
 
     when(userServiceClient.getUserAuthInfoByEmail(email)).thenReturn(userInfo);
     when(passwordEncoder.matches(rawPassword, passwordHash)).thenReturn(true);
-    when(jwtTokenProvider.createAccessToken(userId, tokenRole)).thenReturn("access-token");
+    when(jwtTokenProvider.createAccessToken(userId, role)).thenReturn("access-token");
     when(jwtTokenProvider.createRefreshToken(userId)).thenReturn("refresh-token");
 
     // when
@@ -61,13 +60,13 @@ class LoginUseCaseTest {
     // then
     assertThat(response.userId()).isEqualTo(userId);
     assertThat(response.email()).isEqualTo(email);
-    assertThat(response.role()).isEqualTo(tokenRole);
+    assertThat(response.role()).isEqualTo(role);
     assertThat(response.accessToken()).isEqualTo("access-token");
     assertThat(response.refreshToken()).isEqualTo("refresh-token");
 
     verify(userServiceClient).getUserAuthInfoByEmail(email);
     verify(passwordEncoder).matches(rawPassword, passwordHash);
-    verify(jwtTokenProvider).createAccessToken(userId, tokenRole);
+    verify(jwtTokenProvider).createAccessToken(userId, role);
     verify(jwtTokenProvider).createRefreshToken(userId);
   }
 
@@ -79,12 +78,12 @@ class LoginUseCaseTest {
     String rawPassword = "WrongPassword123!";
     String passwordHash = "$2a$10$encoded-password";
     Long userId = 1L;
-    String userServiceRole = "MEMBER";
+    String role = "MEMBER";
 
     LoginRequest request = new LoginRequest(email, rawPassword);
 
     UserServiceAuthInfoResponse userInfo =
-        new UserServiceAuthInfoResponse(userId, email, passwordHash, userServiceRole);
+        new UserServiceAuthInfoResponse(userId, email, passwordHash, role);
 
     when(userServiceClient.getUserAuthInfoByEmail(email)).thenReturn(userInfo);
     when(passwordEncoder.matches(rawPassword, passwordHash)).thenReturn(false);
@@ -115,6 +114,33 @@ class LoginUseCaseTest {
 
     verify(userServiceClient).getUserAuthInfoByEmail(email);
     verify(passwordEncoder, never()).matches(anyString(), anyString());
+    verify(jwtTokenProvider, never()).createAccessToken(anyLong(), anyString());
+    verify(jwtTokenProvider, never()).createRefreshToken(anyLong());
+  }
+
+  @Test
+  @DisplayName("지원하지 않는 role이면 로그인 토큰 발급에 실패한다")
+  void login_fail_whenUnsupportedRole() {
+    // given
+    String email = "test@example.com";
+    String rawPassword = "Password123!";
+    String passwordHash = "$2a$10$encoded-password";
+    Long userId = 1L;
+    String unsupportedRole = "MANAGER";
+
+    LoginRequest request = new LoginRequest(email, rawPassword);
+
+    UserServiceAuthInfoResponse userInfo =
+        new UserServiceAuthInfoResponse(userId, email, passwordHash, unsupportedRole);
+
+    when(userServiceClient.getUserAuthInfoByEmail(email)).thenReturn(userInfo);
+    when(passwordEncoder.matches(rawPassword, passwordHash)).thenReturn(true);
+
+    // when & then
+    assertThatThrownBy(() -> loginUseCase.execute(request)).isInstanceOf(BusinessException.class);
+
+    verify(userServiceClient).getUserAuthInfoByEmail(email);
+    verify(passwordEncoder).matches(rawPassword, passwordHash);
     verify(jwtTokenProvider, never()).createAccessToken(anyLong(), anyString());
     verify(jwtTokenProvider, never()).createRefreshToken(anyLong());
   }

@@ -2,6 +2,7 @@ package com.ticketrush.boundedcontext.auth.app.usecase;
 
 import com.ticketrush.boundedcontext.auth.app.dto.request.SocialOauthLoginRequest;
 import com.ticketrush.boundedcontext.auth.app.dto.request.UserServiceSocialLoginRequest;
+import com.ticketrush.boundedcontext.auth.app.dto.response.login.UserServiceAuthInfoResponse;
 import com.ticketrush.boundedcontext.auth.app.dto.response.social.OauthLoginResponse;
 import com.ticketrush.boundedcontext.auth.app.dto.response.social.UserServiceSocialLoginResponse;
 import com.ticketrush.boundedcontext.auth.domain.types.SocialUserInfo;
@@ -21,7 +22,8 @@ import org.springframework.stereotype.Component;
 1. provider에 맞는 OAuth 서비스 선택
 2. 인가 코드로 소셜 사용자 정보 조회
 3. user-service에 회원 식별/생성 요청
-4. 최종 응답 반환
+4. 사용자의 실제 권한 조회
+5. JWT 생성 및 최종 응답 반환
  */
 public class SocialOauthLoginUseCase {
 
@@ -37,7 +39,7 @@ public class SocialOauthLoginUseCase {
 
     SocialUserInfo socialUserInfo = oauthClient.getUserInfo(request.code());
 
-    // 2. user-service 호출
+    // 2. user-service에 소셜 회원 식별 또는 생성 요청
     UserServiceSocialLoginResponse userResponse =
         userServiceClient.socialLogin(
             new UserServiceSocialLoginRequest(
@@ -48,16 +50,21 @@ public class SocialOauthLoginUseCase {
 
     Long userId = userResponse.userId();
 
-    // 3. JWT 생성
-    String accessToken = jwtTokenProvider.createAccessToken(userId, "USER");
+    // 3. 사용자 실제 권한 조회
+    UserServiceAuthInfoResponse userAuthInfo = userServiceClient.getUserAuthInfoByUserId(userId);
+
+    String role = validateRole(userAuthInfo.role());
+
+    // 4. JWT 생성
+    String accessToken = jwtTokenProvider.createAccessToken(userId, role);
 
     String refreshToken = jwtTokenProvider.createRefreshToken(userId);
 
-    // 4. Redis 저장
+    // 5. Redis에 Refresh Token 저장
     redisRepository.saveRefreshToken(
         userId, refreshToken, jwtTokenProvider.getRefreshTokenExpiration());
 
-    // 5. 응답 반환
+    // 6. 응답 반환
     return new OauthLoginResponse(
         userId,
         userResponse.name(),
@@ -66,5 +73,14 @@ public class SocialOauthLoginUseCase {
         refreshToken,
         jwtTokenProvider.getAccessTokenExpiration(),
         jwtTokenProvider.getRefreshTokenExpiration());
+  }
+
+  private String validateRole(String role) {
+    if (!"MEMBER".equals(role) && !"ADMIN".equals(role)) {
+      throw new com.ticketrush.global.exception.BusinessException(
+          com.ticketrush.global.status.ErrorStatus.BAD_REQUEST, "지원하지 않는 사용자 역할입니다: " + role);
+    }
+
+    return role;
   }
 }
