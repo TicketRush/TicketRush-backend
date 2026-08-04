@@ -4,6 +4,7 @@ import com.ticketrush.boundedcontext.payment.app.support.PaymentEventPublisher;
 import com.ticketrush.boundedcontext.payment.app.usecase.FailedRefundRecorder;
 import com.ticketrush.boundedcontext.payment.app.usecase.PaymentRefundByBookingUseCase;
 import com.ticketrush.boundedcontext.payment.app.usecase.PaymentRefundByBookingUseCase.RefundOutcome;
+import com.ticketrush.boundedcontext.payment.domain.types.RefundTrigger;
 import com.ticketrush.global.constants.MetricNames;
 import com.ticketrush.global.event.DomainEventEnvelope;
 import com.ticketrush.global.event.KafkaConsumerGroup;
@@ -63,7 +64,9 @@ public class RefundRequestedEventListener {
     try {
       event = jsonConverter.deserialize(envelope.payload(), RefundRequestedEvent.class);
 
-      RefundOutcome outcome = paymentRefundByBookingUseCase.execute(event);
+      RefundOutcome outcome =
+          paymentRefundByBookingUseCase.execute(
+              event.bookingId(), event.bookingNumber(), RefundTrigger.USER_CANCEL);
 
       if (outcome == RefundOutcome.REPUBLISHED) {
         log.info(
@@ -79,6 +82,7 @@ public class RefundRequestedEventListener {
 
       Counter.builder(MetricNames.PAYMENT_REFUND)
           .tag(MetricNames.TAG_OUTCOME, outcome.name().toLowerCase())
+          .tag(MetricNames.TAG_TRIGGER, RefundTrigger.USER_CANCEL.tag())
           .register(meterRegistry)
           .increment();
 
@@ -101,7 +105,10 @@ public class RefundRequestedEventListener {
             e);
         paymentEventPublisher.publishRefundFailed(
             event.bookingId(), event.bookingNumber(), REASON_REFUND_FAILED, LocalDateTime.now());
-        Counter.builder(MetricNames.PAYMENT_REFUND_FAILED).register(meterRegistry).increment();
+        Counter.builder(MetricNames.PAYMENT_REFUND_FAILED)
+            .tag(MetricNames.TAG_TRIGGER, RefundTrigger.USER_CANCEL.tag())
+            .register(meterRegistry)
+            .increment();
         ack.acknowledge();
       } else {
         log.warn(
