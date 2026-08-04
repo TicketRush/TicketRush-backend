@@ -50,9 +50,9 @@ public interface BookingRepository extends JpaRepository<Booking, Long> {
       "SELECT new com.ticketrush.boundedcontext.booking.app.dto.response"
           + ".BookingPerformanceStatsRow("
           + "b.performanceId, COUNT(b), "
-          + "COUNT(CASE WHEN b.bookingStatus = :confirmed THEN 1 END), "
-          + "COUNT(CASE WHEN b.bookingStatus = :canceled "
-          + "OR b.bookingStatus = :refunded THEN 1 END)) "
+          + "SUM(CASE WHEN b.bookingStatus = :confirmed THEN 1 ELSE 0 END), "
+          + "SUM(CASE WHEN b.bookingStatus = :canceled "
+          + "OR b.bookingStatus = :refunded THEN 1 ELSE 0 END)) "
           + "FROM Booking b "
           + "GROUP BY b.performanceId "
           + "ORDER BY b.performanceId ASC")

@@ -170,10 +170,21 @@ public class BookingFacade {
    *
    * <p>세 보강이 직렬이라 최악 벽시계는 공연 3s + 좌석 2s + 예매자 2s다. 관리자 전용 저빈도 경로라 병렬화하지 않았고, 실측상 문제가 되면 순차 N 호출을
    * 없애는 performance-service 벌크 조회가 가장 큰 레버다.
+   *
+   * <p><b>조회 사실을 감사 로그로 남긴다.</b> 이 응답은 예매자 이름·이메일을 담고 페이지 상한이 없어 순차 호출로 고객 명부를 통째로 훑을 수 있는데, 환불 1건은
+   * 추적되면서 개인정보 전량 열람은 흔적이 없는 비대칭이 된다. <b>남기는 것은 건수뿐이다</b> — 행 내용을 찍으면 로그가 두 번째 개인정보 저장소가 된다.
    */
-  public Page<BookingAdminSummaryResponse> getAdminBookings(OffsetPageRequest pageRequest) {
+  public Page<BookingAdminSummaryResponse> getAdminBookings(
+      Long adminId, OffsetPageRequest pageRequest) {
     Page<Booking> page = bookingGetAdminBookingsUseCase.execute(pageRequest);
     List<Booking> content = page.getContent();
+
+    log.info(
+        "[ADMIN-AUDIT] 관리자 예매 목록 조회(예매자 개인정보 포함). adminId: {}, page: {}, size: {}, returned: {}",
+        adminId,
+        pageRequest.page(),
+        pageRequest.size(),
+        content.size());
 
     // 순서를 페이지 순서로 고정한다(LinkedHashSet). 보강이 예산·장애로 중간에 끊길 때 HashSet이면 어느 행이
     // 채워질지가 매 요청 달라져, 새로고침마다 다른 행의 공연 정보가 나타났다 사라진다.

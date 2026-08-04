@@ -47,11 +47,15 @@ public class BookingAdminController {
 
           행 확장 드롭다운에 필요한 필드(예매자 정보·좌석 정보·좌석 수·티켓 단가·총 결제 금액)도 이 응답에 함께 실려 있어 별도 상세 조회가
           필요 없습니다. 1인 1매라 좌석 수는 항상 1이고 티켓 단가와 총 결제 금액이 같은 값이므로 `payment_amount` 하나로 내립니다.
+
+          예매자 개인정보가 포함되므로 조회 사실이 ADMIN-AUDIT 로그에 남습니다(조회자와 건수만 기록하며 응답 내용은 남기지 않습니다).
           """)
   @GetMapping("/bookings")
   public ResponseEntity<ApiResponse<List<BookingAdminSummaryResponse>>> getBookings(
+      @AuthenticationPrincipal CustomUserDetails admin,
       @ModelAttribute OffsetPageRequest pageRequest) {
-    Page<BookingAdminSummaryResponse> response = bookingFacade.getAdminBookings(pageRequest);
+    Page<BookingAdminSummaryResponse> response =
+        bookingFacade.getAdminBookings(admin.getUserId(), pageRequest);
 
     return ApiResponse.onSuccess(SuccessStatus.OK, response);
   }

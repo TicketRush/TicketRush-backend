@@ -64,9 +64,10 @@ public class UserRestClient {
 
       // 계약을 이 안에서 닫는다. toMap은 키 중복이면 IllegalStateException, 키가 null이면 NPE를 던지는데
       // 둘 다 RestClientException이 아니라 아래 catch를 뚫고 500이 된다(#560 리뷰가 좌석 쪽에서 잡은 구멍).
+      // 원소 자체의 null도 같은 이유로 건너뛴다 — 배열에 null이 섞여 오면 user.userId()에서 NPE가 난다.
       Map<Long, UserSummaryInfoResponse> users = new HashMap<>();
       for (UserSummaryInfoResponse user : response.result()) {
-        if (user.userId() != null) {
+        if (user != null && user.userId() != null) {
           users.put(user.userId(), user);
         }
       }

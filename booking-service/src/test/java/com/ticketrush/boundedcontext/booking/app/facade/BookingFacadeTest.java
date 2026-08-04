@@ -477,6 +477,8 @@ class BookingFacadeTest {
     verifyNoInteractions(bookingAdminRetryRefundUseCase);
   }
 
+  private static final Long ADMIN_ID = 99L;
+
   private static Booking adminBooking(Long userId, Long performanceId, Long seatId) {
     return Booking.builder()
         .userId(userId)
@@ -502,7 +504,7 @@ class BookingFacadeTest {
         .willReturn(Map.of(5L, new UserSummaryInfoResponse(5L, "김소희", "user@example.com")));
 
     // when
-    Page<BookingAdminSummaryResponse> page = bookingFacade.getAdminBookings(pageRequest);
+    Page<BookingAdminSummaryResponse> page = bookingFacade.getAdminBookings(ADMIN_ID, pageRequest);
 
     // then
     BookingAdminSummaryResponse response = page.getContent().get(0);
@@ -527,7 +529,7 @@ class BookingFacadeTest {
     given(userRestClient.getUsers(List.of(5L))).willReturn(Map.of());
 
     // when
-    bookingFacade.getAdminBookings(pageRequest);
+    bookingFacade.getAdminBookings(ADMIN_ID, pageRequest);
 
     // then: 공연 1회, 회원 1회 (좌석만 2건)
     verify(performanceRestClient).getPerformances(Set.of(2L));
@@ -547,7 +549,7 @@ class BookingFacadeTest {
     given(userRestClient.getUsers(List.of(5L))).willReturn(Map.of());
 
     // when
-    Page<BookingAdminSummaryResponse> page = bookingFacade.getAdminBookings(pageRequest);
+    Page<BookingAdminSummaryResponse> page = bookingFacade.getAdminBookings(ADMIN_ID, pageRequest);
 
     // then
     BookingAdminSummaryResponse response = page.getContent().get(0);

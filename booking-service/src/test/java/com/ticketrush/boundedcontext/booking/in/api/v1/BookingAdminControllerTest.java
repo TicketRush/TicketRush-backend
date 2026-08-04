@@ -178,7 +178,7 @@ class BookingAdminControllerTest {
             1,
             150000L);
 
-    given(bookingFacade.getAdminBookings(new OffsetPageRequest(0, 10)))
+    given(bookingFacade.getAdminBookings(1L, new OffsetPageRequest(0, 10)))
         .willReturn(new PageImpl<>(List.of(response), PageRequest.of(0, 10), 1));
 
     // when & then
@@ -201,7 +201,7 @@ class BookingAdminControllerTest {
         .andExpect(jsonPath("$.result[0].payment_amount").value(150000))
         .andExpect(jsonPath("$.pagination_info.total_elements").value(1));
 
-    verify(bookingFacade).getAdminBookings(new OffsetPageRequest(0, 10));
+    verify(bookingFacade).getAdminBookings(1L, new OffsetPageRequest(0, 10));
   }
 
   @Test
