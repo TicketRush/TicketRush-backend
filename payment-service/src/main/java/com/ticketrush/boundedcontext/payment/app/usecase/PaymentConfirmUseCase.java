@@ -11,6 +11,7 @@ import com.ticketrush.boundedcontext.payment.out.apiclient.PaymentApprovalClient
 import com.ticketrush.boundedcontext.payment.out.apiclient.PaymentApprovalRequest;
 import com.ticketrush.boundedcontext.payment.out.apiclient.PaymentApprovalResponse;
 import com.ticketrush.boundedcontext.payment.out.apiclient.PgRejectionException;
+import com.ticketrush.boundedcontext.payment.out.apiclient.dto.BookingInfoResponse;
 import com.ticketrush.boundedcontext.payment.out.repository.ExpiredBookingRepository;
 import com.ticketrush.boundedcontext.payment.out.repository.PaymentRepository;
 import com.ticketrush.global.constants.MetricNames;
@@ -54,6 +55,14 @@ import org.springframework.stereotype.Service;
  * <p>3번의 판정은 <b>허용 목록</b>이다 — {@code PENDING}만 통과시키고 나머지는 전부 막는다. 차단 목록(예: EXPIRED만 거부)으로 짜면 #559가
  * 추가한 사용자 PENDING 즉시 취소 경로(CANCELED)가 그대로 샌다. 기본이 거부라 booking이 상태를 추가해도 payment는 컴파일 에러 없이 자동으로
  * 막는다.
+ *
+ * <p><b>3번은 상태를 보기 전에 소유자를 먼저 대조한다 (#572).</b> 같은 왕복의 응답에 소유자가 이미 실려 오므로 비용이 늘지 않는다. 순서가 뒤집히면 남의
+ * EXPIRED 예매에 "만료된 예매"라고 답하게 되어 그 예매의 존재와 상태가 함께 새므로, 순서 자체가 계약이다({@link #assertBookingOwnedBy}).
+ *
+ * <p><b>다만 1·2번이 남기는 누출까지 닫지는 못한다.</b> 둘은 로컬 DB만 보고 {@code bookingId}만으로 판정하므로, 남의 예매라도 이미 결제됐으면
+ * {@code PAYMENT_ALREADY_COMPLETED}가, 만료 기록이 있으면 {@code BOOKING_EXPIRED}가 그대로 나간다. 소유자 대조를 이 둘보다
+ * 앞으로 올리면 닫히지만, 그러면 중복·만료 요청에도 booking 왕복이 붙고 booking이 죽어 있을 때 로컬로 끝나던 경로까지 503이 된다(위 "싼 것부터" 순서와
+ * 2번을 남긴 이유를 동시에 뒤집는다). 새는 것이 소유자 귀속 정보가 아니라 상태 2비트라 이 비용을 치르지 않는다 — ADR 0011 결과 절에 감수 사실로 남겼다.
  */
 @Slf4j
 @Service
@@ -121,6 +130,18 @@ public class PaymentConfirmUseCase {
 
   private static final String REASON_BOOKING_NOT_FOUND = "not_found";
 
+  /** 예매 소유자가 아닌 사용자의 결제 확정을 막은 건의 사유 태그 (#572). */
+  private static final String REASON_OWNER_MISMATCH = "owner_mismatch";
+
+  /**
+   * 예매 응답에 소유자가 없어 대조 자체가 불가능했던 건의 사유 태그 (#572).
+   *
+   * <p>{@code owner_mismatch}와 가르는 이유는 원인이 다르기 때문이다. 불일치는 사용자 요청의 문제지만, 소유자 없음은 booking이 {@code
+   * user_id}를 바꾸거나 지워 매핑이 끊긴 <b>우리 쪽 계약 결함</b>이고 그 순간 결제 확정이 전건 실패한다. 한 태그로 합치면 배포 사고가 사용자 오류 시계열에
+   * 묻힌다.
+   */
+  private static final String REASON_OWNER_UNKNOWN = "owner_unknown";
+
   private final PaymentRepository paymentRepository;
   private final PaymentApprovalClientRouter paymentApprovalClientRouter;
   private final PaymentEventPublisher paymentEventPublisher;
@@ -143,7 +164,7 @@ public class PaymentConfirmUseCase {
 
     // 이벤트 도착과 무관하게 '지금'의 예매 상태를 확인한다(결정적 방어선, #490).
     // 위 fast-path는 이벤트가 늦으면 통과시키는데, 대량 만료 구간에서 그 창이 분 단위임이 실측됐다(#345).
-    assertBookingIsPayable(request.bookingId());
+    assertBookingIsPayable(request.bookingId(), userId);
 
     String orderId = generateOrderId(request.bookingId());
 
@@ -217,6 +238,12 @@ public class PaymentConfirmUseCase {
    * <p>동시 confirm 요청이 unique 제약에 막혔을 때, 먼저 확정된 COMPLETED 결제를 돌려주기 위해 {@link
    * com.ticketrush.boundedcontext.payment.app.facade.PaymentFacade}의 멱등 fallback에서 호출한다. bookingId
    * 기준 조회는 paymentKey 충돌의 상위집합이라, 동일 paymentKey 재수신과 동일 booking·다른 paymentKey 충돌을 모두 흡수한다(#296).
+   *
+   * <p><b>{@code userId} 조건이 없어도 남의 결제가 새지 않는다 (#572).</b> 이 메서드는 {@code execute}가 {@code
+   * DataIntegrityViolationException}을 던졌을 때만 호출되는데, 그 예외가 밖으로 나올 수 있는 지점은 {@code saveAndFlush}
+   * 하나뿐이고({@link #recordFailedPayment}의 저장 실패는 그 안에서 삼켜진다) 거기에 도달하려면 {@link #assertBookingOwnedBy}를
+   * 이미 통과했어야 한다. 즉 <b>소유자 대조 통과가 이 경로의 선행 조건</b>이고, 그 불변식이 성립하는 한 {@code userId} 조건을 덧붙여도 조회 결과가
+   * 달라지지 않는다. 없어도 되는 조건이라 덧붙이지 않는 것이지 덧붙이면 위험해서가 아니다. 가드를 옮기거나 지우면 이 전제가 깨진다.
    */
   public PaymentConfirmResponse getConfirmedResponseByBookingId(Long bookingId) {
     Payment payment =
@@ -240,11 +267,14 @@ public class PaymentConfirmUseCase {
    * <p>조회 자체가 실패하면 {@link com.ticketrush.boundedcontext.payment.out.apiclient.BookingRestClient}가
    * 예외로 끊으므로 이 메서드는 통과시키지 않는다 (fail-closed 근거는 그 클래스 javadoc 참고). 그 예외는 PG 호출 try 블록 <b>밖</b>에서 나므로
    * {@link #recordFailedPayment} 경로를 타지 않는다 — 과금이 일어나지 않은 차단이라 FAILED 이력을 남길 이유가 없고, 화이트리스트에도 없다.
+   *
+   * <p>같은 응답으로 <b>소유자 대조를 먼저</b> 수행한다({@link #assertBookingOwnedBy}, #572). 상태 판정은 그 대조를 통과한 요청에만
+   * 도달하므로, 아래의 상태별 사유 코드는 "본인 예매"에 대해서만 노출된다.
    */
-  private void assertBookingIsPayable(Long bookingId) {
-    String bookingStatus;
+  private void assertBookingIsPayable(Long bookingId, Long userId) {
+    BookingInfoResponse booking;
     try {
-      bookingStatus = bookingRestClient.getBooking(bookingId).bookingStatus();
+      booking = bookingRestClient.getBooking(bookingId);
     } catch (BusinessException e) {
       // 조회 실패로 막힌 건도 이 가드가 차단한 건이다. 여기서 세지 않으면 booking이 느려지거나 죽은 구간에서
       // 결제가 전건 거부되는 동안 차단 카운터가 0으로 평평해, 서킷이 없는 지금 관측 축이 통째로 빈다.
@@ -255,6 +285,13 @@ public class PaymentConfirmUseCase {
       throw e;
     }
 
+    // 상태보다 소유자를 먼저 본다. 순서를 뒤집으면 남의 예매에도 상태별 사유가 나가 존재가 샌다(#572).
+    // 응답의 bookingId 에코는 대조하지 않는다 — 요청자가 조종할 수 없는 값이고, 경로 오설정이 만드는
+    // 404(BOOKING_404_001이 아닌 404)는 이미 BookingRestClient가 503으로 거른다. 검증 대상은
+    // "누구 것인가"뿐이다.
+    assertBookingOwnedBy(bookingId, booking.userId(), userId);
+
+    String bookingStatus = booking.bookingStatus();
     if (BOOKING_STATUS_PENDING.equals(bookingStatus)) {
       return;
     }
@@ -271,6 +308,48 @@ public class PaymentConfirmUseCase {
         bookingStatus);
 
     throw new BusinessException(errorStatus);
+  }
+
+  /**
+   * 예매 소유자와 결제를 요청한 인증 주체가 같은지 대조한다 (#572).
+   *
+   * <p>booking internal API는 소유자 검증 없이 {@code bookingId}만으로 조회되므로({@code
+   * BookingGetInternalUseCase}) 대조는 호출자인 payment 몫이다. 이 가드가 없으면 남의 예매로 확정한 결제가 요청자 앞으로 귀속되고, 그 결제의
+   * 취소 권한까지 함께 넘어간다.
+   *
+   * <p><b>불일치를 {@code BOOKING_NOT_FOUND}로 접는다.</b> "당신 예매가 아니다"라고 답하면 그 {@code bookingId}가 존재한다는
+   * 사실이 응답으로 새고, 예매 ID가 순번에 가까운 이 시스템에서는 훑기만 해도 타인의 예매 존재를 열거할 수 있다. 없는 예매와 같은 답으로 수렴시켜 그 차이를 지운다 —
+   * payment가 이미 쓰는 관례({@code findByIdAndUserId} → {@code PAYMENT_NOT_FOUND})와 ticket-service의 404
+   * 통일 선례를 따른다. 응답으로 원인을 가릴 수 없게 되므로 진단은 아래 로그와 {@code reason} 태그가 맡는다. 근거는 ADR 0011.
+   *
+   * <p><b>소유자가 없으면 503으로 끊는다.</b> booking의 {@code user_id}는 {@code nullable = false}라 정상 경로에서 null이
+   * 될 수 없다. null이 왔다면 booking이 필드를 바꿔 매핑이 끊긴 것이고({@code @JsonIgnoreProperties(ignoreUnknown =
+   * true)}라 조용히 null이 된다) 그 순간 결제 확정은 전건 실패한다. 이를 404로 접으면 전건이 "예매를 찾을 수 없습니다"로 나가 배포 사고가 예매 데이터
+   * 문제로 오진단되므로, 판정 불가는 판정 불가대로 보이게 한다({@code BookingRestClient}의 fail-closed 수렴 규칙과 같은 축).
+   */
+  private void assertBookingOwnedBy(Long bookingId, Long ownerId, Long requesterId) {
+    if (ownerId == null) {
+      incrementGuardBlocked(REASON_OWNER_UNKNOWN);
+      // FAILED 이력 억제(아래 recordFailedPayment)는 같은 반복을 debug로 낮췄지만 여기는 error를 유지한다.
+      // 그쪽은 정상 운영 중 사용자 재시도로 반복되는 것이라 억제해도 메트릭이 남지만, 이 조건은 배포 직후
+      // 전건이 무너진 상태라 즉시 롤백 판단이 필요하다. 로그가 쌓이는 것 자체가 그 신호다.
+      log.error(
+          "예매 응답에 소유자가 없어 결제 확정을 차단합니다. booking 응답 계약 확인이 필요합니다. bookingId={}, requesterId={}",
+          bookingId,
+          requesterId);
+      throw new BusinessException(ErrorStatus.PAYMENT_BOOKING_COMMUNICATION_FAILED);
+    }
+
+    if (!ownerId.equals(requesterId)) {
+      incrementGuardBlocked(REASON_OWNER_MISMATCH);
+      // 응답을 "예매 없음"으로 동일화했으므로, 실제 원인을 아는 경로는 이 로그뿐이다(CS 진단용).
+      log.warn(
+          "예매 소유자가 아니라 PG 승인 전에 차단합니다. bookingId={}, requesterId={}, ownerId={}",
+          bookingId,
+          requesterId,
+          ownerId);
+      throw new BusinessException(ErrorStatus.BOOKING_NOT_FOUND);
+    }
   }
 
   private void incrementGuardBlocked(String reason) {
