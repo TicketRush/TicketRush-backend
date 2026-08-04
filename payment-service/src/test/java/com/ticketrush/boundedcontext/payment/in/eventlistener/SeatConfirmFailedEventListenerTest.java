@@ -232,6 +232,8 @@ class SeatConfirmFailedEventListenerTest {
     assertThatThrownBy(() -> listener.handleSeatConfirmFailed(envelope(), acknowledgment))
         .isSameAs(failure);
 
+    // 대상을 식별하지 못했으므로 PG 를 부르지도 않아야 한다
+    verify(paymentRefundByBookingUseCase, never()).execute(any(), any(), any());
     verify(paymentEventPublisher, never()).publishRefundFailed(any(), any(), any(), any());
     verify(acknowledgment, never()).acknowledge();
   }

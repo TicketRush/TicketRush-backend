@@ -15,6 +15,7 @@ import com.ticketrush.shared.booking.event.RefundRequestedEvent;
 import io.micrometer.core.instrument.Counter;
 import io.micrometer.core.instrument.MeterRegistry;
 import java.time.LocalDateTime;
+import java.util.Locale;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.dao.DataIntegrityViolationException;
@@ -81,7 +82,7 @@ public class RefundRequestedEventListener {
       }
 
       Counter.builder(MetricNames.PAYMENT_REFUND)
-          .tag(MetricNames.TAG_OUTCOME, outcome.name().toLowerCase())
+          .tag(MetricNames.TAG_OUTCOME, outcome.name().toLowerCase(Locale.ROOT))
           .tag(MetricNames.TAG_TRIGGER, RefundTrigger.USER_CANCEL.tag())
           .register(meterRegistry)
           .increment();

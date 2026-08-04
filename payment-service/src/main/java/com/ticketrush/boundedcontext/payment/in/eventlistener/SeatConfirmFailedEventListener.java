@@ -14,6 +14,7 @@ import com.ticketrush.shared.booking.event.SeatConfirmFailedEvent;
 import io.micrometer.core.instrument.Counter;
 import io.micrometer.core.instrument.MeterRegistry;
 import java.time.LocalDateTime;
+import java.util.Locale;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.dao.DataIntegrityViolationException;
@@ -76,7 +77,7 @@ public class SeatConfirmFailedEventListener {
       logOutcome(outcome, envelope, event);
 
       Counter.builder(MetricNames.PAYMENT_REFUND)
-          .tag(MetricNames.TAG_OUTCOME, outcome.name().toLowerCase())
+          .tag(MetricNames.TAG_OUTCOME, outcome.name().toLowerCase(Locale.ROOT))
           .tag(MetricNames.TAG_TRIGGER, RefundTrigger.SEAT_CONFIRM_FAILED.tag())
           .register(meterRegistry)
           .increment();
@@ -160,7 +161,7 @@ public class SeatConfirmFailedEventListener {
         event.bookingId(),
         e);
 
-    // booking 의 refundFailedAt 을 채워 관리자 재환불 API 와 미해결 목록에 이 건이 잡히게 한다(#391).
+    // booking 의 refundFailedAt 을 채워 미해결 목록과 (티켓 미사용 건이면) 관리자 재환불 API 에 이 건이 잡히게 한다(#391).
     paymentEventPublisher.publishRefundFailed(
         event.bookingId(), event.bookingNumber(), REASON_REFUND_FAILED, LocalDateTime.now());
 
@@ -169,7 +170,9 @@ public class SeatConfirmFailedEventListener {
         .register(meterRegistry)
         .increment();
 
-    // 재시도가 무의미한 확정 실패라 오프셋을 커밋한다. 복구는 RefundFailedEvent 와 CRITICAL 로 넘어갔다.
+    // 재시도해도 같은 거절이 돌아오므로 오프셋을 커밋한다. 이후 복구는 위 CRITICAL 과 RefundFailedEvent 가 맡는다.
+    // 다만 그 발행은 비동기 fire-and-forget 이라 유실되면 booking 에 refundFailedAt 이 남지 않고, 그러면 여기서
+    // 열어둔 관리자 복구 경로가 함께 닫힌다 — 보장이 아니라 최선 노력이다(#574).
     ack.acknowledge();
   }
 }
