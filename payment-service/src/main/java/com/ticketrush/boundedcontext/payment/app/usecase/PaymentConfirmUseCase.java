@@ -6,6 +6,7 @@ import com.ticketrush.boundedcontext.payment.app.mapper.PaymentMapper;
 import com.ticketrush.boundedcontext.payment.app.support.PaymentEventPublisher;
 import com.ticketrush.boundedcontext.payment.domain.entity.Payment;
 import com.ticketrush.boundedcontext.payment.domain.types.PaymentStatus;
+import com.ticketrush.boundedcontext.payment.out.apiclient.BookingRestClient;
 import com.ticketrush.boundedcontext.payment.out.apiclient.PaymentApprovalClientRouter;
 import com.ticketrush.boundedcontext.payment.out.apiclient.PaymentApprovalRequest;
 import com.ticketrush.boundedcontext.payment.out.apiclient.PaymentApprovalResponse;
@@ -31,6 +32,28 @@ import org.springframework.stereotype.Service;
  * 안에 가두지 않아 DB 커넥션을 장시간 점유하지 않는다. 이벤트는 saveAndFlush(자체 트랜잭션 커밋) 성공 이후에 호출되므로, 커밋에 성공한 데이터만 외부로
  * 전파된다. (ID 전략이 IDENTITY라 {@code save}만으로도 INSERT가 즉시 실행되지만, 동시 confirm 시 unique 위반을 이벤트 발행 이전에
  * 표면화한다는 의도를 명시하고 취소 경로({@code PaymentCancelPersister})와 일관성을 맞추기 위해 saveAndFlush를 쓴다, #296.)
+ *
+ * <h2>PG 호출 전 가드 계층 (#490)</h2>
+ *
+ * <p>PG 승인은 되돌릴 수 없는 부작용(과금)이므로 그 앞의 가드는 <b>싼 것부터 순서대로</b> 둔다. 셋 다 목적이 다르며 하나가 다른 하나를 대체하지 않는다.
+ *
+ * <ol>
+ *   <li><b>COMPLETED 중복</b>(로컬 DB) — 이미 확정된 결제의 재요청을 막는다(#296).
+ *   <li><b>{@code expired_booking} fast-path</b>(로컬 DB) — 만료 이벤트를 <b>이미 수신한</b> booking을 네트워크 왕복 없이
+ *       거른다. 도착에 의존하므로 best-effort이며(#224), 이벤트가 늦으면 그냥 통과한다.
+ *   <li><b>예매 상태 동기 확인</b>(booking-service 호출) — 이벤트 도착과 무관하게 <b>지금</b>의 상태를 보는 방어선이다(#490). 대량 만료
+ *       구간에서 outbox 릴레이가 밀려 2번이 분 단위로 무력화된 것이 실측됐고(#345, 약 13분), 그 창에서 과금 후 좌석 미확정이 발생했다.
+ * </ol>
+ *
+ * <p><b>3번도 창을 없애지는 못한다.</b> 상태를 읽은 뒤 PG 승인이 끝나기까지 사이에 만료가 일어나면 같은 결과가 나온다 — 분 단위였던 창이 왕복 한 번(수십
+ * ms~1s)으로 줄어든 것이지 사라진 것이 아니다. 그 잔여 창에서 과금이 나면 되돌릴 자동 보상 경로는 아직 없다(#492). 이 가드를 완전 해결로 읽으면 안 된다.
+ *
+ * <p>2번을 남긴 이유는 3번이 네트워크 왕복이기 때문이다. 이미 만료가 확정된 건은 로컬 조회 하나로 끝내는 편이 싸고, booking-service가 죽어 있어도 그
+ * 경로는 계속 동작한다.
+ *
+ * <p>3번의 판정은 <b>허용 목록</b>이다 — {@code PENDING}만 통과시키고 나머지는 전부 막는다. 차단 목록(예: EXPIRED만 거부)으로 짜면 #559가
+ * 추가한 사용자 PENDING 즉시 취소 경로(CANCELED)가 그대로 샌다. 기본이 거부라 booking이 상태를 추가해도 payment는 컴파일 에러 없이 자동으로
+ * 막는다.
  */
 @Slf4j
 @Service
@@ -66,10 +89,43 @@ public class PaymentConfirmUseCase {
    */
   private static final long MAX_FAILED_HISTORY_PER_BOOKING = 5;
 
+  /**
+   * 결제 확정을 허용하는 유일한 예매 상태 (#490).
+   *
+   * <p>booking-service {@code BookingStatus}의 이름이 문자열로 건너오므로 컴파일러가 지켜주지 못한다. 그래서 판정을 "이 값이 아니면 거부"로
+   * 짜, 상대가 값을 바꾸거나 추가해도 통과가 아니라 차단으로 기울게 한다.
+   */
+  private static final String BOOKING_STATUS_PENDING = "PENDING";
+
+  private static final String BOOKING_STATUS_EXPIRED = "EXPIRED";
+
+  /**
+   * 차단 메트릭의 {@code reason} 태그로 그대로 쓸 수 있는 상태 값 (#490).
+   *
+   * <p>태그 값은 카디널리티가 폭발하지 않도록 유한 집합이어야 하는데, 상태는 외부 서비스가 주는 문자열이라 그 보장이 코드에 없다. 알려진 값만 통과시키고 나머지는
+   * {@code unknown}으로 접어 상한을 만든다.
+   */
+  private static final Set<String> KNOWN_BOOKING_STATUSES =
+      Set.of(
+          BOOKING_STATUS_PENDING,
+          "CONFIRMED",
+          "CANCELED",
+          "REFUNDING",
+          "REFUNDED",
+          BOOKING_STATUS_EXPIRED);
+
+  private static final String BOOKING_STATUS_UNKNOWN = "unknown";
+
+  /** 상태 판정에 도달하지 못하고 조회 단계에서 막힌 건의 사유 태그. */
+  private static final String REASON_LOOKUP_FAILED = "lookup_failed";
+
+  private static final String REASON_BOOKING_NOT_FOUND = "not_found";
+
   private final PaymentRepository paymentRepository;
   private final PaymentApprovalClientRouter paymentApprovalClientRouter;
   private final PaymentEventPublisher paymentEventPublisher;
   private final ExpiredBookingRepository expiredBookingRepository;
+  private final BookingRestClient bookingRestClient;
   private final PaymentMapper paymentMapper;
   private final MeterRegistry meterRegistry;
 
@@ -80,9 +136,14 @@ public class PaymentConfirmUseCase {
     }
 
     // 만료 이벤트를 이미 수신한 booking이면 PG 호출 전 차단한다(best-effort 방어선, #224).
+    // 로컬 조회라 아래 동기 확인보다 싸고, booking-service가 죽어 있어도 계속 동작한다.
     if (expiredBookingRepository.existsByBookingId(request.bookingId())) {
       throw new BusinessException(ErrorStatus.BOOKING_EXPIRED);
     }
+
+    // 이벤트 도착과 무관하게 '지금'의 예매 상태를 확인한다(결정적 방어선, #490).
+    // 위 fast-path는 이벤트가 늦으면 통과시키는데, 대량 만료 구간에서 그 창이 분 단위임이 실측됐다(#345).
+    assertBookingIsPayable(request.bookingId());
 
     String orderId = generateOrderId(request.bookingId());
 
@@ -163,6 +224,74 @@ public class PaymentConfirmUseCase {
             .findFirstByBookingIdAndStatus(bookingId, PaymentStatus.COMPLETED)
             .orElseThrow(() -> new BusinessException(ErrorStatus.PAYMENT_NOT_FOUND));
     return paymentMapper.toConfirmResponse(payment);
+  }
+
+  /**
+   * PG 호출 전에 예매가 아직 결제 가능한 상태인지 booking-service에 동기 확인한다 (#490).
+   *
+   * <p><b>{@code PENDING}만 통과시키는 허용 목록이다.</b> 만료(EXPIRED)뿐 아니라 사용자 자가 취소(CANCELED, #559), 이미 확정된
+   * 예매(CONFIRMED), 환불 진행/완료(REFUNDING·REFUNDED)가 모두 여기서 막힌다. 거절 사유 코드만 상태에 따라 가르는데, 기본값이 {@code
+   * BOOKING_CONFIRM_NOT_ALLOWED}라 booking이 상태를 추가해도 payment는 자동으로 차단한다.
+   *
+   * <p>사유 코드는 booking 도메인의 {@code Booking.confirm()} 규칙과 같은 언어를 쓴다 — EXPIRED만 "만료된 예매"이고 나머지는 "확정할
+   * 수 없는 예매 상태"다. 전부 {@code BOOKING_EXPIRED}로 뭉개면 사용자가 방금 직접 취소한 예매에도 "만료됐다"고 답하게 되어 사실이 아니고, CS
+   * 문의가 오진단된다.
+   *
+   * <p>조회 자체가 실패하면 {@link com.ticketrush.boundedcontext.payment.out.apiclient.BookingRestClient}가
+   * 예외로 끊으므로 이 메서드는 통과시키지 않는다 (fail-closed 근거는 그 클래스 javadoc 참고). 그 예외는 PG 호출 try 블록 <b>밖</b>에서 나므로
+   * {@link #recordFailedPayment} 경로를 타지 않는다 — 과금이 일어나지 않은 차단이라 FAILED 이력을 남길 이유가 없고, 화이트리스트에도 없다.
+   */
+  private void assertBookingIsPayable(Long bookingId) {
+    String bookingStatus;
+    try {
+      bookingStatus = bookingRestClient.getBooking(bookingId).bookingStatus();
+    } catch (BusinessException e) {
+      // 조회 실패로 막힌 건도 이 가드가 차단한 건이다. 여기서 세지 않으면 booking이 느려지거나 죽은 구간에서
+      // 결제가 전건 거부되는 동안 차단 카운터가 0으로 평평해, 서킷이 없는 지금 관측 축이 통째로 빈다.
+      incrementGuardBlocked(
+          ErrorStatus.BOOKING_NOT_FOUND == e.getErrorStatus()
+              ? REASON_BOOKING_NOT_FOUND
+              : REASON_LOOKUP_FAILED);
+      throw e;
+    }
+
+    if (BOOKING_STATUS_PENDING.equals(bookingStatus)) {
+      return;
+    }
+
+    ErrorStatus errorStatus =
+        BOOKING_STATUS_EXPIRED.equals(bookingStatus)
+            ? ErrorStatus.BOOKING_EXPIRED
+            : ErrorStatus.BOOKING_CONFIRM_NOT_ALLOWED;
+
+    incrementGuardBlocked(metricReasonOf(bookingStatus));
+    log.warn(
+        "결제 가능한 예매 상태가 아니라 PG 승인 전에 차단합니다. bookingId={}, bookingStatus={}",
+        bookingId,
+        bookingStatus);
+
+    throw new BusinessException(errorStatus);
+  }
+
+  private void incrementGuardBlocked(String reason) {
+    Counter.builder(MetricNames.PAYMENT_CONFIRM_BOOKING_GUARD_BLOCKED)
+        .tag(MetricNames.TAG_REASON, reason)
+        .register(meterRegistry)
+        .increment();
+  }
+
+  /**
+   * 알려진 상태만 태그로 내보내 메트릭 카디널리티를 유계로 만든다.
+   *
+   * <p>{@code null}을 먼저 거른다 — {@code Set.of(...)}가 만드는 불변 Set은 {@code contains(null)}에 NPE를 던진다. 응답
+   * DTO가 {@code ignoreUnknown = true}라 booking이 필드명을 바꾸거나 URL이 다른 200 응답을 주는 엔드포인트로 오설정되면 상태가 조용히
+   * null이 되는데, 그때 차단은 되더라도 사용자에게 409/503이 아닌 원시 500이 나가면 {@code BookingRestClient}가 약속한 "판정 불가는 모두
+   * 503으로 수렴"이 이 지점에서 깨진다.
+   */
+  private String metricReasonOf(String bookingStatus) {
+    return bookingStatus != null && KNOWN_BOOKING_STATUSES.contains(bookingStatus)
+        ? bookingStatus
+        : BOOKING_STATUS_UNKNOWN;
   }
 
   /**

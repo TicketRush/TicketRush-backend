@@ -45,7 +45,14 @@ public class PaymentController {
       summary = "결제 Confirm",
       description =
           "PG사 결제 인증 후 넘어온 데이터를 검증하고 결제를 확정한다. "
-              + "성공 시 PaymentConfirmedEvent를 발행하여 후속 도메인이 처리하도록 한다.")
+              + "성공 시 PaymentConfirmedEvent를 발행하여 후속 도메인이 처리하도록 한다.\n\n"
+              + "PG 승인 전에 예매가 아직 결제 가능한 상태(PENDING)인지 booking-service에 동기 확인한다(#490). "
+              + "그래서 다음 실패 응답이 나갈 수 있다.\n"
+              + "- `BOOKING_409_003`(만료된 예매) / `BOOKING_409_002`(취소·확정·환불 등 결제할 수 없는 상태)\n"
+              + "- `BOOKING_404_001`(존재하지 않는 예매)\n"
+              + "- `PAYMENT_503_003`(예매 정보 조회 실패) — **자동 재시도 대상이 아니다.** "
+              + "조회가 불가능한 동안은 결제를 통과시키지 않는 fail-closed 설계라, 재시도해도 같은 응답이 반복되며 "
+              + "요청당 스레드 점유만 늘어난다.")
   @PostMapping("/confirm")
   public ResponseEntity<ApiResponse<PaymentConfirmResponse>> confirm(
       @AuthenticationPrincipal CustomUserDetails user,

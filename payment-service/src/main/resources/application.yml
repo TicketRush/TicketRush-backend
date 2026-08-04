@@ -37,6 +37,17 @@ service:
     # ticket-service가 느려질 때 취소 요청이 톰캣 스레드를 오래 붙잡아 결제 경로까지 마르는 것을 막는다.
     connect-timeout-ms: ${TICKET_HTTP_CONNECT_TIMEOUT_MS:1000}
     read-timeout-ms: ${TICKET_HTTP_READ_TIMEOUT_MS:2000}
+  booking:
+    # 결제 확정 전 예매 상태 동기 확인 전용 (#490).
+    # ticket과 마찬가지로 내부 API(/api/v1/internal/booking/**)는 게이트웨이가 라우팅하지 않으므로
+    # (ADR 0002) booking-service '직접' 주소여야 한다. 게이트웨이 주소로 넣으면 라우트 없음 404가 나
+    # 예매 없음(BOOKING_404_001)이 아닌 404로 결제 확정이 전건 503 거부된다.
+    url: ${BOOKING_SERVICE_URL:http://localhost:8084}
+    # 단일 행 조회이므로 공용 예산(3s/10s)을 쓰지 않는다. read-timeout은 곧 톰캣 스레드의 최대 점유
+    # 시간이고, 이 조회는 fail-closed라 booking이 느려지면 결제 경로가 그대로 마른다. 1s 근거는
+    # ticket-service가 같은 엔드포인트에 쓰는 값과 그 근거인 #402 실측 왕복 3.20ms다.
+    connect-timeout-ms: ${BOOKING_HTTP_CONNECT_TIMEOUT_MS:1000}
+    read-timeout-ms: ${BOOKING_HTTP_READ_TIMEOUT_MS:1000}
 
 custom:
   global:
