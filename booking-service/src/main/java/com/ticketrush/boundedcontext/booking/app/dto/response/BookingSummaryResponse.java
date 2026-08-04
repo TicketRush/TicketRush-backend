@@ -15,7 +15,9 @@ public record BookingSummaryResponse(
     @Schema(description = "예매 상태", example = "CONFIRMED") BookingStatus bookingStatus,
     @Schema(description = "예매 확정일", example = "2026-05-22 10:30:00") LocalDateTime confirmedAt,
     @Schema(
-            description = "마지막 환불 실패 시각. null이 아니면 취소를 요청했으나 환불에 실패해 예매가 유지된 것이다.",
+            description =
+                "마지막 환불 실패 시각. null이 아니면 환불에 실패해 예매가 유지된 것이다. "
+                    + "사용자 취소 외에 좌석 확정 실패 보상 환불이 실패한 경우도 포함된다(#492).",
             example = "2026-05-23 11:00:00")
         LocalDateTime refundFailedAt,
     @Schema(

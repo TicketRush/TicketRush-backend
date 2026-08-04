@@ -42,6 +42,10 @@ public class BookingAdminController {
           환불 실패는 별도 상태가 아니라 `booking_status = CONFIRMED` + `refund_failed_at IS NOT NULL`로
           표현됩니다. 환불이 실패하면 취소가 성사되지 않은 것이므로 예매는 유효한 상태(CONFIRMED)로 복원되고,
           실패 사실만 시각으로 남습니다. 실패 사유는 payment-service의 환불 이력이 SSOT입니다.
+
+          사용자 취소가 실패한 건 외에, **좌석 확정 실패로 시스템이 건 보상 환불이 실패한 건**도 여기에 잡힙니다(#492).
+          후자는 REFUNDING을 거치지 않으므로 상태 복원 없이 실패 시각만 기록됩니다 — 사용자가 취소를 요청한 적이
+          없는데도 목록에 오를 수 있다는 뜻이며, 그 건은 과금이 남아 있으므로 우선 처리 대상입니다.
           """)
   @GetMapping("/bookings/refund-failed")
   public ResponseEntity<ApiResponse<List<BookingSummaryResponse>>> getRefundFailedBookings(
