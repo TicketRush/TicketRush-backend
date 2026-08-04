@@ -46,6 +46,11 @@ jobs:
           test -f Dockerfile
           test -f deploy/docker-compose.prod.yml
           test -f deploy/.env.prod.example
+          test -x deploy/scripts/check-image-tag-drift.sh
+          test -x deploy/scripts/update-image-tag.sh
+
+          bash -n deploy/scripts/check-image-tag-drift.sh
+          bash -n deploy/scripts/update-image-tag.sh
 
           if [[ -f deploy/.env ]]; then
             echo "::error::deploy/.env must not be committed."
@@ -299,6 +304,65 @@ jobs:
           done
 
           "${COMPOSE[@]}" config -q
+
+          # pull/up 전에 기존 애플리케이션 실행 상태를 검증한다.
+          echo "Validating current release state before deployment."
+
+          RUNNING_APPLICATION_COUNT=0
+          TOTAL_APPLICATION_COUNT="${#APPLICATION_SERVICES[@]}"
+
+          for SERVICE in "${APPLICATION_SERVICES[@]}"; do
+            if docker inspect "${SERVICE}" > /dev/null 2>&1; then
+              IS_RUNNING="$(
+                docker inspect --format '{{.State.Running}}' "${SERVICE}"
+              )"
+
+              if [[ "${IS_RUNNING}" == "true" ]]; then
+                RUNNING_APPLICATION_COUNT=$((RUNNING_APPLICATION_COUNT + 1))
+              fi
+            fi
+          done
+
+          echo             "Running application containers: ${RUNNING_APPLICATION_COUNT}/${TOTAL_APPLICATION_COUNT}"
+
+          if [[ -f deploy/CURRENT_RELEASE ]]; then
+            # 기존 릴리스 기록이 있으면 실행 중인 8개 컨테이너가
+            # 모두 해당 릴리스와 일치해야 다음 배포를 진행한다.
+            if (( RUNNING_APPLICATION_COUNT != TOTAL_APPLICATION_COUNT )); then
+              echo                 "::error::CURRENT_RELEASE exists, but not all application containers are running."
+              exit 1
+            fi
+
+            CURRENT_RUNNING_RELEASE="$(
+              tr -d '\r\n' < deploy/CURRENT_RELEASE
+            )"
+
+            if [[ -z "${CURRENT_RUNNING_RELEASE}" ]]; then
+              echo "::error::deploy/CURRENT_RELEASE is empty."
+              exit 1
+            fi
+
+            EXPECTED_IMAGE_TAG="${CURRENT_RUNNING_RELEASE}"               deploy/scripts/check-image-tag-drift.sh
+
+            # 실행 상태가 CURRENT_RELEASE와 일치할 때만
+            # 뒤처진 .env의 IMAGE_TAG를 현재 릴리스로 복구한다.
+            deploy/scripts/update-image-tag.sh               "${CURRENT_RUNNING_RELEASE}"
+
+            deploy/scripts/check-image-tag-drift.sh
+          elif (( RUNNING_APPLICATION_COUNT == 0 )); then
+            # 새 호스트의 최초 배포에서는 비교할 기존 컨테이너가 없다.
+            echo               "No existing application containers or CURRENT_RELEASE; skipping pre-deployment drift validation."
+          elif (( RUNNING_APPLICATION_COUNT != TOTAL_APPLICATION_COUNT )); then
+            # 릴리스 기록 없이 일부 컨테이너만 존재하면 기준을 확정할 수 없다.
+            echo               "::error::Partial application deployment exists without CURRENT_RELEASE."
+            exit 1
+          else
+            # 릴리스 기록은 없지만 기존 8개 컨테이너가 모두 있다면
+            # .env와 실행 상태가 이미 일치하는 경우에만 진행한다.
+            deploy/scripts/check-image-tag-drift.sh
+          fi
+
+          echo "Current release state validated successfully."
 
           echo "Snapshotting container restart counts before deployment."
 
@@ -707,20 +771,42 @@ jobs:
 
           echo "Local Nginx HTTPS health check passed."
 
+          # 모든 health 검증이 끝난 뒤 실행 중 애플리케이션이
+          # 이번 배포 태그로 교체됐는지 확인한다.
+          echo "Validating deployed application image tags."
+
+          EXPECTED_IMAGE_TAG="${IMAGE_TAG}" deploy/scripts/check-image-tag-drift.sh
 
           PREVIOUS_RELEASE=""
 
           if [[ -f deploy/CURRENT_RELEASE ]]; then
-            PREVIOUS_RELEASE="$(cat deploy/CURRENT_RELEASE)"
+            PREVIOUS_RELEASE="$(
+              tr -d '\r\n' < deploy/CURRENT_RELEASE
+            )"
           fi
 
           if [[ -n "${PREVIOUS_RELEASE}" && "${PREVIOUS_RELEASE}" != "${IMAGE_TAG}" ]]; then
-            printf '%s\n' "${PREVIOUS_RELEASE}" \
-              > deploy/PREVIOUS_RELEASE
+            printf '%s\n' "${PREVIOUS_RELEASE}" > deploy/PREVIOUS_RELEASE
           fi
 
-          printf '%s\n' "${IMAGE_TAG}" \
-            > deploy/CURRENT_RELEASE
+          # CURRENT_RELEASE를 먼저 갱신한다.
+          # 이후 .env 갱신에 실패해도 다음 배포에서 이 값을 기준으로 복구할 수 있다.
+          CURRENT_RELEASE_TEMP="$(
+            mktemp deploy/CURRENT_RELEASE.tmp.XXXXXX
+          )"
+
+          printf '%s\n' "${IMAGE_TAG}" > "${CURRENT_RELEASE_TEMP}"
+          mv "${CURRENT_RELEASE_TEMP}" deploy/CURRENT_RELEASE
+
+          # 실행 상태 검증에 성공한 경우에만 .env의 IMAGE_TAG를 갱신한다.
+          echo "Persisting deployed IMAGE_TAG to deploy/.env."
+
+          deploy/scripts/update-image-tag.sh "${IMAGE_TAG}"
+
+          # .env에 기록된 IMAGE_TAG와 실행 상태가 일치하는지 최종 확인한다.
+          deploy/scripts/check-image-tag-drift.sh
+
+          echo "IMAGE_TAG synchronization completed."
 
           echo "Deployment completed."
           echo "Current release: ${IMAGE_TAG}"
