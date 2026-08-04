@@ -17,6 +17,7 @@ import com.ticketrush.boundedcontext.payment.domain.types.RefundTrigger;
 import com.ticketrush.global.constants.MetricNames;
 import com.ticketrush.global.event.DomainEventEnvelope;
 import com.ticketrush.global.exception.BusinessException;
+import com.ticketrush.global.json.DeserializationException;
 import com.ticketrush.global.json.JsonConverter;
 import com.ticketrush.global.status.ErrorStatus;
 import com.ticketrush.shared.booking.event.SeatConfirmFailedEvent;
@@ -203,15 +204,33 @@ class SeatConfirmFailedEventListenerTest {
   }
 
   @Test
-  @DisplayName("PG 통신 실패면 보상 없이 예외를 전파하고 오프셋을 커밋하지 않는다(재시도→DLT)")
+  @DisplayName("PG 통신 실패면 보상 없이 원 예외를 그대로 전파하고 오프셋을 커밋하지 않는다(재시도→DLT)")
   void handleSeatConfirmFailed_pgCommunicationFailure_rethrows() {
     // given: 이 케이스를 #269 표준(KafkaConsumerErrorPolicy.isPermanent)으로 분류하면 BusinessException 이라
     // 영구로 판정돼 ack 된다 — 과금된 건의 보상 신호가 조용히 유실된다. 그 회귀를 막는 테스트다.
-    givenFailure(new BusinessException(ErrorStatus.PAYMENT_PG_COMMUNICATION_FAILED));
+    BusinessException communicationFailure =
+        new BusinessException(ErrorStatus.PAYMENT_PG_COMMUNICATION_FAILED);
+    givenFailure(communicationFailure);
+
+    // when & then: 다른 예외로 바꿔 던지면 상위 #269 분류가 달라지므로 동일 인스턴스까지 못 박는다
+    assertThatThrownBy(() -> listener.handleSeatConfirmFailed(envelope(), acknowledgment))
+        .isSameAs(communicationFailure);
+
+    verify(paymentEventPublisher, never()).publishRefundFailed(any(), any(), any(), any());
+    verify(acknowledgment, never()).acknowledge();
+  }
+
+  @Test
+  @DisplayName("역직렬화에 실패하면 보상 없이 예외를 전파하고 오프셋을 커밋하지 않는다(포이즌 메시지 보존)")
+  void handleSeatConfirmFailed_deserializationFailure_rethrows() {
+    // given: DeserializationException 은 BusinessException 하위라 결정적 거절 분기와 같은 catch 로 들어온다.
+    // 여기서 ack 하면 대상조차 식별 못 한 과금 건이 조용히 사라진다. catch 순서·분기 조건의 회귀를 막는다.
+    DeserializationException failure = new DeserializationException(new RuntimeException("broken"));
+    given(jsonConverter.deserialize(PAYLOAD, SeatConfirmFailedEvent.class)).willThrow(failure);
 
     // when & then
     assertThatThrownBy(() -> listener.handleSeatConfirmFailed(envelope(), acknowledgment))
-        .isInstanceOf(BusinessException.class);
+        .isSameAs(failure);
 
     verify(paymentEventPublisher, never()).publishRefundFailed(any(), any(), any(), any());
     verify(acknowledgment, never()).acknowledge();
