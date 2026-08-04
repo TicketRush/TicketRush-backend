@@ -123,18 +123,20 @@ class BookingRecordRefundFailureUseCaseTest {
   }
 
   @Test
-  @DisplayName("교차 경로: 환불을 요청한 적 없는 CONFIRMED 예매는 복원 대상이 아니다")
-  void execute_no_op_when_confirmed_without_refund_failure() {
-    // given: REFUNDING을 거치지 않은 CONFIRMED에 실패 이벤트가 오는 건 비정상 교차 경로다
+  @DisplayName("보상 경로: REFUNDING을 거치지 않은 CONFIRMED에도 실패 시각을 기록한다")
+  void execute_records_failure_on_confirmed_without_prior_failure() {
+    // given: 좌석 확정 실패 보상(#492)은 예매 상태를 바꾸지 않고 곧바로 환불을 걸므로(refund-first),
+    // 그 환불이 PG에 거절되면 CONFIRMED이면서 refundFailedAt이 없는 채로 실패가 도착한다.
     Booking booking = bookingWithStatus(BookingStatus.CONFIRMED);
     given(bookingRepository.findById(BOOKING_ID)).willReturn(Optional.of(booking));
 
     // when
     bookingRecordRefundFailureUseCase.execute(BOOKING_ID, FAILED_AT);
 
-    // then
+    // then: 전이는 없고(이미 CONFIRMED) 기록만 남는다. 이 기록이 없으면 미해결 목록에 잡히지 않고
+    // 관리자 재환불 API도 BOOKING_REFUND_RETRY_NOT_ALLOWED로 거부해 수동 복구 수단까지 막힌다.
     assertThat(booking.getBookingStatus()).isEqualTo(BookingStatus.CONFIRMED);
-    assertThat(booking.getRefundFailedAt()).isNull();
+    assertThat(booking.getRefundFailedAt()).isEqualTo(FAILED_AT);
   }
 
   @Test

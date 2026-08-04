@@ -34,8 +34,14 @@ public class FailedRefundRecorder {
    *
    * <p>통신 실패({@link ErrorStatus#PAYMENT_PG_COMMUNICATION_FAILED}, 성공 여부 불명 → 재시도)와 구분한다. FAILED 이력
    * 기록(본 컴포넌트)과 보상 이벤트 발행({@link
-   * com.ticketrush.boundedcontext.payment.in.eventlistener.RefundRequestedEventListener})이 반드시 같은
-   * 기준으로 짝을 맞춰야 하므로, 두 곳이 각각 하드코딩하지 않고 이 술어를 공유한다.
+   * com.ticketrush.boundedcontext.payment.in.eventlistener.RefundRequestedEventListener}, {@link
+   * com.ticketrush.boundedcontext.payment.in.eventlistener.SeatConfirmFailedEventListener})이 반드시 같은
+   * 기준으로 짝을 맞춰야 하므로, 세 곳이 각각 하드코딩하지 않고 이 술어를 공유한다.
+   *
+   * <p><b>현재 판별은 PG 응답의 4xx 전건을 결정적 거절로 본다 (#573).</b> {@code TossPaymentCancelClient} 가 모든 4xx 를
+   * {@code PAYMENT_REFUND_FAILED} 로 매핑하기 때문이다. 그래서 재시도하면 성공할 응답 — 이전 요청 처리 중을 뜻하는 {@code
+   * IDEMPOTENT_REQUEST_PROCESSING}(409)이나 rate limit(429) — 까지 "PG 가 거절함"으로 확정된다. 좌석 확정 실패
+   * 보상(#492)은 사용자가 다시 시도할 수단이 없어 그대로 수동 처리 대상이 되므로, 이 술어를 손볼 때 #573 을 함께 본다.
    */
   public static boolean isDeterministicRejection(BusinessException e) {
     return e.getErrorStatus() == ErrorStatus.PAYMENT_REFUND_FAILED;

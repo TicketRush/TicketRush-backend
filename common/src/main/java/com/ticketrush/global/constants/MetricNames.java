@@ -79,6 +79,10 @@ public class MetricNames {
   public static final String TAG_PROVIDER = "provider";
   // 이벤트를 만든 발행 경로(#520). 값은 seat-service의 SeatEventSource 열거형이 SSOT다.
   public static final String TAG_SOURCE = "source";
+  // 환불을 유발한 주체(#492). 값은 payment-service의 RefundTrigger 열거형이 SSOT다. 사용자 취소와
+  // 사고 보상은 발생 자체의 의미가 달라(후자는 곧 사고 건수다) 알림 임계도 따로 잡아야 하는데,
+  // 이 태그가 없으면 두 건이 PAYMENT_REFUND 한 시계열에 섞여 보상 발생률을 볼 수 없다.
+  public static final String TAG_TRIGGER = "trigger";
 
   // ===== Tag values =====
   public static final String RESULT_SUCCESS = "success";

@@ -16,6 +16,7 @@ import com.ticketrush.boundedcontext.payment.domain.entity.Refund;
 import com.ticketrush.boundedcontext.payment.domain.types.PaymentProvider;
 import com.ticketrush.boundedcontext.payment.domain.types.PaymentStatus;
 import com.ticketrush.boundedcontext.payment.domain.types.RefundStatus;
+import com.ticketrush.boundedcontext.payment.domain.types.RefundTrigger;
 import com.ticketrush.boundedcontext.payment.out.apiclient.PaymentCancelClientRouter;
 import com.ticketrush.boundedcontext.payment.out.apiclient.PaymentCancelCommand;
 import com.ticketrush.boundedcontext.payment.out.apiclient.PaymentCancelResult;
@@ -24,7 +25,6 @@ import com.ticketrush.boundedcontext.payment.out.repository.RefundRepository;
 import com.ticketrush.global.constants.MetricNames;
 import com.ticketrush.global.exception.BusinessException;
 import com.ticketrush.global.status.ErrorStatus;
-import com.ticketrush.shared.booking.event.RefundRequestedEvent;
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import java.lang.reflect.Field;
 import java.time.LocalDateTime;
@@ -71,11 +71,6 @@ class PaymentRefundByBookingUseCaseTest {
   private static final Long AMOUNT = 55_000L;
   private static final String BOOKING_NUMBER = "BOOK-1234";
 
-  private RefundRequestedEvent event() {
-    return new RefundRequestedEvent(
-        BOOKING_ID, BOOKING_NUMBER, SEAT_ID, 10L, LocalDateTime.of(2026, 5, 22, 10, 0));
-  }
-
   @Test
   @DisplayName(
       "COMPLETED 결제가 있으면 PG 취소 후 bookingNumber를 실어 PaymentCanceledEvent를 발행하고 REFUNDED를 반환한다")
@@ -101,7 +96,9 @@ class PaymentRefundByBookingUseCaseTest {
             });
 
     // when
-    RefundOutcome outcome = paymentRefundByBookingUseCase.execute(event());
+    RefundOutcome outcome =
+        paymentRefundByBookingUseCase.execute(
+            BOOKING_ID, BOOKING_NUMBER, RefundTrigger.USER_CANCEL);
 
     // then
     assertThat(outcome).isEqualTo(RefundOutcome.REFUNDED);
@@ -114,6 +111,7 @@ class PaymentRefundByBookingUseCaseTest {
     assertThat(command.paymentKey()).isEqualTo("pgKey_xyz");
     assertThat(command.amount()).isEqualTo(AMOUNT);
     assertThat(command.idempotencyKey()).isEqualTo("REFUND-0000001");
+    assertThat(command.reason()).isEqualTo(RefundTrigger.USER_CANCEL.getReason());
 
     // 성공 이벤트에 bookingNumber가 실려야 좌석 소유 교차검증(ABA 방지)이 가능하다.
     verify(paymentEventPublisher)
@@ -152,7 +150,9 @@ class PaymentRefundByBookingUseCaseTest {
         .willReturn(Optional.empty());
 
     // when
-    RefundOutcome outcome = paymentRefundByBookingUseCase.execute(event());
+    RefundOutcome outcome =
+        paymentRefundByBookingUseCase.execute(
+            BOOKING_ID, BOOKING_NUMBER, RefundTrigger.USER_CANCEL);
 
     // then
     assertThat(outcome).isEqualTo(RefundOutcome.ALREADY_SETTLED);
@@ -190,7 +190,9 @@ class PaymentRefundByBookingUseCaseTest {
     given(refundRepository.findByBookingId(BOOKING_ID)).willReturn(Optional.of(refund));
 
     // when
-    RefundOutcome outcome = paymentRefundByBookingUseCase.execute(event());
+    RefundOutcome outcome =
+        paymentRefundByBookingUseCase.execute(
+            BOOKING_ID, BOOKING_NUMBER, RefundTrigger.USER_CANCEL);
 
     // then: PG 재호출·재영속화 없이 커밋된 데이터만 재전파한다.
     assertThat(outcome).isEqualTo(RefundOutcome.REPUBLISHED);
@@ -219,13 +221,52 @@ class PaymentRefundByBookingUseCaseTest {
     given(paymentCancelClientRouter.cancel(any())).willThrow(rejected);
 
     // when & then: 원 예외가 그대로 리스너로 전파돼 보상/재시도로 분류된다.
-    assertThatThrownBy(() -> paymentRefundByBookingUseCase.execute(event())).isSameAs(rejected);
+    assertThatThrownBy(
+            () ->
+                paymentRefundByBookingUseCase.execute(
+                    BOOKING_ID, BOOKING_NUMBER, RefundTrigger.USER_CANCEL))
+        .isSameAs(rejected);
 
     // FAILED 이력 기록은 recorder에 위임한다(분류·저장·멱등은 FailedRefundRecorderTest에서 검증).
     verify(failedRefundRecorder).recordIfRejected(payment, rejected);
     verify(paymentCancelPersister, never()).persist(any(), any(Refund.class));
     verify(paymentEventPublisher, never())
         .publishCanceled(any(), any(), any(), any(), any(), any(), any(), any());
+  }
+
+  @Test
+  @DisplayName("보상 트리거로 호출하면 사고 보상 사유가 PG 취소 요청과 Refund에 함께 실린다")
+  void execute_carries_trigger_reason_to_pg_and_refund() throws Exception {
+    // given: 좌석 확정 실패 보상(#492)은 사용자 취소와 사유가 달라야 PG 관리자 화면·정산에서 사고 건을 셀 수 있다.
+    Payment payment = completedPayment();
+    given(paymentRepository.findFirstByBookingIdAndStatus(BOOKING_ID, PaymentStatus.COMPLETED))
+        .willReturn(Optional.of(payment));
+    given(paymentCancelClientRouter.cancel(any()))
+        .willReturn(
+            new PaymentCancelResult("PG-REFUND-1", AMOUNT, LocalDateTime.of(2026, 5, 22, 10, 30)));
+
+    Payment canceled = completedPayment();
+    canceled.markCanceled();
+    given(paymentCancelPersister.persist(eq(PAYMENT_ID), any(Refund.class)))
+        .willAnswer(
+            invocation ->
+                new PaymentCancelPersister.CancelPersisted(canceled, invocation.getArgument(1)));
+
+    // when
+    paymentRefundByBookingUseCase.execute(
+        BOOKING_ID, BOOKING_NUMBER, RefundTrigger.SEAT_CONFIRM_FAILED);
+
+    // then
+    String expectedReason = RefundTrigger.SEAT_CONFIRM_FAILED.getReason();
+
+    ArgumentCaptor<PaymentCancelCommand> commandCaptor =
+        ArgumentCaptor.forClass(PaymentCancelCommand.class);
+    verify(paymentCancelClientRouter).cancel(commandCaptor.capture());
+    assertThat(commandCaptor.getValue().reason()).isEqualTo(expectedReason);
+
+    ArgumentCaptor<Refund> refundCaptor = ArgumentCaptor.forClass(Refund.class);
+    verify(paymentCancelPersister).persist(eq(PAYMENT_ID), refundCaptor.capture());
+    assertThat(refundCaptor.getValue().getReason()).isEqualTo(expectedReason);
   }
 
   private Payment completedPayment() throws Exception {

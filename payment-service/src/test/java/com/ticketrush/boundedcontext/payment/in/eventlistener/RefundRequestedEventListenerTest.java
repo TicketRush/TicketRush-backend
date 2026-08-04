@@ -13,6 +13,7 @@ import static org.mockito.Mockito.verify;
 import com.ticketrush.boundedcontext.payment.app.support.PaymentEventPublisher;
 import com.ticketrush.boundedcontext.payment.app.usecase.PaymentRefundByBookingUseCase;
 import com.ticketrush.boundedcontext.payment.app.usecase.PaymentRefundByBookingUseCase.RefundOutcome;
+import com.ticketrush.boundedcontext.payment.domain.types.RefundTrigger;
 import com.ticketrush.global.constants.MetricNames;
 import com.ticketrush.global.event.DomainEventEnvelope;
 import com.ticketrush.global.exception.BusinessException;
@@ -75,7 +76,9 @@ class RefundRequestedEventListenerTest {
   void handleRefundRequested_success() {
     // given
     given(jsonConverter.deserialize(PAYLOAD, RefundRequestedEvent.class)).willReturn(event());
-    given(paymentRefundByBookingUseCase.execute(any(RefundRequestedEvent.class)))
+    given(
+            paymentRefundByBookingUseCase.execute(
+                BOOKING_ID, BOOKING_NUMBER, RefundTrigger.USER_CANCEL))
         .willReturn(RefundOutcome.REFUNDED);
 
     // when
@@ -87,7 +90,12 @@ class RefundRequestedEventListenerTest {
 
     assertThat(
             meterRegistry
-                .counter(MetricNames.PAYMENT_REFUND, MetricNames.TAG_OUTCOME, "refunded")
+                .counter(
+                    MetricNames.PAYMENT_REFUND,
+                    MetricNames.TAG_OUTCOME,
+                    "refunded",
+                    MetricNames.TAG_TRIGGER,
+                    RefundTrigger.USER_CANCEL.tag())
                 .count())
         .isEqualTo(1.0);
   }
@@ -97,7 +105,9 @@ class RefundRequestedEventListenerTest {
   void handleRefundRequested_alreadySettled() {
     // given
     given(jsonConverter.deserialize(PAYLOAD, RefundRequestedEvent.class)).willReturn(event());
-    given(paymentRefundByBookingUseCase.execute(any(RefundRequestedEvent.class)))
+    given(
+            paymentRefundByBookingUseCase.execute(
+                BOOKING_ID, BOOKING_NUMBER, RefundTrigger.USER_CANCEL))
         .willReturn(RefundOutcome.ALREADY_SETTLED);
 
     // when
@@ -113,7 +123,9 @@ class RefundRequestedEventListenerTest {
   void handleRefundRequested_republished() {
     // given
     given(jsonConverter.deserialize(PAYLOAD, RefundRequestedEvent.class)).willReturn(event());
-    given(paymentRefundByBookingUseCase.execute(any(RefundRequestedEvent.class)))
+    given(
+            paymentRefundByBookingUseCase.execute(
+                BOOKING_ID, BOOKING_NUMBER, RefundTrigger.USER_CANCEL))
         .willReturn(RefundOutcome.REPUBLISHED);
 
     // when
@@ -131,7 +143,7 @@ class RefundRequestedEventListenerTest {
     given(jsonConverter.deserialize(PAYLOAD, RefundRequestedEvent.class)).willReturn(event());
     willThrow(new DataIntegrityViolationException("duplicate refund"))
         .given(paymentRefundByBookingUseCase)
-        .execute(any(RefundRequestedEvent.class));
+        .execute(BOOKING_ID, BOOKING_NUMBER, RefundTrigger.USER_CANCEL);
 
     // when & then
     assertThatCode(() -> listener.handleRefundRequested(envelope(), acknowledgment))
@@ -148,7 +160,7 @@ class RefundRequestedEventListenerTest {
     given(jsonConverter.deserialize(PAYLOAD, RefundRequestedEvent.class)).willReturn(event());
     willThrow(new BusinessException(ErrorStatus.PAYMENT_REFUND_FAILED))
         .given(paymentRefundByBookingUseCase)
-        .execute(any(RefundRequestedEvent.class));
+        .execute(BOOKING_ID, BOOKING_NUMBER, RefundTrigger.USER_CANCEL);
 
     // when & then
     assertThatCode(() -> listener.handleRefundRequested(envelope(), acknowledgment))
@@ -159,7 +171,14 @@ class RefundRequestedEventListenerTest {
             eq(BOOKING_ID), eq(BOOKING_NUMBER), eq("PG 환불 처리 실패"), any(LocalDateTime.class));
     verify(acknowledgment).acknowledge();
 
-    assertThat(meterRegistry.counter(MetricNames.PAYMENT_REFUND_FAILED).count()).isEqualTo(1.0);
+    assertThat(
+            meterRegistry
+                .counter(
+                    MetricNames.PAYMENT_REFUND_FAILED,
+                    MetricNames.TAG_TRIGGER,
+                    RefundTrigger.USER_CANCEL.tag())
+                .count())
+        .isEqualTo(1.0);
   }
 
   @Test
@@ -169,7 +188,7 @@ class RefundRequestedEventListenerTest {
     given(jsonConverter.deserialize(PAYLOAD, RefundRequestedEvent.class)).willReturn(event());
     willThrow(new BusinessException(ErrorStatus.PAYMENT_PG_COMMUNICATION_FAILED))
         .given(paymentRefundByBookingUseCase)
-        .execute(any(RefundRequestedEvent.class));
+        .execute(BOOKING_ID, BOOKING_NUMBER, RefundTrigger.USER_CANCEL);
 
     // when & then
     assertThatThrownBy(() -> listener.handleRefundRequested(envelope(), acknowledgment))
@@ -186,7 +205,7 @@ class RefundRequestedEventListenerTest {
     given(jsonConverter.deserialize(PAYLOAD, RefundRequestedEvent.class)).willReturn(event());
     willThrow(new RuntimeException("PG 일시 장애"))
         .given(paymentRefundByBookingUseCase)
-        .execute(any(RefundRequestedEvent.class));
+        .execute(BOOKING_ID, BOOKING_NUMBER, RefundTrigger.USER_CANCEL);
 
     // when & then
     assertThatThrownBy(() -> listener.handleRefundRequested(envelope(), acknowledgment))

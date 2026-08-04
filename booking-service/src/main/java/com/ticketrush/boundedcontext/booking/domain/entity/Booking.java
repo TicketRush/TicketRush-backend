@@ -211,15 +211,21 @@ public class Booking extends AutoIdBaseEntity {
    * refundFailedAt}으로만 남기고, 사유는 payment의 refund 테이블(FAILED 이력)이 SSOT다.
    *
    * <p>이미 복원된 예매(CONFIRMED이고 {@code refundFailedAt}이 있음)에 이벤트가 재전달되면 멱등 처리한다(전이 없이 {@code true}).
-   * REFUNDING이 아닌 그 외 상태(REFUNDED로 이미 종결됐거나 CANCELED/PENDING 등 교차 경로)는 전이하지 않고 {@code false}를
-   * 반환한다(예외를 던지지 않아 호출 측이 ack 하도록).
+   * REFUNDING도 CONFIRMED도 아닌 상태(REFUNDED로 이미 종결됐거나 CANCELED/PENDING 등 교차 경로)는 전이하지 않고 {@code
+   * false}를 반환한다(예외를 던지지 않아 호출 측이 ack 하도록).
    *
    * <p>REFUNDING이더라도 {@code failedAt}이 이미 기록된 {@code refundFailedAt}보다 나중일 때만 복원한다. Inbox
    * retention이 만료된 뒤 옛 {@code RefundFailedEvent}가 재생돼 <b>진행 중인 재환불 시도</b> 도중 도착하면, 그 시도를 조용히 중단시키고
    * stale 시각을 덮어쓰기 때문이다.
    *
+   * <p><b>REFUNDING을 거치지 않은 CONFIRMED에도 실패를 기록한다 (#492).</b> 좌석 확정 실패 보상은 사용자 취소와 달리 예매 상태를 바꾸지 않고
+   * 곧바로 환불을 걸므로(refund-first, ADR 0005), 그 환불이 PG에 거절되면 CONFIRMED이면서 {@code refundFailedAt}이 없는 채로
+   * 실패가 도착한다. 이 분기가 없으면 {@code false}로 떨어져 실패가 기록되지 않고, 그러면 미해결 목록({@code CONFIRMED +
+   * refundFailedAt IS NOT NULL})에도 잡히지 않을뿐더러 관리자 재환불 API가 {@code BOOKING_REFUND_RETRY_NOT_ALLOWED}로
+   * 거부해 <b>수동 복구 수단까지 함께 막힌다</b>. 과금이 남은 건에서 그건 가장 필요한 도구다.
+   *
    * @param failedAt PG 환불이 최종 실패한 시각
-   * @return 복원(또는 이미 복원)됐으면 {@code true}, 전이 불가 상태라 전이하지 않았으면 {@code false}
+   * @return 복원(또는 이미 복원)됐거나 실패를 기록했으면 {@code true}, 전이 불가 상태면 {@code false}
    */
   public boolean recordRefundFailure(LocalDateTime failedAt) {
     if (this.bookingStatus == BookingStatus.REFUNDING) {
@@ -231,7 +237,12 @@ public class Booking extends AutoIdBaseEntity {
       this.refundFailedAt = failedAt;
       return true;
     }
-    if (this.bookingStatus == BookingStatus.CONFIRMED && this.refundFailedAt != null) {
+    if (this.bookingStatus == BookingStatus.CONFIRMED) {
+      if (this.refundFailedAt == null) {
+        // 보상 환불(#492)의 실패다. 이미 CONFIRMED라 전이는 없고 실패 사실만 남긴다.
+        this.refundFailedAt = failedAt;
+      }
+      // 이미 기록이 있으면 갱신하지 않는다 — 복원 시점이 곧 미해결 진입 시각이고, 재전달로 밀리면 안 된다.
       return true;
     }
     return false;
