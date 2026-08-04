@@ -2,6 +2,11 @@
 
 set -euo pipefail
 
+if ! command -v docker >/dev/null 2>&1; then
+  echo "ERROR: docker 명령을 찾을 수 없습니다. Docker가 설치된 호스트에서 실행하세요." >&2
+  exit 2
+fi
+
 SCRIPT_DIR="$(
   cd "$(dirname "${BASH_SOURCE[0]}")"
   pwd
