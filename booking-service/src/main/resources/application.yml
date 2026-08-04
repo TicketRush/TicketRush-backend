@@ -39,6 +39,12 @@ service:
     # performance-service가 살아 있으면서 느리기만 하면 예외가 없어 통신 실패 중단이 돌지 않고,
     # 페이지 상한(50건)이 그대로 누적된다. 초과하면 잔여 공연 필드를 비운 채 응답한다.
     bulk-budget-ms: ${PERFORMANCE_BULK_BUDGET_MS:3000}
+  user:
+    url: ${USER_SERVICE_URL:http://localhost:8081}
+    # 관리자 예매 목록 보강(예매자 이름·이메일) 전용 (#561). 공연·좌석 보강과 같은 논리로 빨리 포기한다 —
+    # 실패해도 부분 응답(예매자 필드 null)으로 계속 가고, 한 요청 안에서 세 보강 예산이 직렬로 얹힌다.
+    connect-timeout-ms: ${USER_HTTP_CONNECT_TIMEOUT_MS:1000}
+    read-timeout-ms: ${USER_HTTP_READ_TIMEOUT_MS:2000}
   ticket:
     url: ${TICKET_SERVICE_URL:http://localhost:8087}
     # 취소 경로의 입장권 판정 전용. 단일 행 조회이므로 공용 예산(3s/10s)을 쓰지 않는다 —

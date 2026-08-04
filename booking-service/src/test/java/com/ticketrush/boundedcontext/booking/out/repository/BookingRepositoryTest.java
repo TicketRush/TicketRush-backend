@@ -3,10 +3,12 @@ package com.ticketrush.boundedcontext.booking.out.repository;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
+import com.ticketrush.boundedcontext.booking.app.dto.response.BookingPerformanceStatsRow;
 import com.ticketrush.boundedcontext.booking.domain.entity.Booking;
 import com.ticketrush.boundedcontext.booking.domain.types.BookingStatus;
 import com.ticketrush.global.jpa.config.JpaConfig;
 import java.time.LocalDateTime;
+import java.util.List;
 import java.util.Optional;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -149,10 +151,61 @@ class BookingRepositoryTest {
         .isInstanceOf(ObjectOptimisticLockingFailureException.class);
   }
 
+  @Test
+  @DisplayName("관리자 통계: 공연별로 전체·완료(CONFIRMED)·취소(CANCELED+REFUNDED) 수를 집계한다")
+  void aggregateStatsByPerformance_CountsByStatusPerPerformance() {
+    // given: 공연 10에 6개 상태를 하나씩, 공연 20에 CONFIRMED 2건
+    bookingRepository.save(booking("BK-S1", BookingStatus.CONFIRMED, 10L));
+    bookingRepository.save(booking("BK-S2", BookingStatus.CANCELED, 10L));
+    bookingRepository.save(booking("BK-S3", BookingStatus.REFUNDED, 10L));
+    bookingRepository.save(booking("BK-S4", BookingStatus.EXPIRED, 10L));
+    bookingRepository.save(booking("BK-S5", BookingStatus.PENDING, 10L));
+    bookingRepository.save(booking("BK-S6", BookingStatus.REFUNDING, 10L));
+    bookingRepository.save(booking("BK-S7", BookingStatus.CONFIRMED, 20L));
+    bookingRepository.save(booking("BK-S8", BookingStatus.CONFIRMED, 20L));
+
+    // when
+    List<BookingPerformanceStatsRow> rows =
+        bookingRepository.aggregateStatsByPerformance(
+            BookingStatus.CONFIRMED, BookingStatus.CANCELED, BookingStatus.REFUNDED);
+
+    // then: performanceId 오름차순으로 고정된다
+    assertThat(rows)
+        .extracting(BookingPerformanceStatsRow::performanceId)
+        .containsExactly(10L, 20L);
+
+    BookingPerformanceStatsRow first = rows.get(0);
+    assertThat(first.totalCount()).isEqualTo(6);
+    assertThat(first.confirmedCount()).isEqualTo(1);
+    // EXPIRED·PENDING·REFUNDING은 취소로 세지 않는다 — 넣으면 취소율이 부풀려진다.
+    assertThat(first.canceledCount()).isEqualTo(2);
+
+    BookingPerformanceStatsRow second = rows.get(1);
+    assertThat(second.totalCount()).isEqualTo(2);
+    assertThat(second.confirmedCount()).isEqualTo(2);
+    assertThat(second.canceledCount()).isZero();
+  }
+
+  @Test
+  @DisplayName("관리자 통계: 예매가 없으면 빈 목록을 반환한다")
+  void aggregateStatsByPerformance_WhenNoBookings_ReturnsEmpty() {
+    // when
+    List<BookingPerformanceStatsRow> rows =
+        bookingRepository.aggregateStatsByPerformance(
+            BookingStatus.CONFIRMED, BookingStatus.CANCELED, BookingStatus.REFUNDED);
+
+    // then
+    assertThat(rows).isEmpty();
+  }
+
   private Booking booking(String bookingNumber, BookingStatus status) {
+    return booking(bookingNumber, status, 2L);
+  }
+
+  private Booking booking(String bookingNumber, BookingStatus status, Long performanceId) {
     return Booking.builder()
         .userId(1L)
-        .performanceId(2L)
+        .performanceId(performanceId)
         .seatId(3L)
         .bookingNumber(bookingNumber)
         .bookingStatus(status)

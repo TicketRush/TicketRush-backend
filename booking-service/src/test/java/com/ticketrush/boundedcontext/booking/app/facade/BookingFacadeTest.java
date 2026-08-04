@@ -12,15 +12,21 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 
 import com.ticketrush.boundedcontext.booking.app.dto.request.BookingCreateRequest;
+import com.ticketrush.boundedcontext.booking.app.dto.response.BookingAdminStatsResponse;
+import com.ticketrush.boundedcontext.booking.app.dto.response.BookingAdminSummaryResponse;
 import com.ticketrush.boundedcontext.booking.app.dto.response.BookingCountResponse;
 import com.ticketrush.boundedcontext.booking.app.dto.response.BookingDetailResponse;
 import com.ticketrush.boundedcontext.booking.app.dto.response.BookingMySummaryResponse;
 import com.ticketrush.boundedcontext.booking.app.dto.response.BookingPendingResponse;
+import com.ticketrush.boundedcontext.booking.app.dto.response.BookingPerformanceStatsRow;
 import com.ticketrush.boundedcontext.booking.app.dto.response.BookingSummaryResponse;
+import com.ticketrush.boundedcontext.booking.app.usecase.BookingAdminRefundUseCase;
 import com.ticketrush.boundedcontext.booking.app.usecase.BookingAdminRetryRefundUseCase;
 import com.ticketrush.boundedcontext.booking.app.usecase.BookingCancelMyBookingUseCase;
 import com.ticketrush.boundedcontext.booking.app.usecase.BookingCountUseCase;
 import com.ticketrush.boundedcontext.booking.app.usecase.BookingCreateUseCase;
+import com.ticketrush.boundedcontext.booking.app.usecase.BookingGetAdminBookingsUseCase;
+import com.ticketrush.boundedcontext.booking.app.usecase.BookingGetAdminStatsUseCase;
 import com.ticketrush.boundedcontext.booking.app.usecase.BookingGetMyBookingDetailUseCase;
 import com.ticketrush.boundedcontext.booking.app.usecase.BookingGetMyBookingsUseCase;
 import com.ticketrush.boundedcontext.booking.app.usecase.BookingGetRefundingStuckBookingsUseCase;
@@ -32,7 +38,9 @@ import com.ticketrush.boundedcontext.booking.domain.entity.Booking;
 import com.ticketrush.boundedcontext.booking.domain.types.BookingStatus;
 import com.ticketrush.boundedcontext.booking.out.apiclient.PerformanceRestClient;
 import com.ticketrush.boundedcontext.booking.out.apiclient.SeatRestClient;
+import com.ticketrush.boundedcontext.booking.out.apiclient.UserRestClient;
 import com.ticketrush.boundedcontext.booking.out.apiclient.dto.PerformanceInfoResponse;
+import com.ticketrush.boundedcontext.booking.out.apiclient.dto.UserSummaryInfoResponse;
 import com.ticketrush.global.dto.request.OffsetPageRequest;
 import com.ticketrush.global.exception.BusinessException;
 import java.time.LocalDate;
@@ -70,6 +78,10 @@ class BookingFacadeTest {
   @Mock private BookingValidateTicketNotUsedUseCase bookingValidateTicketNotUsedUseCase;
   @Mock private BookingAdminRetryRefundUseCase bookingAdminRetryRefundUseCase;
   @Mock private SeatRestClient seatRestClient;
+  @Mock private BookingGetAdminBookingsUseCase bookingGetAdminBookingsUseCase;
+  @Mock private BookingGetAdminStatsUseCase bookingGetAdminStatsUseCase;
+  @Mock private BookingAdminRefundUseCase bookingAdminRefundUseCase;
+  @Mock private UserRestClient userRestClient;
 
   private static Booking myBooking(Long userId, String bookingNumber) {
     return Booking.builder()
@@ -463,5 +475,143 @@ class BookingFacadeTest {
         .hasFieldOrPropertyWithValue("errorStatus", BOOKING_CANCEL_NOT_ALLOWED_TICKET_USED);
 
     verifyNoInteractions(bookingAdminRetryRefundUseCase);
+  }
+
+  private static Booking adminBooking(Long userId, Long performanceId, Long seatId) {
+    return Booking.builder()
+        .userId(userId)
+        .performanceId(performanceId)
+        .seatId(seatId)
+        .bookingNumber("BK-" + userId)
+        .bookingStatus(BookingStatus.CONFIRMED)
+        .build();
+  }
+
+  @Test
+  @DisplayName("성공: 관리자 목록은 공연·좌석·예매자를 보강해 모든 필드를 채운다")
+  void getAdminBookings_enriches_all_three_axes() {
+    // given
+    OffsetPageRequest pageRequest = new OffsetPageRequest(0, 10);
+    Booking booking = adminBooking(5L, 2L, 3L);
+    given(bookingGetAdminBookingsUseCase.execute(pageRequest))
+        .willReturn(new PageImpl<>(List.of(booking)));
+    given(performanceRestClient.getPerformances(Set.of(2L)))
+        .willReturn(Map.of(2L, performanceInfo()));
+    given(seatRestClient.getSeatNumbers(List.of(3L))).willReturn(Map.of(3L, "A-1"));
+    given(userRestClient.getUsers(List.of(5L)))
+        .willReturn(Map.of(5L, new UserSummaryInfoResponse(5L, "김소희", "user@example.com")));
+
+    // when
+    Page<BookingAdminSummaryResponse> page = bookingFacade.getAdminBookings(pageRequest);
+
+    // then
+    BookingAdminSummaryResponse response = page.getContent().get(0);
+    assertThat(response.performanceTitle()).isEqualTo("오페라의 유령");
+    assertThat(response.performanceDate()).isEqualTo(LocalDate.of(2026, 5, 22));
+    assertThat(response.seatNumber()).isEqualTo("A-1");
+    assertThat(response.bookerName()).isEqualTo("김소희");
+    assertThat(response.bookerEmail()).isEqualTo("user@example.com");
+    assertThat(response.paymentAmount()).isEqualTo(150000L);
+    assertThat(response.seatCount()).isEqualTo(1);
+  }
+
+  @Test
+  @DisplayName("성공: 관리자 목록은 중복 ID를 묶어 각 서비스를 한 번씩만 호출한다")
+  void getAdminBookings_deduplicates_ids_per_service() {
+    // given: 같은 회원이 같은 공연의 좌석 2개를 예매했다
+    OffsetPageRequest pageRequest = new OffsetPageRequest(0, 10);
+    given(bookingGetAdminBookingsUseCase.execute(pageRequest))
+        .willReturn(new PageImpl<>(List.of(adminBooking(5L, 2L, 3L), adminBooking(5L, 2L, 4L))));
+    given(performanceRestClient.getPerformances(Set.of(2L))).willReturn(Map.of());
+    given(seatRestClient.getSeatNumbers(List.of(3L, 4L))).willReturn(Map.of());
+    given(userRestClient.getUsers(List.of(5L))).willReturn(Map.of());
+
+    // when
+    bookingFacade.getAdminBookings(pageRequest);
+
+    // then: 공연 1회, 회원 1회 (좌석만 2건)
+    verify(performanceRestClient).getPerformances(Set.of(2L));
+    verify(userRestClient).getUsers(List.of(5L));
+  }
+
+  @Test
+  @DisplayName("성공: 관리자 목록에서 예매자 조회가 실패해도 그 필드만 비고 나머지는 살아 있다")
+  void getAdminBookings_isolates_user_failure() {
+    // given: user-service만 실패해 빈 맵을 돌려준다
+    OffsetPageRequest pageRequest = new OffsetPageRequest(0, 10);
+    given(bookingGetAdminBookingsUseCase.execute(pageRequest))
+        .willReturn(new PageImpl<>(List.of(adminBooking(5L, 2L, 3L))));
+    given(performanceRestClient.getPerformances(Set.of(2L)))
+        .willReturn(Map.of(2L, performanceInfo()));
+    given(seatRestClient.getSeatNumbers(List.of(3L))).willReturn(Map.of(3L, "A-1"));
+    given(userRestClient.getUsers(List.of(5L))).willReturn(Map.of());
+
+    // when
+    Page<BookingAdminSummaryResponse> page = bookingFacade.getAdminBookings(pageRequest);
+
+    // then
+    BookingAdminSummaryResponse response = page.getContent().get(0);
+    assertThat(response.bookerName()).isNull();
+    assertThat(response.bookerEmail()).isNull();
+    assertThat(response.userId()).isEqualTo(5L); // 프론트 재조회 키는 남는다
+    assertThat(response.performanceTitle()).isEqualTo("오페라의 유령");
+    assertThat(response.seatNumber()).isEqualTo("A-1");
+  }
+
+  @Test
+  @DisplayName("성공: 통계는 완료 예매가 있는 공연만 가격을 조회한다")
+  void getAdminBookingStats_queries_only_revenue_contributing_performances() {
+    // given: 공연 20은 취소만 있어 매출에 기여하지 않는다
+    given(bookingGetAdminStatsUseCase.execute())
+        .willReturn(
+            List.of(
+                new BookingPerformanceStatsRow(10L, 5, 3, 2),
+                new BookingPerformanceStatsRow(20L, 4, 0, 4)));
+    given(performanceRestClient.getPerformances(Set.of(10L)))
+        .willReturn(Map.of(10L, performanceInfo()));
+
+    // when
+    BookingAdminStatsResponse response = bookingFacade.getAdminBookingStats();
+
+    // then: 공연 20은 왕복하지 않았는데도 매출이 정상 산출된다
+    verify(performanceRestClient).getPerformances(Set.of(10L));
+    assertThat(response.totalBookings()).isEqualTo(9);
+    assertThat(response.completedBookings()).isEqualTo(3);
+    assertThat(response.canceledBookings()).isEqualTo(6);
+    assertThat(response.totalRevenue()).isEqualTo(450000L);
+  }
+
+  @Test
+  @DisplayName("성공: 관리자 환불 처리는 입장 완료 검증을 유스케이스보다 먼저 수행한다")
+  void refundBooking_validates_ticket_before_usecase() {
+    // given
+    Long adminId = 99L;
+    String bookingNumber = "BK-1";
+
+    // when
+    bookingFacade.refundBooking(adminId, bookingNumber);
+
+    // then
+    InOrder inOrder = inOrder(bookingValidateTicketNotUsedUseCase, bookingAdminRefundUseCase);
+    inOrder.verify(bookingValidateTicketNotUsedUseCase).executeForAdmin(bookingNumber);
+    inOrder.verify(bookingAdminRefundUseCase).execute(adminId, bookingNumber);
+  }
+
+  @Test
+  @DisplayName("실패: 입장 완료 예매는 관리자 환불 처리도 차단하고 유스케이스를 호출하지 않는다")
+  void refundBooking_blocked_when_ticket_used() {
+    // given
+    Long adminId = 99L;
+    String bookingNumber = "BK-1";
+    doThrow(new BusinessException(BOOKING_CANCEL_NOT_ALLOWED_TICKET_USED))
+        .when(bookingValidateTicketNotUsedUseCase)
+        .executeForAdmin(bookingNumber);
+
+    // when & then
+    assertThatThrownBy(() -> bookingFacade.refundBooking(adminId, bookingNumber))
+        .isInstanceOf(BusinessException.class)
+        .hasFieldOrPropertyWithValue("errorStatus", BOOKING_CANCEL_NOT_ALLOWED_TICKET_USED);
+
+    verifyNoInteractions(bookingAdminRefundUseCase);
   }
 }

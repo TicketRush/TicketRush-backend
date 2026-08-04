@@ -1,5 +1,6 @@
 package com.ticketrush.boundedcontext.booking.out.repository;
 
+import com.ticketrush.boundedcontext.booking.app.dto.response.BookingPerformanceStatsRow;
 import com.ticketrush.boundedcontext.booking.domain.entity.Booking;
 import com.ticketrush.boundedcontext.booking.domain.types.BookingStatus;
 import java.time.LocalDateTime;
@@ -36,6 +37,29 @@ public interface BookingRepository extends JpaRepository<Booking, Long> {
 
   @Query("SELECT b.id FROM Booking b WHERE b.bookingNumber = :bookingNumber")
   Optional<Long> findIdByBookingNumber(@Param("bookingNumber") String bookingNumber);
+
+  /*
+   * 관리자 요약 통계 (#561). 매출이 performance.price 기반이라 공연별 그룹이 어차피 필요한데, 그 김에 전체·완료·취소
+   * 카운트도 같은 스캔에서 뽑아 booking을 한 번만 훑는다. performance_id가 NOT NULL이라 이 그룹은 전 행을
+   * 분할하므로 행별 합계가 곧 전체 합계다.
+   *
+   * ORDER BY로 순서를 고정한다 — 뒤이어 공연 가격을 순차 조회하는데 예산에 걸려 끊길 때 어느 공연이 빠지는지가
+   * 매 요청 달라지면 로그를 읽어 원인을 좁힐 수 없다.
+   */
+  @Query(
+      "SELECT new com.ticketrush.boundedcontext.booking.app.dto.response"
+          + ".BookingPerformanceStatsRow("
+          + "b.performanceId, COUNT(b), "
+          + "COUNT(CASE WHEN b.bookingStatus = :confirmed THEN 1 END), "
+          + "COUNT(CASE WHEN b.bookingStatus = :canceled "
+          + "OR b.bookingStatus = :refunded THEN 1 END)) "
+          + "FROM Booking b "
+          + "GROUP BY b.performanceId "
+          + "ORDER BY b.performanceId ASC")
+  List<BookingPerformanceStatsRow> aggregateStatsByPerformance(
+      @Param("confirmed") BookingStatus confirmed,
+      @Param("canceled") BookingStatus canceled,
+      @Param("refunded") BookingStatus refunded);
 
   @Query(
       "SELECT b.id FROM Booking b "

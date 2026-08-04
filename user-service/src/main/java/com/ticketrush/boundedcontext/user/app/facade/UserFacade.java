@@ -7,12 +7,15 @@ import com.ticketrush.boundedcontext.user.app.dto.response.SignupResponse;
 import com.ticketrush.boundedcontext.user.app.dto.response.SocialLoginResponse;
 import com.ticketrush.boundedcontext.user.app.dto.response.UserAuthInfoResponse;
 import com.ticketrush.boundedcontext.user.app.dto.response.UserMeResponse;
+import com.ticketrush.boundedcontext.user.app.dto.response.UserSummaryResponse;
 import com.ticketrush.boundedcontext.user.app.usecase.EmailExistsUseCase;
 import com.ticketrush.boundedcontext.user.app.usecase.GetUserAuthInfoByEmailUseCase;
 import com.ticketrush.boundedcontext.user.app.usecase.GetUserAuthInfoByUserIdUseCase;
 import com.ticketrush.boundedcontext.user.app.usecase.GetUserMeUseCase;
+import com.ticketrush.boundedcontext.user.app.usecase.GetUserSummariesUseCase;
 import com.ticketrush.boundedcontext.user.app.usecase.SignupUseCase;
 import com.ticketrush.boundedcontext.user.app.usecase.SocialLoginUseCase;
+import java.util.List;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Component;
 
@@ -26,6 +29,7 @@ public class UserFacade {
   private final GetUserAuthInfoByEmailUseCase getUserAuthInfoByEmailUseCase;
   private final GetUserMeUseCase getUserMeUseCase;
   private final GetUserAuthInfoByUserIdUseCase getUserAuthInfoByUserIdUseCase;
+  private final GetUserSummariesUseCase getUserSummariesUseCase;
 
   // 소셜 로그인
   public SocialLoginResponse socialLogin(SocialLoginRequest request) {
@@ -55,5 +59,10 @@ public class UserFacade {
   // userId로 회원 인증 정보 조회
   public UserAuthInfoResponse getUserAuthInfoByUserId(Long userId) {
     return getUserAuthInfoByUserIdUseCase.execute(userId);
+  }
+
+  // 내부 통신용 회원 요약 벌크 조회 (#561)
+  public List<UserSummaryResponse> getUserSummaries(List<Long> userIds) {
+    return getUserSummariesUseCase.execute(userIds);
   }
 }
