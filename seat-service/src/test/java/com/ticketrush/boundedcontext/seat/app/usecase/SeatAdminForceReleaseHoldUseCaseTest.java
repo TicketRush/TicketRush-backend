@@ -6,6 +6,7 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.BDDMockito.given;
+import static org.mockito.BDDMockito.willThrow;
 import static org.mockito.Mockito.inOrder;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
@@ -132,9 +133,10 @@ class SeatAdminForceReleaseHoldUseCaseTest {
   }
 
   @Test
-  @DisplayName("거절: 판매 완료 좌석은 409로 거절하고 아무것도 건드리지 않는다")
+  @DisplayName("거절: 판매 완료 좌석은 환불로 안내하는 전용 코드로 거절한다")
   void execute_rejects_sold_seat() {
     // given: 결제된 좌석을 되돌리는 것은 환불이지 강제 해제가 아니다(#561 환불 API 담당).
+    // 이미 해제된 좌석과 같은 코드로 뭉개면 화면이 '환불로 가라'를 안내하지 못한다.
     Seat seat = seat(SeatStatus.SOLD, null, BOOKING_NUMBER);
     given(seatRepository.findByIdAndPerformanceId(SEAT_ID, PERFORMANCE_ID))
         .willReturn(Optional.of(seat));
@@ -143,7 +145,7 @@ class SeatAdminForceReleaseHoldUseCaseTest {
     assertThatThrownBy(
             () -> seatAdminForceReleaseHoldUseCase.execute(ADMIN_ID, PERFORMANCE_ID, SEAT_ID))
         .isInstanceOf(BusinessException.class)
-        .hasFieldOrPropertyWithValue("errorStatus", ErrorStatus.SEAT_NOT_HELD);
+        .hasFieldOrPropertyWithValue("errorStatus", ErrorStatus.SEAT_SOLD_NOT_RELEASABLE);
 
     verify(seatRepository, never())
         .releaseExpiredHoldById(anyLong(), any(LocalDateTime.class), any(), any());
@@ -168,7 +170,33 @@ class SeatAdminForceReleaseHoldUseCaseTest {
   }
 
   @Test
-  @DisplayName("거절: 조회 이후 선점 상태가 바뀌어 조건부 UPDATE가 0건이면 409로 거절한다")
+  @DisplayName("성공: Redis 락 삭제가 실패해도 예외를 밖으로 내지 않는다 — 감사 로그가 뒤에서 끊기지 않게")
+  void execute_swallows_redis_failure_after_commit() {
+    // given: afterCommit 콜백은 개별 try/catch로 감싸이지 않아, 하나가 던지면 뒤 콜백이 실행되지 않는다.
+    // 커밋은 이미 끝나 좌석은 AVAILABLE인데 관리자에게 500이 나가는 것도 잘못된 신호다.
+    LocalDateTime notExpiredYet = LocalDateTime.now().plusMinutes(4);
+    Seat seat = seat(SeatStatus.HOLD, notExpiredYet, BOOKING_NUMBER);
+
+    given(seatRepository.findByIdAndPerformanceId(SEAT_ID, PERFORMANCE_ID))
+        .willReturn(Optional.of(seat));
+    given(
+            seatRepository.releaseExpiredHoldById(
+                eq(SEAT_ID), eq(notExpiredYet), eq(SeatStatus.HOLD), eq(SeatStatus.AVAILABLE)))
+        .willReturn(1);
+    willThrow(new IllegalStateException("redis down"))
+        .given(seatUnlockUseCase)
+        .forceRelease(SEAT_ID);
+
+    // when & then: 던지지 않는다
+    seatAdminForceReleaseHoldUseCase.execute(ADMIN_ID, PERFORMANCE_ID, SEAT_ID);
+
+    assertThat(seat.getSeatStatus()).isEqualTo(SeatStatus.AVAILABLE);
+    verify(seatUnlockUseCase).forceRelease(SEAT_ID);
+    verify(seatHoldExpiredPublisher).publish(seat);
+  }
+
+  @Test
+  @DisplayName("거절: 조회 이후 선점 상태가 바뀌어 조건부 UPDATE가 0건이면 재시도를 안내하는 전용 코드로 거절한다")
   void execute_rejects_when_conditional_update_affects_nothing() {
     // given: 조회와 UPDATE 사이에 결제가 확정됐거나 다른 예매가 재선점했다.
     LocalDateTime snapshot = LocalDateTime.now().plusMinutes(4);
@@ -185,7 +213,7 @@ class SeatAdminForceReleaseHoldUseCaseTest {
     assertThatThrownBy(
             () -> seatAdminForceReleaseHoldUseCase.execute(ADMIN_ID, PERFORMANCE_ID, SEAT_ID))
         .isInstanceOf(BusinessException.class)
-        .hasFieldOrPropertyWithValue("errorStatus", ErrorStatus.SEAT_NOT_HELD);
+        .hasFieldOrPropertyWithValue("errorStatus", ErrorStatus.SEAT_RELEASE_CONFLICT);
 
     // 이벤트도 락 해제도 없다. 락을 지우면 TTL 만료 이벤트가 영영 오지 않아 회수 경로가 사라진다.
     verifyNoInteractions(seatHoldExpiredPublisher, seatStatusEventPublisher, seatUnlockUseCase);

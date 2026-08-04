@@ -47,6 +47,12 @@ public class SeatAdminForceReleaseHoldUseCase {
             .findByIdAndPerformanceId(seatId, performanceId)
             .orElseThrow(() -> new BusinessException(ErrorStatus.SEAT_NOT_FOUND));
 
+    // 실패 사유를 코드로 가른다. 뭉개면 관리자가 "왜 안 됐는지"를 알 수 없고, 화면이 안내할 다음 행동도 갈린다 —
+    // 판매 완료는 환불로 가야 하고, 경합은 재조회 후 재시도가 유효하며, 이미 해제된 좌석은 할 일이 없다.
+    if (seat.getSeatStatus() == SeatStatus.SOLD) {
+      throw new BusinessException(ErrorStatus.SEAT_SOLD_NOT_RELEASABLE);
+    }
+
     if (seat.getSeatStatus() != SeatStatus.HOLD) {
       throw new BusinessException(ErrorStatus.SEAT_NOT_HELD);
     }
@@ -61,10 +67,31 @@ public class SeatAdminForceReleaseHoldUseCase {
             seatId, seat.getHoldExpiredAt(), SeatStatus.HOLD, SeatStatus.AVAILABLE);
 
     if (updated == 0) {
-      // 조회와 UPDATE 사이에 결제가 확정됐거나 다른 예매가 재선점했다. 관리자에게는 실패로 알린다.
-      log.info("관리자 강제 해제: 좌석 {}이(가) 조회 이후 선점 상태가 바뀌어 해제하지 못했습니다.", seatId);
-      throw new BusinessException(ErrorStatus.SEAT_NOT_HELD);
+      /*
+       * 조회와 UPDATE 사이에 결제가 확정됐거나 다른 예매가 재선점했다. 관리자에게는 실패로 알린다.
+       *
+       * holdExpiredAt을 함께 남기는 이유: 이 값이 null인 HOLD 좌석은 SQL에서 `= NULL`이 항상 UNKNOWN이라
+       * 어떤 해제 경로로도(만료 스케줄러·Redis 리스너·이 API) 영원히 풀리지 않는다. Seat.hold()를 거친
+       * 좌석은 non-null이 보장되지만 시딩·수동 DML로 들어온 행은 그 검증 밖이다. 로그에 null이 보이면
+       * 그것이 경합이 아니라 그 상황이라는 뜻이다.
+       */
+      log.warn(
+          "관리자 강제 해제: 좌석 {}이(가) 조회 이후 선점 상태가 바뀌어 해제하지 못했습니다. "
+              + "holdExpiredAt: {}, bookingNumber: {}",
+          seatId,
+          seat.getHoldExpiredAt(),
+          bookingNumber);
+      throw new BusinessException(ErrorStatus.SEAT_RELEASE_CONFLICT);
     }
+
+    /*
+     * 감사 로그를 가장 먼저 등록한다.
+     *
+     * afterCommit 콜백은 Spring이 개별 try/catch로 감싸지 않아, 앞 콜백이 던지면 뒤 콜백은 실행되지 않고
+     * 예외가 커밋 경로 밖으로 전파된다. 기록을 마지막에 등록하면 Redis 장애 한 번에 "해제는 됐는데 감사
+     * 기록만 없는" 상태가 만들어진다 — AdminAuditLogger가 발생하지 않는다고 적어 둔 바로 그 방향이다.
+     */
+    AdminAuditLogger.logAfterCommit("관리자 좌석 강제 해제", adminId, performanceId, seatId, bookingNumber);
 
     // 순서가 중요하다. publish는 seat의 bookingNumber를 읽는데 releaseHold()가 그것을 null로 지운다.
     seatHoldExpiredPublisher.publish(seat);
@@ -74,9 +101,6 @@ public class SeatAdminForceReleaseHoldUseCase {
     seat.releaseHold();
     seatStatusEventPublisher.publishAfterCommit(seat, SeatEventSource.ADMIN_FORCE_RELEASE);
     forceReleaseAfterCommit(seatId);
-    AdminAuditLogger.logAfterCommit("관리자 좌석 강제 해제", adminId, performanceId, seatId, bookingNumber);
-
-    log.info("관리자 강제 해제로 좌석 {}을(를) AVAILABLE로 반납했습니다. bookingNumber: {}", seatId, bookingNumber);
   }
 
   /**
@@ -90,7 +114,7 @@ public class SeatAdminForceReleaseHoldUseCase {
    */
   private void forceReleaseAfterCommit(Long seatId) {
     if (!TransactionSynchronizationManager.isSynchronizationActive()) {
-      seatUnlockUseCase.forceRelease(seatId);
+      releaseLockQuietly(seatId);
       return;
     }
 
@@ -98,8 +122,29 @@ public class SeatAdminForceReleaseHoldUseCase {
         new TransactionSynchronization() {
           @Override
           public void afterCommit() {
-            seatUnlockUseCase.forceRelease(seatId);
+            releaseLockQuietly(seatId);
           }
         });
+  }
+
+  /**
+   * Redis 락 삭제 실패를 삼킨다.
+   *
+   * <p>이 시점에 DB 커밋은 이미 끝났고 좌석은 AVAILABLE이다. 여기서 던지면 뒤에 등록된 afterCommit 콜백이 끊기고 관리자에게 500이 나가는데, 정작
+   * 해제는 성사된 뒤라 "실패했다"는 잘못된 신호가 된다.
+   *
+   * <p>삼켜도 안전한 이유는 락이 자가 치유되기 때문이다 — 잔여 TTL(최대 {@code Seat.HOLD_TTL_MINUTES}분)이 지나면 키가 사라진다. 그 사이
+   * 좌석은 DB상 예매 가능인데 선점 시도가 락에서 막히므로, 원인을 찾을 수 있도록 CRITICAL로 남긴다.
+   */
+  private void releaseLockQuietly(Long seatId) {
+    try {
+      seatUnlockUseCase.forceRelease(seatId);
+    } catch (RuntimeException e) {
+      log.error(
+          "[CRITICAL] 관리자 강제 해제 후 Redis 락 삭제 실패. 좌석은 해제됐으나 잔여 TTL({}분) 동안 재선점이 막힙니다. seatId: {}",
+          Seat.HOLD_TTL_MINUTES,
+          seatId,
+          e);
+    }
   }
 }

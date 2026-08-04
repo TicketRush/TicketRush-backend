@@ -23,8 +23,12 @@ import com.ticketrush.global.types.SeatStatus;
 import com.ticketrush.support.WebMvcSliceTest;
 import java.time.LocalDateTime;
 import java.util.List;
+import java.util.stream.Stream;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.Arguments;
+import org.junit.jupiter.params.provider.MethodSource;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.context.annotation.Import;
 import org.springframework.test.context.TestPropertySource;
@@ -155,11 +159,13 @@ class SeatAdminControllerTest {
     verify(seatFacade).forceReleaseHold(ADMIN_ID, PERFORMANCE_ID, SEAT_ID);
   }
 
-  @Test
-  @DisplayName("선점 중이 아닌 좌석의 강제 해제는 409로 거절된다")
-  void forceReleaseHold_returns_409_when_seat_is_not_held() throws Exception {
+  @ParameterizedTest(name = "{0}")
+  @MethodSource("releaseRejections")
+  @DisplayName("강제 해제 거절은 사유별로 다른 409 코드를 내려 화면이 다음 행동을 안내할 수 있다")
+  void forceReleaseHold_returns_distinct_409_codes(String label, ErrorStatus errorStatus)
+      throws Exception {
     // given
-    willThrow(new BusinessException(ErrorStatus.SEAT_NOT_HELD))
+    willThrow(new BusinessException(errorStatus))
         .given(seatFacade)
         .forceReleaseHold(ADMIN_ID, PERFORMANCE_ID, SEAT_ID);
 
@@ -171,7 +177,14 @@ class SeatAdminControllerTest {
                     "/api/v1/seat/admin/{performanceId}/{seatId}/hold", PERFORMANCE_ID, SEAT_ID)))
         .andExpect(status().isConflict())
         .andExpect(jsonPath("$.is_success").value(false))
-        .andExpect(jsonPath("$.code").value(ErrorStatus.SEAT_NOT_HELD.getCode()));
+        .andExpect(jsonPath("$.code").value(errorStatus.getCode()));
+  }
+
+  private static Stream<Arguments> releaseRejections() {
+    return Stream.of(
+        Arguments.of("이미 해제됨", ErrorStatus.SEAT_NOT_HELD),
+        Arguments.of("판매 완료 — 환불로 안내", ErrorStatus.SEAT_SOLD_NOT_RELEASABLE),
+        Arguments.of("동시성 경합 — 재조회 후 재시도", ErrorStatus.SEAT_RELEASE_CONFLICT));
   }
 
   @Test
