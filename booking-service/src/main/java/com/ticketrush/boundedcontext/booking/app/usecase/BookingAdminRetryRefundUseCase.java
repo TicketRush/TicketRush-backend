@@ -71,13 +71,9 @@ public class BookingAdminRetryRefundUseCase {
 
   private void publishRefundRequested(Long adminId, Booking booking, String action) {
     // 실제 PG 환불을 유발하는 관리자 행위다. 누가 누구의 예매를 건드렸는지 추적 가능해야 한다.
-    log.info(
-        "[ADMIN-AUDIT] {}. adminId: {}, bookingNumber: {}, bookingId: {}, userId: {}",
-        action,
-        adminId,
-        booking.getBookingNumber(),
-        booking.getId(),
-        booking.getUserId());
+    // 커밋 후에 남긴다 — 낙관적 락 충돌로 롤백되면 일어나지 않은 환불이 감사 기록에 남는다 (#561).
+    AdminAuditLogger.logAfterCommit(
+        action, adminId, booking.getBookingNumber(), booking.getId(), booking.getUserId());
 
     eventPublisher.publish(
         new RefundRequestedEvent(

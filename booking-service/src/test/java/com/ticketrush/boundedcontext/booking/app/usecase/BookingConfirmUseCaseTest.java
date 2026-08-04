@@ -28,6 +28,7 @@ class BookingConfirmUseCaseTest {
   @Mock private BookingRepository bookingRepository;
 
   private static final Long SEAT_ID = 3L;
+  private static final Long PAID_AMOUNT = 150000L;
 
   @Test
   @DisplayName("성공: 예매를 확정하고 확정 시각을 기록하며 예매 번호를 반환한다")
@@ -46,7 +47,8 @@ class BookingConfirmUseCaseTest {
     given(bookingRepository.findById(bookingId)).willReturn(Optional.of(booking));
 
     // when
-    String bookingNumber = bookingConfirmUseCase.execute(bookingId, confirmedAt, SEAT_ID);
+    String bookingNumber =
+        bookingConfirmUseCase.execute(bookingId, confirmedAt, SEAT_ID, PAID_AMOUNT);
 
     // then
     assertThat(bookingNumber).isEqualTo("BOOK-1234");
@@ -71,7 +73,8 @@ class BookingConfirmUseCaseTest {
     given(bookingRepository.findById(bookingId)).willReturn(Optional.of(booking));
 
     // when
-    String bookingNumber = bookingConfirmUseCase.execute(bookingId, confirmedAt, SEAT_ID);
+    String bookingNumber =
+        bookingConfirmUseCase.execute(bookingId, confirmedAt, SEAT_ID, PAID_AMOUNT);
 
     // then
     assertThat(bookingNumber).isEqualTo("BOOK-1234");
@@ -87,7 +90,9 @@ class BookingConfirmUseCaseTest {
     given(bookingRepository.findById(bookingId)).willReturn(Optional.empty());
 
     // when & then
-    assertThatThrownBy(() -> bookingConfirmUseCase.execute(bookingId, LocalDateTime.now(), SEAT_ID))
+    assertThatThrownBy(
+            () ->
+                bookingConfirmUseCase.execute(bookingId, LocalDateTime.now(), SEAT_ID, PAID_AMOUNT))
         .isInstanceOf(BusinessException.class)
         .extracting(ex -> ((BusinessException) ex).getErrorStatus())
         .isEqualTo(BOOKING_NOT_FOUND);
@@ -111,7 +116,9 @@ class BookingConfirmUseCaseTest {
 
     // when & then
     assertThatThrownBy(
-            () -> bookingConfirmUseCase.execute(bookingId, LocalDateTime.now(), mismatchedSeatId))
+            () ->
+                bookingConfirmUseCase.execute(
+                    bookingId, LocalDateTime.now(), mismatchedSeatId, PAID_AMOUNT))
         .isInstanceOf(BusinessException.class)
         .extracting(ex -> ((BusinessException) ex).getErrorStatus())
         .isEqualTo(BOOKING_SEAT_MISMATCH);
@@ -136,7 +143,9 @@ class BookingConfirmUseCaseTest {
     given(bookingRepository.findById(bookingId)).willReturn(Optional.of(booking));
 
     // when & then
-    assertThatThrownBy(() -> bookingConfirmUseCase.execute(bookingId, LocalDateTime.now(), SEAT_ID))
+    assertThatThrownBy(
+            () ->
+                bookingConfirmUseCase.execute(bookingId, LocalDateTime.now(), SEAT_ID, PAID_AMOUNT))
         .isInstanceOf(BusinessException.class)
         .extracting(ex -> ((BusinessException) ex).getErrorStatus())
         .isEqualTo(BOOKING_EXPIRED);

@@ -1,5 +1,7 @@
 package com.ticketrush.boundedcontext.booking.in.api.v1;
 
+import com.ticketrush.boundedcontext.booking.app.dto.response.BookingAdminStatsResponse;
+import com.ticketrush.boundedcontext.booking.app.dto.response.BookingAdminSummaryResponse;
 import com.ticketrush.boundedcontext.booking.app.dto.response.BookingSummaryResponse;
 import com.ticketrush.boundedcontext.booking.app.facade.BookingFacade;
 import com.ticketrush.global.dto.request.OffsetPageRequest;
@@ -32,6 +34,74 @@ import org.springframework.web.bind.annotation.RestController;
 public class BookingAdminController {
 
   private final BookingFacade bookingFacade;
+
+  @Operation(
+      summary = "전체 예매 목록 조회",
+      description =
+          """
+          상태 무관 전체 예매를 최신순으로 페이징 조회합니다. 검색·다중조건 필터는 제공하지 않습니다.
+
+          공연 이름·날짜, 예매자 이름·이메일, 좌석 번호, 결제 금액은 각각 performance·user·seat-service에서 보강합니다.
+          **해당 서비스 장애 시 그 필드만 null로 내려가고 목록 자체는 성공합니다** — 프론트는 `performance_id`·`user_id`·`seat_id`로
+          재조회할 수 있습니다.
+
+          행 확장 드롭다운에 필요한 필드(예매자 정보·좌석 정보·좌석 수·티켓 단가·총 결제 금액)도 이 응답에 함께 실려 있어 별도 상세 조회가
+          필요 없습니다. 1인 1매라 좌석 수는 항상 1이고 티켓 단가와 총 결제 금액이 같은 값이므로 `payment_amount` 하나로 내립니다.
+
+          예매자 개인정보가 포함되므로 조회 사실이 ADMIN-AUDIT 로그에 남습니다(조회자와 건수만 기록하며 응답 내용은 남기지 않습니다).
+          """)
+  @GetMapping("/bookings")
+  public ResponseEntity<ApiResponse<List<BookingAdminSummaryResponse>>> getBookings(
+      @AuthenticationPrincipal CustomUserDetails admin,
+      @ModelAttribute OffsetPageRequest pageRequest) {
+    Page<BookingAdminSummaryResponse> response =
+        bookingFacade.getAdminBookings(admin.getUserId(), pageRequest);
+
+    return ApiResponse.onSuccess(SuccessStatus.OK, response);
+  }
+
+  @Operation(
+      summary = "예매 요약 통계 조회",
+      description =
+          """
+          전체 예매 수(상태 무관), 완료된 예매 수(CONFIRMED), 취소된 예매 수(CANCELED + REFUNDED), 총 매출을 조회합니다.
+
+          **네 지표는 서로 배타적 분할이 아닙니다.** 결제하지 않아 자동 만료된 EXPIRED, 결제 대기 중인 PENDING, 환불 진행 중인 REFUNDING은
+          완료에도 취소에도 잡히지 않습니다.
+
+          총 매출은 완료된 예매의 공연 가격 합입니다(1인 1매라 예매 수 × 공연 가격). **공연 가격 조회가 하나라도 완결되지 않으면 `null`입니다** —
+          일부만 더한 값은 매출 감소로 오독되므로 내리지 않습니다. 완료된 예매가 0건이면 `null`이 아니라 `0`입니다.
+          """)
+  @GetMapping("/bookings/stats")
+  public ResponseEntity<ApiResponse<BookingAdminStatsResponse>> getBookingStats() {
+    BookingAdminStatsResponse response = bookingFacade.getAdminBookingStats();
+
+    return ApiResponse.onSuccess(SuccessStatus.OK, response);
+  }
+
+  @Operation(
+      summary = "환불 처리",
+      description =
+          """
+          관리자가 결제 완료(CONFIRMED) 예매를 환불 처리합니다. 예매를 REFUNDING으로 전환하고 환불 요청 이벤트를 발행하며,
+          처리자(`adminId`)와 대상은 ADMIN-AUDIT 로그로 남습니다.
+
+          **응답 시점의 상태는 REFUNDING입니다.** 환불 완료(REFUNDED)와 좌석 반환은 PG 환불 성공 이벤트가 도착한 뒤이며(refund-first),
+          목록을 다시 조회해 확인합니다.
+
+          CONFIRMED가 아닌 예매는 `BOOKING_409_001`로 거절합니다. 이미 입장을 완료한 예매도 환불할 수 없습니다(`BOOKING_409_006`) —
+          착석한 좌석이 재판매되는 것을 막기 위한 정책이며 사용자 취소 경로와 동일하게 적용됩니다.
+
+          환불에 **실패한 이력이 있는 건의 재시도**와 REFUNDING 고착 복구는 이 API가 아니라 환불 재시도 API가 담당합니다.
+          """)
+  @PostMapping("/{bookingNumber}/refund")
+  public ResponseEntity<ApiResponse<Void>> refundBooking(
+      @AuthenticationPrincipal CustomUserDetails admin,
+      @Parameter(description = "예매 번호") @PathVariable String bookingNumber) {
+    bookingFacade.refundBooking(admin.getUserId(), bookingNumber);
+
+    return ApiResponse.onSuccess(SuccessStatus.OK);
+  }
 
   @Operation(
       summary = "환불 실패 예매 조회",

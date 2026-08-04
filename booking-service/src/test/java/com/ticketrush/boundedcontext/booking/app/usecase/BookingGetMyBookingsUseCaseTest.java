@@ -80,7 +80,7 @@ class BookingGetMyBookingsUseCaseTest {
             .bookingStatus(BookingStatus.PENDING)
             .build();
     ReflectionTestUtils.setField(booking, "id", 100L);
-    booking.confirm(confirmedAt);
+    booking.confirm(confirmedAt, 150000L);
 
     given(
             bookingRepository.findByUserIdAndBookingStatus(
