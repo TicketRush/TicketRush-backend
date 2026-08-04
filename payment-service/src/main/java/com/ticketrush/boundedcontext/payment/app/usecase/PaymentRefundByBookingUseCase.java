@@ -170,10 +170,10 @@ public class PaymentRefundByBookingUseCase {
   /*
    * 동일 결제의 재요청 시 PG 측 중복 취소를 막기 위해 paymentId 기반 고정 멱등 키를 생성한다(API 취소 경로와 동일 규칙).
    *
-   * 트리거가 달라도 키를 나누지 않는다. #492 이후 같은 결제에 서로 다른 reason 이 실릴 수 있어 "같은 키·다른 body"가
-   * 성립하는데(사용자 취소가 통신 실패로 DLT 로 빠진 뒤 보상 신호가 도착하는 순서), 그렇다고 키를 트리거별로 가르면
-   * 두 경로가 같은 결제를 각자의 키로 취소해 PG 중복 취소 방어가 통째로 풀린다. 이중 환불이 body 불일치보다 무겁다.
-   * PG 가 body 불일치를 4xx 로 거절하면 결정적 거절로 분류돼 CRITICAL 로 가시화되므로 조용히 실패하지는 않는다.
+   * 트리거가 달라도 키를 나누지 않는다. #492 이후 같은 결제에 서로 다른 reason 이 실릴 수 있지만, Toss 는 멱등키와
+   * API 키·주소·HTTP 메서드 조합으로만 동일 요청을 판정하고 body 는 검증 기준이 아니다(공식 문서 확인, #492). 즉
+   * "같은 키·다른 body"가 거절을 유발하지 않는다. 반대로 키를 트리거별로 가르면 두 경로가 같은 결제를 각자의 키로
+   * 취소해 PG 중복 취소 방어가 통째로 풀린다 — 이중 환불이 훨씬 무겁다.
    */
   private String generateIdempotencyKey(Long paymentId) {
     return "REFUND-%07d".formatted(paymentId);
