@@ -50,12 +50,10 @@ public class BookingAdminRefundUseCase {
     booking.requestRefund();
 
     // 실제 PG 환불을 유발하는 관리자 행위다. 누가 누구의 예매를 건드렸는지 추적 가능해야 한다.
-    log.info(
-        "[ADMIN-AUDIT] 관리자 환불 처리. adminId: {}, bookingNumber: {}, bookingId: {}, userId: {}",
-        adminId,
-        booking.getBookingNumber(),
-        booking.getId(),
-        booking.getUserId());
+    // 커밋 후에 남긴다 — 낙관적 락 충돌(사용자 취소와 경합)로 롤백되면 일어나지 않은 환불이 감사 기록에
+    // 남아, 사고 조사 때 실제 이력과 구분되지 않는다.
+    AdminAuditLogger.logAfterCommit(
+        "관리자 환불 처리", adminId, booking.getBookingNumber(), booking.getId(), booking.getUserId());
 
     eventPublisher.publish(
         new RefundRequestedEvent(

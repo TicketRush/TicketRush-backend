@@ -3,12 +3,11 @@ package com.ticketrush.boundedcontext.booking.out.repository;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
-import com.ticketrush.boundedcontext.booking.app.dto.response.BookingPerformanceStatsRow;
+import com.ticketrush.boundedcontext.booking.app.dto.response.BookingStatsCounts;
 import com.ticketrush.boundedcontext.booking.domain.entity.Booking;
 import com.ticketrush.boundedcontext.booking.domain.types.BookingStatus;
 import com.ticketrush.global.jpa.config.JpaConfig;
 import java.time.LocalDateTime;
-import java.util.List;
 import java.util.Optional;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -152,63 +151,98 @@ class BookingRepositoryTest {
   }
 
   @Test
-  @DisplayName("관리자 통계: 공연별로 전체·완료(CONFIRMED)·취소(CANCELED+REFUNDED) 수를 집계한다")
-  void aggregateStatsByPerformance_CountsByStatusPerPerformance() {
-    // given: 공연 10에 6개 상태를 하나씩, 공연 20에 CONFIRMED 2건
-    bookingRepository.save(booking("BK-S1", BookingStatus.CONFIRMED, 10L));
-    bookingRepository.save(booking("BK-S2", BookingStatus.CANCELED, 10L));
-    bookingRepository.save(booking("BK-S3", BookingStatus.REFUNDED, 10L));
-    bookingRepository.save(booking("BK-S4", BookingStatus.EXPIRED, 10L));
-    bookingRepository.save(booking("BK-S5", BookingStatus.PENDING, 10L));
-    bookingRepository.save(booking("BK-S6", BookingStatus.REFUNDING, 10L));
-    bookingRepository.save(booking("BK-S7", BookingStatus.CONFIRMED, 20L));
-    bookingRepository.save(booking("BK-S8", BookingStatus.CONFIRMED, 20L));
+  @DisplayName("관리자 통계: 상태별 건수와 확정 예매의 결제 금액 합을 한 번에 집계한다")
+  void aggregateStats_CountsByStatusAndSumsRevenue() {
+    // given: 6개 상태를 하나씩, 확정 예매 2건에 금액을 기록
+    bookingRepository.save(confirmedBooking("BK-S1", 10_000L));
+    bookingRepository.save(confirmedBooking("BK-S2", 25_000L));
+    bookingRepository.save(booking("BK-S3", BookingStatus.CANCELED));
+    bookingRepository.save(booking("BK-S4", BookingStatus.REFUNDED));
+    bookingRepository.save(booking("BK-S5", BookingStatus.EXPIRED));
+    bookingRepository.save(booking("BK-S6", BookingStatus.PENDING));
+    bookingRepository.save(booking("BK-S7", BookingStatus.REFUNDING));
 
     // when
-    List<BookingPerformanceStatsRow> rows =
-        bookingRepository.aggregateStatsByPerformance(
-            BookingStatus.CONFIRMED, BookingStatus.CANCELED, BookingStatus.REFUNDED);
-
-    // then: performanceId 오름차순으로 고정된다
-    assertThat(rows)
-        .extracting(BookingPerformanceStatsRow::performanceId)
-        .containsExactly(10L, 20L);
-
-    BookingPerformanceStatsRow first = rows.get(0);
-    assertThat(first.totalCount()).isEqualTo(6);
-    assertThat(first.confirmedCount()).isEqualTo(1);
-    // EXPIRED·PENDING·REFUNDING은 취소로 세지 않는다 — 넣으면 취소율이 부풀려진다.
-    assertThat(first.canceledCount()).isEqualTo(2);
-
-    BookingPerformanceStatsRow second = rows.get(1);
-    assertThat(second.totalCount()).isEqualTo(2);
-    assertThat(second.confirmedCount()).isEqualTo(2);
-    assertThat(second.canceledCount()).isZero();
-  }
-
-  @Test
-  @DisplayName("관리자 통계: 예매가 없으면 빈 목록을 반환한다")
-  void aggregateStatsByPerformance_WhenNoBookings_ReturnsEmpty() {
-    // when
-    List<BookingPerformanceStatsRow> rows =
-        bookingRepository.aggregateStatsByPerformance(
+    BookingStatsCounts counts =
+        bookingRepository.aggregateStats(
             BookingStatus.CONFIRMED, BookingStatus.CANCELED, BookingStatus.REFUNDED);
 
     // then
-    assertThat(rows).isEmpty();
+    assertThat(counts.totalCount()).isEqualTo(7);
+    assertThat(counts.confirmedCount()).isEqualTo(2);
+    // EXPIRED·PENDING·REFUNDING은 취소로 세지 않는다 — 넣으면 취소율이 부풀려진다.
+    assertThat(counts.canceledCount()).isEqualTo(2);
+    assertThat(counts.confirmedRevenue()).isEqualTo(35_000L);
+    assertThat(counts.amountMissingCount()).isZero();
+  }
+
+  @Test
+  @DisplayName("관리자 통계: 환불된 예매의 금액은 매출에서 빠진다")
+  void aggregateStats_ExcludesRefundedFromRevenue() {
+    // given: 확정 1건(금액 있음)과, 확정을 거쳐 환불된 1건(금액이 남아 있음)
+    bookingRepository.save(confirmedBooking("BK-R1", 10_000L));
+    Booking refunded = confirmedBooking("BK-R2", 99_000L);
+    refunded.markRefunded();
+    bookingRepository.save(refunded);
+
+    // when
+    BookingStatsCounts counts =
+        bookingRepository.aggregateStats(
+            BookingStatus.CONFIRMED, BookingStatus.CANCELED, BookingStatus.REFUNDED);
+
+    // then: 돈이 나간 예매는 매출이 아니다
+    assertThat(counts.confirmedRevenue()).isEqualTo(10_000L);
+    assertThat(counts.canceledCount()).isEqualTo(1);
+  }
+
+  @Test
+  @DisplayName("관리자 통계: 결제 금액이 비어 있는 확정 예매를 따로 세어 축소된 매출을 드러낸다")
+  void aggregateStats_ReportsMissingAmounts() {
+    // given: 백필되지 않은 과거 확정 예매(금액 null)가 섞여 있다
+    bookingRepository.save(confirmedBooking("BK-M1", 10_000L));
+    bookingRepository.save(confirmedBooking("BK-M2", null));
+
+    // when
+    BookingStatsCounts counts =
+        bookingRepository.aggregateStats(
+            BookingStatus.CONFIRMED, BookingStatus.CANCELED, BookingStatus.REFUNDED);
+
+    // then: SUM은 null을 조용히 건너뛰므로, 그 사실을 별도 카운트로 노출해야 축소를 알아챌 수 있다
+    assertThat(counts.confirmedCount()).isEqualTo(2);
+    assertThat(counts.confirmedRevenue()).isEqualTo(10_000L);
+    assertThat(counts.amountMissingCount()).isEqualTo(1);
+  }
+
+  @Test
+  @DisplayName("관리자 통계: 예매가 없으면 모든 지표가 0이다")
+  void aggregateStats_WhenNoBookings_ReturnsZeros() {
+    // when
+    BookingStatsCounts counts =
+        bookingRepository.aggregateStats(
+            BookingStatus.CONFIRMED, BookingStatus.CANCELED, BookingStatus.REFUNDED);
+
+    // then
+    assertThat(counts.totalCount()).isZero();
+    assertThat(counts.confirmedCount()).isZero();
+    assertThat(counts.canceledCount()).isZero();
+    assertThat(counts.confirmedRevenue()).isZero();
+    assertThat(counts.amountMissingCount()).isZero();
   }
 
   private Booking booking(String bookingNumber, BookingStatus status) {
-    return booking(bookingNumber, status, 2L);
-  }
-
-  private Booking booking(String bookingNumber, BookingStatus status, Long performanceId) {
     return Booking.builder()
         .userId(1L)
-        .performanceId(performanceId)
+        .performanceId(2L)
         .seatId(3L)
         .bookingNumber(bookingNumber)
         .bookingStatus(status)
         .build();
+  }
+
+  /** 결제 완료 경로를 그대로 태워 확정한다 — paidAmount는 confirm()으로만 채워진다. */
+  private Booking confirmedBooking(String bookingNumber, Long paidAmount) {
+    Booking booking = booking(bookingNumber, BookingStatus.PENDING);
+    booking.confirm(LocalDateTime.of(2026, 5, 22, 10, 30), paidAmount);
+    return booking;
   }
 }

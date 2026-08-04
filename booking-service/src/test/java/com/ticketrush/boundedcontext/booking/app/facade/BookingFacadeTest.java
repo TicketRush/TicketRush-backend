@@ -18,7 +18,6 @@ import com.ticketrush.boundedcontext.booking.app.dto.response.BookingCountRespon
 import com.ticketrush.boundedcontext.booking.app.dto.response.BookingDetailResponse;
 import com.ticketrush.boundedcontext.booking.app.dto.response.BookingMySummaryResponse;
 import com.ticketrush.boundedcontext.booking.app.dto.response.BookingPendingResponse;
-import com.ticketrush.boundedcontext.booking.app.dto.response.BookingPerformanceStatsRow;
 import com.ticketrush.boundedcontext.booking.app.dto.response.BookingSummaryResponse;
 import com.ticketrush.boundedcontext.booking.app.usecase.BookingAdminRefundUseCase;
 import com.ticketrush.boundedcontext.booking.app.usecase.BookingAdminRetryRefundUseCase;
@@ -489,12 +488,26 @@ class BookingFacadeTest {
         .build();
   }
 
+  /** 결제 완료 경로를 태워 확정한다 — 금액은 공연이 아니라 예매가 보유하므로 confirm()으로만 채워진다 (#561). */
+  private static Booking confirmedAdminBooking(Long userId, Long performanceId, Long seatId) {
+    Booking booking =
+        Booking.builder()
+            .userId(userId)
+            .performanceId(performanceId)
+            .seatId(seatId)
+            .bookingNumber("BK-" + userId)
+            .bookingStatus(BookingStatus.PENDING)
+            .build();
+    booking.confirm(LocalDateTime.of(2026, 5, 22, 10, 30), 150000L);
+    return booking;
+  }
+
   @Test
   @DisplayName("성공: 관리자 목록은 공연·좌석·예매자를 보강해 모든 필드를 채운다")
   void getAdminBookings_enriches_all_three_axes() {
     // given
     OffsetPageRequest pageRequest = new OffsetPageRequest(0, 10);
-    Booking booking = adminBooking(5L, 2L, 3L);
+    Booking booking = confirmedAdminBooking(5L, 2L, 3L);
     given(bookingGetAdminBookingsUseCase.execute(pageRequest))
         .willReturn(new PageImpl<>(List.of(booking)));
     given(performanceRestClient.getPerformances(Set.of(2L)))
@@ -515,6 +528,26 @@ class BookingFacadeTest {
     assertThat(response.bookerEmail()).isEqualTo("user@example.com");
     assertThat(response.paymentAmount()).isEqualTo(150000L);
     assertThat(response.seatCount()).isEqualTo(1);
+  }
+
+  @Test
+  @DisplayName("성공: 공연 조회가 실패해도 결제 금액은 살아남는다 — 금액은 예매가 보유한다")
+  void getAdminBookings_keeps_amount_when_performance_lookup_fails() {
+    // given: performance-service가 죽어 공연 필드를 못 채우는 상황 (#561)
+    OffsetPageRequest pageRequest = new OffsetPageRequest(0, 10);
+    given(bookingGetAdminBookingsUseCase.execute(pageRequest))
+        .willReturn(new PageImpl<>(List.of(confirmedAdminBooking(5L, 2L, 3L))));
+    given(performanceRestClient.getPerformances(Set.of(2L))).willReturn(Map.of());
+    given(seatRestClient.getSeatNumbers(List.of(3L))).willReturn(Map.of());
+    given(userRestClient.getUsers(List.of(5L))).willReturn(Map.of());
+
+    // when
+    Page<BookingAdminSummaryResponse> page = bookingFacade.getAdminBookings(ADMIN_ID, pageRequest);
+
+    // then: 공연 가격을 빌려 쓰던 때는 이 경우 금액도 함께 사라졌다
+    BookingAdminSummaryResponse response = page.getContent().get(0);
+    assertThat(response.performanceTitle()).isNull();
+    assertThat(response.paymentAmount()).isEqualTo(150000L);
   }
 
   @Test
@@ -561,26 +594,18 @@ class BookingFacadeTest {
   }
 
   @Test
-  @DisplayName("성공: 통계는 완료 예매가 있는 공연만 가격을 조회한다")
-  void getAdminBookingStats_queries_only_revenue_contributing_performances() {
-    // given: 공연 20은 취소만 있어 매출에 기여하지 않는다
-    given(bookingGetAdminStatsUseCase.execute())
-        .willReturn(
-            List.of(
-                new BookingPerformanceStatsRow(10L, 5, 3, 2),
-                new BookingPerformanceStatsRow(20L, 4, 0, 4)));
-    given(performanceRestClient.getPerformances(Set.of(10L)))
-        .willReturn(Map.of(10L, performanceInfo()));
+  @DisplayName("성공: 통계는 원격 호출 없이 DB 집계만으로 응답한다")
+  void getAdminBookingStats_does_not_call_remote_services() {
+    // given: 매출이 예매가 보유한 결제 금액의 합이라 공연 가격을 되물을 필요가 없다 (#561)
+    BookingAdminStatsResponse stats = new BookingAdminStatsResponse(9, 3, 6, 450000L, true, 0);
+    given(bookingGetAdminStatsUseCase.execute()).willReturn(stats);
 
     // when
     BookingAdminStatsResponse response = bookingFacade.getAdminBookingStats();
 
-    // then: 공연 20은 왕복하지 않았는데도 매출이 정상 산출된다
-    verify(performanceRestClient).getPerformances(Set.of(10L));
-    assertThat(response.totalBookings()).isEqualTo(9);
-    assertThat(response.completedBookings()).isEqualTo(3);
-    assertThat(response.canceledBookings()).isEqualTo(6);
-    assertThat(response.totalRevenue()).isEqualTo(450000L);
+    // then: 공연 조회가 없으므로 performance-service 장애가 통계를 흔들지 못한다
+    assertThat(response).isEqualTo(stats);
+    verifyNoInteractions(performanceRestClient, seatRestClient, userRestClient);
   }
 
   @Test

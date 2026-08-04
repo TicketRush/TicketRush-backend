@@ -63,6 +63,7 @@ class PaymentConfirmedEventListenerTest {
   private static final String PAYLOAD = "payload";
   private static final Long BOOKING_ID = 10L;
   private static final Long SEAT_ID = 3L;
+  private static final Long PAID_AMOUNT = 50000L;
   private static final String BOOKING_NUMBER = "BOOK-1234";
   private static final LocalDateTime PAID_AT = LocalDateTime.of(2026, 5, 22, 10, 30);
 
@@ -126,7 +127,7 @@ class PaymentConfirmedEventListenerTest {
     listener.handlePaymentConfirmed(envelope, acknowledgment);
 
     // then
-    verify(bookingConfirmUseCase).execute(BOOKING_ID, PAID_AT, SEAT_ID);
+    verify(bookingConfirmUseCase).execute(BOOKING_ID, PAID_AT, SEAT_ID, PAID_AMOUNT);
     verify(seatRestClient).confirmSold(BOOKING_NUMBER, SEAT_ID);
     verify(acknowledgment).acknowledge();
   }
@@ -150,7 +151,7 @@ class PaymentConfirmedEventListenerTest {
     listener.handlePaymentConfirmed(envelope, acknowledgment);
 
     // then: 확정은 실행되지 않았지만 bookingNumber 재조회로 SOLD가 다시 호출된다
-    verify(bookingConfirmUseCase, never()).execute(anyLong(), any(), anyLong());
+    verify(bookingConfirmUseCase, never()).execute(anyLong(), any(), anyLong(), anyLong());
     verify(bookingGetBookingNumberUseCase).execute(BOOKING_ID);
     verify(seatRestClient).confirmSold(BOOKING_NUMBER, SEAT_ID);
     verify(acknowledgment).acknowledge();
@@ -165,7 +166,7 @@ class PaymentConfirmedEventListenerTest {
     givenInboxProcessesFirst();
     willThrow(new BusinessException(ErrorStatus.BOOKING_SEAT_MISMATCH))
         .given(bookingConfirmUseCase)
-        .execute(BOOKING_ID, PAID_AT, SEAT_ID);
+        .execute(BOOKING_ID, PAID_AT, SEAT_ID, PAID_AMOUNT);
 
     // when & then: 예외를 리스너 밖으로 전파하지 않는다(파티션 블로킹 방지)
     assertThatCode(() -> listener.handlePaymentConfirmed(envelope, acknowledgment))
@@ -336,7 +337,7 @@ class PaymentConfirmedEventListenerTest {
     givenInboxProcessesFirst();
     willThrow(new RuntimeException("DB 일시 장애"))
         .given(bookingConfirmUseCase)
-        .execute(BOOKING_ID, PAID_AT, SEAT_ID);
+        .execute(BOOKING_ID, PAID_AT, SEAT_ID, PAID_AMOUNT);
 
     // when & then
     assertThatThrownBy(() -> listener.handlePaymentConfirmed(envelope, acknowledgment))
@@ -369,7 +370,7 @@ class PaymentConfirmedEventListenerTest {
     listener.handlePaymentConfirmed(envelope, acknowledgment);
 
     // then: 확정은 재수행하지 않되(경합 패자), bookingNumber 재조회 후 SOLD는 멱등하게 재시도하고 커밋한다
-    verify(bookingConfirmUseCase, never()).execute(anyLong(), any(), anyLong());
+    verify(bookingConfirmUseCase, never()).execute(anyLong(), any(), anyLong(), anyLong());
     verify(bookingGetBookingNumberUseCase).execute(BOOKING_ID);
     verify(seatRestClient).confirmSold(BOOKING_NUMBER, SEAT_ID);
     verify(acknowledgment).acknowledge();
@@ -388,7 +389,7 @@ class PaymentConfirmedEventListenerTest {
         .doesNotThrowAnyException();
 
     // then: 확정·SOLD는 호출되지 않고, 오프셋은 커밋된다
-    verify(bookingConfirmUseCase, never()).execute(anyLong(), any(), anyLong());
+    verify(bookingConfirmUseCase, never()).execute(anyLong(), any(), anyLong(), anyLong());
     verify(seatRestClient, never()).confirmSold(any(), anyLong());
     verify(acknowledgment).acknowledge();
   }

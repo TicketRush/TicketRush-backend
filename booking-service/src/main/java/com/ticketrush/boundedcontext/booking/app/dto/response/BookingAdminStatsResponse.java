@@ -1,9 +1,6 @@
 package com.ticketrush.boundedcontext.booking.app.dto.response;
 
-import com.ticketrush.boundedcontext.booking.out.apiclient.dto.PerformanceInfoResponse;
 import io.swagger.v3.oas.annotations.media.Schema;
-import java.util.List;
-import java.util.Map;
 
 @Schema(description = "관리자 예매 요약 통계 응답 DTO")
 public record BookingAdminStatsResponse(
@@ -18,50 +15,28 @@ public record BookingAdminStatsResponse(
         long canceledBookings,
     @Schema(
             description =
-                "총 매출. 완료된 예매의 공연 가격 합이며, 1인 1매라 예매 수 × 공연 가격이다. "
-                    + "**공연 가격 조회가 하나라도 완결되지 않으면 null이다** — 일부만 더한 값은 매출 감소로 오독되므로 내리지 않는다. "
-                    + "완료된 예매가 0건이면 null이 아니라 0이다. "
-                    + "출처가 현재 공연 가격이므로 예매 후 관리자가 가격을 바꾸면 이 값도 함께 바뀐다 — "
-                    + "실제 결제액의 SSOT는 payment-service다. "
-                    + "**완료된 예매가 있는 공연이 삭제되면 그 가격을 더 이상 조회할 수 없어 이 값이 계속 null이 된다**"
-                    + "(일시 장애와 달리 저절로 회복되지 않는다). 근본 해결은 예매 시점 금액을 booking이 직접 보유하는 것이며 "
-                    + "별도 이슈로 분리했다.",
+                "총 매출. 완료된 예매의 실제 결제 금액 합이다. 예매 확정 시점의 금액을 예매가 직접 보유하므로 "
+                    + "이후 공연 가격이 바뀌거나 공연이 삭제돼도 이 값은 흔들리지 않는다. "
+                    + "`revenue_complete`가 false면 실제 매출보다 작은 값이다.",
             example = "147000000")
-        Long totalRevenue) {
+        long totalRevenue,
+    @Schema(
+            description =
+                "총 매출이 완전한지 여부. 결제 금액이 기록되지 않은 확정 예매가 하나라도 있으면 false이며, "
+                    + "그 건수는 `missing_amount_bookings`다. 결제 금액 컬럼 도입 이전에 확정된 예매가 백필되지 않은 경우에만 "
+                    + "false가 되고, 정상 운영 중에는 항상 true다.",
+            example = "true")
+        boolean revenueComplete,
+    @Schema(description = "결제 금액이 비어 있어 매출에 반영되지 못한 확정 예매 수. 0이면 총 매출이 완전하다.", example = "0")
+        long missingAmountBookings) {
 
-  /**
-   * 공연별 집계 행과 공연 가격을 합쳐 통계를 만든다 (#561).
-   *
-   * <p>카운트 3종은 DB만으로 확정되므로 항상 정확하다. 매출만 원격 조회에 의존하는데, {@code PerformanceRestClient}는 실패·예산초과 건을 맵에서
-   * 조용히 빼므로 그대로 더하면 <b>축소된 매출이 정상값처럼 보인다</b>. 그래서 기여해야 할 공연이 하나라도 빠지면 부분 합 대신 null을 내린다.
-   */
-  public static BookingAdminStatsResponse of(
-      List<BookingPerformanceStatsRow> rows, Map<Long, PerformanceInfoResponse> performances) {
-    long totalBookings = 0;
-    long completedBookings = 0;
-    long canceledBookings = 0;
-    long revenue = 0;
-    boolean revenueResolved = true;
-
-    for (BookingPerformanceStatsRow row : rows) {
-      totalBookings += row.totalCount();
-      completedBookings += row.confirmedCount();
-      canceledBookings += row.canceledCount();
-
-      if (row.confirmedCount() == 0) {
-        // 매출에 기여하지 않으므로 가격을 몰라도 집계가 흔들리지 않는다.
-        continue;
-      }
-
-      PerformanceInfoResponse performance = performances.get(row.performanceId());
-      if (performance == null || performance.price() == null) {
-        revenueResolved = false;
-        continue;
-      }
-      revenue += row.confirmedCount() * performance.price();
-    }
-
+  public static BookingAdminStatsResponse from(BookingStatsCounts counts) {
     return new BookingAdminStatsResponse(
-        totalBookings, completedBookings, canceledBookings, revenueResolved ? revenue : null);
+        counts.totalCount(),
+        counts.confirmedCount(),
+        counts.canceledCount(),
+        counts.confirmedRevenue(),
+        counts.amountMissingCount() == 0,
+        counts.amountMissingCount());
   }
 }

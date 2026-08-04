@@ -7,7 +7,6 @@ import com.ticketrush.boundedcontext.booking.app.dto.response.BookingCountRespon
 import com.ticketrush.boundedcontext.booking.app.dto.response.BookingDetailResponse;
 import com.ticketrush.boundedcontext.booking.app.dto.response.BookingMySummaryResponse;
 import com.ticketrush.boundedcontext.booking.app.dto.response.BookingPendingResponse;
-import com.ticketrush.boundedcontext.booking.app.dto.response.BookingPerformanceStatsRow;
 import com.ticketrush.boundedcontext.booking.app.dto.response.BookingSummaryResponse;
 import com.ticketrush.boundedcontext.booking.app.usecase.BookingAdminRefundUseCase;
 import com.ticketrush.boundedcontext.booking.app.usecase.BookingAdminRetryRefundUseCase;
@@ -207,23 +206,9 @@ public class BookingFacade {
                 users.get(booking.getUserId())));
   }
 
-  /**
-   * 관리자 예매 요약 통계 (#561). DB 집계는 트랜잭션 안(UseCase), 공연 가격 조회는 밖(여기)이다.
-   *
-   * <p>매출에 기여하는 공연(완료 예매가 1건 이상)만 조회한다 — 취소만 있는 공연까지 왕복하면 순차 호출이 늘어 예산에 걸릴 확률만 높아지고, 그 결과는 매출이
-   * null이 되는 것이다.
-   */
+  /** 관리자 예매 요약 통계 (#561). <b>원격 호출이 없다</b> — 매출이 예매가 보유한 결제 금액의 합이라 DB 집계 한 번으로 끝난다. */
   public BookingAdminStatsResponse getAdminBookingStats() {
-    List<BookingPerformanceStatsRow> rows = bookingGetAdminStatsUseCase.execute();
-
-    Map<Long, PerformanceInfoResponse> performances =
-        performanceRestClient.getPerformances(
-            rows.stream()
-                .filter(row -> row.confirmedCount() > 0)
-                .map(BookingPerformanceStatsRow::performanceId)
-                .collect(Collectors.toCollection(LinkedHashSet::new)));
-
-    return BookingAdminStatsResponse.of(rows, performances);
+    return bookingGetAdminStatsUseCase.execute();
   }
 
   /**

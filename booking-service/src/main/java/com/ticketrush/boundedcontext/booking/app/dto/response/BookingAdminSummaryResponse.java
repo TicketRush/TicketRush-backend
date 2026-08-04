@@ -41,9 +41,9 @@ public record BookingAdminSummaryResponse(
     @Schema(description = "좌석 수. 1인 1매라 항상 1이다.", example = "1") int seatCount,
     @Schema(
             description =
-                "결제 금액. 1인 1매·공연당 단일가라 티켓 단가와 총 결제 금액이 같은 값이다. performance-service 장애 시 null. "
-                    + "출처가 현재 공연 가격이므로, 예매 후 관리자가 가격을 바꾸면 이 값도 함께 바뀐다 — "
-                    + "실제 결제액의 SSOT는 payment-service다.",
+                "결제 금액. 예매 확정 시점의 실제 결제액이며 1인 1매라 티켓 단가와 총 결제 금액이 같은 값이다. "
+                    + "예매가 직접 보유하는 값이라 공연 가격이 바뀌거나 공연이 삭제돼도 흔들리지 않고, "
+                    + "performance-service 장애와도 무관하다. 아직 결제되지 않은 예매(PENDING 등)는 null이다.",
             example = "150000")
         Long paymentAmount) {
 
@@ -70,6 +70,6 @@ public record BookingAdminSummaryResponse(
         (user == null) ? null : user.email(),
         seatNumber,
         SEAT_COUNT_PER_BOOKING,
-        (performance == null) ? null : performance.price());
+        booking.getPaidAmount());
   }
 }

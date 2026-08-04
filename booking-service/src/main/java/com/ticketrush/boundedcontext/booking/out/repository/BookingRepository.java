@@ -1,6 +1,6 @@
 package com.ticketrush.boundedcontext.booking.out.repository;
 
-import com.ticketrush.boundedcontext.booking.app.dto.response.BookingPerformanceStatsRow;
+import com.ticketrush.boundedcontext.booking.app.dto.response.BookingStatsCounts;
 import com.ticketrush.boundedcontext.booking.domain.entity.Booking;
 import com.ticketrush.boundedcontext.booking.domain.types.BookingStatus;
 import java.time.LocalDateTime;
@@ -39,24 +39,27 @@ public interface BookingRepository extends JpaRepository<Booking, Long> {
   Optional<Long> findIdByBookingNumber(@Param("bookingNumber") String bookingNumber);
 
   /*
-   * 관리자 요약 통계 (#561). 매출이 performance.price 기반이라 공연별 그룹이 어차피 필요한데, 그 김에 전체·완료·취소
-   * 카운트도 같은 스캔에서 뽑아 booking을 한 번만 훑는다. performance_id가 NOT NULL이라 이 그룹은 전 행을
-   * 분할하므로 행별 합계가 곧 전체 합계다.
+   * 관리자 요약 통계 (#561). 매출까지 booking 한 번의 스캔으로 끝난다 — paid_amount를 예매가 직접 보유하므로
+   * 공연 가격을 되물을 필요가 없다. 그래서 공연별 GROUP BY도, 순차 원격 호출도, 조회 실패라는 실패 모드도 없다.
    *
-   * ORDER BY로 순서를 고정한다 — 뒤이어 공연 가격을 순차 조회하는데 예산에 걸려 끊길 때 어느 공연이 빠지는지가
-   * 매 요청 달라지면 로그를 읽어 원인을 좁힐 수 없다.
+   * amountMissingCount는 확정을 거쳤는데 금액이 비어 있는 예매 수다. paid_amount 도입 이전에 확정된 행이
+   * 백필 전까지 여기 잡힌다. SUM은 NULL을 조용히 건너뛰므로 이 값을 함께 세지 않으면 축소된 매출이 정상값처럼
+   * 보인다 — 그 상태를 응답에서 구분하려고 별도 컬럼으로 뽑는다.
    */
   @Query(
-      "SELECT new com.ticketrush.boundedcontext.booking.app.dto.response"
-          + ".BookingPerformanceStatsRow("
-          + "b.performanceId, COUNT(b), "
-          + "SUM(CASE WHEN b.bookingStatus = :confirmed THEN 1 ELSE 0 END), "
-          + "SUM(CASE WHEN b.bookingStatus = :canceled "
-          + "OR b.bookingStatus = :refunded THEN 1 ELSE 0 END)) "
-          + "FROM Booking b "
-          + "GROUP BY b.performanceId "
-          + "ORDER BY b.performanceId ASC")
-  List<BookingPerformanceStatsRow> aggregateStatsByPerformance(
+      "SELECT new com.ticketrush.boundedcontext.booking.app.dto.response.BookingStatsCounts("
+          // SUM은 대상 행이 없으면 0이 아니라 NULL을 낸다(COUNT와 다르다). 예매가 하나도 없는 DB에서
+          // record의 long 파라미터에 그대로 들어가 NPE가 되므로 전부 COALESCE로 닫는다.
+          + "COUNT(b), "
+          + "COALESCE(SUM(CASE WHEN b.bookingStatus = :confirmed THEN 1 ELSE 0 END), 0), "
+          + "COALESCE(SUM(CASE WHEN b.bookingStatus = :canceled "
+          + "OR b.bookingStatus = :refunded THEN 1 ELSE 0 END), 0), "
+          + "COALESCE(SUM(CASE WHEN b.bookingStatus = :confirmed "
+          + "THEN b.paidAmount ELSE 0 END), 0), "
+          + "COALESCE(SUM(CASE WHEN b.bookingStatus = :confirmed AND b.paidAmount IS NULL "
+          + "THEN 1 ELSE 0 END), 0)) "
+          + "FROM Booking b")
+  BookingStatsCounts aggregateStats(
       @Param("confirmed") BookingStatus confirmed,
       @Param("canceled") BookingStatus canceled,
       @Param("refunded") BookingStatus refunded);

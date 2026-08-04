@@ -6,6 +6,7 @@ import com.ticketrush.boundedcontext.user.app.dto.response.UserSummaryResponse;
 import com.ticketrush.boundedcontext.user.app.facade.UserFacade;
 import com.ticketrush.global.dto.response.ApiResponse;
 import com.ticketrush.global.status.SuccessStatus;
+import io.swagger.v3.oas.annotations.Hidden;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.constraints.Size;
@@ -21,6 +22,10 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
+// 공개 OpenAPI 문서에서 숨긴다. 게이트웨이가 /v3/api-docs/user를 permitAll로 라우팅하므로, 숨기지 않으면
+// 내부 전용 경로와 파라미터가 인터넷에 그대로 노출된다 — 엔드포인트 자체는 도달 불가지만 회원 개인정보를
+// 벌크로 내리는 창구가 있다는 사실까지 광고할 이유가 없다.
+@Hidden
 @Tag(name = "Internal User", description = "내부 통신용 회원 API")
 // @Validated는 파라미터 제약 위반을 ConstraintViolationException으로 던지게 해 GlobalExceptionHandler의
 // 400 매핑에 태운다. 없어도 Spring Framework 7의 내장 메서드 검증이 제약을 적용하지만, 그때는

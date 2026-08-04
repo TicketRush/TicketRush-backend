@@ -19,6 +19,7 @@ CREATE TABLE `booking` (
   `booking_number` varchar(50) COLLATE utf8mb4_unicode_ci NOT NULL,
   `booking_status` enum('CANCELED','CONFIRMED','EXPIRED','PENDING','REFUNDED','REFUNDING') COLLATE utf8mb4_unicode_ci NOT NULL,
   `confirmed_at` datetime(6) DEFAULT NULL,
+  `paid_amount` bigint DEFAULT NULL,
   `performance_id` bigint NOT NULL,
   `refund_failed_at` datetime(6) DEFAULT NULL,
   `seat_id` bigint NOT NULL,

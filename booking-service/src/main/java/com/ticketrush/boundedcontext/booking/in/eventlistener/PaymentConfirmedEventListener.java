@@ -44,6 +44,8 @@ public class PaymentConfirmedEventListener {
       final Long bookingId = event.bookingId();
       final Long seatId = event.seatId();
       final LocalDateTime paidAt = event.paidAt();
+      // 실제 결제 금액을 예매에 박아 둔다 (#561). 관리자 매출 집계가 공연의 현재 가격을 되묻지 않게 하는 값이다.
+      final Long paidAmount = event.amount();
 
       log.info("결제 완료 이벤트 수신. 예매 확정 처리. bookingId: {}, paidAt: {}", bookingId, paidAt);
 
@@ -57,7 +59,7 @@ public class PaymentConfirmedEventListener {
             inboxService.runIfFirst(
                 KafkaConsumerGroup.BOOKING,
                 envelope,
-                () -> bookingConfirmUseCase.execute(bookingId, paidAt, seatId));
+                () -> bookingConfirmUseCase.execute(bookingId, paidAt, seatId, paidAmount));
       } catch (DuplicateEventException e) {
         // 동시 중복 수신으로 inbox unique가 경합함(#110). 확정은 경합에서 이긴 처리가 커밋하므로 여기선 확정을
         // 재수행하지 않되, SOLD는 아래에서 멱등하게 재시도해 유실을 막는다.

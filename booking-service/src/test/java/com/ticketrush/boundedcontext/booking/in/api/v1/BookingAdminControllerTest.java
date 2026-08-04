@@ -209,7 +209,7 @@ class BookingAdminControllerTest {
   void getBookingStats_returns_summary() throws Exception {
     // given
     given(bookingFacade.getAdminBookingStats())
-        .willReturn(new BookingAdminStatsResponse(1250, 980, 120, 147000000L));
+        .willReturn(new BookingAdminStatsResponse(1250, 980, 120, 147000000L, true, 0));
 
     // when & then
     mockMvc
@@ -222,15 +222,16 @@ class BookingAdminControllerTest {
         .andExpect(jsonPath("$.result.total_bookings").value(1250))
         .andExpect(jsonPath("$.result.completed_bookings").value(980))
         .andExpect(jsonPath("$.result.canceled_bookings").value(120))
-        .andExpect(jsonPath("$.result.total_revenue").value(147000000L));
+        .andExpect(jsonPath("$.result.total_revenue").value(147000000L))
+        .andExpect(jsonPath("$.result.revenue_complete").value(true));
   }
 
   @Test
-  @DisplayName("공연 가격을 조회하지 못하면 총 매출이 null로 응답된다")
-  void getBookingStats_returns_null_revenue_when_unresolved() throws Exception {
-    // given: 부분 합 대신 null을 내리는 정책 (#561)
+  @DisplayName("결제 금액이 비어 있는 확정 예매가 있으면 매출이 불완전함을 함께 알린다")
+  void getBookingStats_flags_incomplete_revenue() throws Exception {
+    // given: 백필되지 않은 과거 확정 예매가 남아 있어 매출이 실제보다 작다 (#561)
     given(bookingFacade.getAdminBookingStats())
-        .willReturn(new BookingAdminStatsResponse(1250, 980, 120, null));
+        .willReturn(new BookingAdminStatsResponse(1250, 980, 120, 146000000L, false, 7));
 
     // when & then
     mockMvc
@@ -241,7 +242,9 @@ class BookingAdminControllerTest {
                 .header("X-User-Role", "ADMIN"))
         .andExpect(status().isOk())
         .andExpect(jsonPath("$.result.completed_bookings").value(980))
-        .andExpect(jsonPath("$.result.total_revenue").doesNotExist());
+        .andExpect(jsonPath("$.result.total_revenue").value(146000000L))
+        .andExpect(jsonPath("$.result.revenue_complete").value(false))
+        .andExpect(jsonPath("$.result.missing_amount_bookings").value(7));
   }
 
   @Test
