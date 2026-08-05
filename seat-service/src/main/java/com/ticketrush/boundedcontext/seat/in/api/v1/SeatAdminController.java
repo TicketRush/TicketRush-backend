@@ -67,12 +67,17 @@ public class SeatAdminController {
           `remaining_seconds`는 이미 만료됐거나 예약 진행 중이 아니면 0입니다.
 
           경로의 공연에 속하지 않는 좌석 ID는 `SEAT_404_001`로 거절합니다.
+
+          응답의 `booking_number`가 예매자 개인정보를 조회하는 키이므로 조회 사실이 ADMIN-AUDIT 로그에 남습니다
+          (조회자와 대상 좌석만 기록하며 응답 내용은 남기지 않습니다).
           """)
   @GetMapping("/{performanceId}/{seatId}")
   public ResponseEntity<ApiResponse<SeatAdminSeatDetailResponse>> getSeatDetail(
+      @AuthenticationPrincipal CustomUserDetails admin,
       @Parameter(description = "공연 ID") @PathVariable Long performanceId,
       @Parameter(description = "좌석 ID") @PathVariable Long seatId) {
-    SeatAdminSeatDetailResponse response = seatFacade.getAdminSeatDetail(performanceId, seatId);
+    SeatAdminSeatDetailResponse response =
+        seatFacade.getAdminSeatDetail(admin.getUserId(), performanceId, seatId);
 
     return ApiResponse.onSuccess(SuccessStatus.OK, response);
   }
@@ -107,11 +112,10 @@ public class SeatAdminController {
       @AuthenticationPrincipal CustomUserDetails admin,
       @Parameter(description = "공연 ID") @PathVariable Long performanceId,
       @Parameter(description = "좌석 ID") @PathVariable Long seatId,
-      // 사실상 필수다. required=true로 두지 않는 이유는 응답 코드 때문이다 — 누락 시 던져지는
-      // MissingServletRequestParameterException은 전역 핸들러에 매핑돼 있지 않아 500으로 나간다.
-      // required=false로 받아 @NotBlank(클래스의 @Validated가 발화)에 걸리게 하면 400으로 응답한다.
-      @Parameter(description = "좌석 상세 조회에서 확인한 예매 번호(필수). 현재 좌석을 쥔 예매와 다르면 거절합니다.", required = true)
-          @RequestParam(required = false)
+      // @NotBlank를 함께 두는 이유: required=true는 누락만 막고 빈 문자열(?bookingNumber=)은 통과시킨다.
+      // 누락은 전역 핸들러가, 빈 문자열은 이 제약이 각각 400으로 잡는다.
+      @Parameter(description = "좌석 상세 조회에서 확인한 예매 번호(필수). 현재 좌석을 쥔 예매와 다르면 거절합니다.")
+          @RequestParam
           @NotBlank
           String bookingNumber) {
     seatFacade.forceReleaseHold(admin.getUserId(), performanceId, seatId, bookingNumber);

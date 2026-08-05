@@ -13,6 +13,7 @@ import org.springframework.data.redis.RedisConnectionFailureException;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.authorization.AuthorizationDeniedException;
 import org.springframework.web.bind.MethodArgumentNotValidException;
+import org.springframework.web.bind.MissingServletRequestParameterException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
 import org.springframework.web.context.request.RequestContextHolder;
@@ -123,7 +124,17 @@ public class GlobalExceptionHandler {
     return ApiResponse.onFailure(e.getErrorStatus(), e.getMessage());
   }
 
-  @ExceptionHandler({MethodArgumentTypeMismatchException.class, ConversionFailedException.class})
+  /*
+   * 요청이 스펙과 맞지 않아 컨트롤러에 들어가지도 못한 경우다. 전부 클라이언트가 고칠 수 있는 실수이므로 400으로 답한다.
+   *
+   * MissingServletRequestParameterException(필수 쿼리 파라미터 누락)이 여기 없으면 catch-all(Exception)로 떨어져
+   * 500이 나간다 — 클라이언트 실수가 서버 장애로 보이고, 호출자는 재시도해도 소용없다는 것을 알 수 없다(#562).
+   */
+  @ExceptionHandler({
+    MethodArgumentTypeMismatchException.class,
+    ConversionFailedException.class,
+    MissingServletRequestParameterException.class
+  })
   public ResponseEntity<ApiResponse<?>> handleConversionFailedException(Exception e) {
     storeException(e);
 

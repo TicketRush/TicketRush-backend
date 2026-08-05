@@ -91,6 +91,9 @@ public class SeatFacade {
    * <p><b>좌석 맵 캐시({@link #getPerformanceSeatMap})를 경유하지 않는다.</b> 그 캐시는 TTL 30초인데 관리자 화면의 갱신 정책이
    * "새로고침 버튼·관리자 작업 실행·좌석 선택"이라, 관리자가 방금 강제 해제한 좌석이 최대 30초간 HOLD로 보이는 것은 그대로 결함이 된다. 캐시가 막으려던 것은
    * 오픈런 트래픽의 CPU 비용인데(#469) 관리자 경로는 그 규모가 아니다.
+   *
+   * <p><b>감사 로그를 남기지 않는다.</b> 좌석 맵({@code SeatMapItemResponse})에는 {@code bookingNumber}가 없어 예매자
+   * 개인정보를 조회할 키가 새지 않는다 — 단건 상세와 갈리는 지점이다.
    */
   public SeatAdminMonitoringResponse getAdminMonitoring(Long performanceId) {
     return new SeatAdminMonitoringResponse(
@@ -98,7 +101,23 @@ public class SeatFacade {
         seatGetSeatMapUseCase.execute(performanceId));
   }
 
-  public SeatAdminSeatDetailResponse getAdminSeatDetail(Long performanceId, Long seatId) {
+  /**
+   * 관리자 좌석 단건 상세 (#562).
+   *
+   * <p><b>조회 사실을 감사 로그로 남긴다.</b> 이 응답의 {@code bookingNumber}가 booking 관리자 조회의 키이고 그쪽은 예매자 이름·이메일을
+   * 내린다. 즉 좌석 ID를 훑어 공연 전체의 예매 번호 명부를 만드는 것이 개인정보 열람의 선행 단계인데, 그 단계에 흔적이 없으면 booking 쪽만 추적되는 비대칭이
+   * 생긴다(booking의 관리자 목록 조회가 감사를 남기는 것과 같은 근거다).
+   *
+   * <p><b>남기는 것은 조회자와 대상 좌석뿐이다</b> — 응답 내용을 찍으면 로그가 두 번째 개인정보 저장소가 된다. 읽기 경로라 롤백될 커밋이 없으므로 즉시 기록한다.
+   */
+  public SeatAdminSeatDetailResponse getAdminSeatDetail(
+      Long adminId, Long performanceId, Long seatId) {
+    log.info(
+        "[ADMIN-AUDIT] 관리자 좌석 상세 조회(예매 번호 포함). adminId: {}, performanceId: {}, seatId: {}",
+        adminId,
+        performanceId,
+        seatId);
+
     return seatGetAdminSeatDetailUseCase.execute(performanceId, seatId);
   }
 

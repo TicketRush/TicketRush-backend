@@ -102,7 +102,7 @@ class SeatAdminControllerTest {
   @DisplayName("ADMIN이 좌석 단건을 조회하면 선점 시각과 남은 시간이 응답된다")
   void getSeatDetail_returns_hold_window() throws Exception {
     // given
-    given(seatFacade.getAdminSeatDetail(PERFORMANCE_ID, SEAT_ID))
+    given(seatFacade.getAdminSeatDetail(ADMIN_ID, PERFORMANCE_ID, SEAT_ID))
         .willReturn(
             new SeatAdminSeatDetailResponse(
                 SEAT_ID,
@@ -161,14 +161,32 @@ class SeatAdminControllerTest {
   }
 
   @Test
-  @DisplayName("예매 번호 없이 강제 해제를 요청하면 파사드에 닿기 전에 거절된다")
+  @DisplayName("예매 번호 없이 강제 해제를 요청하면 파사드에 닿기 전에 400으로 거절된다")
   void forceReleaseHold_requires_booking_number() throws Exception {
-    // given: 전제조건이 선택이면 '안 보내면 무검사'가 사실상 기본값이 되어 가드가 무력해진다 (#562)
+    // given: 전제조건이 선택이면 '안 보내면 무검사'가 사실상 기본값이 되어 가드가 무력해진다 (#562).
+    // 누락은 전역 핸들러가 400으로 잡는다 — 매핑이 없으면 catch-all로 떨어져 500이 나간다.
     mockMvc
         .perform(
             asAdmin(
                 delete(
                     "/api/v1/seat/admin/{performanceId}/{seatId}/hold", PERFORMANCE_ID, SEAT_ID)))
+        .andExpect(status().isBadRequest());
+
+    verifyNoInteractions(seatFacade);
+  }
+
+  @Test
+  @DisplayName("예매 번호를 빈 문자열로 보내도 400으로 거절된다")
+  void forceReleaseHold_rejects_blank_booking_number() throws Exception {
+    // given: required=true는 누락만 막고 빈 문자열은 통과시킨다. @NotBlank가 그 구멍을 막는지 고정한다.
+    mockMvc
+        .perform(
+            asAdmin(
+                    delete(
+                        "/api/v1/seat/admin/{performanceId}/{seatId}/hold",
+                        PERFORMANCE_ID,
+                        SEAT_ID))
+                .param("bookingNumber", ""))
         .andExpect(status().isBadRequest());
 
     verifyNoInteractions(seatFacade);
@@ -206,7 +224,7 @@ class SeatAdminControllerTest {
   @DisplayName("공연에 속하지 않는 좌석 상세 조회는 404로 거절된다")
   void getSeatDetail_returns_404_when_seat_belongs_to_other_performance() throws Exception {
     // given
-    given(seatFacade.getAdminSeatDetail(PERFORMANCE_ID, SEAT_ID))
+    given(seatFacade.getAdminSeatDetail(ADMIN_ID, PERFORMANCE_ID, SEAT_ID))
         .willThrow(new BusinessException(ErrorStatus.SEAT_NOT_FOUND));
 
     // when & then
