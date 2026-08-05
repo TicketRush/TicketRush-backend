@@ -7,6 +7,7 @@ import com.ticketrush.boundedcontext.seat.domain.entity.Seat;
 import com.ticketrush.global.types.SeatStatus;
 import java.time.LocalDateTime;
 import java.util.List;
+import java.util.Optional;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Modifying;
@@ -50,6 +51,12 @@ public interface SeatRepository extends JpaRepository<Seat, Long> {
           + "FROM Seat s "
           + "WHERE s.id IN :seatIds")
   List<SeatNumberResponse> findSeatNumbersByIdIn(@Param("seatIds") List<Long> seatIds);
+
+  /**
+   * 관리자 API 전용 좌석 조회 (#562). {@code findById}를 쓰지 않는 이유는 경로의 {@code performanceId}가 장식이 되면 안 되기
+   * 때문이다 — 임의의 공연 경로에 남의 공연 좌석 ID를 얹어도 조회·강제 해제가 되어버린다.
+   */
+  Optional<Seat> findByIdAndPerformanceId(Long id, Long performanceId);
 
   @Query(
       "SELECT s FROM Seat s "

@@ -455,6 +455,27 @@ class SeatRepositoryTest {
         .hasSize((int) expiredBacklog);
   }
 
+  @Test
+  @DisplayName("관리자 조회는 공연에 속한 좌석만 찾고 다른 공연의 좌석 ID는 비운다")
+  void findByIdAndPerformanceId() {
+    // given: 파생 쿼리가 상속받은 id 속성(@AttributeOverride로 컬럼명은 seat_id)을 제대로 푸는지가 핵심이다.
+    // 못 풀면 컨텍스트 기동 자체가 실패하므로 여기서 고정한다 (#562).
+    Seat seat = entityManager.persist(buildSeat("A-1", SeatStatus.HOLD, null, "X7B29-KLPW1"));
+    entityManager.flush();
+
+    // when & then: 소속 공연으로는 찾힌다
+    assertThat(seatRepository.findByIdAndPerformanceId(seat.getId(), 100L))
+        .get()
+        .satisfies(
+            found -> {
+              assertThat(found.getSeatNumber()).isEqualTo("A-1");
+              assertThat(found.getBookingNumber()).isEqualTo("X7B29-KLPW1");
+            });
+
+    // 경로의 공연 ID가 다르면 비어야 한다 — 임의 공연 경로로 남의 좌석에 닿지 못하게 하는 가드다
+    assertThat(seatRepository.findByIdAndPerformanceId(seat.getId(), 999L)).isEmpty();
+  }
+
   private Seat buildSeat(
       String seatNumber, SeatStatus status, LocalDateTime holdExpiredAt, String bookingNumber) {
     return Seat.builder()

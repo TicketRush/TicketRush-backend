@@ -30,7 +30,20 @@ public class SeatController {
   private final SeatFacade seatFacade;
 
   @GetMapping("/{performanceId}/seat-layouts")
-  @Operation(summary = "공연별 좌석 배치 조회", description = "공연 ID에 해당하는 좌석 ID, 좌석 배치 ID, 좌석 번호를 조회합니다.")
+  @Operation(
+      summary = "공연별 좌석 배치 조회",
+      description =
+          """
+          공연 ID에 해당하는 좌석 ID, 좌석 배치 ID, 좌석 번호, 좌석 상태, 선점 만료 시각을 조회합니다. 인증이 필요 없습니다.
+
+          **선점 만료 시각(`hold_expired_at`)은 인증 없이 계속 공개합니다(#562 검토 결론).** 이 값은 예매자를 식별하는
+          개인정보가 아니라 "이 좌석이 언제 다시 예매 가능해지는지"라는 좌석 상태의 일부이며, 예매 화면이 선점 해제를
+          기다리는 근거로 씁니다. 관리자 경계(`/api/v1/seat/admin/**`)를 세우면서 이 필드의 노출 범위도 함께 검토했으나,
+          축소하면 공개 좌석맵과 SSE의 응답 스펙이 깨지는 대가에 비해 얻는 것이 없어 현행을 유지합니다.
+          예매자를 식별하는 값(예매 번호)은 관리자 API에서만 내려갑니다.
+
+          응답은 최대 30초 캐시될 수 있습니다. 좌석 상태가 바뀌면 캐시가 즉시 무효화되므로 정상 경로에서는 지연되지 않습니다.
+          """)
   @SeatMapApiResponses
   public ResponseEntity<ApiResponse<Object>> getSeatMap(@PathVariable Long performanceId) {
     // 파사드가 캐시/직렬화한 JSON 배열을 재파싱 없이 result 자리에 그대로 끼운다(#469). 래퍼를 응답째 캐싱하지

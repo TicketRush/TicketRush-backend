@@ -93,6 +93,15 @@ import lombok.NoArgsConstructor;
 @AttributeOverride(name = "id", column = @Column(name = "seat_id"))
 public class Seat extends AutoIdBaseEntity {
 
+  /**
+   * 좌석 선점 유지 시간(분). {@code SeatLockUseCase}가 Redis 락 TTL과 {@code holdExpiredAt}을 이 값으로 함께 정한다.
+   *
+   * <p><b>도메인에 두는 이유</b>는 {@code Booking.PAYMENT_WAIT_MINUTES}(#559)와 같다 — 선점 시작 시각을 별도 컬럼 없이
+   * {@code holdExpiredAt - TTL}로 유도하는 곳(관리자 좌석 상세, #562)이 생겼고, TTL이 두 곳에서 갈라지면 관리자 화면의 "예약 시작 시간"이
+   * 실제와 어긋난다.
+   */
+  public static final int HOLD_TTL_MINUTES = 5;
+
   @Column(nullable = false)
   private Long seatLayoutId;
 
@@ -126,13 +135,16 @@ public class Seat extends AutoIdBaseEntity {
    *   - SeatReleaseSoldSeatUseCase → releaseBooking() : SOLD에서만 시작한다. releaseBooking() 자체는 HOLD도
    *     받지만, 호출부의 SOLD 가드가 HOLD를 먼저 스킵한다.
    *
-   * releaseHold()를 부르는 두 곳(SeatReleaseSingleUseCase, SeatReleaseExpiredChunkProcessor)은 예외처럼 보이지만
+   * releaseHold()를 부르는 네 곳(SeatReleaseSingleUseCase, SeatReleaseExpiredChunkProcessor,
+   * SeatReleaseHoldUseCase(#559), SeatAdminForceReleaseHoldUseCase(#562))은 예외처럼 보이지만
    * @Modifying(clearAutomatically = true) 직후라 엔티티가 detach 상태다 — DB에 나가지 않는 in-memory 조정이다.
+   * 해제 경로를 추가할 때마다 이 목록에 더한다. 목록에서 빠진 호출처가 clearAutomatically 밖에서 releaseHold()를
+   * 부르면 그 순간 불변식이 깨진다.
    *
    * 즉 HOLD 행을 들고 더티 체킹으로 쓰는 트랜잭션이 없어 벌크와 경합할 수 없고, 어떤 행이 HOLD로 진입하려면 반드시
    * hold()(version 증가)를 거치므로 stale 엔티티는 낙관적 락에 걸린다.
    *
-   * 이 불변식이 깨지면(= HOLD 좌석을 더티 체킹으로 고치는 UseCase를 추가하거나, 위 두 곳의 clearAutomatically를 끄거나,
+   * 이 불변식이 깨지면(= HOLD 좌석을 더티 체킹으로 고치는 UseCase를 추가하거나, 위 네 곳의 clearAutomatically를 끄거나,
    * AVAILABLE/SOLD 행에 발화하는 벌크 UPDATE를 추가하면) stale 엔티티가 충돌 없이 덮어써 버전 검사가 조용히 무력화된다.
    * 그때는 JPQL UPDATE VERSIONED를 검토한다(booking도 같은 한계를 안고 있다 — ADR 0005).
    *

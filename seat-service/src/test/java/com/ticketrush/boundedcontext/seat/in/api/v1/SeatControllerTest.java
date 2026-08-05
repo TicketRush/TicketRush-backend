@@ -11,19 +11,32 @@ import com.ticketrush.boundedcontext.seat.app.dto.response.SeatStatusCountsRespo
 import com.ticketrush.boundedcontext.seat.app.facade.SeatFacade;
 import com.ticketrush.global.config.CustomSecurityProperties;
 import com.ticketrush.global.config.SecurityConfig;
+import com.ticketrush.global.filter.GatewayHeaderFilter;
 import com.ticketrush.support.WebMvcSliceTest;
 import java.util.List;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.context.annotation.Import;
-import org.springframework.security.test.context.support.WithMockUser;
+import org.springframework.test.context.TestPropertySource;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
 
+/**
+ * 좌석 공개 조회 API 슬라이스 테스트.
+ *
+ * <p><b>게이트웨이 인증 헤더를 일부러 붙이지 않는다.</b> 이 컨트롤러의 엔드포인트는 비로그인 예매 화면이 그대로 부르는 공개 API이고, 헤더 없이 200이 나오는
+ * 것이 곧 그 계약이다({@code SecurityConfig}의 {@code anyRequest().permitAll()}). 누군가 실수로 이 경로에 인증을 요구하게 만들면
+ * 아래 테스트들이 401로 깨진다 — 그것이 이 테스트가 지키는 회귀다.
+ *
+ * <p>{@code @WithMockUser}는 쓰지 않는다(#562). {@code GatewayHeaderFilter}가 체인에 들어오면서, 게이트웨이 토큰이 없는 요청에
+ * 대해 필터가 {@code SecurityContextHolder.clearContext()}를 호출하므로 그 어노테이션이 세팅한 인증은 컨트롤러에 닿기 전에 지워진다. 남겨
+ * 두면 "이 경로는 인증이 필요하다"는 잘못된 신호만 준다.
+ */
 @WebMvcSliceTest(SeatController.class)
-@Import({SecurityConfig.class, CustomSecurityProperties.class})
+@Import({SecurityConfig.class, CustomSecurityProperties.class, GatewayHeaderFilter.class})
+@TestPropertySource(properties = "gateway.internal-token=test-token")
 class SeatControllerTest {
 
   @Autowired private MockMvc mockMvc;
@@ -31,7 +44,6 @@ class SeatControllerTest {
   @MockitoBean private SeatFacade seatFacade;
 
   @Test
-  @WithMockUser
   @DisplayName("공연 ID로 전체 좌석 맵 조회를 성공하고 200 OK를 반환한다")
   void getSeatMap() throws Exception {
     // given: 파사드가 캐시/직렬화해 돌려주는 형태 그대로의 snake_case JSON 배열(#469).
@@ -61,7 +73,6 @@ class SeatControllerTest {
   }
 
   @Test
-  @WithMockUser
   @DisplayName("좌석 ID 목록으로 좌석 번호 목록을 조회한다")
   void getSeatNumbers() throws Exception {
     // given
@@ -84,7 +95,6 @@ class SeatControllerTest {
   }
 
   @Test
-  @WithMockUser
   @DisplayName("공연 ID로 좌석 상태 SSE 스트림을 구독한다")
   void subscribeSeatStatus() throws Exception {
     // given
@@ -101,7 +111,6 @@ class SeatControllerTest {
   }
 
   @Test
-  @WithMockUser
   @DisplayName("공연 ID로 전체 좌석 수와 상태별 좌석 수를 조회하고 200 OK를 반환한다")
   void getSeatCounts() throws Exception {
     // given

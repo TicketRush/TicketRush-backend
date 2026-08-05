@@ -61,6 +61,34 @@ public class BookingAdminController {
   }
 
   @Operation(
+      summary = "예매 단건 조회",
+      description =
+          """
+          예매 번호로 예매 1건을 조회합니다. 응답 형태는 목록과 동일합니다 — 1인 1매라 목록 필드가 곧 상세 필드입니다.
+
+          **좌석 관리자 화면(#562)이 이 API로 예매자를 조합합니다.** 좌석 조회 API는 좌석의 `booking_number`까지만 내리고
+          예매자 이름·이메일은 내리지 않습니다. 좌석 도메인이 예매자 정보를 보유하지도, 조회하지도 않게 하려는 경계이며,
+          프론트가 좌석 상세의 `booking_number`로 이 API를 호출해 두 화면 데이터를 합칩니다.
+
+          공연 이름·날짜, 예매자 이름·이메일, 좌석 번호는 각각 performance·user·seat-service에서 보강합니다.
+          **해당 서비스 장애 시 그 필드만 null로 내려가고 조회 자체는 성공합니다** — 프론트는 `performance_id`·`user_id`·`seat_id`로
+          재조회할 수 있습니다.
+
+          존재하지 않는 예매 번호는 `BOOKING_404_001`로 거절합니다.
+
+          예매자 개인정보가 포함되므로 조회 사실이 ADMIN-AUDIT 로그에 남습니다(조회자와 예매 번호만 기록하며 응답 내용은 남기지 않습니다).
+          """)
+  @GetMapping("/bookings/{bookingNumber}")
+  public ResponseEntity<ApiResponse<BookingAdminSummaryResponse>> getBooking(
+      @AuthenticationPrincipal CustomUserDetails admin,
+      @Parameter(description = "예매 번호") @PathVariable String bookingNumber) {
+    BookingAdminSummaryResponse response =
+        bookingFacade.getAdminBooking(admin.getUserId(), bookingNumber);
+
+    return ApiResponse.onSuccess(SuccessStatus.OK, response);
+  }
+
+  @Operation(
       summary = "예매 요약 통계 조회",
       description =
           """

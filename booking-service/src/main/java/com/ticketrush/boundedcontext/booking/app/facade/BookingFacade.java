@@ -13,6 +13,7 @@ import com.ticketrush.boundedcontext.booking.app.usecase.BookingAdminRetryRefund
 import com.ticketrush.boundedcontext.booking.app.usecase.BookingCancelMyBookingUseCase;
 import com.ticketrush.boundedcontext.booking.app.usecase.BookingCountUseCase;
 import com.ticketrush.boundedcontext.booking.app.usecase.BookingCreateUseCase;
+import com.ticketrush.boundedcontext.booking.app.usecase.BookingGetAdminBookingUseCase;
 import com.ticketrush.boundedcontext.booking.app.usecase.BookingGetAdminBookingsUseCase;
 import com.ticketrush.boundedcontext.booking.app.usecase.BookingGetAdminStatsUseCase;
 import com.ticketrush.boundedcontext.booking.app.usecase.BookingGetMyBookingDetailUseCase;
@@ -60,6 +61,7 @@ public class BookingFacade {
   private final BookingGetRefundingStuckBookingsUseCase bookingGetRefundingStuckBookingsUseCase;
   private final BookingAdminRetryRefundUseCase bookingAdminRetryRefundUseCase;
   private final BookingGetAdminBookingsUseCase bookingGetAdminBookingsUseCase;
+  private final BookingGetAdminBookingUseCase bookingGetAdminBookingUseCase;
   private final BookingGetAdminStatsUseCase bookingGetAdminStatsUseCase;
   private final BookingAdminRefundUseCase bookingAdminRefundUseCase;
   private final UserRestClient userRestClient;
@@ -204,6 +206,35 @@ public class BookingFacade {
                 performances.get(booking.getPerformanceId()),
                 seatNumbers.get(booking.getSeatId()),
                 users.get(booking.getUserId())));
+  }
+
+  /**
+   * 관리자 예매 단건 조회 (#562). 좌석 관리자 화면이 좌석의 {@code bookingNumber}로 예매자를 조합하는 창구다.
+   *
+   * <p>보강 축은 목록과 같지만 전부 1건짜리 호출이다 — 목록의 벌크 조회를 재사용하려고 1건을 리스트에 싸서 넘기면 공연만 단건 API를 갖고 나머지 둘은 벌크 API라
+   * 형태가 갈린다. {@code getMyBooking}(#560)이 이미 같은 조합을 쓰고 있어 그쪽과 축을 맞춘다.
+   *
+   * <p>보강 실패는 각 클라이언트가 흡수하므로 여기에 catch가 없다(부분 응답). 한 도메인의 실패가 다른 도메인 필드에 닿는 경로도 없다.
+   *
+   * <p><b>조회 사실을 감사 로그로 남긴다.</b> 목록과 같은 이유이며 남기는 것은 조회자와 대상 키뿐이다 — 응답 내용(이름·이메일)을 찍으면 로그가 두 번째 개인정보
+   * 저장소가 된다.
+   */
+  public BookingAdminSummaryResponse getAdminBooking(Long adminId, String bookingNumber) {
+    Booking booking = bookingGetAdminBookingUseCase.execute(bookingNumber);
+
+    log.info(
+        "[ADMIN-AUDIT] 관리자 예매 단건 조회(예매자 개인정보 포함). adminId: {}, bookingNumber: {}",
+        adminId,
+        bookingNumber);
+
+    PerformanceInfoResponse performance =
+        performanceRestClient.getPerformance(booking.getPerformanceId()).orElse(null);
+    String seatNumber =
+        seatRestClient.getSeatNumbers(List.of(booking.getSeatId())).get(booking.getSeatId());
+    UserSummaryInfoResponse user =
+        userRestClient.getUsers(List.of(booking.getUserId())).get(booking.getUserId());
+
+    return BookingAdminSummaryResponse.of(booking, performance, seatNumber, user);
   }
 
   /** 관리자 예매 요약 통계 (#561). <b>원격 호출이 없다</b> — 매출이 예매가 보유한 결제 금액의 합이라 DB 집계 한 번으로 끝난다. */
