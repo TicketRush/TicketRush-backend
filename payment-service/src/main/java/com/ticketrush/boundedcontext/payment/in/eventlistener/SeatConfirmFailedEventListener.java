@@ -170,7 +170,10 @@ public class SeatConfirmFailedEventListener {
         .register(meterRegistry)
         .increment();
 
-    // 재시도해도 같은 거절이 돌아오므로 오프셋을 커밋한다. 이후 복구는 위 CRITICAL 과 RefundFailedEvent 가 맡는다.
+    // 재시도해도 같은 거절이 돌아오므로 오프셋을 커밋한다. 화이트리스트에 등재된 일시적 거절이었다면 취소
+    // 클라이언트가 이미 흡수했고 소진된 뒤에만 여기 도달한다(#573). 단 목록 밖(body 파싱 실패·미등재 코드)은
+    // 흡수되지 않으므로 이 분기 도달이 곧 "재시도 무의미"를 뜻하진 않는다 — CRITICAL 로그의 tossCode 를 함께 본다.
+    // 이후 복구는 위 CRITICAL 과 RefundFailedEvent 가 맡는다.
     // 다만 그 발행은 비동기 fire-and-forget 이라 유실되면 booking 에 refundFailedAt 이 남지 않고, 그러면 여기서
     // 열어둔 관리자 복구 경로가 함께 닫힌다 — 보장이 아니라 최선 노력이다(#574).
     ack.acknowledge();

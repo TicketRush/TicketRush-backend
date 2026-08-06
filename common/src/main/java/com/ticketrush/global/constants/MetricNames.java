@@ -42,6 +42,15 @@ public class MetricNames {
   public static final String PAYMENT_PG_APPROVE = "ticketrush.payment.pg.approve"; // Timer
   public static final String PAYMENT_REFUND = "ticketrush.payment.refund";
   public static final String PAYMENT_PG_CANCEL = "ticketrush.payment.pg.cancel"; // Timer
+  // PG 취소 4xx 중 재시도 대상(TossCancelRetryableCode)을 만난 횟수(#573). reason 태그는 재시도를 유발한
+  // Toss 원본 code(화이트리스트 3종이라 유한 집합), outcome은 네 갈래다 — succeeded(재시도 성공),
+  // exhausted(재시도에서도 같은 부류 거절 → 환불 실패 확정), failed(재시도가 다른 실패로 끝남: 통신 오류·
+  // 다른 결정적 코드·대기 중 인터럽트), disabled(킬 스위치로 재시도 건너뜀).
+  // exhausted와 failed를 반드시 갈라야 한다. 이 카운터의 목적이 "재시도 유효성이 문서로 확인되지 않은
+  // PROVIDER_ERROR가 실제로 효과가 있는가"의 사후 판정인데, 한 값에 접으면 판정이 오염된다 — 특히 409 뒤
+  // 재시도에서 ALREADY_CANCELED_PAYMENT가 오는 건 선행 요청이 성공했다는 뜻이라 의미가 정반대다.
+  // PAYMENT_PG_CANCEL Timer가 재시도 구간을 포함해 늘어나는 것도 이 카운터로 설명된다.
+  public static final String PAYMENT_PG_CANCEL_RETRY = "ticketrush.payment.pg.cancel.retry";
   public static final String PAYMENT_REFUND_FAILED = "ticketrush.payment.refund.failed";
   // booking당 FAILED 이력 상한 초과로 기록을 억제한 횟수(#333).
   public static final String PAYMENT_FAILED_RECORD_SUPPRESSED =

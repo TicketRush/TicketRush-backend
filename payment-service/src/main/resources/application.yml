@@ -87,6 +87,11 @@ payment:
       secret-key: ${TOSS_PAYMENTS_SECRET_KEY:}
       connect-timeout-ms: ${TOSS_PAYMENTS_CONNECT_TIMEOUT_MS:3000}
       read-timeout-ms: ${TOSS_PAYMENTS_READ_TIMEOUT_MS:10000}
+      # 재시도 가능한 취소 거절(#573)을 다시 호출하기 전 대기(ms). 겸 킬 스위치다 — 0 이하면 대기만
+      # 생략하는 것이 아니라 재시도 자체를 하지 않고 기존 확정 경로(FAILED 이력 + 보상)로 낙하한다.
+      # 대량 만료 버스트에서 컨슈머 스레드 점유로 max.poll.interval.ms가 압박되면 0으로 끈다.
+      # 생성자 주입이라 변경에는 재기동이 필요하다(재기동은 컨슈머 리밸런스를 유발한다).
+      cancel-retry-delay-ms: ${TOSS_PAYMENTS_CANCEL_RETRY_DELAY_MS:1000}
 
 management:
   endpoints:

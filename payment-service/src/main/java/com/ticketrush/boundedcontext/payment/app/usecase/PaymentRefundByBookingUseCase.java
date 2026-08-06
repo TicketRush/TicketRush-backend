@@ -92,7 +92,10 @@ public class PaymentRefundByBookingUseCase {
     } catch (BusinessException e) {
       failure = e;
     } finally {
-      // 타이머는 PG 왕복만 측정하도록 FAILED 저장(recordIfRejected)보다 먼저 멈춘다.
+      // 타이머는 PG 왕복만 측정하도록 FAILED 저장(recordIfRejected)보다 먼저 멈춘다. 다만 그 "왕복"에는
+      // 클라이언트 내부 재시도(#573 — 대기 후 최대 1회 재호출)가 포함되므로, 재시도가 발생한 건은 대기 +
+      // 2차 왕복만큼 길어진다(최악 +11초 = 대기 1초 + read-timeout 10초). p99 상승 구간의 원인은
+      // PAYMENT_PG_CANCEL_RETRY 카운터와 겹쳐 읽는다.
       sample.stop(
           Timer.builder(MetricNames.PAYMENT_PG_CANCEL)
               .tag(MetricNames.TAG_PROVIDER, payment.getProvider().name())
