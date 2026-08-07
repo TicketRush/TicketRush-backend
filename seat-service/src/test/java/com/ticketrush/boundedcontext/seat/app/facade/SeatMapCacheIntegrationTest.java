@@ -98,6 +98,7 @@ class SeatMapCacheIntegrationTest {
     seatFacade =
         new SeatFacade(
             null,
+            null,
             new SeatGetSeatMapUseCase(seatRepository),
             null,
             null,

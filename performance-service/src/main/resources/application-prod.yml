@@ -24,6 +24,19 @@ spring:
       s3:
         bucket: ${AWS_S3_BUCKET}
 
+# base의 localhost 기본값을 '빈 값'으로 덮는다. 운영 컨테이너에서 localhost는 자기 자신이라,
+# 변수가 안 들어왔을 때 base 기본값이 살아 있으면 performance가 자기 자신에게 예매 집계를 물어
+# 404를 받고 조용히 깨진다. 빈 값이면 호출 자체를 하지 않고 대시보드의 해당 필드만 null이 된다.
+#
+# 다른 서비스처럼 ${VAR}(기본값 없음)로 두지 않는 이유: 그러면 변수 미주입이 곧 기동 실패인데,
+# 이 호출들은 관리자 대시보드 전용이라 사용자 공개 API(공연 목록·상세)까지 함께 죽일 이유가 없다.
+# 설정 누락은 기동 로그의 경고로 드러낸다(RestClientConfig).
+service:
+  booking:
+    url: ${BOOKING_SERVICE_URL:}
+  seat:
+    url: ${SEAT_SERVICE_URL:}
+
 gateway:
   # 운영은 게이트웨이 내부 토큰을 반드시 주입(base의 test-token 기본값 오버라이드, 미주입 시 fail-fast).
   internal-token: ${GATEWAY_INTERNAL_TOKEN}

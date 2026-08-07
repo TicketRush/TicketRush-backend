@@ -141,6 +141,10 @@ public enum ErrorStatus {
   // PERFORMANCE_400_006은 정렬 파라미터 제거(#221)로 결번
   PERFORMANCE_INVALID_PRICE_RANGE(
       HttpStatus.BAD_REQUEST, "PERFORMANCE_400_007", "최소 가격은 최대 가격보다 클 수 없습니다."),
+  PERFORMANCE_INVALID_DASHBOARD_PERIOD(
+      HttpStatus.BAD_REQUEST, "PERFORMANCE_400_008", "조회 시작일은 종료일보다 늦을 수 없습니다."),
+  PERFORMANCE_DASHBOARD_PERIOD_TOO_LONG(
+      HttpStatus.BAD_REQUEST, "PERFORMANCE_400_009", "조회 기간은 최대 92일까지 지정할 수 있습니다."),
 
   // Performance 409
   PERFORMANCE_HAS_SOLD_SEATS(

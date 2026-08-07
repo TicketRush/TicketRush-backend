@@ -3,6 +3,8 @@ package com.ticketrush.boundedcontext.performance.app.facade;
 import com.ticketrush.boundedcontext.performance.app.dto.request.PerformanceChangeStatusRequest;
 import com.ticketrush.boundedcontext.performance.app.dto.request.PerformanceCreateRequest;
 import com.ticketrush.boundedcontext.performance.app.dto.request.PerformancePatchRequest;
+import com.ticketrush.boundedcontext.performance.app.dto.response.PerformanceAdminDashboardResponse;
+import com.ticketrush.boundedcontext.performance.app.dto.response.PerformanceAdminSummaryResponse;
 import com.ticketrush.boundedcontext.performance.app.dto.response.PerformanceCreateResponse;
 import com.ticketrush.boundedcontext.performance.app.dto.response.PerformanceDetailResponse;
 import com.ticketrush.boundedcontext.performance.app.dto.response.PerformanceListResponse;
@@ -10,6 +12,8 @@ import com.ticketrush.boundedcontext.performance.app.usecase.PerformanceChangeSt
 import com.ticketrush.boundedcontext.performance.app.usecase.PerformanceClearBookingOpenAtUseCase;
 import com.ticketrush.boundedcontext.performance.app.usecase.PerformanceCreateUseCase;
 import com.ticketrush.boundedcontext.performance.app.usecase.PerformanceDeleteUseCase;
+import com.ticketrush.boundedcontext.performance.app.usecase.PerformanceGetAdminDashboardUseCase;
+import com.ticketrush.boundedcontext.performance.app.usecase.PerformanceGetAdminListUseCase;
 import com.ticketrush.boundedcontext.performance.app.usecase.PerformanceGetDetailUseCase;
 import com.ticketrush.boundedcontext.performance.app.usecase.PerformanceGetListUseCase;
 import com.ticketrush.boundedcontext.performance.app.usecase.PerformancePatchUseCase;
@@ -17,8 +21,11 @@ import com.ticketrush.boundedcontext.performance.app.usecase.PerformanceValidate
 import com.ticketrush.boundedcontext.performance.domain.types.Genre;
 import com.ticketrush.boundedcontext.performance.domain.types.PerformanceStatus;
 import com.ticketrush.global.dto.request.CursorPageRequest;
+import com.ticketrush.global.dto.request.OffsetPageRequest;
+import java.time.LocalDate;
 import java.util.List;
 import lombok.RequiredArgsConstructor;
+import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Slice;
 import org.springframework.stereotype.Service;
 import org.springframework.web.multipart.MultipartFile;
@@ -35,6 +42,8 @@ public class PerformanceFacade {
   private final PerformanceDeleteUseCase performanceDeleteUseCase;
   private final PerformanceValidateUseCase performanceValidateUseCase;
   private final PerformanceClearBookingOpenAtUseCase performanceClearBookingOpenAtUseCase;
+  private final PerformanceGetAdminDashboardUseCase performanceGetAdminDashboardUseCase;
+  private final PerformanceGetAdminListUseCase performanceGetAdminListUseCase;
 
   public PerformanceCreateResponse createPerformance(
       PerformanceCreateRequest request,
@@ -54,6 +63,16 @@ public class PerformanceFacade {
     return performanceGetListUseCase
         .execute(genre, minPrice, maxPrice, status, pageRequest)
         .toSlice(pageRequest.size());
+  }
+
+  /** 관리자 대시보드 집계 (#563). 기간은 일별 매출에만 적용되며 null이면 최근 30일이다. */
+  public PerformanceAdminDashboardResponse getAdminDashboard(LocalDate from, LocalDate to) {
+    return performanceGetAdminDashboardUseCase.execute(from, to);
+  }
+
+  /** 관리자 공연 목록 (#563). 판매·점유율·매출을 함께 내리며, 각 집계는 원본 서비스 조회 실패 시 null이다. */
+  public Page<PerformanceAdminSummaryResponse> getAdminPerformances(OffsetPageRequest pageRequest) {
+    return performanceGetAdminListUseCase.execute(pageRequest);
   }
 
   public PerformanceDetailResponse getPerformanceDetail(Long performanceId) {

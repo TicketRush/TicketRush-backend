@@ -229,6 +229,56 @@ class SeatRepositoryTest {
   }
 
   @Test
+  @DisplayName("전 공연 좌석 수를 공연 단위로 묶어 단건 조회와 같은 규칙으로 집계한다")
+  void getStatusCountsGroupedByPerformance_GroupsAllPerformances() {
+    // given: 공연 1에 5석(가능2·선점1·판매1·만료선점1), 공연 99에 1석
+    LocalDateTime now = LocalDateTime.now();
+
+    seatRepository.saveAll(
+        List.of(
+            seatOf(1L, "A1", SeatStatus.AVAILABLE, null),
+            seatOf(1L, "A2", SeatStatus.AVAILABLE, null),
+            seatOf(1L, "A3", SeatStatus.HOLD, now.plusMinutes(5)),
+            seatOf(1L, "A4", SeatStatus.SOLD, null),
+            seatOf(1L, "A5", SeatStatus.HOLD, now.minusMinutes(1)),
+            seatOf(99L, "A1", SeatStatus.SOLD, null)));
+
+    // when
+    var rows = seatRepository.getStatusCountsGroupedByPerformance(now);
+
+    // then: 만료된 HOLD가 예매 가능으로 넘어가는 규칙이 단건 조회와 동일해야 두 화면의 숫자가 갈리지 않는다
+    assertThat(rows).hasSize(2);
+    assertThat(rows.get(0).performanceId()).isEqualTo(1L);
+    assertThat(rows.get(0).totalCount()).isEqualTo(5L);
+    assertThat(rows.get(0).availableCount()).isEqualTo(3L);
+    assertThat(rows.get(0).soldCount()).isEqualTo(1L);
+    assertThat(rows.get(0).holdCount()).isEqualTo(1L);
+    assertThat(rows.get(1).performanceId()).isEqualTo(99L);
+    assertThat(rows.get(1).soldCount()).isEqualTo(1L);
+  }
+
+  @Test
+  @DisplayName("좌석이 하나도 없으면 일괄 집계는 빈 목록이다")
+  void getStatusCountsGroupedByPerformance_WhenNoSeats_ReturnsEmpty() {
+    // when
+    var rows = seatRepository.getStatusCountsGroupedByPerformance(LocalDateTime.now());
+
+    // then: GROUP BY는 행이 있는 그룹만 만든다 — 호출자는 이를 0석이 아니라 '모름'으로 다뤄야 한다
+    assertThat(rows).isEmpty();
+  }
+
+  private Seat seatOf(
+      Long performanceId, String seatNumber, SeatStatus status, LocalDateTime holdExpiredAt) {
+    return Seat.builder()
+        .seatLayoutId(1L)
+        .performanceId(performanceId)
+        .seatNumber(seatNumber)
+        .seatStatus(status)
+        .holdExpiredAt(holdExpiredAt)
+        .build();
+  }
+
+  @Test
   @DisplayName("공연 ID에 해당하는 좌석이 없으면 모든 카운트를 0으로 반환한다")
   void getStatusCountsByPerformanceId_ReturnsZeroWhenNoSeatsExist() {
     // when
