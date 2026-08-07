@@ -2,6 +2,7 @@ package com.ticketrush.boundedcontext.seat.out.repository;
 
 import com.ticketrush.boundedcontext.seat.app.dto.response.SeatMapItemResponse;
 import com.ticketrush.boundedcontext.seat.app.dto.response.SeatNumberResponse;
+import com.ticketrush.boundedcontext.seat.app.dto.response.SeatStatusCountsByPerformanceResponse;
 import com.ticketrush.boundedcontext.seat.app.dto.response.SeatStatusCountsResponse;
 import com.ticketrush.boundedcontext.seat.domain.entity.Seat;
 import com.ticketrush.global.types.SeatStatus;
@@ -36,6 +37,42 @@ public interface SeatRepository extends JpaRepository<Seat, Long> {
       Long performanceId, LocalDateTime now) {
     return getStatusCountsByPerformanceIdAndStatuses(
         performanceId, SeatStatus.AVAILABLE, SeatStatus.SOLD, SeatStatus.HOLD, now);
+  }
+
+  /**
+   * 전 공연 좌석 수를 한 번에 집계한다 (#563 관리자 대시보드).
+   *
+   * <p>세는 규칙은 {@link #getStatusCountsByPerformanceIdAndStatuses}와 <b>같은 식을 그대로 쓴다</b>. 규칙이 갈리면
+   * 대시보드의 공연별 점유율과 좌석 현황 화면의 숫자가 어긋나는데, 둘 다 관리자가 같은 세션에서 보는 값이다.
+   *
+   * <p><b>WHERE가 없는 전건 GROUP BY다.</b> 좌석은 공연당 행 수가 고정적이고 관리자 대시보드는 호출 빈도가 극히 낮아, 이 조회를 위해 예매 폭주 경로가
+   * 쓰는 {@code seat} 테이블에 인덱스를 얹지 않았다. 공연 수가 늘어 느려지면 그때 실측 근거를 갖고 추가한다.
+   *
+   * <p>{@code ORDER BY}를 명시하는 이유는 호출자가 공연 ID로 맵을 만들기 때문이 아니라, 정렬 없는 GROUP BY의 순서가 실행 계획에 따라 달라져
+   * 테스트가 간헐 실패하는 것을 막기 위해서다.
+   */
+  @Query(
+      "SELECT new com.ticketrush.boundedcontext.seat.app.dto.response"
+          + ".SeatStatusCountsByPerformanceResponse("
+          + "s.performanceId, "
+          + "COUNT(s), "
+          + "COUNT(CASE WHEN s.seatStatus = :availableStatus "
+          + "OR (s.seatStatus = :holdStatus AND s.holdExpiredAt <= :now) THEN 1 END), "
+          + "COUNT(CASE WHEN s.seatStatus = :soldStatus THEN 1 END), "
+          + "COUNT(CASE WHEN s.seatStatus = :holdStatus AND s.holdExpiredAt > :now THEN 1 END)) "
+          + "FROM Seat s "
+          + "GROUP BY s.performanceId "
+          + "ORDER BY s.performanceId ASC")
+  List<SeatStatusCountsByPerformanceResponse> getStatusCountsGroupedByPerformanceAndStatuses(
+      @Param("availableStatus") SeatStatus availableStatus,
+      @Param("soldStatus") SeatStatus soldStatus,
+      @Param("holdStatus") SeatStatus holdStatus,
+      @Param("now") LocalDateTime now);
+
+  default List<SeatStatusCountsByPerformanceResponse> getStatusCountsGroupedByPerformance(
+      LocalDateTime now) {
+    return getStatusCountsGroupedByPerformanceAndStatuses(
+        SeatStatus.AVAILABLE, SeatStatus.SOLD, SeatStatus.HOLD, now);
   }
 
   @Query(

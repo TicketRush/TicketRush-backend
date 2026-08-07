@@ -4,12 +4,14 @@ import com.ticketrush.boundedcontext.seat.app.dto.response.SeatAdminMonitoringRe
 import com.ticketrush.boundedcontext.seat.app.dto.response.SeatAdminSeatDetailResponse;
 import com.ticketrush.boundedcontext.seat.app.dto.response.SeatMapItemResponse;
 import com.ticketrush.boundedcontext.seat.app.dto.response.SeatNumberResponse;
+import com.ticketrush.boundedcontext.seat.app.dto.response.SeatStatusCountsByPerformanceResponse;
 import com.ticketrush.boundedcontext.seat.app.dto.response.SeatStatusCountsResponse;
 import com.ticketrush.boundedcontext.seat.app.support.SeatStatusStreamSubscriber;
 import com.ticketrush.boundedcontext.seat.app.usecase.SeatAdminForceReleaseHoldUseCase;
 import com.ticketrush.boundedcontext.seat.app.usecase.SeatConfirmSoldUseCase;
 import com.ticketrush.boundedcontext.seat.app.usecase.SeatCreateDefaultLayoutUseCase;
 import com.ticketrush.boundedcontext.seat.app.usecase.SeatGetAdminSeatDetailUseCase;
+import com.ticketrush.boundedcontext.seat.app.usecase.SeatGetAllStatusCountsUseCase;
 import com.ticketrush.boundedcontext.seat.app.usecase.SeatGetNumbersUseCase;
 import com.ticketrush.boundedcontext.seat.app.usecase.SeatGetSeatMapUseCase;
 import com.ticketrush.boundedcontext.seat.app.usecase.SeatGetStatusCountsUseCase;
@@ -37,6 +39,7 @@ import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
 public class SeatFacade {
 
   private final SeatGetStatusCountsUseCase seatGetStatusCountsUseCase;
+  private final SeatGetAllStatusCountsUseCase seatGetAllStatusCountsUseCase;
   private final SeatGetSeatMapUseCase seatGetSeatMapUseCase;
   private final SeatGetNumbersUseCase seatGetNumbersUseCase;
   private final SeatGetAdminSeatDetailUseCase seatGetAdminSeatDetailUseCase;
@@ -129,6 +132,11 @@ public class SeatFacade {
 
   public SeatStatusCountsResponse getPerformanceSeatStatusCounts(Long performanceId) {
     return seatGetStatusCountsUseCase.execute(performanceId);
+  }
+
+  /** 전 공연 좌석 수 일괄 조회 (#563 관리자 대시보드). 좌석이 아직 없는 공연은 응답에 포함되지 않는다. */
+  public List<SeatStatusCountsByPerformanceResponse> getAllPerformanceSeatStatusCounts() {
+    return seatGetAllStatusCountsUseCase.execute();
   }
 
   public SseEmitter subscribeSeatStatus(Long performanceId) {

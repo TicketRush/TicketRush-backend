@@ -35,6 +35,20 @@ spring:
       stack:
         auto: false
 
+# 관리자 대시보드 집계(#563)가 쓰는 아웃바운드 호출. 내부 API는 게이트웨이가 라우팅하지 않으므로
+# 대상 서비스의 '직접' 주소여야 한다(ADR 0002).
+service:
+  booking:
+    url: ${BOOKING_SERVICE_URL:http://localhost:8084}
+    # 두 호출 모두 전건 GROUP BY 집계라 단건 조회 선례(1s/2s)보다 read를 길게 잡는다.
+    # 관리자 경로라 호출 빈도가 낮아 톰캣 스레드를 오래 잡는 위험도 그만큼 작다.
+    connect-timeout-ms: 1000
+    read-timeout-ms: 3000
+  seat:
+    url: ${SEAT_SERVICE_URL:http://localhost:8086}
+    connect-timeout-ms: 1000
+    read-timeout-ms: 3000
+
 app:
   event-publisher:
     type: kafka

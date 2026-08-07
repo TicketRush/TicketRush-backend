@@ -3,11 +3,15 @@ package com.ticketrush.boundedcontext.booking.out.repository;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
+import com.ticketrush.boundedcontext.booking.app.dto.response.BookingDailyRevenueRow;
+import com.ticketrush.boundedcontext.booking.app.dto.response.BookingPerformanceStatsRow;
 import com.ticketrush.boundedcontext.booking.app.dto.response.BookingStatsCounts;
 import com.ticketrush.boundedcontext.booking.domain.entity.Booking;
 import com.ticketrush.boundedcontext.booking.domain.types.BookingStatus;
 import com.ticketrush.global.jpa.config.JpaConfig;
+import java.time.LocalDate;
 import java.time.LocalDateTime;
+import java.util.List;
 import java.util.Optional;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -229,6 +233,91 @@ class BookingRepositoryTest {
     assertThat(counts.amountMissingCount()).isZero();
   }
 
+  @Test
+  @DisplayName("공연별 집계: 확정 예매만 공연 단위로 건수와 매출을 묶는다")
+  void aggregateStatsByPerformance_GroupsConfirmedOnly() {
+    // given: 공연 100에 확정 2건(+취소 1건), 공연 200에 확정 1건
+    bookingRepository.save(confirmedBooking("BK-P1", 100L, 10_000L));
+    bookingRepository.save(confirmedBooking("BK-P2", 100L, 25_000L));
+    bookingRepository.save(performanceBooking("BK-P3", 100L, BookingStatus.CANCELED));
+    bookingRepository.save(confirmedBooking("BK-P4", 200L, 7_000L));
+
+    // when
+    List<BookingPerformanceStatsRow> rows =
+        bookingRepository.aggregateStatsByPerformance(BookingStatus.CONFIRMED);
+
+    // then: 취소 건은 매출·건수 어디에도 잡히지 않지만 그 공연 자체는 행으로 남는다
+    assertThat(rows).hasSize(2);
+    assertThat(rows.get(0).performanceId()).isEqualTo(100L);
+    assertThat(rows.get(0).confirmedCount()).isEqualTo(2);
+    assertThat(rows.get(0).confirmedRevenue()).isEqualTo(35_000L);
+    assertThat(rows.get(1).performanceId()).isEqualTo(200L);
+    assertThat(rows.get(1).confirmedRevenue()).isEqualTo(7_000L);
+  }
+
+  @Test
+  @DisplayName("공연별 집계: 확정 예매가 하나도 없는 공연도 매출 0으로 내려간다(SUM의 NULL 방어)")
+  void aggregateStatsByPerformance_WhenNoConfirmed_ReturnsZeroNotNull() {
+    // given: 취소 예매만 있는 공연
+    bookingRepository.save(performanceBooking("BK-Z1", 300L, BookingStatus.CANCELED));
+
+    // when
+    List<BookingPerformanceStatsRow> rows =
+        bookingRepository.aggregateStatsByPerformance(BookingStatus.CONFIRMED);
+
+    // then: COALESCE가 없으면 record의 원시 long에 NULL이 들어가 NPE가 난다
+    assertThat(rows).hasSize(1);
+    assertThat(rows.get(0).confirmedCount()).isZero();
+    assertThat(rows.get(0).confirmedRevenue()).isZero();
+  }
+
+  @Test
+  @DisplayName("일별 매출: 확정일로 묶고 요청 구간 밖은 제외한다")
+  void aggregateDailyRevenue_GroupsByConfirmedDate() {
+    // given: 5/21 1건, 5/22 2건, 구간 밖(5/23) 1건
+    bookingRepository.save(
+        confirmedBookingAt("BK-D1", LocalDateTime.of(2026, 5, 21, 9, 0), 1_000L));
+    bookingRepository.save(
+        confirmedBookingAt("BK-D2", LocalDateTime.of(2026, 5, 22, 9, 0), 2_000L));
+    bookingRepository.save(
+        confirmedBookingAt("BK-D3", LocalDateTime.of(2026, 5, 22, 23, 59, 59), 3_000L));
+    bookingRepository.save(
+        confirmedBookingAt("BK-D4", LocalDateTime.of(2026, 5, 23, 0, 0), 9_000L));
+
+    // when: [5/21 00:00, 5/23 00:00) — 종료일 5/22의 다음 날 0시 미만
+    List<BookingDailyRevenueRow> rows =
+        bookingRepository.aggregateDailyRevenue(
+            BookingStatus.CONFIRMED,
+            LocalDateTime.of(2026, 5, 21, 0, 0),
+            LocalDateTime.of(2026, 5, 23, 0, 0));
+
+    // then: 반열린 구간이라 5/23 0시 정각 건은 빠지고, 5/22 23:59:59 건은 들어온다
+    assertThat(rows).hasSize(2);
+    assertThat(rows.get(0).date()).isEqualTo(LocalDate.of(2026, 5, 21));
+    assertThat(rows.get(0).revenue()).isEqualTo(1_000L);
+    assertThat(rows.get(1).date()).isEqualTo(LocalDate.of(2026, 5, 22));
+    assertThat(rows.get(1).revenue()).isEqualTo(5_000L);
+  }
+
+  @Test
+  @DisplayName("일별 매출: 확정되지 않은 예매는 세지 않는다")
+  void aggregateDailyRevenue_ExcludesNonConfirmed() {
+    // given: 확정을 거쳐 환불된 예매(confirmedAt과 금액이 남아 있다)
+    Booking refunded = confirmedBookingAt("BK-DR", LocalDateTime.of(2026, 5, 22, 9, 0), 50_000L);
+    refunded.markRefunded();
+    bookingRepository.save(refunded);
+
+    // when
+    List<BookingDailyRevenueRow> rows =
+        bookingRepository.aggregateDailyRevenue(
+            BookingStatus.CONFIRMED,
+            LocalDateTime.of(2026, 5, 1, 0, 0),
+            LocalDateTime.of(2026, 6, 1, 0, 0));
+
+    // then: 돈이 나간 예매라 매출 추이에 남으면 안 된다
+    assertThat(rows).isEmpty();
+  }
+
   private Booking booking(String bookingNumber, BookingStatus status) {
     return Booking.builder()
         .userId(1L)
@@ -243,6 +332,30 @@ class BookingRepositoryTest {
   private Booking confirmedBooking(String bookingNumber, Long paidAmount) {
     Booking booking = booking(bookingNumber, BookingStatus.PENDING);
     booking.confirm(LocalDateTime.of(2026, 5, 22, 10, 30), paidAmount);
+    return booking;
+  }
+
+  private Booking confirmedBooking(String bookingNumber, Long performanceId, Long paidAmount) {
+    Booking booking = performanceBooking(bookingNumber, performanceId, BookingStatus.PENDING);
+    booking.confirm(LocalDateTime.of(2026, 5, 22, 10, 30), paidAmount);
+    return booking;
+  }
+
+  private Booking performanceBooking(
+      String bookingNumber, Long performanceId, BookingStatus status) {
+    return Booking.builder()
+        .userId(1L)
+        .performanceId(performanceId)
+        .seatId(3L)
+        .bookingNumber(bookingNumber)
+        .bookingStatus(status)
+        .build();
+  }
+
+  private Booking confirmedBookingAt(
+      String bookingNumber, LocalDateTime confirmedAt, Long paidAmount) {
+    Booking booking = booking(bookingNumber, BookingStatus.PENDING);
+    booking.confirm(confirmedAt, paidAmount);
     return booking;
   }
 }

@@ -1,5 +1,7 @@
 package com.ticketrush.boundedcontext.booking.out.repository;
 
+import com.ticketrush.boundedcontext.booking.app.dto.response.BookingDailyRevenueRow;
+import com.ticketrush.boundedcontext.booking.app.dto.response.BookingPerformanceStatsRow;
 import com.ticketrush.boundedcontext.booking.app.dto.response.BookingStatsCounts;
 import com.ticketrush.boundedcontext.booking.domain.entity.Booking;
 import com.ticketrush.boundedcontext.booking.domain.types.BookingStatus;
@@ -63,6 +65,67 @@ public interface BookingRepository extends JpaRepository<Booking, Long> {
       @Param("confirmed") BookingStatus confirmed,
       @Param("canceled") BookingStatus canceled,
       @Param("refunded") BookingStatus refunded);
+
+  /*
+   * 공연별 예매·매출 집계 (#563 관리자 대시보드). 요약(aggregateStats)과 같은 모집단(CONFIRMED)을 보되 공연으로 묶는다.
+   * 두 쿼리의 상태 조건이 갈리면 대시보드의 카드 합과 공연 목록 합이 어긋난다.
+   *
+   * WHERE 없는 전건 GROUP BY다. 예매는 오픈런 트래픽을 받는 쓰기 핫패스라, 호출 빈도가 극히 낮은 관리자 조회를
+   * 위해 인덱스를 얹으면 그 비용을 모든 예매 INSERT/UPDATE가 상시 부담한다.
+   *
+   * 실측(로컬 MySQL, booking 3,000행 / CONFIRMED 1,000행):
+   *   Sort: performance_id <- Table scan on <temporary> <- Aggregate using temporary table
+   *     <- Table scan on b (cost=305 rows=3000)
+   * (performance_id, booking_status) 인덱스를 얹으면 임시 테이블 그룹핑을 인덱스 순회로 바꿀 수 있으나,
+   * 관리자 대시보드 1회 호출당 한 번인 비용을 줄이자고 모든 예매 쓰기에 인덱스 유지 비용을 얹는 교환이다.
+   * 공연 수가 아니라 예매 행 수에 비례해 커지므로, 느려지면 그때 이 수치와 대조해 추가한다.
+   *
+   * ORDER BY는 호출자를 위해서가 아니라 정렬 없는 GROUP BY의 순서가 실행 계획에 따라 흔들려 테스트가 간헐
+   * 실패하는 것을 막으려고 명시한다.
+   */
+  @Query(
+      "SELECT new com.ticketrush.boundedcontext.booking.app.dto.response"
+          + ".BookingPerformanceStatsRow("
+          + "b.performanceId, "
+          // SUM은 대상 행이 없으면 NULL이라 record의 long에서 NPE가 된다. aggregateStats와 같은 이유로 COALESCE.
+          + "COALESCE(SUM(CASE WHEN b.bookingStatus = :confirmed THEN 1 ELSE 0 END), 0), "
+          + "COALESCE(SUM(CASE WHEN b.bookingStatus = :confirmed "
+          + "THEN b.paidAmount ELSE 0 END), 0)) "
+          + "FROM Booking b "
+          + "GROUP BY b.performanceId "
+          + "ORDER BY b.performanceId ASC")
+  List<BookingPerformanceStatsRow> aggregateStatsByPerformance(
+      @Param("confirmed") BookingStatus confirmed);
+
+  /*
+   * 일별 매출 집계 (#563 관리자 대시보드). 확정 시각 기준이며 호출자가 넘긴 반열린 구간 [from, toExclusive)만 센다.
+   *
+   * 경계를 반열린 구간으로 받는 이유: confirmed_at은 datetime이라 "to일 23:59:59.999999까지"를 값으로 표현하려
+   * 하면 마이크로초 절삭에 기대게 된다. 다음 날 0시 미만으로 자르면 그 함정이 없다.
+   *
+   * cast(... as LocalDate)는 Hibernate가 MySQL의 DATE()로 번역한다. FUNCTION('DATE', ...)와 달리 반환
+   * 타입이 HQL 수준에서 확정되어 생성자 표현식의 LocalDate 파라미터에 그대로 들어간다.
+   *
+   * 이 쿼리는 새 인덱스 없이도 기존 (booking_status, updated_at) 인덱스의 선두 컬럼을 탄다 —
+   * 실측(로컬 MySQL, booking 3,000행 / CONFIRMED 1,000행, 30일 구간):
+   *   Index lookup on b using idx_booking_status_updated_at (booking_status='CONFIRMED')
+   *     (cost=26.1 rows=1000) -> Filter: confirmed_at 범위 (rows=111)
+   * 즉 전건 3,000행이 아니라 CONFIRMED 1,000행만 훑는다. confirmed_at은 인덱스 두 번째 컬럼이 아니라
+   * (updated_at이다) 범위 조건이 인덱스로 좁혀지지는 않지만, 상태 선별만으로 이 규모에서는 충분하다.
+   */
+  @Query(
+      "SELECT new com.ticketrush.boundedcontext.booking.app.dto.response.BookingDailyRevenueRow("
+          + "cast(b.confirmedAt as LocalDate), "
+          + "COALESCE(SUM(b.paidAmount), 0)) "
+          + "FROM Booking b "
+          + "WHERE b.bookingStatus = :confirmed "
+          + "AND b.confirmedAt >= :from AND b.confirmedAt < :toExclusive "
+          + "GROUP BY cast(b.confirmedAt as LocalDate) "
+          + "ORDER BY cast(b.confirmedAt as LocalDate) ASC")
+  List<BookingDailyRevenueRow> aggregateDailyRevenue(
+      @Param("confirmed") BookingStatus confirmed,
+      @Param("from") LocalDateTime from,
+      @Param("toExclusive") LocalDateTime toExclusive);
 
   @Query(
       "SELECT b.id FROM Booking b "

@@ -1,8 +1,10 @@
 package com.ticketrush.boundedcontext.performance.out.repository;
 
+import com.ticketrush.boundedcontext.performance.app.dto.response.PerformanceAggregateRow;
 import com.ticketrush.boundedcontext.performance.domain.entity.Performance;
 import com.ticketrush.boundedcontext.performance.domain.types.PerformanceStatus;
 import java.time.LocalDateTime;
+import java.util.List;
 import java.util.Optional;
 import org.springframework.data.jpa.repository.EntityGraph;
 import org.springframework.data.jpa.repository.JpaRepository;
@@ -12,6 +14,21 @@ import org.springframework.data.repository.query.Param;
 
 public interface PerformanceRepository
     extends JpaRepository<Performance, Long>, PerformanceRepositoryCustom {
+
+  /**
+   * 대시보드 집계용 공연 최소 정보 전건 조회 (#563).
+   *
+   * <p>{@code @SQLRestriction("deleted_at IS NULL")}이 JPQL에도 적용되므로 삭제된 공연은 자동으로 빠진다. 벌크 UPDATE와 달리
+   * 여기서 조건을 다시 쓸 필요가 없는 이유다.
+   *
+   * <p>정렬을 명시하는 것은 호출자가 순서에 의존해서가 아니라, 정렬 없는 조회의 순서가 실행 계획에 따라 흔들려 테스트가 간헐 실패하는 것을 막기 위해서다.
+   */
+  @Query(
+      "SELECT new com.ticketrush.boundedcontext.performance.app.dto.response"
+          + ".PerformanceAggregateRow(p.id, p.genre, p.performanceStatus) "
+          + "FROM Performance p "
+          + "ORDER BY p.id ASC")
+  List<PerformanceAggregateRow> findAllAggregateRows();
 
   @EntityGraph(attributePaths = {"imageGalleryUrls", "facilities"})
   Optional<Performance> findDetailById(Long id);
