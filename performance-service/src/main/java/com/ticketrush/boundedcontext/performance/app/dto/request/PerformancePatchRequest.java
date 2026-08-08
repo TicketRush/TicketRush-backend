@@ -10,7 +10,13 @@ import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.LocalTime;
 
-@Schema(description = "공연 정보 수정 요청 (null 필드는 수정하지 않음)")
+/**
+ * 공연 정보 수정 요청. null 필드는 수정하지 않는다.
+ *
+ * <p><b>총 좌석 수는 이 요청에 없다(#590).</b> 좌석 수를 실제로 바꾸려면 이미 예매·선점된 좌석을 지우고 번호를 다시 매겨야 하는데 그건 좌석 도메인의 별개
+ * 작업이다. 여기에 필드만 두면 DB의 총 좌석 수만 바뀌고 실제 좌석은 그대로여서 두 값이 조용히 갈린다. 총 좌석 수는 등록 시점에만 정한다.
+ */
+@Schema(description = "공연 정보 수정 요청 (null 필드는 수정하지 않음. 총 좌석 수는 등록 시점에만 정할 수 있어 이 요청에 없음)")
 public record PerformancePatchRequest(
     @Schema(description = "공연명", example = "BTS World Tour 2025")
         @NullOrNotBlank
@@ -35,8 +41,6 @@ public record PerformancePatchRequest(
         Integer durationMinutes,
     @Schema(description = "티켓 가격 (원)", example = "150000") @Positive(message = "가격은 0보다 커야 합니다.")
         Long price,
-    @Schema(description = "총 좌석 수", example = "500") @Positive(message = "총 좌석 수는 1개 이상이어야 합니다.")
-        Integer totalSeats,
     @Schema(description = "공연장 주소", example = "서울특별시 송파구 올림픽로 25 잠실종합운동장")
         @NullOrNotBlank
         @Size(max = 255, message = "주소는 255자를 초과할 수 없습니다.")

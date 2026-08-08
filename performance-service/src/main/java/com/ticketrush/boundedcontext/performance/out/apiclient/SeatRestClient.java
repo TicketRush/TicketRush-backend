@@ -4,14 +4,19 @@ import com.ticketrush.boundedcontext.performance.out.apiclient.dto.SeatCountsApi
 import com.ticketrush.boundedcontext.performance.out.apiclient.dto.SeatCountsInfo;
 import com.ticketrush.global.config.CustomSecurityProperties;
 import com.ticketrush.global.util.ServiceUrlValidator;
+import java.net.URI;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
+import java.util.function.Function;
+import java.util.stream.Collectors;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
 import org.springframework.web.client.RestClient;
 import org.springframework.web.client.RestClientException;
+import org.springframework.web.util.UriBuilder;
 
 /**
  * 관리자 대시보드의 좌석 점유율 조회 클라이언트 (#563).
@@ -26,6 +31,7 @@ import org.springframework.web.client.RestClientException;
 public class SeatRestClient {
 
   private static final String INTERNAL_TOKEN_HEADER = "X-Internal-Token";
+  private static final String SEAT_COUNTS_PATH = "/api/v1/internal/seat/seat-counts";
 
   private final RestClient seatServiceRestClient;
   private final CustomSecurityProperties securityProperties;
@@ -54,18 +60,50 @@ public class SeatRestClient {
       return Map.of();
     }
 
+    return fetch(uriBuilder -> uriBuilder.path(SEAT_COUNTS_PATH).build(), "전 공연");
+  }
+
+  /**
+   * 지정한 공연들의 좌석 수만 가져온다 (#590 관리자 공연 목록). 반환 계약은 전건 버전과 같다.
+   *
+   * <p><b>빈 목록이면 호출하지 않는다.</b> 빈 값을 그대로 보내면 수신측 {@code @Size(min=1)}에 걸려 400이 되고, 그 400은 fail-open이
+   * 흡수해 "공연 0건 페이지"가 "좌석 서비스 장애"로 로그에 남는다. 중복 제거도 여기서 닫는다.
+   */
+  public Map<Long, SeatCountsInfo> getSeatCounts(List<Long> performanceIds) {
+    if (!configured || performanceIds == null) {
+      return Map.of();
+    }
+
+    List<Long> distinctIds =
+        performanceIds.stream().filter(Objects::nonNull).distinct().sorted().toList();
+    if (distinctIds.isEmpty()) {
+      return Map.of();
+    }
+
+    return fetch(
+        uriBuilder ->
+            uriBuilder
+                .path(SEAT_COUNTS_PATH)
+                .queryParam(
+                    "performanceIds",
+                    distinctIds.stream().map(String::valueOf).collect(Collectors.joining(",")))
+                .build(),
+        "공연 " + distinctIds.size() + "건");
+  }
+
+  private Map<Long, SeatCountsInfo> fetch(Function<UriBuilder, URI> uriFunction, String scope) {
     try {
       SeatCountsApiResponse response =
           seatServiceRestClient
               .get()
-              .uri("/api/v1/internal/seat/seat-counts")
+              .uri(uriFunction)
               .header(INTERNAL_TOKEN_HEADER, securityProperties.getInternalToken())
               .retrieve()
               .body(SeatCountsApiResponse.class);
 
       List<SeatCountsInfo> rows = (response == null) ? null : response.result();
       if (rows == null) {
-        log.warn("[SeatRestClient] 좌석 수 응답 본문이 비어 있어 점유율 필드를 null로 응답합니다.");
+        log.warn("[SeatRestClient] 좌석 수 응답 본문이 비어 있어 점유율 필드를 null로 응답합니다. scope={}", scope);
         return Map.of();
       }
 
@@ -77,7 +115,7 @@ public class SeatRestClient {
       }
       return result;
     } catch (RestClientException e) {
-      log.warn("[SeatRestClient] 좌석 수 조회 실패, 점유율 관련 필드는 null로 응답합니다.", e);
+      log.warn("[SeatRestClient] 좌석 수 조회 실패, 점유율 관련 필드는 null로 응답합니다. scope={}", scope, e);
       return Map.of();
     }
   }

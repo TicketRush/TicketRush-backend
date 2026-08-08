@@ -326,7 +326,6 @@ class TossPaymentCancelClientTest {
   void cancel_maps_interrupted_retry_delay_to_communication_failure() {
     // 1차 응답을 돌려주는 시점에 플래그를 세운다. 호출 전에 세우면 1차 요청 처리 자체가 영향받을 수 있다.
     // 플래그가 선 상태로 진입한 Thread.sleep은 대기 없이 즉시 InterruptedException을 던진다.
-    //
     // 전제: 응답 생성부터 Thread.sleep 사이에 인터럽트를 소비하는 연산이 없어야 한다(현재 경로는
     // ByteArrayInputStream 기반 Jackson 파싱 + 동기 콘솔 appender뿐이라 성립). 그 전제가 깨지면 이
     // 테스트는 대기 시간만큼 멈춘 뒤 "No further requests expected" AssertionError로 엉뚱하게 실패한다.

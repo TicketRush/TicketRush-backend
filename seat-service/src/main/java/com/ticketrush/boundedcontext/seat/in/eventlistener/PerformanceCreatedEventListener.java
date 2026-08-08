@@ -42,7 +42,7 @@ public class PerformanceCreatedEventListener {
           inboxService.runIfFirst(
               KafkaConsumerGroup.SEAT,
               envelope,
-              () -> seatFacade.createDefaultSeats(performanceId));
+              () -> seatFacade.createDefaultSeats(performanceId, event.totalSeats()));
 
       if (!processed) {
         log.info(

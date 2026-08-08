@@ -25,7 +25,12 @@ public class SeatGetAllStatusCountsUseCase {
 
   private final SeatRepository seatRepository;
 
-  public List<SeatStatusCountsByPerformanceResponse> execute() {
-    return seatRepository.getStatusCountsGroupedByPerformance(LocalDateTime.now());
+  /**
+   * {@code performanceIds}를 주면 그 공연들만, null이거나 비어 있으면 전 공연을 집계한다 (#590).
+   *
+   * <p>관리자 대시보드는 전 공연이 모수라 필터 없이 부르고, 관리자 공연 목록은 현재 페이지의 공연만 실어 보낸다.
+   */
+  public List<SeatStatusCountsByPerformanceResponse> execute(List<Long> performanceIds) {
+    return seatRepository.getStatusCountsGroupedByPerformance(LocalDateTime.now(), performanceIds);
   }
 }

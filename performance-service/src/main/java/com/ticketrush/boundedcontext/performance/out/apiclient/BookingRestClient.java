@@ -5,7 +5,10 @@ import com.ticketrush.boundedcontext.performance.out.apiclient.dto.BookingStatsI
 import com.ticketrush.global.config.CustomSecurityProperties;
 import com.ticketrush.global.util.ServiceUrlValidator;
 import java.time.LocalDate;
+import java.util.List;
+import java.util.Objects;
 import java.util.Optional;
+import java.util.stream.Collectors;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
@@ -76,6 +79,54 @@ public class BookingRestClient {
     } catch (RestClientException e) {
       log.warn(
           "[BookingRestClient] 예매 집계 조회 실패, 매출 관련 필드는 null로 응답합니다. from={}, to={}", from, to, e);
+      return Optional.empty();
+    }
+  }
+
+  /**
+   * 지정한 공연들의 매출만 가져온다 (#590 관리자 공연 목록).
+   *
+   * <p>응답에는 {@code by_performance}만 들어 있다 — 요약과 일별 매출은 booking-service가 쿼리 자체를 돌리지 않고 키째 생략한다. 기간을
+   * 넘기지 않는 이유는 공연별 매출이 전체 기간 값이라 기간이 장식이 되기 때문이다.
+   *
+   * <p><b>빈 목록이면 호출하지 않는다.</b> 빈 값을 그대로 보내면 수신측 {@code @Size(min=1)}에 걸려 400이 되고, 그 400은 fail-open이
+   * 흡수해 "공연 0건 페이지"가 "예매 서비스 장애"로 로그에 남는다. 중복 제거도 여기서 닫는다 — 중복이 오면 요청만 길어지고 응답 매핑이 같은 키를 두 번 만난다.
+   */
+  public Optional<BookingStatsInfo> getStatsByPerformance(List<Long> performanceIds) {
+    if (!configured || performanceIds == null) {
+      return Optional.empty();
+    }
+
+    List<Long> distinctIds =
+        performanceIds.stream().filter(Objects::nonNull).distinct().sorted().toList();
+    if (distinctIds.isEmpty()) {
+      return Optional.empty();
+    }
+
+    try {
+      BookingStatsApiResponse response =
+          bookingServiceRestClient
+              .get()
+              .uri(
+                  uriBuilder ->
+                      uriBuilder
+                          .path("/api/v1/internal/booking/stats")
+                          .queryParam(
+                              "performanceIds",
+                              distinctIds.stream()
+                                  .map(String::valueOf)
+                                  .collect(Collectors.joining(",")))
+                          .build())
+              .header(INTERNAL_TOKEN_HEADER, securityProperties.getInternalToken())
+              .retrieve()
+              .body(BookingStatsApiResponse.class);
+
+      return Optional.ofNullable(response).map(BookingStatsApiResponse::result);
+    } catch (RestClientException e) {
+      log.warn(
+          "[BookingRestClient] 공연별 예매 집계 조회 실패, 매출 필드는 null로 응답합니다. performanceIds={}",
+          distinctIds,
+          e);
       return Optional.empty();
     }
   }

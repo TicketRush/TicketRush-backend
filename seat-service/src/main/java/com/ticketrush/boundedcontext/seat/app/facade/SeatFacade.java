@@ -135,17 +135,18 @@ public class SeatFacade {
   }
 
   /** 전 공연 좌석 수 일괄 조회 (#563 관리자 대시보드). 좌석이 아직 없는 공연은 응답에 포함되지 않는다. */
-  public List<SeatStatusCountsByPerformanceResponse> getAllPerformanceSeatStatusCounts() {
-    return seatGetAllStatusCountsUseCase.execute();
+  public List<SeatStatusCountsByPerformanceResponse> getAllPerformanceSeatStatusCounts(
+      List<Long> performanceIds) {
+    return seatGetAllStatusCountsUseCase.execute(performanceIds);
   }
 
   public SseEmitter subscribeSeatStatus(Long performanceId) {
     return seatStatusStreamSubscriber.subscribe(performanceId);
   }
 
-  public void createDefaultSeats(Long performanceId) {
+  public void createDefaultSeats(Long performanceId, Integer totalSeats) {
     try {
-      seatCreateDefaultLayoutUseCase.execute(performanceId);
+      seatCreateDefaultLayoutUseCase.execute(performanceId, totalSeats);
     } catch (DataIntegrityViolationException e) {
       if (seatLayoutRepository.existsByPerformanceId(performanceId)) {
         log.info("동시에 생성된 좌석 배치도가 있어 좌석 생성을 스킵합니다. performanceId: {}", performanceId);

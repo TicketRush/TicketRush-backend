@@ -2,7 +2,9 @@ package com.ticketrush.boundedcontext.performance.app.dto.request;
 
 import com.fasterxml.jackson.annotation.JsonFormat;
 import com.ticketrush.boundedcontext.performance.domain.types.Genre;
+import com.ticketrush.shared.performance.event.PerformanceCreatedEvent;
 import io.swagger.v3.oas.annotations.media.Schema;
+import jakarta.validation.constraints.Max;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Positive;
@@ -43,9 +45,15 @@ public record PerformanceCreateRequest(
         @NotNull(message = "가격은 필수입니다.")
         @Positive(message = "가격은 0보다 커야 합니다.")
         Long price,
-    @Schema(description = "총 좌석 수", example = "500")
+    @Schema(
+            description =
+                "총 좌석 수 (기본 배치는 120석 = 10행 x 12열, 최대 10000). 등록 시점에만 정할 수 있고 수정은 지원하지 않습니다.",
+            example = "500")
         @NotNull(message = "총 좌석 수는 필수입니다.")
         @Positive(message = "총 좌석 수는 1개 이상이어야 합니다.")
+        @Max(
+            value = PerformanceCreatedEvent.MAX_TOTAL_SEATS,
+            message = "총 좌석 수는 {value}개를 초과할 수 없습니다.")
         Integer totalSeats,
     @Schema(description = "공연장 주소", example = "서울특별시 송파구 올림픽로 25 잠실종합운동장")
         @NotBlank(message = "공연장 주소는 필수입니다.")

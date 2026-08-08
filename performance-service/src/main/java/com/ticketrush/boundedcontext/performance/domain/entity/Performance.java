@@ -180,6 +180,12 @@ public class Performance extends AutoIdBaseEntity {
     this.imageGalleryUrls = galleryUrls != null ? galleryUrls : new ArrayList<>();
   }
 
+  /**
+   * null이 아닌 필드만 갈아끼운다.
+   *
+   * <p><b>총 좌석 수는 수정 대상이 아니다(#590).</b> 좌석 수를 바꾸려면 이미 예매·선점된 좌석을 지우고 번호를 다시 매겨야 하는데 그건 좌석 도메인의 별개
+   * 작업이고, 여기서 컬럼만 갈아끼우면 좌석 서비스가 실제로 만든 좌석 수와 조용히 갈린다. 총 좌석 수는 등록 시점에만 정한다.
+   */
   public void update(
       String title,
       String performer,
@@ -189,7 +195,6 @@ public class Performance extends AutoIdBaseEntity {
       LocalTime showTime,
       Integer durationMinutes,
       Long price,
-      Integer totalSeats,
       String address,
       LocalDateTime bookingOpenAt) {
     if (title != null) {
@@ -215,9 +220,6 @@ public class Performance extends AutoIdBaseEntity {
     }
     if (price != null) {
       this.price = price;
-    }
-    if (totalSeats != null) {
-      this.totalSeats = totalSeats;
     }
     if (address != null) {
       this.address = address;

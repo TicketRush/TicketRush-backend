@@ -2,8 +2,10 @@ package com.ticketrush.boundedcontext.performance.app.usecase;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyList;
 import static org.mockito.BDDMockito.given;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.verify;
 
 import com.ticketrush.boundedcontext.performance.app.dto.response.PerformanceAdminSummaryResponse;
 import com.ticketrush.boundedcontext.performance.domain.entity.Performance;
@@ -22,6 +24,7 @@ import java.util.Optional;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.ArgumentCaptor;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
@@ -50,7 +53,8 @@ class PerformanceGetAdminListUseCaseTest {
     // given: 120석 중 38석 판매
     givenPage(performance(1L, "뮤지컬 팬텀", Genre.MUSICAL, PerformanceStatus.ON_SALE));
     givenBookingStats(new BookingStatsInfo.PerformanceStat(1L, 38L, 5_320_000L));
-    given(seatRestClient.getSeatCounts()).willReturn(Map.of(1L, new SeatCountsInfo(1L, 120L, 38L)));
+    given(seatRestClient.getSeatCounts(anyList()))
+        .willReturn(Map.of(1L, new SeatCountsInfo(1L, 120L, 38L)));
 
     // when
     PerformanceAdminSummaryResponse row = useCase.execute(PAGE).getContent().get(0);
@@ -71,7 +75,7 @@ class PerformanceGetAdminListUseCaseTest {
     // given
     givenPage(performance(1L, "매진 공연", Genre.CONCERT, PerformanceStatus.ON_SALE));
     givenBookingStats(new BookingStatsInfo.PerformanceStat(1L, 120L, 10_000_000L));
-    given(seatRestClient.getSeatCounts())
+    given(seatRestClient.getSeatCounts(anyList()))
         .willReturn(Map.of(1L, new SeatCountsInfo(1L, 120L, 120L)));
 
     // when
@@ -87,12 +91,13 @@ class PerformanceGetAdminListUseCaseTest {
   void execute_WhenNoBookings_RevenueIsZeroNotNull() {
     // given: 집계 응답에 이 공연이 없다 = 확정된 예매가 없다
     givenPage(performance(1L, "신규 공연", Genre.JAZZ, PerformanceStatus.ON_SALE));
-    given(bookingRestClient.getStats(any(), any()))
+    given(bookingRestClient.getStatsByPerformance(anyList()))
         .willReturn(
             Optional.of(
                 new BookingStatsInfo(
                     new BookingStatsInfo.Summary(0L, 0L, true, 0L), List.of(), List.of())));
-    given(seatRestClient.getSeatCounts()).willReturn(Map.of(1L, new SeatCountsInfo(1L, 120L, 0L)));
+    given(seatRestClient.getSeatCounts(anyList()))
+        .willReturn(Map.of(1L, new SeatCountsInfo(1L, 120L, 0L)));
 
     // when
     PerformanceAdminSummaryResponse row = useCase.execute(PAGE).getContent().get(0);
@@ -106,8 +111,9 @@ class PerformanceGetAdminListUseCaseTest {
   void execute_WhenBookingFails_RevenueIsNull() {
     // given
     givenPage(performance(1L, "공연", Genre.JAZZ, PerformanceStatus.ON_SALE));
-    given(bookingRestClient.getStats(any(), any())).willReturn(Optional.empty());
-    given(seatRestClient.getSeatCounts()).willReturn(Map.of(1L, new SeatCountsInfo(1L, 120L, 10L)));
+    given(bookingRestClient.getStatsByPerformance(anyList())).willReturn(Optional.empty());
+    given(seatRestClient.getSeatCounts(anyList()))
+        .willReturn(Map.of(1L, new SeatCountsInfo(1L, 120L, 10L)));
 
     // when
     PerformanceAdminSummaryResponse row = useCase.execute(PAGE).getContent().get(0);
@@ -123,7 +129,7 @@ class PerformanceGetAdminListUseCaseTest {
     // given: 좌석 생성은 공연 등록 이벤트를 받아 비동기로 일어난다
     givenPage(performance(1L, "방금 등록한 공연", Genre.BALLET, PerformanceStatus.UPCOMING));
     givenBookingStats();
-    given(seatRestClient.getSeatCounts()).willReturn(Map.of());
+    given(seatRestClient.getSeatCounts(anyList())).willReturn(Map.of());
 
     // when
     PerformanceAdminSummaryResponse row = useCase.execute(PAGE).getContent().get(0);
@@ -138,13 +144,58 @@ class PerformanceGetAdminListUseCaseTest {
     assertThat(row.performanceStatus()).isEqualTo(PerformanceStatus.UPCOMING);
   }
 
+  @Test
+  @DisplayName("현재 페이지의 공연 ID만 원격 집계에 실어 보낸다 (#590)")
+  void execute_SendsOnlyCurrentPageIds() {
+    // given
+    Page<Performance> page =
+        new PageImpl<>(
+            List.of(
+                performance(1L, "공연 1", Genre.CONCERT, PerformanceStatus.ON_SALE),
+                performance(2L, "공연 2", Genre.MUSICAL, PerformanceStatus.ON_SALE)),
+            PageRequest.of(0, 10),
+            200);
+    given(performanceRepository.findAll(any(Pageable.class))).willReturn(page);
+    givenBookingStats();
+    given(seatRestClient.getSeatCounts(anyList())).willReturn(Map.of());
+
+    // when
+    useCase.execute(PAGE);
+
+    // then: 페이지를 넘길 때마다 전건 집계가 도는 것이 #590이 없앤 비용이다
+    ArgumentCaptor<List<Long>> bookingIds = ArgumentCaptor.forClass(List.class);
+    ArgumentCaptor<List<Long>> seatIds = ArgumentCaptor.forClass(List.class);
+    verify(bookingRestClient).getStatsByPerformance(bookingIds.capture());
+    verify(seatRestClient).getSeatCounts(seatIds.capture());
+    assertThat(bookingIds.getValue()).containsExactly(1L, 2L);
+    assertThat(seatIds.getValue()).containsExactly(1L, 2L);
+  }
+
+  @Test
+  @DisplayName("공연이 한 건도 없는 페이지는 원격 집계에 빈 목록을 보낸다")
+  void execute_WhenEmptyPage_SendsEmptyIds() {
+    // given
+    given(performanceRepository.findAll(any(Pageable.class)))
+        .willReturn(new PageImpl<>(List.of(), PageRequest.of(0, 10), 0));
+    givenBookingStats();
+    given(seatRestClient.getSeatCounts(anyList())).willReturn(Map.of());
+
+    // when
+    Page<PerformanceAdminSummaryResponse> result = useCase.execute(PAGE);
+
+    // then: 빈 목록을 받은 클라이언트가 원격 호출 자체를 하지 않는다. 그 계약은 클라이언트 테스트가 고정한다.
+    assertThat(result.getContent()).isEmpty();
+    verify(bookingRestClient).getStatsByPerformance(List.of());
+    verify(seatRestClient).getSeatCounts(List.of());
+  }
+
   private void givenPage(Performance performance) {
     Page<Performance> page = new PageImpl<>(List.of(performance), PageRequest.of(0, 10), 1);
     given(performanceRepository.findAll(any(Pageable.class))).willReturn(page);
   }
 
   private void givenBookingStats(BookingStatsInfo.PerformanceStat... stats) {
-    given(bookingRestClient.getStats(any(), any()))
+    given(bookingRestClient.getStatsByPerformance(anyList()))
         .willReturn(
             Optional.of(
                 new BookingStatsInfo(

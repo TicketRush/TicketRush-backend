@@ -98,6 +98,43 @@ public interface BookingRepository extends JpaRepository<Booking, Long> {
       @Param("confirmed") BookingStatus confirmed);
 
   /*
+   * 지정한 공연들만 집계한다 (#590 관리자 공연 목록). 세는 규칙은 전건 버전과 같은 식을 그대로 쓴다.
+   *
+   * 관리자 공연 목록은 페이지마다 이 집계를 부른다. 전건 버전을 쓰면 페이지를 넘길 때마다 booking 전체를
+   * 훑는데, 그건 오픈런 트래픽을 받는 쓰기 핫패스다.
+   *
+   * 실측(로컬 MySQL 8.0, booking 3,000행 / CONFIRMED 1,000행, 공연 50건 지정):
+   *   전건: Sort <- Table scan on <temporary> <- Aggregate using temporary table
+   *           <- Table scan on b (cost=303 rows=2980)  -> 3,000행 읽고 101그룹, 1.28ms
+   *   IN  : Sort <- Table scan on <temporary> <- Aggregate using temporary table
+   *           <- Filter: performance_id in (...) (cost=303 rows=1490)
+   *             <- Table scan on b (cost=303 rows=2980)  -> 3,000행 읽고 50그룹, 1.08ms
+   *
+   * 스캔량은 줄지 않는다. booking에는 performance_id를 선두로 하는 인덱스가 없어(있는 것은 user_id·status
+   * 조합과 status·updated_at 조합뿐이다) IN이 range scan이 되지 못하고 필터로만 걸린다. 줄어드는 것은 임시
+   * 테이블의 그룹 수와 정렬 대상, 그리고 응답 행 수다. seat 쪽은 선두 컬럼이 맞아 읽는 행 자체가 절반으로
+   * 주는데, 여기는 그렇지 않다는 뜻이다. 그래도 인덱스를 얹지 않는 이유는 위와 같다 — 관리자 저빈도 조회를
+   * 위해 모든 예매 INSERT/UPDATE에 인덱스 유지 비용을 상시 얹는 교환이 맞지 않는다. 예매 행 수가 늘어 이
+   * 조회가 문제가 되면 그때 이 수치와 대조해 추가한다.
+   *
+   * 빈 목록을 넘기면 IN ()이 되어 JPQL이 성립하지 않는다. 호출자(BookingGetInternalStatsUseCase)가 막는다.
+   */
+  @Query(
+      "SELECT new com.ticketrush.boundedcontext.booking.app.dto.response"
+          + ".BookingPerformanceStatsRow("
+          + "b.performanceId, "
+          + "COALESCE(SUM(CASE WHEN b.bookingStatus = :confirmed THEN 1 ELSE 0 END), 0), "
+          + "COALESCE(SUM(CASE WHEN b.bookingStatus = :confirmed "
+          + "THEN b.paidAmount ELSE 0 END), 0)) "
+          + "FROM Booking b "
+          + "WHERE b.performanceId IN :performanceIds "
+          + "GROUP BY b.performanceId "
+          + "ORDER BY b.performanceId ASC")
+  List<BookingPerformanceStatsRow> aggregateStatsByPerformanceIdIn(
+      @Param("confirmed") BookingStatus confirmed,
+      @Param("performanceIds") List<Long> performanceIds);
+
+  /*
    * 일별 매출 집계 (#563 관리자 대시보드). 확정 시각 기준이며 호출자가 넘긴 반열린 구간 [from, toExclusive)만 센다.
    *
    * 경계를 반열린 구간으로 받는 이유: confirmed_at은 datetime이라 "to일 23:59:59.999999까지"를 값으로 표현하려
