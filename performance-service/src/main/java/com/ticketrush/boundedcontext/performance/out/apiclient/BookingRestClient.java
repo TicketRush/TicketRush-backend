@@ -5,7 +5,10 @@ import com.ticketrush.boundedcontext.performance.out.apiclient.dto.BookingStatsI
 import com.ticketrush.global.config.CustomSecurityProperties;
 import com.ticketrush.global.util.ServiceUrlValidator;
 import java.time.LocalDate;
+import java.util.List;
+import java.util.Objects;
 import java.util.Optional;
+import java.util.stream.Collectors;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
@@ -28,6 +31,7 @@ import org.springframework.web.client.RestClientException;
 public class BookingRestClient {
 
   private static final String INTERNAL_TOKEN_HEADER = "X-Internal-Token";
+  private static final String BOOKING_STATS_PATH = "/api/v1/internal/booking/stats";
 
   private final RestClient bookingServiceRestClient;
   private final CustomSecurityProperties securityProperties;
@@ -64,7 +68,7 @@ public class BookingRestClient {
               .uri(
                   uriBuilder ->
                       uriBuilder
-                          .path("/api/v1/internal/booking/stats")
+                          .path(BOOKING_STATS_PATH)
                           .queryParam("from", from)
                           .queryParam("to", to)
                           .build())
@@ -76,6 +80,62 @@ public class BookingRestClient {
     } catch (RestClientException e) {
       log.warn(
           "[BookingRestClient] 예매 집계 조회 실패, 매출 관련 필드는 null로 응답합니다. from={}, to={}", from, to, e);
+      return Optional.empty();
+    }
+  }
+
+  /**
+   * 지정한 공연들의 매출만 가져온다 (#590 관리자 공연 목록).
+   *
+   * <p>응답에는 {@code by_performance}만 들어 있다 — 요약과 일별 매출은 booking-service가 쿼리 자체를 돌리지 않고 키째 생략한다. 기간을
+   * 넘기지 않는 이유는 공연별 매출이 전체 기간 값이라 기간이 장식이 되기 때문이다.
+   *
+   * <p><b>빈 목록이면 호출하지 않는다.</b> 빈 값을 그대로 보내면 수신측 {@code @Size(min=1)}에 걸려 400이 되고, 그 400은 fail-open이
+   * 흡수해 "공연 0건 페이지"가 "예매 서비스 장애"로 로그에 남는다. 중복 제거도 여기서 닫는다 — 중복이 오면 요청만 길어지고 응답 매핑이 같은 키를 두 번 만난다.
+   *
+   * <p><b>쓰지도 않을 기간을 함께 보내는 이유는 롤링 배포다.</b> 예매 서비스의 구버전은 {@code from}·{@code to}가 필수라, 이 서비스가 먼저 뜬
+   * 구간에서 기간 없이 부르면 400이 나고 그 400은 아래 fail-open이 흡수해 <b>관리자 목록의 매출이 전 행 비는 형태로만</b> 드러난다. 기간을 실어 보내면
+   * 신버전은 공연 ID가 있으므로 그것을 무시하고, 구버전은 정상 응답한다(공연 ID를 모르는 구버전은 전량을 주지만 호출자는 필요한 공연만 꺼내 쓴다). 두 서비스의 배포
+   * 순서 제약이 이 한 줄로 사라진다.
+   */
+  public Optional<BookingStatsInfo> getStatsByPerformance(List<Long> performanceIds) {
+    if (!configured || performanceIds == null) {
+      return Optional.empty();
+    }
+
+    List<Long> distinctIds = performanceIds.stream().filter(Objects::nonNull).distinct().toList();
+    if (distinctIds.isEmpty()) {
+      return Optional.empty();
+    }
+
+    LocalDate today = LocalDate.now();
+
+    try {
+      BookingStatsApiResponse response =
+          bookingServiceRestClient
+              .get()
+              .uri(
+                  uriBuilder ->
+                      uriBuilder
+                          .path(BOOKING_STATS_PATH)
+                          .queryParam(
+                              "performanceIds",
+                              distinctIds.stream()
+                                  .map(String::valueOf)
+                                  .collect(Collectors.joining(",")))
+                          .queryParam("from", today)
+                          .queryParam("to", today)
+                          .build())
+              .header(INTERNAL_TOKEN_HEADER, securityProperties.getInternalToken())
+              .retrieve()
+              .body(BookingStatsApiResponse.class);
+
+      return Optional.ofNullable(response).map(BookingStatsApiResponse::result);
+    } catch (RestClientException e) {
+      log.warn(
+          "[BookingRestClient] 공연별 예매 집계 조회 실패, 매출 필드는 null로 응답합니다. performanceIds={}",
+          distinctIds,
+          e);
       return Optional.empty();
     }
   }

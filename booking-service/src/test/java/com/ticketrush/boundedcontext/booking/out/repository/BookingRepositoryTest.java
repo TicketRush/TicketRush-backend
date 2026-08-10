@@ -256,6 +256,47 @@ class BookingRepositoryTest {
   }
 
   @Test
+  @DisplayName("공연별 집계: 공연 ID를 주면 그 공연만 집계하고 세는 규칙은 전건 집계와 같다 (#590)")
+  void aggregateStatsByPerformanceIdIn_NarrowsToGivenIds() {
+    // given: 공연 100에 확정 2건(+취소 1건), 공연 200에 확정 1건
+    bookingRepository.save(confirmedBooking("BK-P1", 100L, 10_000L));
+    bookingRepository.save(confirmedBooking("BK-P2", 100L, 25_000L));
+    bookingRepository.save(performanceBooking("BK-P3", 100L, BookingStatus.CANCELED));
+    bookingRepository.save(confirmedBooking("BK-P4", 200L, 7_000L));
+
+    // when: 같은 픽스처에 두 경로를 모두 돌린다
+    List<BookingPerformanceStatsRow> filtered =
+        bookingRepository.aggregateStatsByPerformanceIdIn(BookingStatus.CONFIRMED, List.of(100L));
+    List<BookingPerformanceStatsRow> all =
+        bookingRepository.aggregateStatsByPerformance(BookingStatus.CONFIRMED);
+
+    // then: 두 경로를 직접 맞대 본다. 기대값만 하드코딩하면 나중에 전건 쪽 CASE-WHEN만 고쳐도 두 쿼리가
+    // 갈린 채 테스트가 모두 통과한다 — 이 이슈가 막으려는 회귀가 바로 그것이다.
+    assertThat(filtered).hasSize(1);
+    assertThat(filtered.getFirst())
+        .isEqualTo(all.stream().filter(row -> row.performanceId().equals(100L)).findFirst().get());
+
+    assertThat(filtered.getFirst().confirmedCount()).isEqualTo(2);
+    assertThat(filtered.getFirst().confirmedRevenue()).isEqualTo(35_000L);
+  }
+
+  @Test
+  @DisplayName("공연별 집계: 예매가 없는 공연 ID를 주면 그 공연은 행으로 나오지 않는다")
+  void aggregateStatsByPerformanceIdIn_WhenNoBookings_OmitsPerformance() {
+    // given
+    bookingRepository.save(confirmedBooking("BK-P1", 100L, 10_000L));
+
+    // when: GROUP BY는 행이 있는 그룹만 만든다 — 호출자는 이를 매출 0이 아니라 '모름'으로 다뤄야 한다
+    List<BookingPerformanceStatsRow> rows =
+        bookingRepository.aggregateStatsByPerformanceIdIn(
+            BookingStatus.CONFIRMED, List.of(100L, 999L));
+
+    // then
+    assertThat(rows).hasSize(1);
+    assertThat(rows.getFirst().performanceId()).isEqualTo(100L);
+  }
+
+  @Test
   @DisplayName("공연별 집계: 확정 예매가 하나도 없는 공연도 매출 0으로 내려간다(SUM의 NULL 방어)")
   void aggregateStatsByPerformance_WhenNoConfirmed_ReturnsZeroNotNull() {
     // given: 취소 예매만 있는 공연

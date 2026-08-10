@@ -30,7 +30,7 @@ public record PerformanceAdminSummaryResponse(
             example = "38",
             nullable = true)
         Long soldSeats,
-    @Schema(description = "전체 좌석 수. 좌석 서비스가 실제로 생성한 좌석 수다.", example = "120", nullable = true)
+    @Schema(description = "전체 좌석 수. 좌석 서비스가 실제로 생성한 좌석 수다.", example = "500", nullable = true)
         Long totalSeats,
     @Schema(
             description = "좌석 점유율(0~1, 소수점 넷째 자리 반올림). 전체 좌석이 0이면 생략된다.",

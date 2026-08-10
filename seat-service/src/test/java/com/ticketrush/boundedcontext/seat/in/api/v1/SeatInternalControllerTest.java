@@ -13,6 +13,8 @@ import com.ticketrush.global.config.JacksonConfig;
 import com.ticketrush.global.config.SecurityConfig;
 import com.ticketrush.global.filter.GatewayHeaderFilter;
 import java.util.List;
+import java.util.stream.Collectors;
+import java.util.stream.LongStream;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -52,7 +54,7 @@ class SeatInternalControllerTest {
   @DisplayName("성공: 전 공연 좌석 수를 snake_case 키로 200 반환한다 (#563 대시보드 계약)")
   void getAllSeatCounts_success() throws Exception {
     // given
-    given(seatFacade.getAllPerformanceSeatStatusCounts())
+    given(seatFacade.getAllPerformanceSeatStatusCounts(null))
         .willReturn(
             List.of(
                 new SeatStatusCountsByPerformanceResponse(100L, 120L, 82L, 38L, 0L),
@@ -74,7 +76,7 @@ class SeatInternalControllerTest {
   @DisplayName("성공: 좌석이 하나도 없으면 빈 배열을 반환한다")
   void getAllSeatCounts_empty() throws Exception {
     // given
-    given(seatFacade.getAllPerformanceSeatStatusCounts()).willReturn(List.of());
+    given(seatFacade.getAllPerformanceSeatStatusCounts(null)).willReturn(List.of());
 
     // when & then
     mockMvc
@@ -82,6 +84,43 @@ class SeatInternalControllerTest {
         .andExpect(status().isOk())
         .andExpect(jsonPath("$.result").isArray())
         .andExpect(jsonPath("$.result").isEmpty());
+  }
+
+  @Test
+  @DisplayName("성공: performance_ids를 주면 그 공연들만 조회한다 (#590 관리자 공연 목록)")
+  void getAllSeatCounts_withPerformanceIds() throws Exception {
+    // given: 클라이언트가 콤마로 이어 보낸 값이 List<Long>으로 바인딩되는지까지 함께 고정한다
+    given(seatFacade.getAllPerformanceSeatStatusCounts(List.of(100L, 200L)))
+        .willReturn(List.of(new SeatStatusCountsByPerformanceResponse(100L, 500L, 462L, 38L, 0L)));
+
+    // when & then
+    mockMvc
+        .perform(
+            get(SEAT_COUNTS_URL)
+                .param("performanceIds", "100,200")
+                .header(INTERNAL_TOKEN_HEADER, "test-internal-token"))
+        .andExpect(status().isOk())
+        .andExpect(jsonPath("$.result[0].performance_id").value(100))
+        .andExpect(jsonPath("$.result[0].total_count").value(500))
+        .andExpect(jsonPath("$.result[1]").doesNotExist());
+  }
+
+  @Test
+  @DisplayName("실패: performance_ids가 상한을 넘으면 400을 반환한다")
+  void getAllSeatCounts_tooManyPerformanceIds_badRequest() throws Exception {
+    // given: @Validated가 없으면 이 케이스가 500이 되고, 호출자 fail-open이 그 500을 장애로 오인한다
+    String tooMany =
+        LongStream.rangeClosed(1, 121).mapToObj(String::valueOf).collect(Collectors.joining(","));
+
+    // when & then
+    mockMvc
+        .perform(
+            get(SEAT_COUNTS_URL)
+                .param("performanceIds", tooMany)
+                .header(INTERNAL_TOKEN_HEADER, "test-internal-token"))
+        .andExpect(status().isBadRequest());
+
+    verifyNoInteractions(seatFacade);
   }
 
   @Test

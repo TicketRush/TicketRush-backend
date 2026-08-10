@@ -20,6 +20,8 @@ import com.ticketrush.global.config.SecurityConfig;
 import com.ticketrush.global.filter.GatewayHeaderFilter;
 import java.time.LocalDate;
 import java.util.List;
+import java.util.stream.Collectors;
+import java.util.stream.LongStream;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -62,7 +64,7 @@ class BookingInternalControllerTest {
     // given
     given(
             bookingGetInternalStatsUseCase.execute(
-                LocalDate.of(2026, 7, 9), LocalDate.of(2026, 8, 7)))
+                LocalDate.of(2026, 7, 9), LocalDate.of(2026, 8, 7), null))
         .willReturn(
             new BookingInternalStatsResponse(
                 new BookingAdminStatsResponse(1250L, 980L, 120L, 147_000_000L, false, 3L),
@@ -86,6 +88,50 @@ class BookingInternalControllerTest {
         .andExpect(jsonPath("$.result.by_performance[0].confirmed_revenue").value(5000000))
         .andExpect(jsonPath("$.result.by_date[0].date").value("2026-08-01"))
         .andExpect(jsonPath("$.result.by_date[0].revenue").value(1000000));
+  }
+
+  /**
+   * 키의 <b>부재</b>도 계약이다. 소비측이 "요청하지 않아 세지 않았다"를 null로 읽어 fail-open과 구분하므로, 여기서 키가 되살아나면 목록 경로가 다시 전건
+   * 집계를 유발하고도 아무 테스트가 깨지지 않는다.
+   */
+  @Test
+  @DisplayName("성공: performance_ids를 주면 by_performance만 내리고 summary·by_date 키는 생략한다 (#590)")
+  void getStats_withPerformanceIds_returnsOnlyByPerformance() throws Exception {
+    // given
+    given(bookingGetInternalStatsUseCase.execute(null, null, List.of(100L, 200L)))
+        .willReturn(
+            new BookingInternalStatsResponse(
+                null, List.of(new BookingPerformanceStatsRow(100L, 30L, 5_000_000L)), null));
+
+    // when & then
+    mockMvc
+        .perform(
+            get("/api/v1/internal/booking/stats")
+                .param("performanceIds", "100,200")
+                .header(INTERNAL_TOKEN_HEADER, "test-internal-token"))
+        .andExpect(status().isOk())
+        .andExpect(jsonPath("$.result.by_performance[0].performance_id").value(100))
+        .andExpect(jsonPath("$.result.by_performance[0].confirmed_revenue").value(5000000))
+        .andExpect(jsonPath("$.result.summary").doesNotExist())
+        .andExpect(jsonPath("$.result.by_date").doesNotExist());
+  }
+
+  @Test
+  @DisplayName("실패: performance_ids가 상한을 넘으면 400을 반환한다")
+  void getStats_tooManyPerformanceIds_badRequest() throws Exception {
+    // given: @Validated가 없으면 이 케이스가 500이 되고, 호출자 fail-open이 그 500을 장애로 오인한다
+    String tooMany =
+        LongStream.rangeClosed(1, 121).mapToObj(String::valueOf).collect(Collectors.joining(","));
+
+    // when & then
+    mockMvc
+        .perform(
+            get("/api/v1/internal/booking/stats")
+                .param("performanceIds", tooMany)
+                .header(INTERNAL_TOKEN_HEADER, "test-internal-token"))
+        .andExpect(status().isBadRequest());
+
+    verifyNoInteractions(bookingGetInternalStatsUseCase);
   }
 
   @Test

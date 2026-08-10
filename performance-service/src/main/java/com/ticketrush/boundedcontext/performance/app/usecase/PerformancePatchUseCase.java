@@ -34,7 +34,6 @@ public class PerformancePatchUseCase {
         request.showTime(),
         request.durationMinutes(),
         request.price(),
-        request.totalSeats(),
         request.address(),
         request.bookingOpenAt());
   }

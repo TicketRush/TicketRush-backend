@@ -27,7 +27,10 @@ public class SeatMapCacheRepository {
 
   // 무효화는 SeatStatusEventPublisher가 담당하고, TTL은 evict 누락·cache-aside 경합(커밋 직전 스냅샷이
   // evict 직후 적재되는 창)의 stale 상한이다(performance-service PERFORMANCE_LIST_TTL과 같은 근거).
-  // 값이 공연당 최대 221KB(2,080석)라 짧은 TTL이 Redis 상주량도 활성 공연 수준으로 묶는다.
+  // 짧은 TTL이 Redis 상주량을 활성 공연 수준으로 묶는다. 값 크기는 좌석당 약 106B다(측정: 2,080석 → 221KB).
+  // #590이 좌석 수 상한을 10,000으로 열면서 공연당 최대치가 약 1.06MB로 커졌다 — maxmemory 64mb가 차는
+  // 활성 공연 수가 약 289개에서 약 60개로 줄었다는 뜻이다. noeviction이라 상한에 닿으면 좌석맵 SET만이 아니라
+  // seat:lock: SET도 함께 거절되어 예매가 막힌다. 상한을 더 올리려면 이 산식을 먼저 다시 봐야 한다.
   private static final Duration SEAT_MAP_TTL = Duration.ofSeconds(30);
 
   private final StringRedisTemplate redisTemplate;

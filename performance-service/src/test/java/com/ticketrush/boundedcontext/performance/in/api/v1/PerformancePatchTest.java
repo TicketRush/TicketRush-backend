@@ -62,7 +62,7 @@ class PerformancePatchTest {
   }
 
   @Test
-  @DisplayName("전체 필드를 수정하면 DB에 반영된다")
+  @DisplayName("전체 필드를 수정하면 DB에 반영된다 (총 좌석 수는 수정 대상이 아니다)")
   void patchAllFields_success() {
     Performance performance = savePerformance();
     LocalDate newShowDate = LocalDate.now().plusDays(60);
@@ -80,7 +80,6 @@ class PerformancePatchTest {
             newShowTime,
             150,
             80000L,
-            200,
             "부산",
             newBookingOpenAt));
 
@@ -96,7 +95,9 @@ class PerformancePatchTest {
     assertThat(updated.getShowTime()).isEqualTo(newShowTime);
     assertThat(updated.getDurationMinutes()).isEqualTo(150);
     assertThat(updated.getPrice()).isEqualTo(80000L);
-    assertThat(updated.getTotalSeats()).isEqualTo(200);
+    // 총 좌석 수는 PATCH 대상이 아니다(#590). 좌석 수의 원본은 좌석 서비스이고, 여기서 고쳐도 seat으로 나가지
+    // 않아(PerformancePatchUseCase에 EventPublisher가 없다) 두 값이 조용히 갈렸다. 등록 시점에만 정한다.
+    assertThat(updated.getTotalSeats()).isEqualTo(100);
     assertThat(updated.getAddress()).isEqualTo("부산");
     assertThat(updated.getBookingOpenAt()).isEqualTo(newBookingOpenAt);
   }
@@ -109,7 +110,7 @@ class PerformancePatchTest {
     performancePatchUseCase.execute(
         performance.getId(),
         new PerformancePatchRequest(
-            "새로운 공연명", null, null, null, null, null, null, null, null, null, null));
+            "새로운 공연명", null, null, null, null, null, null, null, null, null));
 
     em.flush();
     em.clear();
@@ -127,8 +128,7 @@ class PerformancePatchTest {
   @DisplayName("존재하지 않는 공연 ID로 수정 요청 시 예외 발생")
   void patchPerformance_notFound() {
     PerformancePatchRequest request =
-        new PerformancePatchRequest(
-            "새 제목", null, null, null, null, null, null, null, null, null, null);
+        new PerformancePatchRequest("새 제목", null, null, null, null, null, null, null, null, null);
 
     assertThatThrownBy(() -> performancePatchUseCase.execute(999L, request))
         .isInstanceOf(BusinessException.class)
