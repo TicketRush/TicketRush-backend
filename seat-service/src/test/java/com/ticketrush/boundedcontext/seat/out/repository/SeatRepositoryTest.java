@@ -272,16 +272,20 @@ class SeatRepositoryTest {
             seatOf(1L, "A5", SeatStatus.HOLD, now.minusMinutes(1)),
             seatOf(99L, "A1", SeatStatus.SOLD, null)));
 
-    // when
-    var rows = seatRepository.getStatusCountsGroupedByPerformance(now, List.of(1L));
+    // when: 같은 픽스처와 같은 기준 시각으로 두 경로를 모두 돌린다
+    var filtered = seatRepository.getStatusCountsGroupedByPerformance(now, List.of(1L));
+    var all = seatRepository.getStatusCountsGroupedByPerformance(now, null);
 
-    // then: 전건 집계와 같은 값이어야 한다 — 한 화면의 두 경로가 다른 규칙으로 세면 안 된다
-    assertThat(rows).hasSize(1);
-    assertThat(rows.getFirst().performanceId()).isEqualTo(1L);
-    assertThat(rows.getFirst().totalCount()).isEqualTo(5L);
-    assertThat(rows.getFirst().availableCount()).isEqualTo(3L);
-    assertThat(rows.getFirst().soldCount()).isEqualTo(1L);
-    assertThat(rows.getFirst().holdCount()).isEqualTo(1L);
+    // then: 두 경로를 직접 맞대 본다. 기대값만 하드코딩하면 나중에 전건 쪽 만료 HOLD 규칙만 고쳐도 두 쿼리가
+    // 갈린 채 테스트가 모두 통과한다 — 대시보드와 좌석 현황 화면의 숫자가 어긋나는 경로가 바로 그것이다.
+    assertThat(filtered).hasSize(1);
+    assertThat(filtered.getFirst())
+        .isEqualTo(all.stream().filter(row -> row.performanceId().equals(1L)).findFirst().get());
+
+    assertThat(filtered.getFirst().totalCount()).isEqualTo(5L);
+    assertThat(filtered.getFirst().availableCount()).isEqualTo(3L);
+    assertThat(filtered.getFirst().soldCount()).isEqualTo(1L);
+    assertThat(filtered.getFirst().holdCount()).isEqualTo(1L);
   }
 
   @Test

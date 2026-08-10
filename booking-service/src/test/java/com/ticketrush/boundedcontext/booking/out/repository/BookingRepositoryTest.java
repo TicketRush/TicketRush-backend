@@ -264,15 +264,20 @@ class BookingRepositoryTest {
     bookingRepository.save(performanceBooking("BK-P3", 100L, BookingStatus.CANCELED));
     bookingRepository.save(confirmedBooking("BK-P4", 200L, 7_000L));
 
-    // when
-    List<BookingPerformanceStatsRow> rows =
+    // when: 같은 픽스처에 두 경로를 모두 돌린다
+    List<BookingPerformanceStatsRow> filtered =
         bookingRepository.aggregateStatsByPerformanceIdIn(BookingStatus.CONFIRMED, List.of(100L));
+    List<BookingPerformanceStatsRow> all =
+        bookingRepository.aggregateStatsByPerformance(BookingStatus.CONFIRMED);
 
-    // then: 전건 집계가 공연 100에 대해 내는 값과 같아야 한다 — 두 경로가 다른 규칙으로 세면 안 된다
-    assertThat(rows).hasSize(1);
-    assertThat(rows.getFirst().performanceId()).isEqualTo(100L);
-    assertThat(rows.getFirst().confirmedCount()).isEqualTo(2);
-    assertThat(rows.getFirst().confirmedRevenue()).isEqualTo(35_000L);
+    // then: 두 경로를 직접 맞대 본다. 기대값만 하드코딩하면 나중에 전건 쪽 CASE-WHEN만 고쳐도 두 쿼리가
+    // 갈린 채 테스트가 모두 통과한다 — 이 이슈가 막으려는 회귀가 바로 그것이다.
+    assertThat(filtered).hasSize(1);
+    assertThat(filtered.getFirst())
+        .isEqualTo(all.stream().filter(row -> row.performanceId().equals(100L)).findFirst().get());
+
+    assertThat(filtered.getFirst().confirmedCount()).isEqualTo(2);
+    assertThat(filtered.getFirst().confirmedRevenue()).isEqualTo(35_000L);
   }
 
   @Test

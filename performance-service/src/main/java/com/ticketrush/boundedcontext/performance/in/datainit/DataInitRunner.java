@@ -3,6 +3,7 @@ package com.ticketrush.boundedcontext.performance.in.datainit;
 import com.ticketrush.boundedcontext.performance.domain.entity.Performance;
 import com.ticketrush.boundedcontext.performance.domain.types.Genre;
 import com.ticketrush.boundedcontext.performance.out.repository.PerformanceRepository;
+import com.ticketrush.shared.performance.event.PerformanceCreatedEvent;
 import java.time.LocalDate;
 import java.time.LocalTime;
 import java.util.List;
@@ -61,7 +62,10 @@ public class DataInitRunner implements ApplicationRunner {
                 .showTime(LocalTime.of(19, 0))
                 .durationMinutes(150)
                 .price(165000L)
-                .totalSeats(70000)
+                // 잠실주경기장 실제 수용 인원은 더 크지만 좌석 수 상한(PerformanceCreatedEvent.MAX_TOTAL_SEATS)에
+                // 맞춘다. 빌더로 직접 넣는 시드라 등록 API의 @Max를 우회할 수 있는데, 그러면 local 화면에만
+                // 등록 경로로는 만들 수 없는 공연이 남는다.
+                .totalSeats(PerformanceCreatedEvent.MAX_TOTAL_SEATS)
                 .address("서울특별시 송파구 올림픽로 25 잠실종합운동장")
                 .imageMainUrl(PLACEHOLDER_MAIN_IMAGE)
                 .image3dUrl(PLACEHOLDER_MODEL_3D)

@@ -74,8 +74,7 @@ public class SeatRestClient {
       return Map.of();
     }
 
-    List<Long> distinctIds =
-        performanceIds.stream().filter(Objects::nonNull).distinct().sorted().toList();
+    List<Long> distinctIds = performanceIds.stream().filter(Objects::nonNull).distinct().toList();
     if (distinctIds.isEmpty()) {
       return Map.of();
     }

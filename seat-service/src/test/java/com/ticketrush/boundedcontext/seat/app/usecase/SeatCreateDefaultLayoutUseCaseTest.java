@@ -79,9 +79,10 @@ class SeatCreateDefaultLayoutUseCaseTest {
     // when
     useCase.execute(performanceId, 500);
 
-    // then: 26행 x 20열 = 520칸에서 정확히 500석 (25행이 꽉 차고 Z행은 비어 있다)
+    // then: 12열로는 42행이 필요해 26행 상한에 걸리므로 20열로 넓힌다. 500석은 25행에서 정확히 끝나므로
+    // 배치도에도 25행으로 남는다 — 좌석이 하나도 없는 26번째 행을 만들지 않는다.
     SeatLayout layout = seatLayoutRepository.findAll().getFirst();
-    assertThat(layout.getTotalRows()).isEqualTo(26);
+    assertThat(layout.getTotalRows()).isEqualTo(25);
     assertThat(layout.getMaxCols()).isEqualTo(20);
 
     List<SeatMapItemResponse> seats = seatRepository.findSeatMapByPerformanceId(performanceId);

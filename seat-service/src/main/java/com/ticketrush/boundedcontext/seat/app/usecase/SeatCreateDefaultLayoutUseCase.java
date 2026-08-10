@@ -43,8 +43,11 @@ public class SeatCreateDefaultLayoutUseCase {
     }
 
     int totalSeats = resolveTotalSeats(performanceId, requestedSeats);
-    int totalRows = Math.min(ceilDiv(totalSeats, DEFAULT_MAX_COLS), MAX_ROWS);
-    int maxCols = (totalRows < MAX_ROWS) ? DEFAULT_MAX_COLS : ceilDiv(totalSeats, MAX_ROWS);
+    int rowsAtDefaultCols = Math.min(ceilDiv(totalSeats, DEFAULT_MAX_COLS), MAX_ROWS);
+    int maxCols = (rowsAtDefaultCols < MAX_ROWS) ? DEFAULT_MAX_COLS : ceilDiv(totalSeats, MAX_ROWS);
+    // 열을 넓히고 나면 26행을 다 쓰지 않을 수 있다(313석이면 26행 x 13열로 잡히지만 실제로는 25행에서 끝난다).
+    // 실제로 채우는 행 수로 좁혀 저장한다 — 그러지 않으면 좌석이 하나도 없는 행이 배치도에 남는다.
+    int totalRows = ceilDiv(totalSeats, maxCols);
 
     SeatLayout savedLayout =
         seatLayoutRepository.saveAndFlush(

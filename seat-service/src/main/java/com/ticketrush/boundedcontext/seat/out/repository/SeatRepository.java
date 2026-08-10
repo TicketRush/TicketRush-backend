@@ -86,9 +86,14 @@ public interface SeatRepository extends JpaRepository<Seat, Long> {
    *            (cost=1205 rows=6000) -&gt; 6,000행 읽고 2.24ms
    * </pre>
    *
-   * <b>읽는 행 자체가 준다.</b> 예매 경로용 인덱스 {@code (performance_id, seat_status, hold_expired_at)}의 선두 컬럼이
-   * {@code performance_id}라, IN이 range scan으로 좁혀지고 커버링이라 테이블을 건드리지 않는다. 이 조회를 위해 인덱스를 새로 얹지 않고도 그렇다
-   * — 위 전건 버전의 판단(예매 폭주 경로에 인덱스를 더하지 않는다)이 그대로 유지된다.
+   * <b>읽는 행이 지정한 공연 몫으로 준다.</b> 위 회차에서 6,000행은 공연 101건 중 50건을 고른 결과이지 쿼리의 고정된 성질이 아니다 — 공연 수가 늘수록
+   * 페이지가 차지하는 비율은 작아진다.
+   *
+   * <p><b>이 계획은 {@code idx_seat_performance_id_status_hold_expired_at}이 있을 때의 것이다.</b> 선두 컬럼이
+   * {@code performance_id}라 IN이 range scan으로 좁혀지고 커버링이라 테이블을 건드리지 않는다. 이 조회를 위해 인덱스를 새로 얹지 않고도 그렇다
+   * — 위 전건 버전의 판단(예매 폭주 경로에 인덱스를 더하지 않는다)이 그대로 유지된다. 다만 {@code @Index} 선언이 곧 배포 환경의 인덱스를 뜻하지는
+   * 않으므로({@code Seat} 클래스 주석 참고) 운영에서 이 계획을 근거로 삼기 전에 {@code SHOW INDEX FROM seat}으로 먼저 확인해야 한다. 그
+   * 인덱스가 없으면 아래 booking처럼 전건 스캔 뒤 필터로 degrade한다.
    */
   @Query(
       "SELECT new com.ticketrush.boundedcontext.seat.app.dto.response"
@@ -115,6 +120,9 @@ public interface SeatRepository extends JpaRepository<Seat, Long> {
    *
    * <p>빈 목록을 그대로 IN에 넘기면 {@code IN ()}이 되어 JPQL이 성립하지 않으므로 여기서 갈라 낸다. 옵셔널 IN을 {@code (:ids IS NULL
    * OR ...)} 한 줄로 쓰지 않는 이유도 같다 — 컬렉션 파라미터는 IN 확장으로 바인딩되어 같은 이름을 스칼라 비교에 재사용할 수 없다.
+   *
+   * <p>HTTP 경로로는 빈 목록이 여기까지 오지 않는다. 컨트롤러의 {@code @Size(min = 1)}이 먼저 400으로 막기 때문이다. 이 가드는 서비스 내부에서
+   * 직접 부르는 호출자를 위한 것이니 둘 중 하나를 중복으로 보고 지우지 않는다.
    */
   default List<SeatStatusCountsByPerformanceResponse> getStatusCountsGroupedByPerformance(
       LocalDateTime now, List<Long> performanceIds) {
