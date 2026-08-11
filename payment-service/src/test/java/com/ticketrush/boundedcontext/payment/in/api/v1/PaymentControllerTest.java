@@ -1,5 +1,6 @@
 package com.ticketrush.boundedcontext.payment.in.api.v1;
 
+import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.BDDMockito.given;
@@ -20,6 +21,7 @@ import com.ticketrush.boundedcontext.payment.app.facade.PaymentFacade;
 import com.ticketrush.boundedcontext.payment.domain.types.PaymentProvider;
 import com.ticketrush.boundedcontext.payment.domain.types.PaymentStatus;
 import com.ticketrush.global.config.SecurityConfig;
+import com.ticketrush.global.dto.request.OffsetPageRequest;
 import com.ticketrush.global.exception.BusinessException;
 import com.ticketrush.global.filter.GatewayHeaderFilter;
 import com.ticketrush.global.status.ErrorStatus;
@@ -28,6 +30,7 @@ import java.time.LocalDateTime;
 import java.util.List;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
+import org.mockito.ArgumentCaptor;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.context.annotation.Import;
 import org.springframework.data.domain.Page;
@@ -381,7 +384,7 @@ class PaymentControllerTest {
             PaymentStatus.COMPLETED,
             LocalDateTime.of(2026, 5, 1, 10, 0));
     Page<PaymentSummaryResponse> page = new PageImpl<>(List.of(item), Pageable.ofSize(10), 1);
-    given(paymentFacade.getPayments(eq(userId), any(Pageable.class))).willReturn(page);
+    given(paymentFacade.getPayments(eq(userId), any(OffsetPageRequest.class))).willReturn(page);
 
     // when & then
     mockMvc
@@ -396,6 +399,79 @@ class PaymentControllerTest {
         .andExpect(jsonPath("$.result[0].payment_id").value(1))
         .andExpect(jsonPath("$.result[0].booking_id").value(100))
         .andExpect(jsonPath("$.result[0].status").value("COMPLETED"));
+
+    verify(paymentFacade).getPayments(userId, new OffsetPageRequest(0, 10));
+  }
+
+  /*
+   * sort는 더 이상 바인딩 대상이 아니므로 어떤 값이 오든 하위 계층에 전달되지 않는다(#475).
+   * 클라이언트가 준 프로퍼티가 쿼리 실행까지 도달하는 경로 자체가 사라졌으므로,
+   * "잘못된 프로퍼티가 PropertyReferenceException으로 500을 낸다"는 회귀는 검증 대상이 아니라 소멸한 것이다.
+   */
+  @Test
+  @DisplayName("sort 파라미터는 바인딩되지 않아 기본 페이지 요청만 전달된다(#475)")
+  void getPayments_ignoresSortParameter() throws Exception {
+    // given
+    Long userId = 10L;
+    given(paymentFacade.getPayments(eq(userId), any(OffsetPageRequest.class)))
+        .willReturn(Page.empty());
+
+    // when & then
+    mockMvc
+        .perform(
+            get("/api/v1/payment")
+                .param("sort", "amount,asc")
+                .param("sort", "notAnEntityProperty,desc")
+                .header("X-Gateway-Token", INTERNAL_TOKEN)
+                .header("X-User-Id", userId)
+                .header("X-User-Role", "USER"))
+        .andExpect(status().isOk())
+        .andExpect(jsonPath("$.is_success").value(true));
+
+    verify(paymentFacade).getPayments(userId, new OffsetPageRequest(0, 10));
+  }
+
+  @Test
+  @DisplayName("size가 정수로 변환되지 않으면 보정하지 않고 400으로 거부한다")
+  void getPayments_rejectsNonNumericSize() throws Exception {
+    // when & then
+    mockMvc
+        .perform(
+            get("/api/v1/payment")
+                .param("size", "abc")
+                .header("X-Gateway-Token", INTERNAL_TOKEN)
+                .header("X-User-Id", 10L)
+                .header("X-User-Role", "USER"))
+        .andExpect(status().isBadRequest())
+        .andExpect(jsonPath("$.is_success").value(false))
+        .andExpect(jsonPath("$.code").value(ErrorStatus.VALIDATION_ERROR.getCode()));
+
+    verifyNoInteractions(paymentFacade);
+  }
+
+  @Test
+  @DisplayName("size가 상한을 넘으면 50으로 보정되어 전달된다")
+  void getPayments_clampsPageSize() throws Exception {
+    // given
+    Long userId = 10L;
+    given(paymentFacade.getPayments(eq(userId), any(OffsetPageRequest.class)))
+        .willReturn(Page.empty());
+    ArgumentCaptor<OffsetPageRequest> captor = ArgumentCaptor.forClass(OffsetPageRequest.class);
+
+    // when & then
+    mockMvc
+        .perform(
+            get("/api/v1/payment")
+                .param("page", "1")
+                .param("size", "2000")
+                .header("X-Gateway-Token", INTERNAL_TOKEN)
+                .header("X-User-Id", userId)
+                .header("X-User-Role", "USER"))
+        .andExpect(status().isOk());
+
+    verify(paymentFacade).getPayments(eq(userId), captor.capture());
+    assertThat(captor.getValue().size()).isEqualTo(50);
+    assertThat(captor.getValue().page()).isEqualTo(1);
   }
 
   @Test
