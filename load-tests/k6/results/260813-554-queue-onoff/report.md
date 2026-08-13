@@ -46,22 +46,24 @@ TBD — `arm-stats.py` 출력으로 채운다.
 
 | 축 | ON | OFF | 비고 |
 |---|---|---|---|
-| DEFERRAL_RATIO (주 판정축) | TBD | TBD | |
-| 예매 서버 RPS (판정창 평균) | TBD | TBD | 창이 arm 마다 다르다(§2.1) |
-| 예매 서버 p95 / avg | TBD | TBD | |
-| `queue_polls_per_user` avg / max | TBD | TBD | |
-| `queue_wait_to_admit_seconds` p95 | TBD | TBD | |
-| 게이트웨이 총 RPS (공통 창 max) | TBD | TBD | |
-| 총 요청 수 | TBD | TBD | |
-| 호스트 CPU max / avg (공통 창) | TBD | TBD | 기저 약 7% |
-| seat-service RSS peak | TBD | TBD | |
-| HikariCP active / pending max | TBD | TBD | |
-| Tomcat busy max | TBD | TBD | |
-| 최대 동시 커넥션 | TBD | TBD | |
-| Redis 메모리 max | TBD | TBD | |
-| `queue_status_unavailable` | TBD | TBD | |
-| 실효 코호트 (`queue_enqueue_failed`) | TBD | TBD | 모든 비율의 분모 |
-| 오버셀 | TBD | TBD | LTQ 3쿼리 |
+| **DEFERRAL_RATIO** (주 판정축) | **47.01%** | TBD | ON 기준 ≥30% / OFF 기준 ≤10% |
+| 예매 서버 RPS (판정창 avg) | **20.31** (min 19.47 / max 20.80) | TBD | 창이 arm 마다 다르다(§2.1) |
+| `queue_polls_per_user` avg / max | 16.22 / 42 | TBD | 대기열의 비용을 보여 주는 가장 깨끗한 한 숫자 |
+| `queue_wait_to_admit_seconds` p95 | 182.6s (avg 98.9s) | TBD | 사용자 체감 대가 |
+| `queue_status_duration` p95 | 28.5ms (avg 15.14ms) | TBD | |
+| `http_req_duration` p95 | 42.34ms (avg 17.76ms) | TBD | |
+| 총 요청 수 | 178,473 | TBD | 상태 확인만 158,691 |
+| 호스트 CPU max / avg (회차 전체) | 88.59% / 36.37% | TBD | 무부하 기저 약 7% |
+| seat-service 컨테이너 mem max | 81.37% | TBD | 공통 창 |
+| booking-service 컨테이너 mem max | 99.55% | TBD | ADR 0006 정상 운영값 |
+| HikariCP active max (pending) | booking 2 / seat 3 (pending 0) | TBD | |
+| Tomcat busy max | booking 7 / max 200 | TBD | |
+| Redis 메모리 max | 8.27MB | TBD | 무효 기준 48MB |
+| `queue_status_unavailable` | 0.00% (0/158,691) | TBD | |
+| **실효 코호트** (`queue_enqueue_failed`) | **9,781** (219 실패) | TBD | 모든 비율의 분모 |
+| 오버셀 | **0행** (9,781 = 9,781 = 9,781) | TBD | 상태 무관 좌석 중복 검사 |
+| outbox peak → 소진 | booking 760 → 435s / seat 703 → 75s | TBD | 무너진 뒤 회복 |
+| 최초 포화 지표 | 실질 N/A (워밍업, §4.5) | TBD | 같은 임계 9개 적용 |
 
 ### 2.1 판정 창이 arm 마다 다르다
 
