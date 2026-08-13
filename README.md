@@ -110,6 +110,124 @@
 ### 4️⃣ CI/CD 파이프라인
 -->
 
+## 🚀 시작하기 (Getting Started)
+
+로컬에서 서비스를 띄우는 절차입니다.
+
+### 1️⃣ 사전 준비물
+
+| 항목 | 버전 | 비고 |
+|-----|-----|-----|
+| JDK | 21 | 각 모듈 `build.gradle`의 Gradle toolchain 설정 |
+| Docker | - | Redis · Kafka · 관측 스택 구동용 |
+| MySQL | 8.x | **호스트에 직접 설치**. `docker-compose.yml`에는 MySQL이 없습니다 |
+
+### 2️⃣ 데이터베이스 준비
+
+각 서비스는 `jdbc:mysql://localhost:3306/ticket_rush`로 접속합니다. 스키마만 만들어 두면 테이블은
+`ddl-auto=update`가 자동 생성합니다.
+
+```sql
+CREATE DATABASE ticket_rush CHARACTER SET utf8mb4;
+```
+
+> 운영과 동일한 스키마(generated 컬럼·인덱스 포함)로 시작하려면
+> [`deploy/mysql/init/001-ticket-rush-schema.sql`](deploy/mysql/init/001-ticket-rush-schema.sql)을 적용하세요.
+> 데이터 모델은 [ERD 문서](docs/erd.md)를 참고하세요.
+
+### 3️⃣ 환경변수 설정
+
+```bash
+cp .env.example .env.local
+```
+
+`.env.local`을 열어 `[필수]` 표시된 값을 채웁니다. 각 키가 어떤 서비스에서 필수인지는
+[`.env.example`](.env.example) 주석에 정리돼 있습니다.
+
+- **`gateway-service`만 띄울 때** — `JWT_SECRET`만 있으면 됩니다 (DB를 쓰지 않습니다)
+- **`auth-service`를 띄울 때** — OAuth 3종 · `MAIL_*` · `INTERNAL_API_TOKEN` · `GATEWAY_INTERNAL_TOKEN`이
+  모두 기본값 없이 필수입니다. 하나라도 비면 부팅에 실패합니다
+- `SPRING_PROFILES_ACTIVE`는 `local` 단독으로 둡니다
+
+### 4️⃣ 인프라 기동
+
+```bash
+# 최소 구성 (Redis + Kafka)
+docker compose up -d redis kafka
+
+# 관측 스택까지 포함 (Prometheus + Grafana)
+docker compose up -d
+```
+
+| 컨테이너 | 포트 | 비고 |
+|--------|-----|-----|
+| Redis | `127.0.0.1:6379` | 좌석 선점 락 · 대기열. keyspace 만료 이벤트(`Ex`) 활성화 |
+| Kafka | `127.0.0.1:29092` | KRaft 모드. 기본 파티션 3 |
+| Prometheus | `127.0.0.1:9090` | |
+| Grafana | `127.0.0.1:3000` | 기본 계정 `admin` / `admin` |
+
+부하 테스트용 `k6`는 `loadtest` 프로파일로 분리돼 있어 위 명령으로는 뜨지 않습니다
+([load-test-guide.md](docs/load-test-guide.md) 참고).
+
+### 5️⃣ 애플리케이션 기동
+
+모듈별로 띄웁니다. 필요한 서비스만 골라 띄워도 됩니다.
+
+```bash
+# .env.local 을 환경변수로 주입한 뒤 실행
+set -a && . ./.env.local && set +a
+./gradlew :gateway-service:bootRun
+./gradlew :performance-service:bootRun
+```
+
+> IntelliJ에서 실행한다면 [EnvFile 플러그인](https://plugins.jetbrains.com/plugin/7861-envfile)으로
+> `.env.local`을 주입하도록 실행 구성을 만드세요. `.idea/`는 추적 대상이 아니라 실행 구성이 함께 받아지지 않습니다.
+
+| 서비스 | 포트 | DB |
+|------|-----|-----|
+| `gateway-service` | 8080 | 미사용 (WebFlux + Redis) |
+| `user-service` | 8081 | ✅ |
+| `auth-service` | 8082 | ✅ |
+| `performance-service` | 8083 | ✅ |
+| `booking-service` | 8084 | ✅ |
+| `payment-service` | 8085 | ✅ |
+| `seat-service` | 8086 | ✅ |
+| `ticket-service` | 8087 | ✅ |
+
+API 호출은 게이트웨이 **8080** 하나로 보냅니다. 나머지 포트는 게이트웨이가 내부 라우팅에 쓰는 것으로,
+직접 호출하면 게이트웨이가 주입하는 인증 헤더가 없어 동작이 달라집니다.
+운영에서는 인터넷에 8080만 열려 있습니다.
+
+`local` 프로파일에서는 더미 데이터가 자동 시딩됩니다 — 공연·배너(`performance-service`), 좌석(`seat-service`).
+데이터가 이미 있으면 건너뜁니다.
+
+### 6️⃣ 동작 확인
+
+```bash
+curl http://localhost:8080/actuator/health
+# {"status":"UP"}
+```
+
+---
+
+## 📖 API 문서 (Swagger)
+
+게이트웨이가 7개 서비스의 OpenAPI 문서를 **하나의 Swagger UI로 통합**합니다.
+우측 상단 드롭다운에서 서비스를 전환합니다.
+
+| 환경 | 주소 |
+|-----|-----|
+| 로컬 | http://localhost:8080/swagger-ui.html |
+| 운영 | https://api.ticketrush.store/swagger-ui.html |
+
+- `/swagger-ui.html`은 `/swagger-ui/index.html`로 리다이렉트(302)됩니다
+- 인증 없이 접근할 수 있습니다 (`/swagger-ui/**`, `/v3/api-docs/**`가 게이트웨이 허용 목록에 등록돼 있습니다)
+- 서비스별 원본 스펙은 `/v3/api-docs/{user|auth|performance|booking|payment|seat|ticket}`에서 직접 받을 수 있습니다
+- 해당 서비스가 떠 있지 않으면 그 항목만 로딩에 실패합니다 — 게이트웨이가 각 서비스로 프록시하는 구조이기 때문입니다
+
+<img src="docs/images/swagger-ui.jpg" width="700" alt="게이트웨이 통합 Swagger UI — performance-service 선택 화면">
+
+
 ## 📚 Deep Dive Docs
 
 | 문서                                                            | 내용                          |
@@ -118,6 +236,7 @@
 | [CLAUDE.md](CLAUDE.md)                                        | 아키텍처 개요 + AI 작업 규칙          |
 | [backend-convention.md](docs/backend-convention.md)           | 코딩·협업 컨벤션, 버전 정보 (SSOT)     |
 | [ddd-directory-structure.md](docs/ddd-directory-structure.md) | DDD 디렉토리 구조                 |
+| [erd.md](docs/erd.md)                                         | 데이터 모델 / ERD               |
 | [kafka-event-guide.md](docs/kafka-event-guide.md)             | Kafka 이벤트 / Outbox / DLT 정책 |
 | [mapstruct-guide.md](docs/mapstruct-guide.md)                 | MapStruct Mapper 구조         |
 | [ai-workflow-guide.md](docs/ai-workflow-guide.md)             | Claude Code AI 개발 워크플로우     |
