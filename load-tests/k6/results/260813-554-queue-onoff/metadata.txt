@@ -463,9 +463,13 @@ OFF_POLLS=polls_per_user avg 1 / min 1 / max 1 · 상태 확인 요청 총 9,545
 OFF_HOST=CPU 공통창(t+30~300s) min 26.34 / avg 56.87 / max 84.02 (ON 41.72 / 66.31 / 88.59)
 OFF_GATEWAY_RPS=max 100.5 — 회차 전 모델 예측 100 과 오차 0.5%.
 #   ON 444.6(예측 453, 오차 1.9%)과 함께 부하 모델이 두 arm 모두에서 검증됐다.
-OFF_CONTAINER=공통창 max — mysql 100.00%(⚠ ON 83.67%) / performance 90.76% / booking 97.91% /
+OFF_CONTAINER=공통창 max — performance 90.76% / booking 97.91% /
 #   ticket 81.37% / seat-service 67.77%(ON 81.37% — arm 사이 재시작 효과) / gateway 57.24%.
 #   OOM kill 0건.
+#   ⚠ MySQL 은 대조 축에서 뺐다. 회차 후 인프라 컨테이너 패널을 찍어 보니 ON arm 중에
+#     72% → 100%(t+500s)로 차오른 뒤 내려오지 않았고, OFF 는 100% 에서 시작했다.
+#     덤프의 'ON 83.67%' 는 공통 창이 아직 차오르는 중인 구간이라 그렇게 잡힌 것이다.
+#     ON/OFF 차이가 아니라 arm 순서 효과다(report.md §2.3). seat-service RSS 와 같은 성질.
 OFF_HIKARI_TOMCAT=Hikari active max booking 3 / seat 2, pending 0. Tomcat busy max booking 3.
 OFF_NETWORK=data_sent 25 MB (20 kB/s) — ON 55 MB 의 45%
 OFF_COHORT=9,545명. 455명이 진입에서 실패했다(ON 219명).
