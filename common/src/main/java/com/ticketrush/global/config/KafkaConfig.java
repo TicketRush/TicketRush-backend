@@ -76,6 +76,35 @@ public class KafkaConfig {
   @Value("${spring.kafka.bootstrap-servers:localhost:29092}")
   private String bootstrapServers;
 
+  /*
+   * 리스너 컨테이너의 컨슈머 스레드 수 (#596). 브로커가 KAFKA_NUM_PARTITIONS: 3 으로 뜨고 NewTopic 빈이 있는 토픽은
+   * performance-events 하나뿐이라 나머지 9개는 auto-create 로 이미 3파티션인데, 이 팩토리에 setConcurrency 가 없어
+   * 실효 병렬도가 1이었다. 파티션 3개를 스레드 1개가 먹고 있었다는 뜻이다.
+   *
+   * 3이 상한인 이유: 파티션 수를 넘는 스레드는 할당받을 파티션이 없어 그냥 논다. 값 검증 코드를 두지 않는 이유도 같다 —
+   * 상한은 Kafka 가 흡수하고, 1 미만은 ConcurrentMessageListenerContainer.setConcurrency 가 기동 시
+   * IllegalArgumentException 으로 잘라낸다.
+   *
+   * Boot 자동설정(ConcurrentKafkaListenerContainerFactoryConfigurer)은 kafkaListenerContainerFactory
+   * 라는 같은 이름의 빈이 있으면 back off 한다. 즉 이 프로퍼티를 yml 에 적어두기만 해서는 아무 효과가 없고,
+   * 여기서 직접 읽어야 실제로 적용된다.
+   *
+   * 환경변수 SPRING_KAFKA_LISTENER_CONCURRENCY 로 재배포 없이 바꿀 수 있다(relaxed binding). #598 이 같은
+   * 배포본에서 이 값만 1↔3 으로 토글해 A/B 두 arm 을 돌린다 — 배포로 arm 을 가르면 이미지가 달라져 대조가 흔들리기
+   * 때문이고, #554 가 QUEUE_ENABLED 로 같은 선례를 세웠다.
+   *
+   * ⚠ 되돌릴 조건 — 다음 중 하나가 관측되면 1로 되돌린다.
+   *   1) hikaricp_connections_pending > 0. 커넥션 풀은 서비스당 기본 10인데 booking 은 리스너 5개 × 3 = 15 스레드,
+   *      seat 은 3개 × 3 = 9 스레드다. 커넥션을 못 받아 타임아웃나면 Kafka 재시도 → 5회 후 DLT 로 번진다.
+   *      "지금까지 pending=0 이라 풀을 튜닝하지 않았다"는 근거가 깨지는 지점이 정확히 여기다.
+   *   2) 호스트 CPU 가 이미 상한인데 처리량이 늘지 않는 경우. 2 vCPU 다(ADR 0006). 스레드만 늘리면 컨텍스트
+   *      스위칭만 는다(#509 에서 확인된 실패 모드).
+   *   3) 컨테이너 RSS 가 mem_limit 에 근접하는 경우. seat-service 는 640 MiB 상한에서 이미 cgroup OOM 으로
+   *      죽은 적이 있다(#509).
+   */
+  @Value("${spring.kafka.listener.concurrency:3}")
+  private int listenerConcurrency;
+
   @Bean
   public ProducerFactory<String, DomainEventEnvelope> producerFactory() {
     Map<String, Object> configProps = new HashMap<>();
@@ -137,6 +166,7 @@ public class KafkaConfig {
         new ConcurrentKafkaListenerContainerFactory<>();
 
     factory.setConsumerFactory(consumerFactory());
+    factory.setConcurrency(listenerConcurrency);
     factory.getContainerProperties().setAckMode(AckMode.MANUAL_IMMEDIATE);
 
     DeadLetterPublishingRecoverer recoverer =

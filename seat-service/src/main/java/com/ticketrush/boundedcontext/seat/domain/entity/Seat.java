@@ -148,6 +148,15 @@ public class Seat extends AutoIdBaseEntity {
    * AVAILABLE/SOLD 행에 발화하는 벌크 UPDATE를 추가하면) stale 엔티티가 충돌 없이 덮어써 버전 검사가 조용히 무력화된다.
    * 그때는 JPQL UPDATE VERSIONED를 검토한다(booking도 같은 한계를 안고 있다 — ADR 0005).
    *
+   * 병렬 소비(#596)에서 확인한 결과: 위 불변식은 그대로 성립한다. 상태 집합 비중첩 논증은 스레드 수가 아니라 어느 상태에서
+   * 시작하는지에만 의존하고, seat-service의 리스너 3개는 이전에도 각각 별도 컨테이너라 서로 병렬이었다. 새로 병렬이 되는 것은
+   * 같은 리스너 안 — 즉 hold()끼리의 경합인데, 그건 정확히 이 @Version이 담당하도록 설계된 경우다(#427).
+   *
+   * 달라지는 것은 불변식이 아니라 도달 빈도다. 지금까지 @Version 충돌은 Redis 락 유실(#426)에서만 도달할 수 있어 운영에서
+   * 사실상 0이었는데, 이제 평범한 동시성으로 도달한다. 충돌 시 경로는 기존 설계 그대로다 —
+   * OptimisticLockingFailureException → runIfFirst 커밋 실패 → Kafka 재시도 → 재시도 시엔 이미 HOLD라
+   * SeatHoldFailedEvent 정상 발행. 이 경로가 실제로 도는지와 오버셀 0행 유지는 #598이 수치로 확인한다.
+   *
    * columnDefinition으로 DEFAULT 0을 명시하는 이유는 스키마 스냅샷 때문이다(#433). Hibernate는 DEFAULT를 만들지
    * 않는데, version을 명시하지 않는 시딩 SQL(load-test/seed/seed_load.sql 등)은 DEFAULT가 없으면 ERROR 1364로
    * 깨진다. 매핑에 넣지 않으면 스냅샷을 재생성할 때마다 사람이 수동으로 DEFAULT를 넣어줘야 하고, validate CI는
