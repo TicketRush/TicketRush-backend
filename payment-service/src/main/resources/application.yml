@@ -37,6 +37,17 @@ service:
     # ticket-service가 느려질 때 취소 요청이 톰캣 스레드를 오래 붙잡아 결제 경로까지 마르는 것을 막는다.
     connect-timeout-ms: ${TICKET_HTTP_CONNECT_TIMEOUT_MS:1000}
     read-timeout-ms: ${TICKET_HTTP_READ_TIMEOUT_MS:2000}
+  booking:
+    # 결제 확정 전 예매 상태 동기 확인 전용 (#490).
+    # ticket과 마찬가지로 내부 API(/api/v1/internal/booking/**)는 게이트웨이가 라우팅하지 않으므로
+    # (ADR 0002) booking-service '직접' 주소여야 한다. 게이트웨이 주소로 넣으면 라우트 없음 404가 나
+    # 예매 없음(BOOKING_404_001)이 아닌 404로 결제 확정이 전건 503 거부된다.
+    url: ${BOOKING_SERVICE_URL:http://localhost:8084}
+    # 단일 행 조회이므로 공용 예산(3s/10s)을 쓰지 않는다. read-timeout은 곧 톰캣 스레드의 최대 점유
+    # 시간이고, 이 조회는 fail-closed라 booking이 느려지면 결제 경로가 그대로 마른다. 1s 근거는
+    # ticket-service가 같은 엔드포인트에 쓰는 값과 그 근거인 #402 실측 왕복 3.20ms다.
+    connect-timeout-ms: ${BOOKING_HTTP_CONNECT_TIMEOUT_MS:1000}
+    read-timeout-ms: ${BOOKING_HTTP_READ_TIMEOUT_MS:1000}
 
 custom:
   global:
@@ -76,6 +87,11 @@ payment:
       secret-key: ${TOSS_PAYMENTS_SECRET_KEY:}
       connect-timeout-ms: ${TOSS_PAYMENTS_CONNECT_TIMEOUT_MS:3000}
       read-timeout-ms: ${TOSS_PAYMENTS_READ_TIMEOUT_MS:10000}
+      # 재시도 가능한 취소 거절(#573)을 다시 호출하기 전 대기(ms). 겸 킬 스위치다 — 0 이하면 대기만
+      # 생략하는 것이 아니라 재시도 자체를 하지 않고 기존 확정 경로(FAILED 이력 + 보상)로 낙하한다.
+      # 대량 만료 버스트에서 컨슈머 스레드 점유로 max.poll.interval.ms가 압박되면 0으로 끈다.
+      # 생성자 주입이라 변경에는 재기동이 필요하다(재기동은 컨슈머 리밸런스를 유발한다).
+      cancel-retry-delay-ms: ${TOSS_PAYMENTS_CANCEL_RETRY_DELAY_MS:1000}
 
 management:
   endpoints:

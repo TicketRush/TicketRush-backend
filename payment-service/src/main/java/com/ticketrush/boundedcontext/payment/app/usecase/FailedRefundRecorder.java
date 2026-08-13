@@ -34,8 +34,18 @@ public class FailedRefundRecorder {
    *
    * <p>통신 실패({@link ErrorStatus#PAYMENT_PG_COMMUNICATION_FAILED}, 성공 여부 불명 → 재시도)와 구분한다. FAILED 이력
    * 기록(본 컴포넌트)과 보상 이벤트 발행({@link
-   * com.ticketrush.boundedcontext.payment.in.eventlistener.RefundRequestedEventListener})이 반드시 같은
-   * 기준으로 짝을 맞춰야 하므로, 두 곳이 각각 하드코딩하지 않고 이 술어를 공유한다.
+   * com.ticketrush.boundedcontext.payment.in.eventlistener.RefundRequestedEventListener}, {@link
+   * com.ticketrush.boundedcontext.payment.in.eventlistener.SeatConfirmFailedEventListener})이 반드시 같은
+   * 기준으로 짝을 맞춰야 하므로, 세 곳이 각각 하드코딩하지 않고 이 술어를 공유한다.
+   *
+   * <p><b>불변식: 결정적 거절은 반드시 {@link ErrorStatus#PAYMENT_REFUND_FAILED} 하나로만 매핑한다 (#573).</b> 4xx 세분화는
+   * 이 술어가 아니라 {@code TossPaymentCancelClient} 안에서 끝난다 — 재시도 대상({@code TossCancelRetryableCode})은
+   * 클라이언트가 자체 재시도로 흡수하고, 소진되면 다시 {@code PAYMENT_REFUND_FAILED} 로 확정해 던진다. 그래서 이 술어와 두 리스너의 분기는 그대로
+   * 유지된다.
+   *
+   * <p>거절 사유를 의미별로 세분해 각각 다른 {@code ErrorStatus} 로 나누고 싶은 유혹이 있으나 <b>그렇게 하면 안 된다.</b> 그 순간 이 술어가
+   * false 가 되어 FAILED 이력과 보상 이벤트가 <b>동시에</b> 사라지고, {@code refundFailedAt} 이 없는 그 건은 관리자 재환불 API 마저
+   * 거부한다({@code BOOKING_REFUND_RETRY_NOT_ALLOWED}). 분류 근거는 ADR 0012.
    */
   public static boolean isDeterministicRejection(BusinessException e) {
     return e.getErrorStatus() == ErrorStatus.PAYMENT_REFUND_FAILED;

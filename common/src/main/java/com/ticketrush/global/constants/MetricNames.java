@@ -42,10 +42,30 @@ public class MetricNames {
   public static final String PAYMENT_PG_APPROVE = "ticketrush.payment.pg.approve"; // Timer
   public static final String PAYMENT_REFUND = "ticketrush.payment.refund";
   public static final String PAYMENT_PG_CANCEL = "ticketrush.payment.pg.cancel"; // Timer
+  // PG 취소 4xx 중 재시도 대상(TossCancelRetryableCode)을 만난 횟수(#573). reason 태그는 재시도를 유발한
+  // Toss 원본 code(화이트리스트 3종이라 유한 집합), outcome은 네 갈래다 — succeeded(재시도 성공),
+  // exhausted(재시도에서도 같은 부류 거절 → 환불 실패 확정), failed(재시도가 다른 실패로 끝남: 통신 오류·
+  // 다른 결정적 코드·대기 중 인터럽트), disabled(킬 스위치로 재시도 건너뜀).
+  // exhausted와 failed를 반드시 갈라야 한다. 이 카운터의 목적이 "재시도 유효성이 문서로 확인되지 않은
+  // PROVIDER_ERROR가 실제로 효과가 있는가"의 사후 판정인데, 한 값에 접으면 판정이 오염된다 — 특히 409 뒤
+  // 재시도에서 ALREADY_CANCELED_PAYMENT가 오는 건 선행 요청이 성공했다는 뜻이라 의미가 정반대다.
+  // PAYMENT_PG_CANCEL Timer가 재시도 구간을 포함해 늘어나는 것도 이 카운터로 설명된다.
+  public static final String PAYMENT_PG_CANCEL_RETRY = "ticketrush.payment.pg.cancel.retry";
   public static final String PAYMENT_REFUND_FAILED = "ticketrush.payment.refund.failed";
   // booking당 FAILED 이력 상한 초과로 기록을 억제한 횟수(#333).
   public static final String PAYMENT_FAILED_RECORD_SUPPRESSED =
       "ticketrush.payment.failed_record.suppressed";
+  // 결제 확정 전 예매 상태 동기 확인이 PG 승인을 차단한 횟수(#490). 이 가드가 막는 건은 원래
+  // "과금됐는데 좌석이 없는" 상태로 끝나던 것이라, 차단 건수가 곧 방지한 사고 건수다. 로그로는
+  // 대량 만료 구간의 규모를 집계할 수 없어 이 카운터가 유일한 관측 축이다(서킷브레이커 미도입).
+  // reason 태그는 네 갈래이며 모두 유한 집합이다 — booking-service BookingStatus 이름(상태 때문에
+  // 막힌 건), unknown(모르는 상태 문자열·null), lookup_failed/not_found(상태 판정에 도달하지 못하고
+  // 조회 단계에서 막힌 건), owner_mismatch/owner_unknown(소유자 대조에서 막힌 건, #572). 세 번째
+  // 갈래를 함께 세지 않으면 booking 장애로 결제가 전건 거부되는 구간에서 이 카운터가 0으로 평평해
+  // 장애가 관측되지 않는다. 네 번째 갈래는 응답이 "예매 없음"·"통신 실패"로 동일화돼 있어(#572)
+  // 이 태그가 소유자 차단을 구분하는 유일한 축이다.
+  public static final String PAYMENT_CONFIRM_BOOKING_GUARD_BLOCKED =
+      "ticketrush.payment.confirm.booking_guard.blocked";
 
   // ticket
   public static final String TICKET_ISSUE = "ticketrush.ticket.issue";
@@ -70,6 +90,10 @@ public class MetricNames {
   public static final String TAG_PROVIDER = "provider";
   // 이벤트를 만든 발행 경로(#520). 값은 seat-service의 SeatEventSource 열거형이 SSOT다.
   public static final String TAG_SOURCE = "source";
+  // 환불을 유발한 주체(#492). 값은 payment-service의 RefundTrigger 열거형이 SSOT다. 사용자 취소와
+  // 사고 보상은 발생 자체의 의미가 달라(후자는 곧 사고 건수다) 알림 임계도 따로 잡아야 하는데,
+  // 이 태그가 없으면 두 건이 PAYMENT_REFUND 한 시계열에 섞여 보상 발생률을 볼 수 없다.
+  public static final String TAG_TRIGGER = "trigger";
 
   // ===== Tag values =====
   public static final String RESULT_SUCCESS = "success";

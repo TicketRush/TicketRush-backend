@@ -22,20 +22,21 @@ public class DevTokenIssueUseCase {
   public LoginResponse execute(DevTokenIssueRequest request) {
     UserServiceAuthInfoResponse user = userServiceClient.getUserAuthInfoByUserId(request.userId());
 
-    String normalizedRole = normalizeRole(user.role());
+    String role = validateRole(user.role());
 
-    String accessToken = jwtTokenProvider.createAccessToken(user.userId(), normalizedRole);
+    String accessToken = jwtTokenProvider.createAccessToken(user.userId(), role);
+
     String refreshToken = jwtTokenProvider.createRefreshToken(user.userId());
 
-    return new LoginResponse(
-        user.userId(), user.email(), normalizedRole, accessToken, refreshToken);
+    return new LoginResponse(user.userId(), user.email(), role, accessToken, refreshToken);
   }
 
-  private String normalizeRole(String role) {
-    return switch (role) {
-      case "MEMBER" -> "USER";
-      case "ADMIN" -> "ADMIN";
-      default -> throw new IllegalArgumentException("지원하지 않는 사용자 역할입니다: " + role);
-    };
+  private String validateRole(String role) {
+    if (!"MEMBER".equals(role) && !"ADMIN".equals(role)) {
+      throw new com.ticketrush.global.exception.BusinessException(
+          com.ticketrush.global.status.ErrorStatus.BAD_REQUEST, "지원하지 않는 사용자 역할입니다: " + role);
+    }
+
+    return role;
   }
 }

@@ -1,6 +1,9 @@
 package com.ticketrush.boundedcontext.booking.in.api.v1;
 
+import static org.mockito.ArgumentMatchers.anyLong;
+import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.BDDMockito.given;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
@@ -8,6 +11,8 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
+import com.ticketrush.boundedcontext.booking.app.dto.response.BookingAdminStatsResponse;
+import com.ticketrush.boundedcontext.booking.app.dto.response.BookingAdminSummaryResponse;
 import com.ticketrush.boundedcontext.booking.app.dto.response.BookingSummaryResponse;
 import com.ticketrush.boundedcontext.booking.app.facade.BookingFacade;
 import com.ticketrush.boundedcontext.booking.domain.types.BookingStatus;
@@ -15,7 +20,10 @@ import com.ticketrush.global.config.CustomSecurityProperties;
 import com.ticketrush.global.config.JacksonConfig;
 import com.ticketrush.global.config.SecurityConfig;
 import com.ticketrush.global.dto.request.OffsetPageRequest;
+import com.ticketrush.global.exception.BusinessException;
 import com.ticketrush.global.filter.GatewayHeaderFilter;
+import com.ticketrush.global.status.ErrorStatus;
+import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.List;
 import org.junit.jupiter.api.DisplayName;
@@ -146,6 +154,240 @@ class BookingAdminControllerTest {
     mockMvc
         .perform(
             get("/api/v1/booking/admin/bookings/refund-failed")
+                .header("X-Gateway-Token", INTERNAL_TOKEN)
+                .header("X-User-Id", 1L)
+                .header("X-User-Role", "USER"))
+        .andExpect(status().isForbidden());
+
+    verifyNoInteractions(bookingFacade);
+  }
+
+  @Test
+  @DisplayName("ADMIN이 전체 예매 목록을 조회하면 공연·예매자·좌석 보강 필드가 함께 응답된다")
+  void getBookings_returns_enriched_bookings() throws Exception {
+    // given
+    BookingAdminSummaryResponse response =
+        new BookingAdminSummaryResponse(
+            100L,
+            BOOKING_NUMBER,
+            5L,
+            2L,
+            3L,
+            BookingStatus.CONFIRMED,
+            LocalDateTime.of(2026, 5, 22, 10, 30),
+            "오페라의 유령",
+            LocalDate.of(2026, 5, 22),
+            "김소희",
+            "user@example.com",
+            "A-1",
+            1,
+            150000L);
+
+    given(bookingFacade.getAdminBookings(1L, new OffsetPageRequest(0, 10)))
+        .willReturn(new PageImpl<>(List.of(response), PageRequest.of(0, 10), 1));
+
+    // when & then
+    mockMvc
+        .perform(
+            get("/api/v1/booking/admin/bookings")
+                .header("X-Gateway-Token", INTERNAL_TOKEN)
+                .header("X-User-Id", 1L)
+                .header("X-User-Role", "ADMIN"))
+        .andExpect(status().isOk())
+        .andExpect(jsonPath("$.is_success").value(true))
+        .andExpect(jsonPath("$.result[0].booking_number").value(BOOKING_NUMBER))
+        .andExpect(jsonPath("$.result[0].booked_at").value("2026-05-22 10:30:00"))
+        .andExpect(jsonPath("$.result[0].performance_title").value("오페라의 유령"))
+        .andExpect(jsonPath("$.result[0].performance_date").value("2026-05-22"))
+        .andExpect(jsonPath("$.result[0].booker_name").value("김소희"))
+        .andExpect(jsonPath("$.result[0].booker_email").value("user@example.com"))
+        .andExpect(jsonPath("$.result[0].seat_number").value("A-1"))
+        .andExpect(jsonPath("$.result[0].seat_count").value(1))
+        .andExpect(jsonPath("$.result[0].payment_amount").value(150000))
+        .andExpect(jsonPath("$.pagination_info.total_elements").value(1));
+
+    verify(bookingFacade).getAdminBookings(1L, new OffsetPageRequest(0, 10));
+  }
+
+  @Test
+  @DisplayName("ADMIN이 예매 번호로 단건을 조회하면 목록과 같은 보강 필드가 응답된다")
+  void getBooking_returns_enriched_booking() throws Exception {
+    // given: 좌석 관리자 화면이 좌석의 booking_number로 예매자를 조합하는 창구 (#562)
+    BookingAdminSummaryResponse response =
+        new BookingAdminSummaryResponse(
+            100L,
+            BOOKING_NUMBER,
+            5L,
+            2L,
+            3L,
+            BookingStatus.PENDING,
+            LocalDateTime.of(2026, 5, 22, 10, 30),
+            "오페라의 유령",
+            LocalDate.of(2026, 5, 22),
+            "김소희",
+            "user@example.com",
+            "A-1",
+            1,
+            null);
+
+    given(bookingFacade.getAdminBooking(42L, BOOKING_NUMBER)).willReturn(response);
+
+    // when & then
+    mockMvc
+        .perform(
+            get("/api/v1/booking/admin/bookings/{bookingNumber}", BOOKING_NUMBER)
+                .header("X-Gateway-Token", INTERNAL_TOKEN)
+                .header("X-User-Id", 42L)
+                .header("X-User-Role", "ADMIN"))
+        .andExpect(status().isOk())
+        .andExpect(jsonPath("$.is_success").value(true))
+        .andExpect(jsonPath("$.result.booking_number").value(BOOKING_NUMBER))
+        .andExpect(jsonPath("$.result.seat_id").value(3))
+        .andExpect(jsonPath("$.result.booking_status").value("PENDING"))
+        .andExpect(jsonPath("$.result.booker_name").value("김소희"))
+        .andExpect(jsonPath("$.result.seat_number").value("A-1"));
+
+    verify(bookingFacade).getAdminBooking(42L, BOOKING_NUMBER);
+  }
+
+  @Test
+  @DisplayName("존재하지 않는 예매 번호로 단건을 조회하면 404로 거절된다")
+  void getBooking_returns_404_for_unknown_booking_number() throws Exception {
+    // given
+    given(bookingFacade.getAdminBooking(1L, "NOPE-0000"))
+        .willThrow(new BusinessException(ErrorStatus.BOOKING_NOT_FOUND));
+
+    // when & then
+    mockMvc
+        .perform(
+            get("/api/v1/booking/admin/bookings/{bookingNumber}", "NOPE-0000")
+                .header("X-Gateway-Token", INTERNAL_TOKEN)
+                .header("X-User-Id", 1L)
+                .header("X-User-Role", "ADMIN"))
+        .andExpect(status().isNotFound())
+        .andExpect(jsonPath("$.is_success").value(false))
+        .andExpect(jsonPath("$.code").value(ErrorStatus.BOOKING_NOT_FOUND.getCode()));
+  }
+
+  @Test
+  @DisplayName("정적 경로가 단건 조회의 경로 변수보다 우선한다")
+  void staticPaths_take_precedence_over_booking_number_variable() throws Exception {
+    // given: /bookings/{bookingNumber}가 추가되면서 stats·refund-failed·refunding-stuck을 삼킬 수 있다.
+    // Spring의 리터럴 우선 매칭에 의존하고 있으므로 그 전제를 여기서 고정한다 (#562).
+    given(bookingFacade.getAdminBookingStats())
+        .willReturn(new BookingAdminStatsResponse(0, 0, 0, 0L, true, 0));
+    given(bookingFacade.getRefundFailedBookings(new OffsetPageRequest(0, 10)))
+        .willReturn(new PageImpl<>(List.of(), PageRequest.of(0, 10), 0));
+    given(bookingFacade.getRefundingStuckBookings(new OffsetPageRequest(0, 10)))
+        .willReturn(new PageImpl<>(List.of(), PageRequest.of(0, 10), 0));
+
+    // when & then
+    for (String staticPath : List.of("stats", "refund-failed", "refunding-stuck")) {
+      mockMvc
+          .perform(
+              get("/api/v1/booking/admin/bookings/" + staticPath)
+                  .header("X-Gateway-Token", INTERNAL_TOKEN)
+                  .header("X-User-Id", 1L)
+                  .header("X-User-Role", "ADMIN"))
+          .andExpect(status().isOk());
+    }
+
+    verify(bookingFacade).getAdminBookingStats();
+    verify(bookingFacade).getRefundFailedBookings(new OffsetPageRequest(0, 10));
+    verify(bookingFacade).getRefundingStuckBookings(new OffsetPageRequest(0, 10));
+    verify(bookingFacade, never()).getAdminBooking(anyLong(), anyString());
+  }
+
+  @Test
+  @DisplayName("ADMIN이 요약 통계를 조회하면 카운트 3종과 총 매출이 응답된다")
+  void getBookingStats_returns_summary() throws Exception {
+    // given
+    given(bookingFacade.getAdminBookingStats())
+        .willReturn(new BookingAdminStatsResponse(1250, 980, 120, 147000000L, true, 0));
+
+    // when & then
+    mockMvc
+        .perform(
+            get("/api/v1/booking/admin/bookings/stats")
+                .header("X-Gateway-Token", INTERNAL_TOKEN)
+                .header("X-User-Id", 1L)
+                .header("X-User-Role", "ADMIN"))
+        .andExpect(status().isOk())
+        .andExpect(jsonPath("$.result.total_bookings").value(1250))
+        .andExpect(jsonPath("$.result.completed_bookings").value(980))
+        .andExpect(jsonPath("$.result.canceled_bookings").value(120))
+        .andExpect(jsonPath("$.result.total_revenue").value(147000000L))
+        .andExpect(jsonPath("$.result.revenue_complete").value(true));
+  }
+
+  @Test
+  @DisplayName("결제 금액이 비어 있는 확정 예매가 있으면 매출이 불완전함을 함께 알린다")
+  void getBookingStats_flags_incomplete_revenue() throws Exception {
+    // given: 백필되지 않은 과거 확정 예매가 남아 있어 매출이 실제보다 작다 (#561)
+    given(bookingFacade.getAdminBookingStats())
+        .willReturn(new BookingAdminStatsResponse(1250, 980, 120, 146000000L, false, 7));
+
+    // when & then
+    mockMvc
+        .perform(
+            get("/api/v1/booking/admin/bookings/stats")
+                .header("X-Gateway-Token", INTERNAL_TOKEN)
+                .header("X-User-Id", 1L)
+                .header("X-User-Role", "ADMIN"))
+        .andExpect(status().isOk())
+        .andExpect(jsonPath("$.result.completed_bookings").value(980))
+        .andExpect(jsonPath("$.result.total_revenue").value(146000000L))
+        .andExpect(jsonPath("$.result.revenue_complete").value(false))
+        .andExpect(jsonPath("$.result.missing_amount_bookings").value(7));
+  }
+
+  @Test
+  @DisplayName("ADMIN이 환불 처리를 요청하면 처리자 ID와 함께 파사드로 위임된다")
+  void refundBooking_delegates_to_facade_with_admin_id() throws Exception {
+    // when & then
+    mockMvc
+        .perform(
+            post("/api/v1/booking/admin/{bookingNumber}/refund", BOOKING_NUMBER)
+                .header("X-Gateway-Token", INTERNAL_TOKEN)
+                .header("X-User-Id", 42L)
+                .header("X-User-Role", "ADMIN"))
+        .andExpect(status().isOk())
+        .andExpect(jsonPath("$.is_success").value(true));
+
+    verify(bookingFacade).refundBooking(42L, BOOKING_NUMBER);
+  }
+
+  @Test
+  @DisplayName("ADMIN이 아닌 사용자는 신규 관리자 API 세 경로에도 접근할 수 없다")
+  void newAdminApis_are_forbidden_for_non_admin() throws Exception {
+    // when & then
+    mockMvc
+        .perform(
+            get("/api/v1/booking/admin/bookings")
+                .header("X-Gateway-Token", INTERNAL_TOKEN)
+                .header("X-User-Id", 1L)
+                .header("X-User-Role", "USER"))
+        .andExpect(status().isForbidden());
+
+    mockMvc
+        .perform(
+            get("/api/v1/booking/admin/bookings/stats")
+                .header("X-Gateway-Token", INTERNAL_TOKEN)
+                .header("X-User-Id", 1L)
+                .header("X-User-Role", "USER"))
+        .andExpect(status().isForbidden());
+
+    mockMvc
+        .perform(
+            post("/api/v1/booking/admin/{bookingNumber}/refund", BOOKING_NUMBER)
+                .header("X-Gateway-Token", INTERNAL_TOKEN)
+                .header("X-User-Id", 1L)
+                .header("X-User-Role", "USER"))
+        .andExpect(status().isForbidden());
+
+    mockMvc
+        .perform(
+            get("/api/v1/booking/admin/bookings/{bookingNumber}", BOOKING_NUMBER)
                 .header("X-Gateway-Token", INTERNAL_TOKEN)
                 .header("X-User-Id", 1L)
                 .header("X-User-Role", "USER"))

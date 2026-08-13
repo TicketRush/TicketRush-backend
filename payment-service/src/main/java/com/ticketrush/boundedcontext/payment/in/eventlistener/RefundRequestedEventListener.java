@@ -4,6 +4,7 @@ import com.ticketrush.boundedcontext.payment.app.support.PaymentEventPublisher;
 import com.ticketrush.boundedcontext.payment.app.usecase.FailedRefundRecorder;
 import com.ticketrush.boundedcontext.payment.app.usecase.PaymentRefundByBookingUseCase;
 import com.ticketrush.boundedcontext.payment.app.usecase.PaymentRefundByBookingUseCase.RefundOutcome;
+import com.ticketrush.boundedcontext.payment.domain.types.RefundTrigger;
 import com.ticketrush.global.constants.MetricNames;
 import com.ticketrush.global.event.DomainEventEnvelope;
 import com.ticketrush.global.event.KafkaConsumerGroup;
@@ -14,6 +15,7 @@ import com.ticketrush.shared.booking.event.RefundRequestedEvent;
 import io.micrometer.core.instrument.Counter;
 import io.micrometer.core.instrument.MeterRegistry;
 import java.time.LocalDateTime;
+import java.util.Locale;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.dao.DataIntegrityViolationException;
@@ -28,10 +30,13 @@ import org.springframework.stereotype.Component;
  * <p>성공 시 {@code PaymentCanceledEvent}가 발행되어 seat/booking/ticket이 정합을 완료한다. 실패는 원인에 따라 갈린다:
  *
  * <ul>
- *   <li><b>PG 거절({@link ErrorStatus#PAYMENT_REFUND_FAILED}, 4xx)</b> = 결정적 실패 → {@code
- *       RefundFailedEvent}로 booking을 CONFIRMED로 복원시키고 ack 한다(재시도 무의미).
- *   <li><b>PG 통신 실패({@link ErrorStatus#PAYMENT_PG_COMMUNICATION_FAILED}, 5xx/timeout)</b> = 일시적 실패
- *       → 재시도→DLT로 위임한다. 환불 성공 여부가 불명이라 섣불리 환불 실패로 확정하지 않는다(멱등 키로 재시도는 안전).
+ *   <li><b>PG 거절({@link ErrorStatus#PAYMENT_REFUND_FAILED})</b> = 결정적 실패 → {@code
+ *       RefundFailedEvent}로 booking을 CONFIRMED로 복원시키고 ack 한다. 4xx 전건이 아니다 — 취소 클라이언트가 화이트리스트({@code
+ *       TossCancelRetryableCode})에 등재된 일시적 거절을 자체 재시도로 흡수하고, 소진된 뒤에 이 상태로 확정한다(#573). 다만 <b>흡수 대상은
+ *       그 목록뿐</b>이라, body를 읽지 못한 4xx나 Toss가 나중에 추가한 일시적 코드는 재시도 없이 여기 도달한다. 즉 이 분기 도달이 곧 "재시도 무의미"를
+ *       보증하지는 않는다.
+ *   <li><b>PG 통신 실패({@link ErrorStatus#PAYMENT_PG_COMMUNICATION_FAILED}, 5xx/timeout·재시도 대기
+ *       인터럽트)</b> = 일시적 실패 → 재시도→DLT로 위임한다. 환불 성공 여부가 불명이라 섣불리 환불 실패로 확정하지 않는다(멱등 키로 재시도는 안전).
  *   <li><b>동시/중복 환불(unique 경합, #296)</b> = 이미 환불됨 → 멱등 ack(보상 아님).
  *   <li><b>그 외(역직렬화 등)</b> = 재시도→DLT로 보존한다.
  * </ul>
@@ -63,7 +68,9 @@ public class RefundRequestedEventListener {
     try {
       event = jsonConverter.deserialize(envelope.payload(), RefundRequestedEvent.class);
 
-      RefundOutcome outcome = paymentRefundByBookingUseCase.execute(event);
+      RefundOutcome outcome =
+          paymentRefundByBookingUseCase.execute(
+              event.bookingId(), event.bookingNumber(), RefundTrigger.USER_CANCEL);
 
       if (outcome == RefundOutcome.REPUBLISHED) {
         log.info(
@@ -78,7 +85,8 @@ public class RefundRequestedEventListener {
       }
 
       Counter.builder(MetricNames.PAYMENT_REFUND)
-          .tag(MetricNames.TAG_OUTCOME, outcome.name().toLowerCase())
+          .tag(MetricNames.TAG_OUTCOME, outcome.name().toLowerCase(Locale.ROOT))
+          .tag(MetricNames.TAG_TRIGGER, RefundTrigger.USER_CANCEL.tag())
           .register(meterRegistry)
           .increment();
 
@@ -101,7 +109,10 @@ public class RefundRequestedEventListener {
             e);
         paymentEventPublisher.publishRefundFailed(
             event.bookingId(), event.bookingNumber(), REASON_REFUND_FAILED, LocalDateTime.now());
-        Counter.builder(MetricNames.PAYMENT_REFUND_FAILED).register(meterRegistry).increment();
+        Counter.builder(MetricNames.PAYMENT_REFUND_FAILED)
+            .tag(MetricNames.TAG_TRIGGER, RefundTrigger.USER_CANCEL.tag())
+            .register(meterRegistry)
+            .increment();
         ack.acknowledge();
       } else {
         log.warn(

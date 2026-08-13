@@ -21,6 +21,10 @@ service:
     # 운영은 performance-service URL을 반드시 주입(base의 localhost 기본값 오버라이드, 미주입 시 fail-fast).
     # 기본값을 남겨두면 컨테이너가 자기 자신을 호출해 예매 조회의 공연 필드가 전부 null이 되는데, 기동은 성공해 조용히 깨진다.
     url: ${PERFORMANCE_SERVICE_URL}
+  user:
+    # 운영은 user-service URL을 반드시 주입(base의 localhost 기본값 오버라이드, 미주입 시 fail-fast).
+    # 기본값을 남겨두면 컨테이너가 자기 자신을 호출해 관리자 목록의 예매자 필드가 전부 null이 되는데, 기동은 성공해 조용히 깨진다.
+    url: ${USER_SERVICE_URL}
   ticket:
     # 운영은 ticket-service URL을 반드시 주입(base의 localhost 기본값 오버라이드, 미주입 시 fail-fast).
     # 기본값을 남겨두면 컨테이너가 자기 자신을 호출해 취소·재환불이 전부 503이 되는데, 기동은 성공해 조용히 깨진다.

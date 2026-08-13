@@ -16,6 +16,9 @@ TicketRush의 아키텍처 결정을 번호 매긴 Markdown으로 축적하는 �
 - [8. Redis 단일 인스턴스 SPOF를 수용하고, 장애 시 전면 차단(fail-closed)한다](0008-accept-redis-spof-with-fail-closed.md)
 - [9. 대기열을 게이트웨이 안의 모듈로 두고, 서버가 지시하는 폴링으로 1만 VU 유입을 제어한다](0009-virtual-waiting-room-with-server-directed-polling.md)
 - [10. 1만 VU 회차의 부하 생성기를 AWS 안의 임시 EC2로 옮긴다](0010-in-aws-load-generator-for-ten-thousand-vu.md)
+- [11. 내부 API 응답의 소유자 대조는 호출자가 하고, 불일치는 존재를 숨기는 코드로 접는다](0011-verify-booking-owner-at-caller.md)
+- [12. PG 환불의 일시적 거절은 호출 지점에서 흡수하고, 소진되면 결정적 실패로 확정한다](0012-absorb-transient-pg-refund-rejections-at-caller.md)
+- [13. 배너는 performance-service 안의 별도 bounded context로 두고, 경로는 서비스명이 아니라 리소스명을 따른다](0013-banner-as-separate-context-inside-performance-service.md)
 
 ## 사용법
 

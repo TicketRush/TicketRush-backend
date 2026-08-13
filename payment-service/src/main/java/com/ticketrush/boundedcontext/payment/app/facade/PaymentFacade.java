@@ -12,12 +12,12 @@ import com.ticketrush.boundedcontext.payment.app.usecase.PaymentGetDetailUseCase
 import com.ticketrush.boundedcontext.payment.app.usecase.PaymentGetListUseCase;
 import com.ticketrush.boundedcontext.payment.app.usecase.PaymentWebhookUseCase;
 import com.ticketrush.boundedcontext.payment.app.usecase.RegisterExpiredBookingUseCase;
+import com.ticketrush.global.dto.request.OffsetPageRequest;
 import com.ticketrush.global.exception.BusinessException;
 import java.time.LocalDateTime;
 import lombok.RequiredArgsConstructor;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.data.domain.Page;
-import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 
 @Service
@@ -63,8 +63,8 @@ public class PaymentFacade {
     }
   }
 
-  public Page<PaymentSummaryResponse> getPayments(Long userId, Pageable pageable) {
-    return paymentGetListUseCase.execute(userId, pageable);
+  public Page<PaymentSummaryResponse> getPayments(Long userId, OffsetPageRequest pageRequest) {
+    return paymentGetListUseCase.execute(userId, pageRequest);
   }
 
   public PaymentDetailResponse getPayment(Long userId, Long paymentId) {

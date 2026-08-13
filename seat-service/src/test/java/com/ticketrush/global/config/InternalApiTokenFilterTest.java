@@ -9,6 +9,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 
 import com.ticketrush.boundedcontext.seat.app.facade.SeatFacade;
 import com.ticketrush.boundedcontext.seat.in.api.v1.SeatInternalController;
+import com.ticketrush.global.filter.GatewayHeaderFilter;
 import com.ticketrush.support.WebMvcSliceTest;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -20,11 +21,12 @@ import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
 
 @WebMvcSliceTest(SeatInternalController.class)
-@Import({SecurityConfig.class, CustomSecurityProperties.class})
+@Import({SecurityConfig.class, CustomSecurityProperties.class, GatewayHeaderFilter.class})
 @TestPropertySource(
     properties = {
       "custom.security.internal-token=test-internal-token",
-      "custom.security.permit-all=false"
+      "custom.security.permit-all=false",
+      "gateway.internal-token=test-token"
     })
 class InternalApiTokenFilterTest {
 

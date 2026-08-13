@@ -64,4 +64,19 @@ public class RestClientConfig {
         .requestFactory(RestClientFactorySupport.withTimeouts(connectTimeoutMs, readTimeoutMs))
         .build();
   }
+
+  /**
+   * 관리자 예매 목록 보강(예매자 이름·이메일) 전용 클라이언트 (#561). 공연·좌석 보강과 같은 짧은 예산을 쓴다 — 실패해도 부분 응답(예매자 필드 null)으로 계속
+   * 가는 경로이고, 같은 요청 안에서 세 보강 예산이 직렬로 얹히므로 하나라도 길면 합이 그대로 커진다.
+   */
+  @Bean
+  public RestClient userServiceRestClient(
+      @Value("${service.user.url}") String userServiceUrl,
+      @Value("${service.user.connect-timeout-ms:1000}") long connectTimeoutMs,
+      @Value("${service.user.read-timeout-ms:2000}") long readTimeoutMs) {
+    return RestClient.builder()
+        .baseUrl(userServiceUrl)
+        .requestFactory(RestClientFactorySupport.withTimeouts(connectTimeoutMs, readTimeoutMs))
+        .build();
+  }
 }

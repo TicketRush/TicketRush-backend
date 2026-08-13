@@ -45,6 +45,7 @@ class PerformanceCreatedEventListenerTest {
   @Mock private Acknowledgment acknowledgment;
 
   private static final Long PERFORMANCE_ID = 1L;
+  private static final Integer TOTAL_SEATS = 120;
   private static final String PAYLOAD = "{\"performance_id\":1}";
 
   private DomainEventEnvelope envelope() {
@@ -53,8 +54,12 @@ class PerformanceCreatedEventListenerTest {
   }
 
   private PerformanceCreatedEvent event() {
+    return event(TOTAL_SEATS);
+  }
+
+  private PerformanceCreatedEvent event(Integer totalSeats) {
     return new PerformanceCreatedEvent(
-        PERFORMANCE_ID, "콘서트", 120, LocalDate.now(), LocalTime.of(19, 0), 50000L);
+        PERFORMANCE_ID, "콘서트", totalSeats, LocalDate.now(), LocalTime.of(19, 0), 50000L);
   }
 
   /** Inbox가 최초 수신으로 판정해 비즈니스 콜백을 실행하고 true를 반환하도록 스텁한다. */
@@ -80,7 +85,23 @@ class PerformanceCreatedEventListenerTest {
     listener.handlePerformanceCreated(envelope(), acknowledgment);
 
     // then
-    verify(seatFacade).createDefaultSeats(PERFORMANCE_ID);
+    verify(seatFacade).createDefaultSeats(PERFORMANCE_ID, TOTAL_SEATS);
+    verify(acknowledgment).acknowledge();
+  }
+
+  @Test
+  @DisplayName("페이로드에 좌석 수가 없어도 그대로 위임하고 오프셋을 커밋한다")
+  void handlePerformanceCreatedWithNullTotalSeats() {
+    // given: 배포 이전에 발행된 이벤트나 DLT 재처리는 좌석 수 없이 도착할 수 있다. 기본값 폴백은 좌석 서비스가 한다.
+    given(jsonConverter.deserialize(PAYLOAD, PerformanceCreatedEvent.class))
+        .willReturn(event(null));
+    givenInboxProcessesFirst();
+
+    // when
+    listener.handlePerformanceCreated(envelope(), acknowledgment);
+
+    // then
+    verify(seatFacade).createDefaultSeats(PERFORMANCE_ID, null);
     verify(acknowledgment).acknowledge();
   }
 
@@ -96,7 +117,7 @@ class PerformanceCreatedEventListenerTest {
     listener.handlePerformanceCreated(envelope, acknowledgment);
 
     // then
-    verify(seatFacade, never()).createDefaultSeats(anyLong());
+    verify(seatFacade, never()).createDefaultSeats(anyLong(), any());
     verify(acknowledgment).acknowledge();
   }
 
@@ -114,7 +135,7 @@ class PerformanceCreatedEventListenerTest {
     listener.handlePerformanceCreated(envelope(), acknowledgment);
 
     // then
-    verify(seatFacade, never()).createDefaultSeats(anyLong());
+    verify(seatFacade, never()).createDefaultSeats(anyLong(), any());
     verify(acknowledgment).acknowledge();
   }
 
@@ -147,7 +168,7 @@ class PerformanceCreatedEventListenerTest {
     givenInboxProcessesFirst();
     willThrow(new DataIntegrityViolationException("좌석 무결성 위반"))
         .given(seatFacade)
-        .createDefaultSeats(PERFORMANCE_ID);
+        .createDefaultSeats(PERFORMANCE_ID, TOTAL_SEATS);
 
     // when & then
     assertThatThrownBy(() -> listener.handlePerformanceCreated(envelope(), acknowledgment))
@@ -164,7 +185,7 @@ class PerformanceCreatedEventListenerTest {
     givenInboxProcessesFirst();
     willThrow(new RuntimeException("DB 일시 장애"))
         .given(seatFacade)
-        .createDefaultSeats(PERFORMANCE_ID);
+        .createDefaultSeats(PERFORMANCE_ID, TOTAL_SEATS);
 
     // when & then
     assertThatThrownBy(() -> listener.handlePerformanceCreated(envelope(), acknowledgment))
@@ -181,7 +202,7 @@ class PerformanceCreatedEventListenerTest {
     givenInboxProcessesFirst();
     willThrow(new BusinessException(ErrorStatus.PERFORMANCE_NOT_FOUND))
         .given(seatFacade)
-        .createDefaultSeats(PERFORMANCE_ID);
+        .createDefaultSeats(PERFORMANCE_ID, TOTAL_SEATS);
 
     // when & then
     assertThatCode(() -> listener.handlePerformanceCreated(envelope(), acknowledgment))

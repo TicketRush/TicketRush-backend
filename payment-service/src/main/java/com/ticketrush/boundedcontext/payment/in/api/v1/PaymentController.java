@@ -7,6 +7,7 @@ import com.ticketrush.boundedcontext.payment.app.dto.response.PaymentConfirmResp
 import com.ticketrush.boundedcontext.payment.app.dto.response.PaymentDetailResponse;
 import com.ticketrush.boundedcontext.payment.app.dto.response.PaymentSummaryResponse;
 import com.ticketrush.boundedcontext.payment.app.facade.PaymentFacade;
+import com.ticketrush.global.dto.request.OffsetPageRequest;
 import com.ticketrush.global.dto.response.ApiResponse;
 import com.ticketrush.global.security.CustomUserDetails;
 import com.ticketrush.global.status.SuccessStatus;
@@ -19,13 +20,11 @@ import java.util.List;
 import lombok.RequiredArgsConstructor;
 import org.springdoc.core.annotations.ParameterObject;
 import org.springframework.data.domain.Page;
-import org.springframework.data.domain.Pageable;
-import org.springframework.data.domain.Sort;
-import org.springframework.data.web.PageableDefault;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.ModelAttribute;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
@@ -45,7 +44,14 @@ public class PaymentController {
       summary = "결제 Confirm",
       description =
           "PG사 결제 인증 후 넘어온 데이터를 검증하고 결제를 확정한다. "
-              + "성공 시 PaymentConfirmedEvent를 발행하여 후속 도메인이 처리하도록 한다.")
+              + "성공 시 PaymentConfirmedEvent를 발행하여 후속 도메인이 처리하도록 한다.\n\n"
+              + "PG 승인 전에 예매가 아직 결제 가능한 상태(PENDING)인지 booking-service에 동기 확인한다(#490). "
+              + "그래서 다음 실패 응답이 나갈 수 있다.\n"
+              + "- `BOOKING_409_003`(만료된 예매) / `BOOKING_409_002`(취소·확정·환불 등 결제할 수 없는 상태)\n"
+              + "- `BOOKING_404_001`(존재하지 않는 예매)\n"
+              + "- `PAYMENT_503_003`(예매 정보 조회 실패) — **자동 재시도 대상이 아니다.** "
+              + "조회가 불가능한 동안은 결제를 통과시키지 않는 fail-closed 설계라, 재시도해도 같은 응답이 반복되며 "
+              + "요청당 스레드 점유만 늘어난다.")
   @PostMapping("/confirm")
   public ResponseEntity<ApiResponse<PaymentConfirmResponse>> confirm(
       @AuthenticationPrincipal CustomUserDetails user,
@@ -70,13 +76,23 @@ public class PaymentController {
 
   @Operation(
       summary = "결제 내역 목록 조회",
-      description = "로그인 사용자의 결제 내역을 오프셋 페이징으로 조회한다. COMPLETED 상태만 노출된다.")
+      description =
+          """
+          로그인 사용자의 결제 내역을 오프셋 페이징으로 조회한다. COMPLETED 상태만 노출된다.
+
+          정렬은 결제 완료 시각 내림차순(동일 시각이면 결제 ID 내림차순) 고정이며 클라이언트가 지정할 수 없다(#475).
+          `sort` 파라미터를 보내도 무시된다.
+
+          `page`는 0부터 시작하며 미지정이거나 음수면 0으로 보정된다. `size`는 미지정이거나 1 미만이면 10,
+          50을 초과하면 50으로 보정된다. 다만 정수로 변환할 수 없는 값(`size=abc` 등)은 보정 대상이 아니라
+          `VALID_400_001`로 거부된다.
+          """)
   @GetMapping
   public ResponseEntity<ApiResponse<List<PaymentSummaryResponse>>> getPayments(
       @AuthenticationPrincipal CustomUserDetails user,
-      @ParameterObject @PageableDefault(size = 10, sort = "paidAt", direction = Sort.Direction.DESC)
-          Pageable pageable) {
-    Page<PaymentSummaryResponse> payments = paymentFacade.getPayments(user.getUserId(), pageable);
+      @ParameterObject @ModelAttribute OffsetPageRequest pageRequest) {
+    Page<PaymentSummaryResponse> payments =
+        paymentFacade.getPayments(user.getUserId(), pageRequest);
     return ApiResponse.onSuccess(SuccessStatus.OK, payments);
   }
 

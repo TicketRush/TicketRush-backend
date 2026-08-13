@@ -9,6 +9,25 @@
 /*!40014 SET @OLD_FOREIGN_KEY_CHECKS=@@FOREIGN_KEY_CHECKS, FOREIGN_KEY_CHECKS=0 */;
 /*!40101 SET @OLD_SQL_MODE=@@SQL_MODE, SQL_MODE='NO_AUTO_VALUE_ON_ZERO' */;
 /*!40111 SET @OLD_SQL_NOTES=@@SQL_NOTES, SQL_NOTES=0 */;
+DROP TABLE IF EXISTS `banner`;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!50503 SET character_set_client = utf8mb4 */;
+CREATE TABLE `banner` (
+  `banner_id` bigint NOT NULL AUTO_INCREMENT,
+  `created_at` datetime(6) DEFAULT NULL,
+  `updated_at` datetime(6) DEFAULT NULL,
+  `deactivated_at` datetime(6) DEFAULT NULL,
+  `description` varchar(500) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
+  `display_date` date DEFAULT NULL,
+  `display_order` int NOT NULL,
+  `icon_emoji` varchar(20) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
+  `link_performance_id` bigint DEFAULT NULL,
+  `subtitle` varchar(200) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
+  `tag_label` varchar(50) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
+  `title` varchar(200) COLLATE utf8mb4_unicode_ci NOT NULL,
+  PRIMARY KEY (`banner_id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+/*!40101 SET character_set_client = @saved_cs_client */;
 DROP TABLE IF EXISTS `booking`;
 /*!40101 SET @saved_cs_client     = @@character_set_client */;
 /*!50503 SET character_set_client = utf8mb4 */;
@@ -19,6 +38,7 @@ CREATE TABLE `booking` (
   `booking_number` varchar(50) COLLATE utf8mb4_unicode_ci NOT NULL,
   `booking_status` enum('CANCELED','CONFIRMED','EXPIRED','PENDING','REFUNDED','REFUNDING') COLLATE utf8mb4_unicode_ci NOT NULL,
   `confirmed_at` datetime(6) DEFAULT NULL,
+  `paid_amount` bigint DEFAULT NULL,
   `performance_id` bigint NOT NULL,
   `refund_failed_at` datetime(6) DEFAULT NULL,
   `seat_id` bigint NOT NULL,

@@ -48,18 +48,27 @@ import org.testcontainers.mysql.MySQLContainer;
 /**
  * 동일 좌석 고동시성에서 oversell이 0건인지 실 MySQL·Redis로 검증한다(#344).
  *
- * <p><b>이 테스트가 만드는 락 경합은 프로덕션에서 실제로 일어나지 않는다.</b> 운영에서 좌석 홀드를 부르는 스레드는 Kafka 컨슈머 하나뿐이라({@code
- * KafkaConfig}의 컨테이너 팩토리에 {@code setConcurrency}가 없고 {@code spring.kafka.listener.concurrency}도 없어
- * 기본 1) Redisson 락은 경합하지 않는다. {@code RLock}은 (clientUUID:threadId) 기준 재진입 락이라 같은 스레드의 {@code
- * tryLock}은 실패 대신 재진입 성공한다. 즉 {@code SEAT_LOCK_CONTENTION}은 운영에서 구조적으로 0이며, 부하 테스트로는 이 카운터를 올릴 수
- * 없다(측정 결과와 근거는 docs/load-test-guide.md §10).
+ * <p><b>이 테스트가 만드는 락 경합은 이제 프로덕션에서도 일어난다(#596).</b> 예전에는 좌석 홀드를 부르는 스레드가 Kafka 컨슈머 하나뿐이라({@code
+ * KafkaConfig}의 컨테이너 팩토리에 {@code setConcurrency}가 없어 기본 1) Redisson 락이 경합하지 않았다. {@code RLock}은
+ * (clientUUID:threadId) 기준 재진입 락이라 같은 스레드의 {@code tryLock}은 실패 대신 재진입 성공하기 때문이다. 그래서 {@code
+ * SEAT_LOCK_CONTENTION}이 운영에서 구조적으로 0이었고 부하 테스트로도 올릴 수 없었다.
+ *
+ * <p>#596이 {@code spring.kafka.listener.concurrency}를 열면서(기본 3, 토픽 파티션 수와 동일) 그 전제가 깨졌다. {@code
+ * booking-created-topic}은 파티션이 3개이고 {@code BookingCreatedEvent.key()}가 {@code bookingId}라, <b>같은
+ * 좌석을 노리는 서로 다른 예매</b>는 서로 다른 파티션에 흩어져 서로 다른 스레드가 동시에 집는다. 이때 {@code tryLock(0, ...)}은 재진입이 아니라 즉시
+ * 실패이므로 {@code SEAT_LOCK_CONTENTION}은 운영에서 <b>0이 아닐 수 있다</b>. 실제 수치는 #598이 확정한다.
+ *
+ * <p>재진입이 여전히 유효한 구간은 남는다 — 같은 파티션 안의 순차 처리와 {@code DefaultErrorHandler}의 in-place 재시도는 같은 스레드에서
+ * 돈다. 즉 "같은 이벤트의 재시도"는 예전처럼 재진입이고, 새로 갈라지는 것은 "다른 키의 동시 처리"다.
  *
  * <p>그래서 두 테스트가 서로 다른 것을 검증한다.
  *
  * <ol>
- *   <li>스레드를 갈라 락 경합을 <b>인위적으로</b> 만들었을 때 {@code SeatFacade}의 분기(차단·보상·카운터)가 설계대로 도는가 — 컨슈머 동시성을 올릴
- *       때를 대비한 회귀 그물.
- *   <li>Redis 락이 유실돼도(#426, ADR 0008) DB {@code @Version}이 중복 HOLD를 막는가 — <b>운영의 실제 방어선</b>(#427).
+ *   <li>스레드를 갈라 락 경합을 만들었을 때 {@code SeatFacade}의 분기(차단·보상·카운터)가 설계대로 도는가 — #596 이전에는 "동시성을 올릴 때를
+ *       대비한" 회귀 그물이었지만, 이제는 <b>운영 경로의 직접 재현</b>이다. 패자는 락을 못 얻고 보상 이벤트로 빠지는데, 승자가 성공 경로에서 unlock하지
+ *       않고 TTL 5분에 맡기므로({@code SeatFacade}) 이 분기는 운영에서 실제로 도는 분기가 됐다.
+ *   <li>Redis 락이 유실돼도(#426, ADR 0008) DB {@code @Version}이 중복 HOLD를 막는가 — <b>정합성의 최종 방어선</b>(#427).
+ *       이쪽은 #596과 무관하게 그대로다.
  * </ol>
  *
  * <p>{@code TransactionTemplate}으로 감싸는 이유는 {@code runIfFirst}의 트랜잭션 경계를 재현하기 위해서다. 없으면 (a) {@code
@@ -142,12 +151,15 @@ class SeatHoldConcurrencyTest {
                 meterRegistry),
             meterRegistry);
 
-    // ponytail: SeatFacade의 생성자 13개 중 홀드 경로가 쓰는 4개만 채우고 나머지 9개는 null로 둔다.
+    // ponytail: SeatFacade의 생성자 인자 중 홀드 경로가 쓰는 4개만 채우고 나머지는 null로 둔다.
     //           @Import + @MockitoBean 7개보다 짧고, 타입이 전부 달라 오배치는 컴파일러가 잡는다.
     //           EventPublisher도 람다 — Outbox 테이블도 Kafka도 필요 없고 호출 횟수가 곧 차단 수다
     //           (Mockito verify는 멀티스레드 카운팅에서 신뢰도가 낮다).
     seatFacade =
         new SeatFacade(
+            null,
+            null,
+            null,
             null,
             null,
             null,

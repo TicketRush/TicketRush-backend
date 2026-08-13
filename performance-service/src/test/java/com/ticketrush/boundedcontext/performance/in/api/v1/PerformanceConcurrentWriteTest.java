@@ -121,7 +121,7 @@ class PerformanceConcurrentWriteTest {
 
   private PerformancePatchRequest patchRequest(String title, LocalDateTime bookingOpenAt) {
     return new PerformancePatchRequest(
-        title, null, null, null, null, null, null, null, null, null, bookingOpenAt);
+        title, null, null, null, null, null, null, null, null, bookingOpenAt);
   }
 
   /**

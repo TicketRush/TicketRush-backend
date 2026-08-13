@@ -46,7 +46,14 @@ public enum SeatEventSource {
    * PENDING 예매를 직접 취소해 <b>만료 전</b> HOLD를 되돌린 경우다. {@link #EXPIRE_SINGLE}과 결과 상태는 같지만 도착 분포가 다르다 —
    * 만료는 예매 5분 뒤에 고르게 퍼지는 반면 이것은 사용자 행동 시점에 몰린다.
    */
-  CANCEL_RELEASE("cancel_release");
+  CANCEL_RELEASE("cancel_release"),
+
+  /**
+   * 관리자 강제 해제 — {@code SeatAdminController} → {@code SeatAdminForceReleaseHoldUseCase} (#562). 관리자가
+   * 만료 전 HOLD를 직접 되돌린 경우다. 결과 상태는 {@link #EXPIRE_SINGLE}·{@link #CANCEL_RELEASE}와 같지만 도착이 극히 드물고
+   * 사람의 조작에만 붙으므로, 이 태그의 발행률이 0이 아니라는 것 자체가 관리자 개입이 있었다는 신호다.
+   */
+  ADMIN_FORCE_RELEASE("admin_force_release");
 
   private final String tagValue;
 

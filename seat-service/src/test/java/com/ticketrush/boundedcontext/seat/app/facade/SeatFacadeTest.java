@@ -57,7 +57,10 @@ class SeatFacadeTest {
   private SeatFacade seatMapFacade() {
     return new SeatFacade(
         null,
+        null,
         seatGetSeatMapUseCase,
+        null,
+        null,
         null,
         null,
         null,

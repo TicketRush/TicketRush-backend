@@ -45,6 +45,32 @@ import lombok.NoArgsConstructor;
  * <p>실행 전 {@code SHOW INDEX FROM booking}으로 두 인덱스의 실존 여부를 먼저 확인한다. idx_booking_status_updated_at은
  * ADR 0005에서 이미 적용된 전제라 위 DDL에 포함하지 않았지만(중복 실행 시 Duplicate key name), 이 전제 역시 검증된 적 없는 가정이므로 — 이
  * 클래스가 보정한 drift가 그랬듯 — 확인 결과 없으면 그때 같은 방식으로 함께 추가한다.
+ *
+ * <p><b>paid_amount 마이그레이션 (#561).</b> 결제 금액 컬럼을 추가한다. 기존 가동 DB에는 아래를 실행해야 하며, prod는 {@code
+ * ddl-auto: validate}라 <b>배포 전에 실행하지 않으면 기동이 실패한다.</b>
+ *
+ * <pre>
+ *   ALTER TABLE booking ADD COLUMN paid_amount bigint DEFAULT NULL,
+ *     ALGORITHM=INSTANT;
+ *
+ *   -- 백필: 이미 확정된 예매의 결제 금액을 payment에서 가져온다.
+ *   -- 이 조인은 단일 공유 DB(ADR 0003)에서 일회성 운영 마이그레이션에 한해 허용한다.
+ *   -- 애플리케이션 코드의 크로스 도메인 조인 금지 규율과는 별개다.
+ *   UPDATE booking b
+ *     JOIN payment p ON p.completed_booking_id = b.booking_id
+ *   SET b.paid_amount = p.amount
+ *   WHERE b.booking_status IN ('CONFIRMED', 'REFUNDING', 'REFUNDED')
+ *     AND b.paid_amount IS NULL;
+ *
+ *   -- 검증: 0이어야 한다. 0이 아니면 그만큼 매출 집계에서 빠지며,
+ *   -- 통계 응답의 revenue_complete=false와 missing_amount_bookings로 드러난다.
+ *   SELECT COUNT(*) FROM booking
+ *     WHERE booking_status = 'CONFIRMED' AND paid_amount IS NULL;
+ * </pre>
+ *
+ * <p>백필하지 않아도 서비스는 정상 동작한다 — 매출이 그만큼 작게 나오고 통계 응답이 그 사실을 스스로 신고한다. 조용히 틀린 값을 내지 않는 것이 이 설계의 요지다. 백필
+ * 대상에 REFUNDING·REFUNDED를 포함한 것은 그 예매들도 한때 확정을 거쳤고, 환불이 실패해 CONFIRMED로 복원되면(ADR 0005) 다시 매출에 잡혀야 하기
+ * 때문이다.
  */
 @Entity
 @Table(
@@ -88,6 +114,21 @@ public class Booking extends AutoIdBaseEntity {
   /* 마지막으로 PG 환불이 실패한 시각. null이면 환불 실패 이력이 없다. 실패 사유는 payment의 refund 테이블이 SSOT다 (#391). */
   @Column(name = "refund_failed_at")
   private LocalDateTime refundFailedAt;
+
+  /*
+   * 확정 시점에 실제로 결제된 금액 (#561). PaymentConfirmedEvent가 싣고 오는 값을 그대로 박아 둔다.
+   *
+   * 이 스냅샷이 없을 때는 공연의 현재 가격(performance.price)을 빌려 썼는데, 그 값은 예매 이후 관리자가 가격을
+   * 바꾸면 과거 매출까지 소급해 흔들리고, 공연이 삭제되면 아예 조회할 수 없어 매출 집계가 영구히 불가능해졌다.
+   * 금액을 자기 행에 들고 있으면 관리자 통계가 크로스 서비스 호출 없이 SUM 한 번으로 끝나고, 조회 실패라는
+   * 실패 모드 자체가 사라진다.
+   *
+   * PENDING·CANCELED·EXPIRED는 결제가 성사되지 않았으므로 null이다. 확정을 거친 예매(CONFIRMED 이후 상태)는
+   * 값이 있는 것이 정상이지만, 이 컬럼 도입 이전에 확정된 행은 백필 전까지 null이다 — 매출 집계는 null을
+   * 0으로 취급하지 않고 별도로 센다(BookingRepository 참고).
+   */
+  @Column(name = "paid_amount")
+  private Long paidAmount;
 
   /*
    * 낙관적 락 (#397). requestRefund()가 check-then-act라 사용자 취소와 관리자 재환불이 동시에 검증을 통과하면
@@ -161,11 +202,21 @@ public class Booking extends AutoIdBaseEntity {
     this.bookingStatus = BookingStatus.CANCELED;
   }
 
-  public void confirm(LocalDateTime confirmedAt) {
+  /**
+   * 결제 완료로 예매를 확정한다 (#49).
+   *
+   * <p>{@code paidAmount}는 결제 확정 이벤트가 싣고 온 <b>실제 결제 금액</b>이다. 공연의 현재 가격을 빌려 쓰는 대신 이 시점의 값을 박아 둬야 이후
+   * 가격 변경이나 공연 삭제가 과거 매출을 흔들지 못한다 (#561).
+   */
+  public void confirm(LocalDateTime confirmedAt, Long paidAmount) {
     if (this.bookingStatus == BookingStatus.CONFIRMED) {
       if (this.confirmedAt == null) {
         // 결제 확정 이벤트 재처리 시 과거 확정 데이터의 누락된 확정 시각을 보정한다.
         this.confirmedAt = confirmedAt;
+      }
+      if (this.paidAmount == null) {
+        // 같은 이유로 결제 금액도 보정한다 — 컬럼 도입 이전에 확정된 예매가 이벤트 재처리로 채워질 수 있다.
+        this.paidAmount = paidAmount;
       }
       return;
     }
@@ -180,6 +231,7 @@ public class Booking extends AutoIdBaseEntity {
 
     this.bookingStatus = BookingStatus.CONFIRMED;
     this.confirmedAt = confirmedAt;
+    this.paidAmount = paidAmount;
   }
 
   /**
@@ -211,15 +263,21 @@ public class Booking extends AutoIdBaseEntity {
    * refundFailedAt}으로만 남기고, 사유는 payment의 refund 테이블(FAILED 이력)이 SSOT다.
    *
    * <p>이미 복원된 예매(CONFIRMED이고 {@code refundFailedAt}이 있음)에 이벤트가 재전달되면 멱등 처리한다(전이 없이 {@code true}).
-   * REFUNDING이 아닌 그 외 상태(REFUNDED로 이미 종결됐거나 CANCELED/PENDING 등 교차 경로)는 전이하지 않고 {@code false}를
-   * 반환한다(예외를 던지지 않아 호출 측이 ack 하도록).
+   * REFUNDING도 CONFIRMED도 아닌 상태(REFUNDED로 이미 종결됐거나 CANCELED/PENDING 등 교차 경로)는 전이하지 않고 {@code
+   * false}를 반환한다(예외를 던지지 않아 호출 측이 ack 하도록).
    *
    * <p>REFUNDING이더라도 {@code failedAt}이 이미 기록된 {@code refundFailedAt}보다 나중일 때만 복원한다. Inbox
    * retention이 만료된 뒤 옛 {@code RefundFailedEvent}가 재생돼 <b>진행 중인 재환불 시도</b> 도중 도착하면, 그 시도를 조용히 중단시키고
    * stale 시각을 덮어쓰기 때문이다.
    *
+   * <p><b>REFUNDING을 거치지 않은 CONFIRMED에도 실패를 기록한다 (#492).</b> 좌석 확정 실패 보상은 사용자 취소와 달리 예매 상태를 바꾸지 않고
+   * 곧바로 환불을 걸므로(refund-first, ADR 0005), 그 환불이 PG에 거절되면 CONFIRMED이면서 {@code refundFailedAt}이 없는 채로
+   * 실패가 도착한다. 이 분기가 없으면 {@code false}로 떨어져 실패가 기록되지 않고, 그러면 미해결 목록({@code CONFIRMED +
+   * refundFailedAt IS NOT NULL})에도 잡히지 않을뿐더러 관리자 재환불 API가 {@code BOOKING_REFUND_RETRY_NOT_ALLOWED}로
+   * 거부해 <b>수동 복구 수단까지 함께 막힌다</b>. 과금이 남은 건에서 그건 가장 필요한 도구다.
+   *
    * @param failedAt PG 환불이 최종 실패한 시각
-   * @return 복원(또는 이미 복원)됐으면 {@code true}, 전이 불가 상태라 전이하지 않았으면 {@code false}
+   * @return 복원(또는 이미 복원)됐거나 실패를 기록했으면 {@code true}, 전이 불가 상태면 {@code false}
    */
   public boolean recordRefundFailure(LocalDateTime failedAt) {
     if (this.bookingStatus == BookingStatus.REFUNDING) {
@@ -231,7 +289,12 @@ public class Booking extends AutoIdBaseEntity {
       this.refundFailedAt = failedAt;
       return true;
     }
-    if (this.bookingStatus == BookingStatus.CONFIRMED && this.refundFailedAt != null) {
+    if (this.bookingStatus == BookingStatus.CONFIRMED) {
+      if (this.refundFailedAt == null) {
+        // 보상 환불(#492)의 실패다. 이미 CONFIRMED라 전이는 없고 실패 사실만 남긴다.
+        this.refundFailedAt = failedAt;
+      }
+      // 이미 기록이 있으면 갱신하지 않는다 — 복원 시점이 곧 미해결 진입 시각이고, 재전달로 밀리면 안 된다.
       return true;
     }
     return false;

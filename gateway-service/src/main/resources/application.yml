@@ -37,7 +37,10 @@ spring:
             - id: performance-service
               uri: http://${services.performance.host}:8083
               predicates:
-                - Path=/api/v1/performance/**,/v3/api-docs/performance
+                # /api/v1/banner/** = 메인 배너 조회(#564). 배너는 공연의 하위 리소스가 아니라 전용 리소스라
+                # 경로가 /api/v1/performance 아래가 아니다. 다만 배포 단위는 performance-service이므로
+                # 라우트를 여기 얹는다. 이 항목이 없으면 애플리케이션이 정상이어도 외부에서는 404다.
+                - Path=/api/v1/performance/**,/api/v1/banner/**,/v3/api-docs/performance
               filters:
                 - RewritePath=/v3/api-docs/performance,/v3/api-docs
 

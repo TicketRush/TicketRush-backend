@@ -229,6 +229,104 @@ class SeatRepositoryTest {
   }
 
   @Test
+  @DisplayName("전 공연 좌석 수를 공연 단위로 묶어 단건 조회와 같은 규칙으로 집계한다")
+  void getStatusCountsGroupedByPerformance_GroupsAllPerformances() {
+    // given: 공연 1에 5석(가능2·선점1·판매1·만료선점1), 공연 99에 1석
+    LocalDateTime now = LocalDateTime.now();
+
+    seatRepository.saveAll(
+        List.of(
+            seatOf(1L, "A1", SeatStatus.AVAILABLE, null),
+            seatOf(1L, "A2", SeatStatus.AVAILABLE, null),
+            seatOf(1L, "A3", SeatStatus.HOLD, now.plusMinutes(5)),
+            seatOf(1L, "A4", SeatStatus.SOLD, null),
+            seatOf(1L, "A5", SeatStatus.HOLD, now.minusMinutes(1)),
+            seatOf(99L, "A1", SeatStatus.SOLD, null)));
+
+    // when
+    var rows = seatRepository.getStatusCountsGroupedByPerformance(now, null);
+
+    // then: 만료된 HOLD가 예매 가능으로 넘어가는 규칙이 단건 조회와 동일해야 두 화면의 숫자가 갈리지 않는다
+    assertThat(rows).hasSize(2);
+    assertThat(rows.get(0).performanceId()).isEqualTo(1L);
+    assertThat(rows.get(0).totalCount()).isEqualTo(5L);
+    assertThat(rows.get(0).availableCount()).isEqualTo(3L);
+    assertThat(rows.get(0).soldCount()).isEqualTo(1L);
+    assertThat(rows.get(0).holdCount()).isEqualTo(1L);
+    assertThat(rows.get(1).performanceId()).isEqualTo(99L);
+    assertThat(rows.get(1).soldCount()).isEqualTo(1L);
+  }
+
+  @Test
+  @DisplayName("공연 ID를 주면 그 공연만 집계하고 세는 규칙은 전건 집계와 같다")
+  void getStatusCountsGroupedByPerformance_WithPerformanceIds_NarrowsToGivenIds() {
+    // given: 공연 1에 5석(가능2·선점1·판매1·만료선점1), 공연 99에 1석
+    LocalDateTime now = LocalDateTime.now();
+
+    seatRepository.saveAll(
+        List.of(
+            seatOf(1L, "A1", SeatStatus.AVAILABLE, null),
+            seatOf(1L, "A2", SeatStatus.AVAILABLE, null),
+            seatOf(1L, "A3", SeatStatus.HOLD, now.plusMinutes(5)),
+            seatOf(1L, "A4", SeatStatus.SOLD, null),
+            seatOf(1L, "A5", SeatStatus.HOLD, now.minusMinutes(1)),
+            seatOf(99L, "A1", SeatStatus.SOLD, null)));
+
+    // when: 같은 픽스처와 같은 기준 시각으로 두 경로를 모두 돌린다
+    var filtered = seatRepository.getStatusCountsGroupedByPerformance(now, List.of(1L));
+    var all = seatRepository.getStatusCountsGroupedByPerformance(now, null);
+
+    // then: 두 경로를 직접 맞대 본다. 기대값만 하드코딩하면 나중에 전건 쪽 만료 HOLD 규칙만 고쳐도 두 쿼리가
+    // 갈린 채 테스트가 모두 통과한다 — 대시보드와 좌석 현황 화면의 숫자가 어긋나는 경로가 바로 그것이다.
+    assertThat(filtered).hasSize(1);
+    assertThat(filtered.getFirst())
+        .isEqualTo(all.stream().filter(row -> row.performanceId().equals(1L)).findFirst().get());
+
+    assertThat(filtered.getFirst().totalCount()).isEqualTo(5L);
+    assertThat(filtered.getFirst().availableCount()).isEqualTo(3L);
+    assertThat(filtered.getFirst().soldCount()).isEqualTo(1L);
+    assertThat(filtered.getFirst().holdCount()).isEqualTo(1L);
+  }
+
+  @Test
+  @DisplayName("공연 ID가 빈 목록이면 전건 집계로 돌아간다")
+  void getStatusCountsGroupedByPerformance_WithEmptyIds_FallsBackToAll() {
+    // given
+    LocalDateTime now = LocalDateTime.now();
+    seatRepository.saveAll(
+        List.of(
+            seatOf(1L, "A1", SeatStatus.AVAILABLE, null),
+            seatOf(99L, "A1", SeatStatus.SOLD, null)));
+
+    // when: 빈 목록을 IN에 그대로 넘기면 JPQL이 성립하지 않으므로 default 메서드가 갈라 낸다
+    var rows = seatRepository.getStatusCountsGroupedByPerformance(now, List.of());
+
+    // then
+    assertThat(rows).hasSize(2);
+  }
+
+  @Test
+  @DisplayName("좌석이 하나도 없으면 일괄 집계는 빈 목록이다")
+  void getStatusCountsGroupedByPerformance_WhenNoSeats_ReturnsEmpty() {
+    // when
+    var rows = seatRepository.getStatusCountsGroupedByPerformance(LocalDateTime.now(), null);
+
+    // then: GROUP BY는 행이 있는 그룹만 만든다 — 호출자는 이를 0석이 아니라 '모름'으로 다뤄야 한다
+    assertThat(rows).isEmpty();
+  }
+
+  private Seat seatOf(
+      Long performanceId, String seatNumber, SeatStatus status, LocalDateTime holdExpiredAt) {
+    return Seat.builder()
+        .seatLayoutId(1L)
+        .performanceId(performanceId)
+        .seatNumber(seatNumber)
+        .seatStatus(status)
+        .holdExpiredAt(holdExpiredAt)
+        .build();
+  }
+
+  @Test
   @DisplayName("공연 ID에 해당하는 좌석이 없으면 모든 카운트를 0으로 반환한다")
   void getStatusCountsByPerformanceId_ReturnsZeroWhenNoSeatsExist() {
     // when
@@ -453,6 +551,27 @@ class SeatRepositoryTest {
     assertThat(expiredBacklog).isEqualTo(2L);
     assertThat(seatRepository.findExpiredHoldSeats(SeatStatus.HOLD, now, PageRequest.of(0, 10)))
         .hasSize((int) expiredBacklog);
+  }
+
+  @Test
+  @DisplayName("관리자 조회는 공연에 속한 좌석만 찾고 다른 공연의 좌석 ID는 비운다")
+  void findByIdAndPerformanceId() {
+    // given: 파생 쿼리가 상속받은 id 속성(@AttributeOverride로 컬럼명은 seat_id)을 제대로 푸는지가 핵심이다.
+    // 못 풀면 컨텍스트 기동 자체가 실패하므로 여기서 고정한다 (#562).
+    Seat seat = entityManager.persist(buildSeat("A-1", SeatStatus.HOLD, null, "X7B29-KLPW1"));
+    entityManager.flush();
+
+    // when & then: 소속 공연으로는 찾힌다
+    assertThat(seatRepository.findByIdAndPerformanceId(seat.getId(), 100L))
+        .get()
+        .satisfies(
+            found -> {
+              assertThat(found.getSeatNumber()).isEqualTo("A-1");
+              assertThat(found.getBookingNumber()).isEqualTo("X7B29-KLPW1");
+            });
+
+    // 경로의 공연 ID가 다르면 비어야 한다 — 임의 공연 경로로 남의 좌석에 닿지 못하게 하는 가드다
+    assertThat(seatRepository.findByIdAndPerformanceId(seat.getId(), 999L)).isEmpty();
   }
 
   private Seat buildSeat(

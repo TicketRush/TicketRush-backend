@@ -12,6 +12,7 @@ import com.ticketrush.boundedcontext.performance.app.facade.PerformanceFacade;
 import com.ticketrush.boundedcontext.performance.domain.types.Genre;
 import com.ticketrush.boundedcontext.performance.domain.types.PerformanceStatus;
 import com.ticketrush.global.config.CustomSecurityProperties;
+import com.ticketrush.shared.performance.event.PerformanceCreatedEvent;
 import java.nio.charset.StandardCharsets;
 import java.time.LocalDate;
 import java.time.LocalTime;
@@ -144,6 +145,19 @@ class PerformanceValidationTest {
         .andExpect(jsonPath("$.message").value(containsString("showDate")))
         .andExpect(jsonPath("$.message").value(containsString("showTime")))
         .andExpect(jsonPath("$.message").value(containsString("durationMinutes")))
+        .andExpect(jsonPath("$.message").value(containsString("totalSeats")));
+  }
+
+  @Test
+  @WithMockUser
+  @DisplayName("총 좌석 수가 상한을 넘으면 VALID401 에러가 발생한다 (#590)")
+  void totalSeatsMaxValidationFail() throws Exception {
+    // given: 좌석 서비스도 상한으로 clamp하지만, 관리자가 넣은 값과 다른 좌석 수를 조용히 받게 되므로 400으로 알린다
+    PerformanceCreateRequest request =
+        createBaseRequest().totalSeats(PerformanceCreatedEvent.MAX_TOTAL_SEATS + 1).build();
+
+    performMultipartRequest(request)
+        .andExpect(status().isBadRequest())
         .andExpect(jsonPath("$.message").value(containsString("totalSeats")));
   }
 

@@ -32,22 +32,21 @@ class DevTokenIssueUseCaseTest {
   @InjectMocks private DevTokenIssueUseCase devTokenIssueUseCase;
 
   @Test
-  @DisplayName("userId로 회원 정보를 조회한 뒤 테스트용 토큰을 발급한다")
+  @DisplayName("userId로 회원 정보를 조회한 뒤 실제 권한으로 테스트용 토큰을 발급한다")
   void issueDevToken_success() {
     // given
     Long userId = 1L;
     String email = "test@example.com";
     String passwordHash = "$2a$10$encoded-password";
-    String userServiceRole = "MEMBER";
-    String tokenRole = "USER";
+    String role = "MEMBER";
 
     DevTokenIssueRequest request = new DevTokenIssueRequest(userId);
 
     UserServiceAuthInfoResponse userInfo =
-        new UserServiceAuthInfoResponse(userId, email, passwordHash, userServiceRole);
+        new UserServiceAuthInfoResponse(userId, email, passwordHash, role);
 
     when(userServiceClient.getUserAuthInfoByUserId(userId)).thenReturn(userInfo);
-    when(jwtTokenProvider.createAccessToken(userId, tokenRole)).thenReturn("access-token");
+    when(jwtTokenProvider.createAccessToken(userId, role)).thenReturn("access-token");
     when(jwtTokenProvider.createRefreshToken(userId)).thenReturn("refresh-token");
 
     // when
@@ -56,12 +55,12 @@ class DevTokenIssueUseCaseTest {
     // then
     assertThat(response.userId()).isEqualTo(userId);
     assertThat(response.email()).isEqualTo(email);
-    assertThat(response.role()).isEqualTo(tokenRole);
+    assertThat(response.role()).isEqualTo(role);
     assertThat(response.accessToken()).isEqualTo("access-token");
     assertThat(response.refreshToken()).isEqualTo("refresh-token");
 
     verify(userServiceClient).getUserAuthInfoByUserId(userId);
-    verify(jwtTokenProvider).createAccessToken(userId, tokenRole);
+    verify(jwtTokenProvider).createAccessToken(userId, role);
     verify(jwtTokenProvider).createRefreshToken(userId);
   }
 
@@ -102,8 +101,7 @@ class DevTokenIssueUseCaseTest {
 
     // when & then
     assertThatThrownBy(() -> devTokenIssueUseCase.execute(request))
-        .isInstanceOf(IllegalArgumentException.class)
-        .hasMessageContaining("지원하지 않는 사용자 역할입니다");
+        .isInstanceOf(BusinessException.class);
 
     verify(userServiceClient).getUserAuthInfoByUserId(userId);
     verify(jwtTokenProvider, never()).createAccessToken(anyLong(), anyString());

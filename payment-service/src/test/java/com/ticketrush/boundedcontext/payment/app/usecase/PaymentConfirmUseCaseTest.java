@@ -16,10 +16,12 @@ import com.ticketrush.boundedcontext.payment.app.support.PaymentEventPublisher;
 import com.ticketrush.boundedcontext.payment.domain.entity.Payment;
 import com.ticketrush.boundedcontext.payment.domain.types.PaymentProvider;
 import com.ticketrush.boundedcontext.payment.domain.types.PaymentStatus;
+import com.ticketrush.boundedcontext.payment.out.apiclient.BookingRestClient;
 import com.ticketrush.boundedcontext.payment.out.apiclient.PaymentApprovalClientRouter;
 import com.ticketrush.boundedcontext.payment.out.apiclient.PaymentApprovalRequest;
 import com.ticketrush.boundedcontext.payment.out.apiclient.PaymentApprovalResponse;
 import com.ticketrush.boundedcontext.payment.out.apiclient.PgRejectionException;
+import com.ticketrush.boundedcontext.payment.out.apiclient.dto.BookingInfoResponse;
 import com.ticketrush.boundedcontext.payment.out.repository.ExpiredBookingRepository;
 import com.ticketrush.boundedcontext.payment.out.repository.PaymentRepository;
 import com.ticketrush.global.constants.MetricNames;
@@ -33,6 +35,8 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
 import org.mapstruct.factory.Mappers;
 import org.mockito.ArgumentCaptor;
 import org.mockito.InOrder;
@@ -43,10 +47,14 @@ import org.mockito.junit.jupiter.MockitoExtension;
 @ExtendWith(MockitoExtension.class)
 class PaymentConfirmUseCaseTest {
 
+  /** 픽스처가 세우는 예매의 소유자. 모든 기존 케이스가 이 값으로 결제를 요청한다. */
+  private static final Long DEFAULT_OWNER_ID = 10L;
+
   @Mock private PaymentRepository paymentRepository;
   @Mock private PaymentApprovalClientRouter paymentApprovalClientRouter;
   @Mock private PaymentEventPublisher paymentEventPublisher;
   @Mock private ExpiredBookingRepository expiredBookingRepository;
+  @Mock private BookingRestClient bookingRestClient;
 
   @Spy private PaymentMapper paymentMapper = Mappers.getMapper(PaymentMapper.class);
 
@@ -62,15 +70,45 @@ class PaymentConfirmUseCaseTest {
             paymentApprovalClientRouter,
             paymentEventPublisher,
             expiredBookingRepository,
+            bookingRestClient,
             paymentMapper,
             meterRegistry);
+  }
+
+  /**
+   * PG 호출 앞의 선행 가드 둘(COMPLETED 중복·예매 상태 동기 확인)을 지정한 상태로 세운다.
+   *
+   * <p>{@code expired_booking} fast-path는 mock 기본값이 false라 따로 스텁하지 않는다 — 이벤트가 아직 도착하지 않아 fast-path가
+   * 통과하는 상황이 이 가드(#490)가 실제로 겨냥한 창이다.
+   */
+  private void givenPreConfirmGuards(Long bookingId, String bookingStatus) {
+    givenPreConfirmGuards(bookingId, DEFAULT_OWNER_ID, bookingStatus);
+  }
+
+  /**
+   * 예매 소유자까지 지정해야 하는 케이스(#572)를 위한 오버로드.
+   *
+   * <p>기본 오버로드는 소유자를 {@link #DEFAULT_OWNER_ID}로 고정하고 모든 기존 케이스가 그 값으로 요청하므로, 소유자 가드는 기존 케이스의 판정에
+   * 영향을 주지 않는다.
+   */
+  private void givenPreConfirmGuards(Long bookingId, Long ownerUserId, String bookingStatus) {
+    given(paymentRepository.existsByBookingIdAndStatus(bookingId, PaymentStatus.COMPLETED))
+        .willReturn(false);
+    given(bookingRestClient.getBooking(bookingId))
+        .willReturn(new BookingInfoResponse(bookingId, ownerUserId, bookingStatus));
+  }
+
+  private double guardBlockedCount(String reason) {
+    return meterRegistry
+        .counter(MetricNames.PAYMENT_CONFIRM_BOOKING_GUARD_BLOCKED, MetricNames.TAG_REASON, reason)
+        .count();
   }
 
   @Test
   @DisplayName("PG 승인 성공 시 Payment를 COMPLETED 상태로 저장하고 PaymentConfirmedEvent를 발행한다")
   void execute_success() throws Exception {
     // given
-    Long userId = 10L;
+    final Long userId = 10L;
     Long bookingId = 100L;
     Long seatId = 200L;
     Long amount = 55_000L;
@@ -78,11 +116,10 @@ class PaymentConfirmUseCaseTest {
     String approvalNumber = "APR-123";
     Long savedPaymentId = 999L;
     LocalDateTime approvedAt = LocalDateTime.of(2025, 1, 15, 10, 0);
-    PaymentConfirmRequest request =
+    final PaymentConfirmRequest request =
         new PaymentConfirmRequest(bookingId, seatId, PaymentProvider.TOSS, amount, paymentKey);
 
-    given(paymentRepository.existsByBookingIdAndStatus(bookingId, PaymentStatus.COMPLETED))
-        .willReturn(false);
+    givenPreConfirmGuards(bookingId, "PENDING");
     given(paymentApprovalClientRouter.approve(any()))
         .willReturn(new PaymentApprovalResponse(approvalNumber, amount, approvedAt));
     given(paymentRepository.saveAndFlush(any(Payment.class)))
@@ -167,8 +204,7 @@ class PaymentConfirmUseCaseTest {
         new PaymentConfirmRequest(
             bookingId, seatId, PaymentProvider.KAKAO, requestAmount, "pgKey_xyz");
 
-    given(paymentRepository.existsByBookingIdAndStatus(bookingId, PaymentStatus.COMPLETED))
-        .willReturn(false);
+    givenPreConfirmGuards(bookingId, "PENDING");
     given(paymentApprovalClientRouter.approve(any()))
         .willReturn(new PaymentApprovalResponse("APR-123", approvedAmount, LocalDateTime.now()));
 
@@ -192,8 +228,7 @@ class PaymentConfirmUseCaseTest {
     PaymentConfirmRequest request =
         new PaymentConfirmRequest(bookingId, 200L, PaymentProvider.TOSS, 55_000L, "pgKey_xyz");
 
-    given(paymentRepository.existsByBookingIdAndStatus(bookingId, PaymentStatus.COMPLETED))
-        .willReturn(false);
+    givenPreConfirmGuards(bookingId, "PENDING");
     given(paymentApprovalClientRouter.approve(any()))
         .willThrow(new BusinessException(ErrorStatus.PAYMENT_ALREADY_COMPLETED));
 
@@ -219,8 +254,7 @@ class PaymentConfirmUseCaseTest {
     PaymentConfirmRequest request =
         new PaymentConfirmRequest(bookingId, seatId, PaymentProvider.TOSS, amount, "pgKey_xyz");
 
-    given(paymentRepository.existsByBookingIdAndStatus(bookingId, PaymentStatus.COMPLETED))
-        .willReturn(false);
+    givenPreConfirmGuards(bookingId, "PENDING");
     given(paymentApprovalClientRouter.approve(any()))
         .willThrow(
             new PgRejectionException(
@@ -272,8 +306,7 @@ class PaymentConfirmUseCaseTest {
     PaymentConfirmRequest request =
         new PaymentConfirmRequest(bookingId, 200L, PaymentProvider.TOSS, 55_000L, "pgKey_xyz");
 
-    given(paymentRepository.existsByBookingIdAndStatus(bookingId, PaymentStatus.COMPLETED))
-        .willReturn(false);
+    givenPreConfirmGuards(bookingId, "PENDING");
     given(paymentApprovalClientRouter.approve(any()))
         .willThrow(new BusinessException(ErrorStatus.PAYMENT_LIMIT_EXCEEDED));
 
@@ -296,13 +329,12 @@ class PaymentConfirmUseCaseTest {
   @DisplayName("booking당 FAILED 이력이 상한에 도달하면 화이트리스트 실패라도 저장하지 않고 억제 메트릭만 남긴다(#333)")
   void execute_does_not_record_failed_when_cap_reached() {
     // given
-    Long userId = 10L;
+    final Long userId = 10L;
     Long bookingId = 100L;
-    PaymentConfirmRequest request =
+    final PaymentConfirmRequest request =
         new PaymentConfirmRequest(bookingId, 200L, PaymentProvider.TOSS, 55_000L, "pgKey_xyz");
 
-    given(paymentRepository.existsByBookingIdAndStatus(bookingId, PaymentStatus.COMPLETED))
-        .willReturn(false);
+    givenPreConfirmGuards(bookingId, "PENDING");
     given(paymentApprovalClientRouter.approve(any()))
         .willThrow(new BusinessException(ErrorStatus.PAYMENT_METHOD_REJECTED));
     // 이미 상한(5)만큼 FAILED 이력이 쌓여 있다.
@@ -332,13 +364,12 @@ class PaymentConfirmUseCaseTest {
   @DisplayName("booking당 FAILED 이력이 상한 직전(4건)이면 이번 실패는 저장되고 억제 메트릭은 증가하지 않는다(#333 경계)")
   void execute_records_failed_when_below_cap() {
     // given
-    Long userId = 10L;
+    final Long userId = 10L;
     Long bookingId = 100L;
-    PaymentConfirmRequest request =
+    final PaymentConfirmRequest request =
         new PaymentConfirmRequest(bookingId, 200L, PaymentProvider.TOSS, 55_000L, "pgKey_xyz");
 
-    given(paymentRepository.existsByBookingIdAndStatus(bookingId, PaymentStatus.COMPLETED))
-        .willReturn(false);
+    givenPreConfirmGuards(bookingId, "PENDING");
     given(paymentApprovalClientRouter.approve(any()))
         .willThrow(new BusinessException(ErrorStatus.PAYMENT_METHOD_REJECTED));
     // 상한(5) 직전인 4건 → 이번 실패는 5번째로 기록되어야 한다.
@@ -374,8 +405,7 @@ class PaymentConfirmUseCaseTest {
     PaymentConfirmRequest request =
         new PaymentConfirmRequest(bookingId, 200L, PaymentProvider.TOSS, 55_000L, "pgKey_xyz");
 
-    given(paymentRepository.existsByBookingIdAndStatus(bookingId, PaymentStatus.COMPLETED))
-        .willReturn(false);
+    givenPreConfirmGuards(bookingId, "PENDING");
     given(paymentApprovalClientRouter.approve(any()))
         .willThrow(new BusinessException(ErrorStatus.PAYMENT_PG_COMMUNICATION_FAILED));
 
@@ -412,10 +442,13 @@ class PaymentConfirmUseCaseTest {
     verify(paymentRepository, never()).saveAndFlush(any(Payment.class));
     verify(paymentEventPublisher, never())
         .publishConfirmed(any(), any(), any(), any(), any(), any());
+    // 첫 가드에서 끝나므로 booking-service까지 가지 않는다.
+    verify(bookingRestClient, never()).getBooking(any());
   }
 
   @Test
-  @DisplayName("만료된 booking이면 BOOKING_409_003 예외가 발생하고 PG 승인을 호출하지 않는다")
+  @DisplayName(
+      "expired_booking fast-path가 적중하면 BOOKING_409_003으로 막고 booking-service를 호출하지 않는다(#490 역할 구분)")
   void execute_fail_when_booking_expired() {
     // given
     Long userId = 10L;
@@ -437,6 +470,287 @@ class PaymentConfirmUseCaseTest {
     verify(paymentRepository, never()).saveAndFlush(any(Payment.class));
     verify(paymentEventPublisher, never())
         .publishConfirmed(any(), any(), any(), any(), any(), any());
+    // 로컬 조회로 이미 걸러진 건은 네트워크 왕복을 쓰지 않는다 — fast-path를 남겨 둔 이유다.
+    verify(bookingRestClient, never()).getBooking(any());
+  }
+
+  @Test
+  @DisplayName("동기 확인에서 EXPIRED면 BOOKING_409_003으로 막고 PG 승인을 호출하지 않는다(#490)")
+  void execute_fail_when_booking_status_expired() {
+    // given: 만료 이벤트가 아직 도착하지 않아 fast-path는 통과하는 상황
+    Long userId = 10L;
+    Long bookingId = 100L;
+    PaymentConfirmRequest request =
+        new PaymentConfirmRequest(bookingId, 200L, PaymentProvider.TOSS, 55_000L, "pgKey_xyz");
+
+    givenPreConfirmGuards(bookingId, "EXPIRED");
+
+    // when & then
+    assertThatThrownBy(() -> paymentConfirmUseCase.execute(userId, request))
+        .isInstanceOf(BusinessException.class)
+        .extracting("errorStatus")
+        .isEqualTo(ErrorStatus.BOOKING_EXPIRED);
+
+    verify(paymentApprovalClientRouter, never()).approve(any());
+    verify(paymentRepository, never()).saveAndFlush(any(Payment.class));
+    verify(paymentEventPublisher, never())
+        .publishConfirmed(any(), any(), any(), any(), any(), any());
+    assertThat(
+            meterRegistry
+                .counter(
+                    MetricNames.PAYMENT_CONFIRM_BOOKING_GUARD_BLOCKED,
+                    MetricNames.TAG_REASON,
+                    "EXPIRED")
+                .count())
+        .isEqualTo(1.0);
+  }
+
+  @Test
+  @DisplayName("사용자가 직접 취소한 CANCELED 예매도 막는다 — 차단 목록이었다면 샜을 경로다(#559)")
+  void execute_fail_when_booking_status_canceled() {
+    // given
+    Long userId = 10L;
+    Long bookingId = 100L;
+    PaymentConfirmRequest request =
+        new PaymentConfirmRequest(bookingId, 200L, PaymentProvider.TOSS, 55_000L, "pgKey_xyz");
+
+    givenPreConfirmGuards(bookingId, "CANCELED");
+
+    // when & then: 만료가 아니므로 "만료된 예매"가 아니라 "확정할 수 없는 예매 상태"로 답한다.
+    assertThatThrownBy(() -> paymentConfirmUseCase.execute(userId, request))
+        .isInstanceOf(BusinessException.class)
+        .extracting("errorStatus")
+        .isEqualTo(ErrorStatus.BOOKING_CONFIRM_NOT_ALLOWED);
+
+    verify(paymentApprovalClientRouter, never()).approve(any());
+    verify(paymentRepository, never()).saveAndFlush(any(Payment.class));
+    assertThat(
+            meterRegistry
+                .counter(
+                    MetricNames.PAYMENT_CONFIRM_BOOKING_GUARD_BLOCKED,
+                    MetricNames.TAG_REASON,
+                    "CANCELED")
+                .count())
+        .isEqualTo(1.0);
+  }
+
+  @ParameterizedTest(name = "bookingStatus={0}")
+  @ValueSource(strings = {"CONFIRMED", "REFUNDING", "REFUNDED"})
+  @DisplayName("PENDING이 아닌 나머지 상태는 모두 BOOKING_409_002로 막는다(허용 목록)")
+  void execute_fail_when_booking_status_not_pending(String bookingStatus) {
+    // given
+    Long userId = 10L;
+    Long bookingId = 100L;
+    PaymentConfirmRequest request =
+        new PaymentConfirmRequest(bookingId, 200L, PaymentProvider.TOSS, 55_000L, "pgKey_xyz");
+
+    givenPreConfirmGuards(bookingId, bookingStatus);
+
+    // when & then
+    assertThatThrownBy(() -> paymentConfirmUseCase.execute(userId, request))
+        .isInstanceOf(BusinessException.class)
+        .extracting("errorStatus")
+        .isEqualTo(ErrorStatus.BOOKING_CONFIRM_NOT_ALLOWED);
+
+    verify(paymentApprovalClientRouter, never()).approve(any());
+    verify(paymentRepository, never()).saveAndFlush(any(Payment.class));
+  }
+
+  @Test
+  @DisplayName("알 수 없는 상태 문자열도 막고 메트릭은 unknown으로 접는다 — booking이 상태를 늘려도 통과하지 않는다")
+  void execute_fail_when_booking_status_unknown() {
+    // given
+    Long userId = 10L;
+    Long bookingId = 100L;
+    PaymentConfirmRequest request =
+        new PaymentConfirmRequest(bookingId, 200L, PaymentProvider.TOSS, 55_000L, "pgKey_xyz");
+
+    givenPreConfirmGuards(bookingId, "SOMETHING_NEW");
+
+    // when & then
+    assertThatThrownBy(() -> paymentConfirmUseCase.execute(userId, request))
+        .isInstanceOf(BusinessException.class)
+        .extracting("errorStatus")
+        .isEqualTo(ErrorStatus.BOOKING_CONFIRM_NOT_ALLOWED);
+
+    verify(paymentApprovalClientRouter, never()).approve(any());
+    // 태그 카디널리티가 외부 문자열을 따라 늘지 않도록 알려지지 않은 값은 unknown으로 접는다.
+    assertThat(
+            meterRegistry
+                .counter(
+                    MetricNames.PAYMENT_CONFIRM_BOOKING_GUARD_BLOCKED,
+                    MetricNames.TAG_REASON,
+                    "unknown")
+                .count())
+        .isEqualTo(1.0);
+  }
+
+  @Test
+  @DisplayName("상태 문자열이 null이어도 409로 막는다 — 원시 500이 새면 fail-closed 계약이 깨진다")
+  void execute_fail_when_booking_status_null() {
+    // given: booking이 필드명을 바꾸거나 URL 오설정으로 다른 200 응답이 오면 상태가 조용히 null이 된다.
+    Long userId = 10L;
+    Long bookingId = 100L;
+    PaymentConfirmRequest request =
+        new PaymentConfirmRequest(bookingId, 200L, PaymentProvider.TOSS, 55_000L, "pgKey_xyz");
+
+    givenPreConfirmGuards(bookingId, null);
+
+    // when & then: NPE(500)가 아니라 BusinessException(409)이어야 한다.
+    assertThatThrownBy(() -> paymentConfirmUseCase.execute(userId, request))
+        .isInstanceOf(BusinessException.class)
+        .extracting("errorStatus")
+        .isEqualTo(ErrorStatus.BOOKING_CONFIRM_NOT_ALLOWED);
+
+    verify(paymentApprovalClientRouter, never()).approve(any());
+    assertThat(
+            meterRegistry
+                .counter(
+                    MetricNames.PAYMENT_CONFIRM_BOOKING_GUARD_BLOCKED,
+                    MetricNames.TAG_REASON,
+                    "unknown")
+                .count())
+        .isEqualTo(1.0);
+  }
+
+  @Test
+  @DisplayName("존재하지 않는 예매면 BOOKING_404_001이 그대로 전파되고 not_found로 집계된다")
+  void execute_fail_when_booking_not_found() {
+    // given
+    Long userId = 10L;
+    Long bookingId = 100L;
+    PaymentConfirmRequest request =
+        new PaymentConfirmRequest(bookingId, 200L, PaymentProvider.TOSS, 55_000L, "pgKey_xyz");
+
+    given(paymentRepository.existsByBookingIdAndStatus(bookingId, PaymentStatus.COMPLETED))
+        .willReturn(false);
+    given(bookingRestClient.getBooking(bookingId))
+        .willThrow(new BusinessException(ErrorStatus.BOOKING_NOT_FOUND));
+
+    // when & then
+    assertThatThrownBy(() -> paymentConfirmUseCase.execute(userId, request))
+        .isInstanceOf(BusinessException.class)
+        .extracting("errorStatus")
+        .isEqualTo(ErrorStatus.BOOKING_NOT_FOUND);
+
+    verify(paymentApprovalClientRouter, never()).approve(any());
+    assertThat(
+            meterRegistry
+                .counter(
+                    MetricNames.PAYMENT_CONFIRM_BOOKING_GUARD_BLOCKED,
+                    MetricNames.TAG_REASON,
+                    "not_found")
+                .count())
+        .isEqualTo(1.0);
+  }
+
+  @Test
+  @DisplayName("예매 조회가 실패하면(fail-closed) 503이 전파되고 PG 승인도 FAILED 이력도 남지 않는다")
+  void execute_fail_when_booking_lookup_failed() {
+    // given
+    Long userId = 10L;
+    Long bookingId = 100L;
+    PaymentConfirmRequest request =
+        new PaymentConfirmRequest(bookingId, 200L, PaymentProvider.TOSS, 55_000L, "pgKey_xyz");
+
+    given(paymentRepository.existsByBookingIdAndStatus(bookingId, PaymentStatus.COMPLETED))
+        .willReturn(false);
+    given(bookingRestClient.getBooking(bookingId))
+        .willThrow(new BusinessException(ErrorStatus.PAYMENT_BOOKING_COMMUNICATION_FAILED));
+
+    // when & then
+    assertThatThrownBy(() -> paymentConfirmUseCase.execute(userId, request))
+        .isInstanceOf(BusinessException.class)
+        .extracting("errorStatus")
+        .isEqualTo(ErrorStatus.PAYMENT_BOOKING_COMMUNICATION_FAILED);
+
+    verify(paymentApprovalClientRouter, never()).approve(any());
+    // 가드는 PG 호출 try 블록 밖이라 과금이 없고, 따라서 FAILED 이력 기록 경로를 타지 않는다.
+    verify(paymentRepository, never()).saveAndFlush(any(Payment.class));
+    verify(paymentEventPublisher, never())
+        .publishConfirmed(any(), any(), any(), any(), any(), any());
+    // 조회 실패로 막힌 건도 차단 카운터에 잡혀야 booking 장애 구간이 관측된다.
+    assertThat(
+            meterRegistry
+                .counter(
+                    MetricNames.PAYMENT_CONFIRM_BOOKING_GUARD_BLOCKED,
+                    MetricNames.TAG_REASON,
+                    "lookup_failed")
+                .count())
+        .isEqualTo(1.0);
+  }
+
+  @Test
+  @DisplayName("예매 소유자가 아니면 BOOKING_404_001로 막고 PG 승인·저장·이벤트가 모두 없다")
+  void execute_fail_when_booking_owner_mismatch() {
+    // given: 인증 주체(99L)와 예매 소유자(10L)가 다르다. 상태는 정상(PENDING)이라 소유자 가드만이 이 요청을 막는다.
+    Long requesterId = 99L;
+    Long bookingId = 100L;
+    PaymentConfirmRequest request =
+        new PaymentConfirmRequest(bookingId, 200L, PaymentProvider.TOSS, 55_000L, "pgKey_xyz");
+
+    givenPreConfirmGuards(bookingId, DEFAULT_OWNER_ID, "PENDING");
+
+    // when & then: 남의 예매 존재가 새지 않도록 "없는 예매"와 같은 응답으로 수렴한다.
+    assertThatThrownBy(() -> paymentConfirmUseCase.execute(requesterId, request))
+        .isInstanceOf(BusinessException.class)
+        .extracting("errorStatus")
+        .isEqualTo(ErrorStatus.BOOKING_NOT_FOUND);
+
+    // 과금·귀속이 시작조차 되지 않아야 한다. 하나라도 새면 이 이슈가 막으려던 결과가 그대로 만들어진다.
+    verify(paymentApprovalClientRouter, never()).approve(any());
+    verify(paymentRepository, never()).saveAndFlush(any(Payment.class));
+    verify(paymentEventPublisher, never())
+        .publishConfirmed(any(), any(), any(), any(), any(), any());
+    // 응답이 "예매 없음"으로 동일화됐으므로 소유자 차단을 구분하는 축은 이 태그뿐이다.
+    assertThat(guardBlockedCount("owner_mismatch")).isEqualTo(1.0);
+  }
+
+  @Test
+  @DisplayName("남의 예매가 EXPIRED여도 404로 막는다 — 상태를 먼저 보면 예매의 존재와 상태가 함께 샌다")
+  void execute_fail_when_owner_mismatch_precedes_status_check() {
+    // given: 소유자도 다르고 상태도 결제 불가(EXPIRED)라, 어느 가드가 먼저 끊는지가 응답으로 드러난다.
+    Long requesterId = 99L;
+    Long bookingId = 100L;
+    PaymentConfirmRequest request =
+        new PaymentConfirmRequest(bookingId, 200L, PaymentProvider.TOSS, 55_000L, "pgKey_xyz");
+
+    givenPreConfirmGuards(bookingId, DEFAULT_OWNER_ID, "EXPIRED");
+
+    // when & then: BOOKING_EXPIRED("만료된 예매입니다")가 나가면 남의 예매가 존재하고 만료됐다는 사실이 새어 나간다.
+    assertThatThrownBy(() -> paymentConfirmUseCase.execute(requesterId, request))
+        .isInstanceOf(BusinessException.class)
+        .extracting("errorStatus")
+        .isEqualTo(ErrorStatus.BOOKING_NOT_FOUND);
+
+    verify(paymentApprovalClientRouter, never()).approve(any());
+    // 상태 갈래로는 세지 않는다 — 소유자 대조가 먼저 끊었기 때문이다. 순서가 뒤집히면 이 단언이 깨진다.
+    assertThat(guardBlockedCount("EXPIRED")).isEqualTo(0.0);
+    assertThat(guardBlockedCount("owner_mismatch")).isEqualTo(1.0);
+  }
+
+  @Test
+  @DisplayName("예매 응답에 소유자가 없으면 503으로 끊는다 — 계약 결함을 '예매 없음'으로 감추지 않는다")
+  void execute_fail_when_booking_owner_unknown() {
+    // given: booking이 user_id 필드를 바꾸거나 지우면 ignoreUnknown 매핑이라 예외 없이 조용히 null이 된다.
+    Long requesterId = 99L;
+    Long bookingId = 100L;
+    PaymentConfirmRequest request =
+        new PaymentConfirmRequest(bookingId, 200L, PaymentProvider.TOSS, 55_000L, "pgKey_xyz");
+
+    givenPreConfirmGuards(bookingId, null, "PENDING");
+
+    // when & then: 대조가 불가능한 것이지 예매가 없는 게 아니다. 404로 접으면 전건 실패가 예매 데이터 문제로 오진단된다.
+    assertThatThrownBy(() -> paymentConfirmUseCase.execute(requesterId, request))
+        .isInstanceOf(BusinessException.class)
+        .extracting("errorStatus")
+        .isEqualTo(ErrorStatus.PAYMENT_BOOKING_COMMUNICATION_FAILED);
+
+    verify(paymentApprovalClientRouter, never()).approve(any());
+    verify(paymentRepository, never()).saveAndFlush(any(Payment.class));
+    // 사용자 오류(owner_mismatch)와 갈라 세야 배포 사고가 사용자 오류 시계열에 묻히지 않는다.
+    assertThat(guardBlockedCount("owner_unknown")).isEqualTo(1.0);
+    assertThat(guardBlockedCount("owner_mismatch")).isEqualTo(0.0);
   }
 
   @Test

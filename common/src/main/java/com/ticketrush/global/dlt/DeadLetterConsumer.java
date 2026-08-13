@@ -74,8 +74,15 @@ public class DeadLetterConsumer {
    *
    * <p>검증: {@code "X.DLT".matches(".*(?<!\\.DLT)\\.DLT")} → true, {@code
    * "X.DLT.DLT".matches(".*(?<!\\.DLT)\\.DLT")} → false.
+   *
+   * <p>concurrency 를 전역값(#596, 기본 3)에 맡기지 않고 1로 고정한다. 이 컨슈머는 처리량 경로가 아니라 관측 경로이고 평시 트래픽이 0인데,
+   * common 에 있어 7개 서비스 전부에 탑재되므로 전역값을 그대로 받으면 스레드만 서비스마다 3배가 된다. seat-service 는 mem_limit 640 MiB
+   * 에서 이미 cgroup OOM 으로 죽은 적이 있어(#509) 쓰지 않을 스레드에 내줄 여유가 없다. 적재가 느려 문제가 되면 그때 올린다.
    */
-  @KafkaListener(topicPattern = ".*(?<!\\.DLT)\\.DLT", groupId = KafkaConsumerGroup.DLT_MONITOR)
+  @KafkaListener(
+      topicPattern = ".*(?<!\\.DLT)\\.DLT",
+      groupId = KafkaConsumerGroup.DLT_MONITOR,
+      concurrency = "1")
   public void consume(
       ConsumerRecord<String, Object> record,
       @Header(name = KafkaHeaders.DLT_ORIGINAL_TOPIC, required = false) byte[] originalTopicHeader,

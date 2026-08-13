@@ -3,8 +3,10 @@ package com.ticketrush.boundedcontext.performance.in.api.v1;
 import com.ticketrush.boundedcontext.performance.app.dto.request.PerformanceChangeStatusRequest;
 import com.ticketrush.boundedcontext.performance.app.dto.request.PerformanceCreateRequest;
 import com.ticketrush.boundedcontext.performance.app.dto.request.PerformancePatchRequest;
+import com.ticketrush.boundedcontext.performance.app.dto.response.PerformanceAdminSummaryResponse;
 import com.ticketrush.boundedcontext.performance.app.dto.response.PerformanceCreateResponse;
 import com.ticketrush.boundedcontext.performance.app.facade.PerformanceFacade;
+import com.ticketrush.global.dto.request.OffsetPageRequest;
 import com.ticketrush.global.dto.response.ApiResponse;
 import com.ticketrush.global.status.SuccessStatus;
 import io.swagger.v3.oas.annotations.Operation;
@@ -18,11 +20,15 @@ import jakarta.validation.Valid;
 import jakarta.validation.constraints.Positive;
 import java.util.List;
 import lombok.RequiredArgsConstructor;
+import org.springdoc.core.annotations.ParameterObject;
+import org.springframework.data.domain.Page;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.DeleteMapping;
+import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.ModelAttribute;
 import org.springframework.web.bind.annotation.PatchMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -40,6 +46,32 @@ import org.springframework.web.multipart.MultipartFile;
 public class PerformanceAdminController {
 
   private final PerformanceFacade performanceFacade;
+
+  @Operation(
+      summary = "관리자 공연 목록 조회",
+      description =
+          """
+          전체 공연을 최신 등록순으로 페이징 조회합니다 (#563). 공개 목록과 달리 판매 좌석 수·점유율·매출 같은 관리 집계를 함께 내립니다.
+
+          **모수는 삭제된 공연만 제외한 전체입니다** — 판매 전(UPCOMING)·취소(CANCELED) 공연도 포함합니다.
+
+          **판매 좌석 수와 전체 좌석 수는 좌석 서비스의 실제 좌석 상태입니다.** 공연 등록 시 입력한 총 좌석 수와는 무관합니다.
+
+          집계 필드는 원본 서비스 조회 실패 시 **그 필드만 null**로 내려가고 목록 자체는 성공합니다 —
+          매출은 예매 서비스, 판매 좌석·점유율·매진은 좌석 서비스가 원본입니다.
+          좌석이 아직 생성되지 않은 공연(등록 직후)도 좌석 관련 필드가 null입니다.
+          `revenue`가 0과 null로 갈리는 것이 이 구분입니다: 0은 확정된 예매가 없다는 뜻이고 null은 값을 읽지 못했다는 뜻입니다.
+
+          정렬 파라미터는 받지 않습니다.
+          """)
+  @GetMapping
+  public ResponseEntity<ApiResponse<List<PerformanceAdminSummaryResponse>>> getAdminPerformances(
+      @ParameterObject @ModelAttribute OffsetPageRequest pageRequest) {
+    Page<PerformanceAdminSummaryResponse> response =
+        performanceFacade.getAdminPerformances(pageRequest);
+
+    return ApiResponse.onSuccess(SuccessStatus.OK, response);
+  }
 
   @Operation(
       summary = "공연 등록",
