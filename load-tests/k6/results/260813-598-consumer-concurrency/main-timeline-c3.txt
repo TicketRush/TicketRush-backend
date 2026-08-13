@@ -3,3 +3,33 @@
 [inject] group   booking-group  consumers=3
 [inject] group   ticket-group  consumers=3
 [inject] begin   count=3000 offset=7000 rate=10 run=1786635948265758  2026-08-13 15:45:48 UTC
+[inject] end     count=3000 elapsed=301s actual_rate=9/s  2026-08-13 15:50:49 UTC
+[drain]  begin   2026-08-13 15:50:49 UTC
+[drain]  2026-08-13T15:50:53Z booking-group=0 ticket-group=0 total=0
+[drain]  drained elapsed_from_inject_end=0s  2026-08-13 15:50:53 UTC
+########## SPIKE 20000 unpaced ##########
+[inject] topic   payment-confirmed-topic  partitions=3
+[inject] group   booking-group  consumers=3
+[inject] group   ticket-group  consumers=3
+[inject] begin   count=20000 offset=10000 rate=0 run=1786636260265757  2026-08-13 15:51:00 UTC
+[inject] end     count=20000 elapsed=3s actual_rate=6666/s  2026-08-13 15:51:03 UTC
+[drain]  begin   2026-08-13 15:51:03 UTC
+[drain]  2026-08-13T15:51:12Z booking-group=19563 ticket-group=18370 total=37933
+[drain]  2026-08-13T15:51:26Z booking-group=18430 ticket-group=15989 total=34419
+[drain]  2026-08-13T15:51:39Z booking-group=17380 ticket-group=13533 total=30913
+[drain]  2026-08-13T15:51:52Z booking-group=16244 ticket-group=11145 total=27389
+[drain]  2026-08-13T15:52:05Z booking-group=15176 ticket-group=8790 total=23966
+[drain]  2026-08-13T15:52:18Z booking-group=14069 ticket-group=6345 total=20414
+[drain]  2026-08-13T15:52:31Z booking-group=12989 ticket-group=3902 total=16891
+[drain]  2026-08-13T15:52:44Z booking-group=11879 ticket-group=1515 total=13394
+[drain]  2026-08-13T15:52:56Z booking-group=10812 ticket-group=0 total=10812
+[drain]  2026-08-13T15:53:07Z booking-group=9550 ticket-group=0 total=9550
+[drain]  2026-08-13T15:53:18Z booking-group=8302 ticket-group=0 total=8302
+[drain]  2026-08-13T15:53:29Z booking-group=7063 ticket-group=0 total=7063
+[drain]  2026-08-13T15:53:40Z booking-group=5813 ticket-group=0 total=5813
+[drain]  2026-08-13T15:53:52Z booking-group=4540 ticket-group=0 total=4540
+[drain]  2026-08-13T15:54:03Z booking-group=3297 ticket-group=0 total=3297
+[drain]  2026-08-13T15:54:14Z booking-group=2063 ticket-group=0 total=2063
+[drain]  2026-08-13T15:54:25Z booking-group=831 ticket-group=0 total=831
+[drain]  2026-08-13T15:54:33Z booking-group=0 ticket-group=0 total=0
+[drain]  drained elapsed_from_inject_end=207s  2026-08-13 15:54:33 UTC

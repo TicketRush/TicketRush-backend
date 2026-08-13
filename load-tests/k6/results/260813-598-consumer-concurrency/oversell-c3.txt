@@ -1,0 +1,65 @@
+==============================================================
+ #598 오버셀 검증 — arm c1 (concurrency 1) / performance_id=13 / target seat_id=26130
+ 실행 시각: 2026-08-13T16:03:40Z   측정 창: 2026-08-13T15:15:00Z ~ 2026-08-13T15:33:00Z
+
+ ⚠ 런북 §13.4-(7)(a) 의 booking_status IN ('PENDING','CONFIRMED') 필터는 쓰지 않는다.
+   예매는 5-6분이면 만료되므로 검증 시점에 활성 예매가 0건이고 검출력이 0이다(#554 §9.3).
+ ⚠ #554 가 만든 '상태 무관 좌석 중복 검사'(GROUP BY seat_id HAVING COUNT(*)>1)도
+   이 회차에는 쓰지 않는다. 그 검사는 VU 마다 좌석이 유일한 회차 전용이다.
+   한 좌석에 전 VU 가 몰리는 #344 형 회차에서는 '예매 N건이 같은 seat_id 를 가리킨다' 가
+   정상이며 오버셀의 정의가 아니다 — 예매 생성은 좌석 점유가 아니다.
+   여기서 오버셀은 '두 예매가 동시에 그 좌석을 보유했는가' 이고, 아래 (a)-(e) 로 판정한다.
+==============================================================
+
+--- (a) 좌석을 실제로 점유한 예매 수 — 보상(CANCELED)되지 않은 것
+SQL: SELECT COUNT(*) held_ever FROM booking WHERE performance_id=13 AND booking_status <> 'CANCELED';
++-----------+
+| held_ever |
++-----------+
+|         7 |
++-----------+
+
+--- (b) 예매 상태 분포 — 점유분 + 보상분 = 전체, 잔여 0 이어야 한다
+SQL: SELECT booking_status, COUNT(*) c FROM booking WHERE performance_id=13 GROUP BY 1 WITH ROLLUP;
++----------------+------+
+| booking_status | c    |
++----------------+------+
+| CANCELED       | 5406 |
+| EXPIRED        |    6 |
+| PENDING        |    1 |
+| NULL           | 5413 |
++----------------+------+
+
+--- (c) 대상 좌석 최종 상태와 version — version = 엔티티 관리 HOLD 쓰기 횟수 = HOLD 사이클 수
+SQL: SELECT seat_id, seat_status, booking_number, version, hold_expired_at FROM seat WHERE seat_id=26130;
++---------+-------------+----------------+---------+----------------------------+
+| seat_id | seat_status | booking_number | version | hold_expired_at            |
++---------+-------------+----------------+---------+----------------------------+
+|   26130 | HOLD        | C8ET8-AZHGH    |      15 | 2026-08-13 16:08:02.090029 |
++---------+-------------+----------------+---------+----------------------------+
+
+--- (d) 현재 HOLD 건수 — 1 이하
+SQL: SELECT COUNT(*) held_now FROM seat WHERE seat_id=26130 AND seat_status='HOLD';
++----------+
+| held_now |
++----------+
+|        1 |
++----------+
+
+--- (e) 대상 공연 좌석 상태 — 대상 1석 외에 건드려진 좌석이 없어야 한다
+SQL: SELECT seat_status, COUNT(*) c FROM seat WHERE performance_id=13 GROUP BY 1;
++-------------+------+
+| seat_status | c    |
++-------------+------+
+| AVAILABLE   | 2079 |
+| HOLD        |    1 |
++-------------+------+
+
+--- (m) 시간 축 직접 증거: 동시 보유 최대 건수 (Prometheus)
+PromQL: max_over_time(ticketrush_seat_held[10m]) over 2026-08-13T15:15:00Z ~ 2026-08-13T15:33:00Z
+  seat-service:8090  min=999 max=20540 표본=73
+PromQL: ticketrush_seat_hold_total (result 별 누적)
+  result=success value=7
+  result=unavailable value=1785
+PromQL: ticketrush_seat_lock_contention_total
+  seat-service:8090 = 3621

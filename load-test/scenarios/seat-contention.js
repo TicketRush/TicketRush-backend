@@ -1,13 +1,19 @@
 // (c) 동일 좌석 경합 — POST /api/v1/booking 을 단 하나의 seat_id 에 집중시킨다(#344).
 //
-// 이 시나리오는 Redisson 락 경합을 측정하지 못한다. 좌석 홀드는 Kafka 컨슈머 스레드 하나가
-// 순차 처리하므로(KafkaConfig에 setConcurrency 없음 → 기본 1) 락은 경합하지 않고
-// ticketrush_seat_lock_contention_total 은 0으로 남는다.
+// 이 시나리오가 락 경합을 측정할 수 있는지는 spring.kafka.listener.concurrency 에 달려 있다(#596).
+// 1이면 컨슈머 스레드 하나가 순차 처리하고 RLock 이 (clientUUID:threadId) 기준 재진입이라
+// tryLock 이 실패하지 않아 ticketrush_seat_lock_contention_total 이 0으로 남는다.
+// 현행 기본값은 3이고, #598 이 같은 배포본에서 1↔3 을 토글해 실측했다 —
+// 1에서 0(시리즈 미생성) / 3에서 3,621. 회차마다 실제 값을 metadata.txt 에 적는다.
+// ⚠ 어느 쪽이든 오버셀은 0이다. 정합성을 지키는 것은 컨슈머 직렬화가 아니라
+//   Seat.@Version(#427) + isAvailable() 이다 — #598 이 실제 경합 3,621건으로 확인했다.
 //
 // 이 POST 와 좌석 HOLD 사이에는 비동기 구간이 둘이다. #471 로 booking 발행이 outbox 모드가 되어
-// 요청은 outbox 행만 커밋하고 끝나고, OutboxRelayScheduler(fixedDelay 5s, batch 100)가 그걸
-// 5초마다 꺼내 발행한다 → 발행 상한 ≈20 events/s. 즉 여기서 재는 RPS·p99 는 유입 축이고,
-// 홀드까지의 지연은 outbox backlog·컨슈머 랙(처리 축)으로 봐야 한다.
+// 요청은 outbox 행만 커밋하고 끝나고, OutboxRelayScheduler(fixedDelay 5s)가 그걸 5초마다
+// batch-size 만큼 꺼내 발행한다 → 발행 상한 = batch-size / 5초 (현행 300 → ≈60 events/s, #489).
+// 즉 여기서 재는 RPS·p99 는 유입 축이고, 홀드까지의 지연은 outbox backlog·컨슈머 랙(처리 축)으로
+// 봐야 한다. 이 상한 때문에 이 시나리오로 컨슈머 처리량을 판정할 수 없다 —
+// #598 은 그래서 이벤트를 토픽에 직접 주입하는 별도 시나리오(#504 절차)를 주 판정축으로 썼다.
 //
 // 실제로 관측되는 차단은 두 군데다.
 //   1. booking-service 의 사전 체크(JdbcBookingSeatStatusReader → seat 테이블 직접 SELECT).
