@@ -340,8 +340,10 @@ sum(rate(ticketrush_kafka_inbox_total{result="duplicate",consumer_group="seat-gr
 
 - 좌석 홀드는 HTTP API가 아니다. `SeatController`는 GET만 있고, 홀드 진입점은 `BookingCreatedEventListener`의 Kafka 리스너뿐이다. k6는 `POST /api/v1/booking`으로 **간접 유발만** 할 수 있고, 그 201 응답은 "예매 생성됨"이지 "좌석 선점됨"이 아니다.
 - **릴레이가 유입을 5초 단위로 정형화한다**(#471). booking-service는 이벤트를 즉시 발행하지 않고 outbox 행으로 커밋한 뒤, `OutboxRelayScheduler`가 5초마다 최대 `app.outbox.batch-size`건씩 꺼내 발행한다. 따라서 k6가 초당 수백 건을 밀어넣어도 Kafka로 나가는 속도에 상한이 걸리고, 초과분은 `ticketrush_outbox_backlog`에 쌓인다. **아래 §10.5 수치는 `batch-size: 100` 시절(≈20 events/s)의 것이다** — 현행은 300(≈60 events/s)이므로 재측정 시 상한선을 다시 계산한다(#489, §11.8). 이슈가 세운 "1차 병목은 락이 아니라 소비 병렬도"라는 가설은 이제 **릴레이 배치 주기까지 포함해** 확인해야 한다 — 릴레이가 컨슈머보다 앞에서 조이면 컨슈머 랙은 애초에 크게 자라지 않는다.
-- 그 리스너의 컨슈머 스레드는 **1개**다. `common/.../config/KafkaConfig.java`의 컨테이너 팩토리에 `setConcurrency`가 없고 `spring.kafka.listener.concurrency`도 어디에도 없어 기본값 1이 적용된다(#466이 추가한 것은 Micrometer 리스너뿐이고 동시성은 건드리지 않았다).
-- Redisson `RLock`은 `(clientUUID:threadId)` 기준 **재진입** 락이다. 같은 스레드가 1,000건을 순차 처리하면 `tryLock`은 실패하지 않고 **재진입으로 성공**한다. 카운터는 `tryLock == false` 경로에서만 오르므로(`SeatLockUseCase`) 구조적으로 0이다.
+- 그 리스너의 컨슈머 스레드는 **`spring.kafka.listener.concurrency` 값만큼**이다(#596, 기본 3 = 토픽 파티션 수). `common/.../config/KafkaConfig.java`의 컨테이너 팩토리가 이 값을 읽는다. **회차마다 실제 값을 `metadata.txt`에 기록한다** — 환경변수 `SPRING_KAFKA_LISTENER_CONCURRENCY`로 재배포 없이 바뀌므로 이미지 태그만으로는 특정되지 않는다.
+  - **#596 이전 회차(`260724-344`·`260729-504` 등)는 전부 스레드 1개 조건**이다. 그 회차들과 비교할 때는 이 차이를 교란 변수로 명시한다.
+- Redisson `RLock`은 `(clientUUID:threadId)` 기준 **재진입** 락이다. 같은 스레드가 1,000건을 순차 처리하면 `tryLock`은 실패하지 않고 **재진입으로 성공**한다. 카운터는 `tryLock == false` 경로에서만 오른다(`SeatLockUseCase`).
+  - 따라서 **concurrency 1에서는 이 카운터가 구조적으로 0**이었다. concurrency > 1이면 서로 다른 스레드가 같은 좌석을 집을 수 있어 **0이 아닌 값이 정상**이다. 다만 같은 파티션 안의 순차 처리와 `DefaultErrorHandler`의 in-place 재시도는 여전히 같은 스레드라 그 구간은 재진입이다.
 
 **따라서 동시성 방어선은 락이 아니다.** 실제로 중복 선점을 막는 것은 둘이다.
 
@@ -350,9 +352,9 @@ sum(rate(ticketrush_kafka_inbox_total{result="duplicate",consumer_group="seat-gr
 
 **"차단율"은 §10.3의 `unavailable` 비율로 산출한다.** 락 경합률로 산출하면 항상 0%가 나와 방어선이 없다는 뜻으로 오독된다. 락은 정합성 장치가 아니라 경쟁을 앞단에서 걸러내는 **성능 최적화**이며, 정합성의 최종 방어선은 DB다 — 이 구분의 SSOT는 [ADR 0008](adr/0008-accept-redis-spof-with-fail-closed.md)과 `Seat.version` javadoc이다.
 
-> 컨슈머 동시성을 올리면(`setConcurrency > 1`) 이 수치는 달라진다. 그때 락 경합이 실제로 설계대로 작동하는지는 `SeatHoldConcurrencyTest`(seat-service)가 스레드를 갈라 검증해 둔 상태다. oversell 0 자체의 증명도 같은 테스트가 실 MySQL로 수행한다(Redis 락을 제거한 두 번째 케이스).
+> 컨슈머 동시성이 1보다 크면(#596 이후 기본 3) 락 경합 수치는 달라진다. 그 조건에서 분기가 설계대로 도는지는 `SeatHoldConcurrencyTest`(seat-service)가 스레드를 갈라 검증해 둔 상태다. oversell 0 자체의 증명도 같은 테스트가 실 MySQL로 수행한다(Redis 락을 제거한 두 번째 케이스).
 >
-> 참고로 `BookingCreatedEvent.key()`는 `bookingId`다. 파티션을 늘리는 순간 같은 좌석 이벤트가 여러 파티션에 흩어지므로, "파티션 순차 처리 덕분에 안전하다"는 서사는 성립하지 않는다. 지금 안전한 이유는 순전히 컨슈머 스레드가 1개이기 때문이다.
+> `BookingCreatedEvent.key()`는 `bookingId`다. 파티션 키가 예매 단위이므로 **같은 좌석을 노리는 서로 다른 예매는 서로 다른 파티션에 흩어진다** — "파티션 순차 처리 덕분에 안전하다"는 서사는 성립한 적이 없다. concurrency 1에서 안전했던 이유는 순전히 컨슈머 스레드가 1개였기 때문이고, 그 전제는 #596으로 사라졌다. **지금 안전한 이유는 `Seat.version` 낙관적 락 하나다**(#427, ADR 0008).
 
 ### 10.2 실행
 
@@ -1324,7 +1326,7 @@ echo "SELECT COUNT(*) AS app_bookings FROM booking b
 | `e2e_seat_exhausted > 0` | 좌석 고갈. 시딩 규모나 `E2E_PURCHASE_PERF_IDS`가 부족하다 |
 | `e2e_seat_conflict > 0` | 유일 배정이 깨졌다. 리셋 누락이거나 코호트가 겹쳤다 |
 | setup 단계 `fail` | 좌석 간격이 일정하지 않다(다른 코호트가 중간을 점유). `reset_e2e.sql` 후 재시도 |
-| `ticketrush_seat_lock_contention_total` 증가 | **이전 회차의 좌석 락이 Redis에 남아 있다.** §10.1대로 이 카운터는 컨슈머 스레드가 1개라 구조적으로 0이므로, 0이 아니면 리셋의 Redis 단계가 실패한 것이다. 이 경우 홀드가 전부 보상 처리되는데 409가 아니라 `SeatHoldFailedEvent`로 나가므로 `e2e_seat_conflict`에는 잡히지 않는다 |
+| `ticketrush_seat_lock_contention_total` 증가 | **판정이 concurrency 값에 달렸다(#596).** ⚠️ 먼저 `spring.kafka.listener.concurrency`를 확인한다.<br>· **1이면** §10.1대로 이 카운터는 구조적으로 0이므로, 0이 아니면 **이전 회차의 좌석 락이 Redis에 남아 있다** = 리셋의 Redis 단계 실패다.<br>· **1보다 크면(기본 3) 0이 아닌 것이 정상이다** — 서로 다른 스레드가 같은 좌석을 집으면 오른다. 이 값만 보고 회차를 중단하지 않는다. 잔류 락을 의심할 땐 부하 시작 **전** `seat:lock:*` 키가 0건인지로 판정한다(§리셋 절차).<br>어느 쪽이든 홀드가 보상 처리되면 409가 아니라 `SeatHoldFailedEvent`로 나가므로 `e2e_seat_conflict`에는 잡히지 않는다 |
 | k6 → Prometheus remote-write 터널 끊김 | 클라이언트 시계열 소실. 서버 축만으로 판정할지 리포트에 명시(#496 §6 전례) |
 | 측정 중 인스턴스 중지 | 2026-07-23에 공유 IAM 사용자의 수동 `StopInstances`로 측정이 날아간 사례가 있다. 시간대를 공지한다 |
 
@@ -1855,7 +1857,7 @@ baseline (드레인율 미만, 5분)  →  스파이크 (무페이싱 스텝)  �
 
 ### 🚨 `kafka_consumer_fetch_manager_records_lag` 로 backlog 곡선을 그리지 않는다
 
-**#504 실측에서 확인했다.** 이 지표는 파티션별로 **"마지막 fetch 응답 시점의 lag"** 이다. `max.poll.records=20` 인 단일 스레드가 파티션 3개를 번갈아 훑으면 파티션마다 갱신 시각이 달라지고, `sum by (instance)` 는 **신선한 값과 낡은 값을 더한다.** 그 결과 적체가 단조 감소하지 않고 톱니로 튄다.
+**#504 실측에서 확인했다.** 이 지표는 파티션별로 **"마지막 fetch 응답 시점의 lag"** 이다. `max.poll.records=20` 으로 파티션 3개를 훑으면 파티션마다 갱신 시각이 달라지고, `sum by (instance)` 는 **신선한 값과 낡은 값을 더한다.** 그 결과 적체가 단조 감소하지 않고 톱니로 튄다. (#504 당시는 단일 스레드가 세 파티션을 번갈아 훑는 조건이었다. #596 이후 스레드가 파티션당 하나씩 붙으면 갱신 시각이 덜 벌어져 톱니 진폭은 줄 수 있지만, 파티션별 스크랩 시점 차이는 남으므로 지표 성질 자체는 같다.)
 
 ```
 booking-service:8090   4,632 → 4,052 → 6,073 ↑ → 5,473          (Prometheus 15초, max by)
