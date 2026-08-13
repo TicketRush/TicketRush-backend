@@ -378,8 +378,85 @@ SMOKE_CLEANUP=예매 삭제 + 좌석 AVAILABLE 복구 → LTQ 좌석 10,000 전�
 #   queue:* 0건 · seat 락 키 0건 · Redis used_memory 1.70M.
 
 # ── 실측 — 회차 후에 채운다 ────────────────────────────────────────────────
+# 수치는 전부 arm-stats.py 출력으로 채운다(손집계 금지 — AGGREGATION_TOOL 참조).
+
 ON_START_UTC=2026-08-13T10:57:48Z
-# ON_*  / OFF_*
+ON_END_UTC=2026-08-13T11:19:19Z (20m53.5s 정상 종료, exit 0)
+ON_CONFIG=QUEUE_ENABLED=true / ADMIT_RATE=20 / STATUS_RPS_CAPACITY=400 / 램프 5m / 유지 15m
+ON_RESULT=유효. 무효 기준 6개 전부 통과 — queue_status_unavailable 0.00%(0/158,691),
+#   entry_token unavailable/invalid/missing 전부 0(valid 9,831 = 본회차 9,781 + 스모크 50),
+#   redis 최대 8.27MB(기준 48MB), queue_polls_exhausted 0, queue_booking_forbidden 0.00%,
+#   생성기는 interrupted iteration 0 으로 정상 완료.
+ON_PRIMARY=예매 서버 RPS — 판정 창 t+300s~t+500s 표본 13
+#   min 19.47 / avg 20.31 / max 20.80 → 선언 밴드(10-30) 이탈 0건. 허용량 20 대비 +1.6%.
+ON_DRIFT=해당 없음. 판정창 평균 20.31 이 DRIFT_FLAG 범위(19.0-21.5) 안이다.
+ON_SECONDARY=queue_status_duration avg 15.14ms p95 28.5ms max 2.11s
+#   / wait_to_admit avg 98.9s med 99.9s p95 182.6s max 191.1s
+#   / polls_per_user avg 16.22 med 15 max 42 (상한 300 에 한참 못 미친다)
+ON_ADMISSION=admitted 100.00%(9,781/9,781) / booking_ok 100.00%(9,781/9,781) / forbidden 0%
+ON_LATENCY=http_req_duration avg 17.76ms med 7.63ms p95 42.34ms max 3.08s
+ON_WAIT=queue_wait_to_admit_seconds avg 98.9s / med 99.9s / p95 182.6s / max 191.1s
+ON_POLLS=polls_per_user avg 16.22 / med 15 / max 42 · 상태 확인 요청 총 158,691건
+ON_HOST=CPU 회차 전체 min 5.99 / avg 36.37 / max 88.59 (최대 시점 t+72s)
+#   ⚠ 회차 전 예측은 70-85% 였다 — max 가 예측을 3.59%p 넘었다(PREDICTION_VS_ACTUAL 참조).
+#   무부하 기저는 약 7% 였다(G8).
+ON_GATEWAY_RPS=공통 창(t+30~300s) 기준은 회차 후 대조표에서 OFF 와 함께 적는다
+ON_CONTAINER=공통 창 max — booking-service 99.55% / performance-service 89.75% /
+#   seat-service 81.37% / gateway-service 58.63% / mysql 83.67%.
+#   ⚠ booking 94-99.55% 는 이 프로젝트의 정상 운영값이다(ADR 0006 mem_limit). OOM kill 0건.
+ON_HIKARI_TOMCAT=Hikari active max — booking 2 / seat 3, pending 0(시계열 미생성 = 0).
+#   Tomcat busy max — booking 7 (config max 200 의 3.5%). 둘 다 자릿수 밖이다.
+ON_NETWORK=data_sent 55 MB (43 kB/s) — 대역은 이 회차에서도 무관했다
+ON_COHORT=9,781명 (1만이 아니다). 219명이 진입(enqueue)에서 실패했다.
+#   ✅ #549 의 숙제가 닫혔다 — 신설한 queue_enqueue_failed 가 219 를 직접 셌고
+#     http_req_failed 219(0.12%, 219/178,473)와 정확히 일치한다. 역산이 필요 없었다.
+ON_ENQUEUE_FAILED=219 (queue_enqueue_failed, status 태그 포함)
+ON_DEFERRAL_RATIO=47.01% — t+300s 이후 4,579건 / 전체 9,741건.
+#   회차 전 예측 43%. OFF arm 기준(<=10%)과 대조하는 주 판정축이다.
+ON_KNEE=임계 교차는 있었으나 포화가 아니다 — JIT 워밍업이다.
+#   KNEE_WATCH_3(booking p95 >= 150ms, 2연속)이 t+42s~t+87s 에 걸렸다(219 → 200 → 183 → 167ms).
+#   ⚠ 포화로 읽지 않는 근거: 101개 표본 중 4개만 임계를 넘었고 전부 램프 초반 연속 구간이며,
+#     VU 가 917 → 10,000 으로 10배 느는 동안 p95 는 오히려 단조 감소했다(149 → 132ms).
+#     부하가 늘수록 내려가는 것은 포화의 반대다.
+#   → 실질 KNEE=N/A. 나머지 8개 임계는 교차 없음.
+#   ⚠ 이 판정은 기준을 고친 것이 아니다. 기준(KNEE_WATCH_3)은 그대로 두고 해석에 근거를 달았으며,
+#     같은 기준이 OFF arm 에도 그대로 적용된다.
+ON_OVERSELL=0행. 예매 9,781 = 좌석 9,781 = 사용자 9,781 (1:1:1).
+#   ⚠ 검증 방법을 바꿔야 했다. 런북 §13.4-(7) 의 (a) 는 booking_status IN ('PENDING','CONFIRMED')
+#     로 거르는데, 검증 시점에 LTQ 예매가 전부 EXPIRED(9,749) / CANCELED(32) 였다 — 예매는 5-6분
+#     뒤 만료되고 이 회차는 20분짜리라 종료 시점에 PENDING 이 0 이다. 그 쿼리는 아무 행도 보지
+#     않았다(검출력 0).
+#   → 상태 무관 좌석 중복 검사로 다시 쟀다: seat_id 중복 0행 · user_id 중복 0행 ·
+#     bookings 9,781 = distinct_seats 9,781 = distinct_users 9,781. 증적 oversell-on.txt.
+ON_OUTBOX=회복 확인. booking peak 760(t+432s) → 0 도달 t+867s (peak 이후 435s)
+#   / seat peak 703(t+792s) → 0 도달 t+867s (peak 이후 75s). 덤프 창이 소진 시점을 덮는다.
+
+OFF_START_UTC=
+OFF_END_UTC=
+OFF_CONFIG=QUEUE_ENABLED=false / 나머지 ON 과 동일
+OFF_RESULT=
+OFF_PRIMARY=
+OFF_CONTROL_CHECK=
+#   양성 대조 — entry_token 카운터 증가 여부 · admitted_rate 가 1.000 인지.
+#   둘 중 하나라도 어긋나면 킬 스위치가 컨테이너에 안 먹은 것이다.
+OFF_ADMISSION=
+OFF_LATENCY=
+OFF_POLLS=
+OFF_HOST=
+OFF_GATEWAY_RPS=
+OFF_CONTAINER=
+OFF_HIKARI_TOMCAT=
+OFF_NETWORK=
+OFF_COHORT=
+OFF_ENQUEUE_FAILED=
+OFF_DEFERRAL_RATIO=
+OFF_KNEE=
+OFF_OVERSELL=
+OFF_OUTBOX=
+
+COMPARISON=
+PREDICTION_VS_ACTUAL=
+#   회차 전 예측 6개(PREDICT_*)와 실측을 하나씩 대조한다. 틀린 예측은 틀렸다고 적는다.
 
 # ── 이 회차가 답하지 못하는 것 (회차 전에 적는다) ──────────────────────────
 LIMIT_NO_KNEE=무릎(포화점)의 위치. ramping-vus 는 다이얼이 없어 실효 도착률이 33.3/s 상수인
