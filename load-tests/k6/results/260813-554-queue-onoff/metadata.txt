@@ -443,29 +443,64 @@ ON_OUTBOX=회복 확인. booking peak 760(t+432s) → 0 도달 t+867s (peak 이�
 #   / seat peak 703(t+792s) → 0 도달 t+867s (peak 이후 75s). 덤프 창이 소진 시점을 덮는다.
 
 OFF_START_UTC=2026-08-13T11:24:24Z
-OFF_END_UTC=
+OFF_END_UTC=2026-08-13T11:45:40Z (20m53.4s 정상 종료, exit 0)
 OFF_CONFIG=QUEUE_ENABLED=false / 나머지 ON 과 동일
-OFF_RESULT=
-OFF_PRIMARY=
-OFF_CONTROL_CHECK=
+OFF_RESULT=유효(계측 신뢰성 축). 무효 기준 전부 통과 — redis 최대 9.17MB(기준 48MB),
+#   컨테이너 샘플러 정상, Prometheus targets 11개 유지, remote-write 유지, 생성기 정상 완료,
+#   시딩 연속성 OK, IMAGE_TAG 동일(b0f3da84…), 실효 코호트 편차 2.41%(기준 10%).
+OFF_PRIMARY=(i) DEFERRAL_RATIO 18.73% — 선언 기준 <=10% 를 **넘겼다**(아래 상세).
+#   (ii) 예매 서버 RPS 판정창(t+30~300s) min 6.60 / avg 28.73 / max 33.73
+#        → 선언 밴드 33.3 ± 20%(26.7-40.0) 안. '램프 기울기를 따라간다' 가 확인됐다.
+OFF_CONTROL_CHECK=통과. queue_polls_per_user 가 정확히 1 (min 1 / med 1 / max 1) —
+#   첫 폴링에서 전원 승급이 코드대로 일어났다. queue_admitted 100.00%(9,545/9,545),
+#   queue_booking_forbidden 0%, entry_token 카운터 증가 없음(필터가 계측 전에 리턴).
+#   → 킬 스위치가 실제로 컨테이너에 먹었다.
 #   양성 대조 — entry_token 카운터 증가 여부 · admitted_rate 가 1.000 인지.
 #   둘 중 하나라도 어긋나면 킬 스위치가 컨테이너에 안 먹은 것이다.
-OFF_ADMISSION=
-OFF_LATENCY=
-OFF_POLLS=
-OFF_HOST=
-OFF_GATEWAY_RPS=
-OFF_CONTAINER=
-OFF_HIKARI_TOMCAT=
-OFF_NETWORK=
-OFF_COHORT=
-OFF_ENQUEUE_FAILED=
-OFF_DEFERRAL_RATIO=
-OFF_KNEE=
-OFF_OVERSELL=
-OFF_OUTBOX=
+OFF_ADMISSION=admitted 100.00%(9,545/9,545) / booking_ok 100.00%(9,545/9,545) / forbidden 0%
+OFF_LATENCY=http_req_duration avg 18.93ms med 9.81ms p95 41.04ms max 690.22ms
+OFF_POLLS=polls_per_user avg 1 / min 1 / max 1 · 상태 확인 요청 총 9,545건 (ON 은 158,691건)
+OFF_HOST=CPU 공통창(t+30~300s) min 26.34 / avg 56.87 / max 84.02 (ON 41.72 / 66.31 / 88.59)
+OFF_GATEWAY_RPS=max 100.5 — 회차 전 모델 예측 100 과 오차 0.5%.
+#   ON 444.6(예측 453, 오차 1.9%)과 함께 부하 모델이 두 arm 모두에서 검증됐다.
+OFF_CONTAINER=공통창 max — mysql 100.00%(⚠ ON 83.67%) / performance 90.76% / booking 97.91% /
+#   ticket 81.37% / seat-service 67.77%(ON 81.37% — arm 사이 재시작 효과) / gateway 57.24%.
+#   OOM kill 0건.
+OFF_HIKARI_TOMCAT=Hikari active max booking 3 / seat 2, pending 0. Tomcat busy max booking 3.
+OFF_NETWORK=data_sent 25 MB (20 kB/s) — ON 55 MB 의 45%
+OFF_COHORT=9,545명. 455명이 진입에서 실패했다(ON 219명).
+#   ON 대비 편차 |9,545-9,781|/9,781 = 2.41% < 10% → 대조 성립 기준 통과.
+OFF_ENQUEUE_FAILED=455 (http_req_failed 455 와 일치, 1.56%).
+#   ⚠ k6 기본 threshold(http_req_failed rate<0.01)를 넘겨 k6 가 'thresholds crossed' 로 종료했다.
+#     회차 무효 기준이 아니다 — 455건은 전부 enqueue 실패이고 서버 포화가 아니다.
+OFF_DEFERRAL_RATIO=18.73% — t+300s 이후 1,788건 / 전체 9,545건.
+#   ⚠ 선언 기준 <=10% 를 넘겼다. 회차 전 예측은 3.3% 였다.
+#   원인: 예측이 '마지막 VU 가 t+300+T(약 10초)에 끝난다' 를 전제했는데, 램프 종료 시점에 아직
+#   진입·폴링 단계인 VU 가 많아 실제로는 66초에 걸쳐 마무리됐다(예매가 t+366s 에 0 이 된다).
+#   ⚠ 그래도 분리는 성립한다 — ON 47.01% vs OFF 18.73%(2.5배), 램프 종료 후 지속 시간은
+#     ON 237초 vs OFF 66초(3.6배). 예측한 13배는 아니지만 방향과 분리는 확인됐다.
+OFF_KNEE=KNEE=N/A — 임계 9개 중 교차 없음. 도달한 최대 동작점:
+#   VU 10,000 / 예매 RPS 33.73 / 게이트웨이 RPS 100.5 / 호스트 CPU 84.02%.
+#   → 회차 전에 적어 둔 KNEE_IF_NONE 분기 그대로다: 유입 상한이 램프 기울기 33.3/s 였고
+#     #344 붕괴점(258 RPS)의 12.9% 다. 시스템이 튼튼한 것이 아니라 부하가 작았다.
+#   ⚠ k6 http_req_failed 1.56% 는 KNEE_WATCH_4 의 임계(1%)를 넘지만, 그 시계열(k6-req-failed)이
+#     덤프에 없어 자동 판정에 잡히지 않았다. 수동 확인 결과 455건 전부 enqueue 실패이고
+#     서버 5xx 가 아니다(gateway-5xx-rps 시계열도 데이터 부재 = 0). 포화 신호가 아니다.
+OFF_OVERSELL=0행. 예매 9,545 = 좌석 9,545 = 사용자 9,545 (1:1:1).
+#   좌석 중복 0행 · 사용자 중복 0행(상태 무관 검사). 예매 상태는 전부 EXPIRED 9,545 —
+#   ON arm 과 같은 이유로 상태 필터 쿼리는 검출력이 없다. 증적 oversell-off.txt.
+#   ⇒ 대기열 없이 @Version + Redis 락만으로 오버셀이 막혔다.
+OFF_OUTBOX=booking peak 1,338(t+411s) → 0 도달 t+441s (peak 이후 30s)
+#   / seat peak 1,119(t+426s) → 0 도달 t+681s (peak 이후 255s).
+#   ⚠ ON(booking peak 760 → 435s)보다 peak 이 1.76배 높지만 소진은 14배 빨랐다 —
+#     OFF 는 유입이 t+366s 에 끝나 릴레이가 따라잡을 시간이 있었다.
 
-COMPARISON=
+COMPARISON=대조표는 report.md §2 참조. 핵심 세 줄:
+#   ① 게이트웨이 총 RPS — ON 444.6 vs OFF 100.5 (4.4배). 대기열의 자기 비용이다.
+#   ② 사용자당 폴링 — ON avg 16.22 / max 42 vs OFF 정확히 1. 가장 깨끗한 한 숫자다.
+#   ③ 이연 — ON 47.01% / 램프 후 237초 vs OFF 18.73% / 66초.
+#   그리고 호스트 CPU 는 OFF 가 낮다(max 84.02 vs 88.59, avg 56.87 vs 66.31) —
+#   대기열이 유입을 제어하는 대가로 서버 부하를 더 만든다는 뜻이다.
 PREDICTION_VS_ACTUAL=ON arm 부분(OFF 는 회차 후 추가).
 #   [맞음] PREDICT_ON_FIRST 의 '최초 포화 미도달' — 9개 임계 중 booking p95 하나만 걸렸고
 #          그것은 워밍업이었다(ON_KNEE 참조). 실질 KNEE=N/A.
