@@ -59,7 +59,7 @@ ARRIVAL_RATE = QUEUE_FLOOD_VUS(10,000) / QUEUE_FLOOD_RAMP(300s) = 33.33 여정/s
 
 ## 2. ON/OFF 대조표
 
-TBD — `arm-stats.py` 출력으로 채운다.
+수치는 전부 `arm-stats.py` 출력이다(손집계 금지 — 15초 샘플러의 중앙값을 "최대" 로 쓰는 사고를 막는다).
 
 | 축 | ON | OFF | 배수 / 비고 |
 |---|---|---|---|
