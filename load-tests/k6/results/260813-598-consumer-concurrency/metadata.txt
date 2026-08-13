@@ -229,7 +229,13 @@ G4_REDIS=used_memory 1.40M / maxmemory 64.00M / policy noeviction. seat:lock:* 0
 G5_PROM_TARGETS=11개 전부 up (gateway 1 · ticketrush-services 7 · node · redis · prometheus)
 G6_DLT=DLT 토픽 미생성. 토픽 10개 + __consumer_offsets 뿐이다.
 G7_OUTBOX=backlog 0. outbox 57,996행 전부 SENT (PENDING·FAILED 0건).
-G8_IDLE_CPU_BASELINE=<무명령 5분 창에서 측정 — 아래에 채운다>
+G8_IDLE_CPU_BASELINE=약 7.5% — min 5.78 / avg 7.55 / max 13.67 (창 14:49:30~14:54:30Z, 표본 21).
+#   같은 순간 load average 0.10. #554 가 잰 약 7.0% 와 같은 자릿수다.
+#   ⚠ 첫 표본 13.67 은 직전(14:48:49Z) 프리플라이트 검증 질의의 꼬리다. 그것을 빼면 max 9.3.
+#   ⚠ 이 값은 arm A 셋업(컨슈머 4개 --force-recreate + 코호트 reset + 프리플라이트)을 모두
+#     끝낸 뒤에 쟀다. 셋업 전 상태가 아니라 회차가 실제로 출발하는 상태의 기저다.
+#   ⚠ 첫 시도(14:40~14:43)는 max 57.46 이 나왔는데 원인이 대상이 아니라 측정자였다 —
+#     그 구간에 SSH 질의를 던졌고, 같은 순간 load average 는 0.77 이었다. #554 와 같은 함정이다.
 G9_BASELINE=hikaricp_connections_pending 전 인스턴스 0.
 #   tomcat_threads_config_max_threads: seat-service 50 / 나머지 6개 200.
 #   jvm_threads_live: booking 112 / seat 131 / ticket 64 / payment 77 / performance 46 /
@@ -251,25 +257,78 @@ MEASUREMENT_HAZARD=2 vCPU 라 관측 행위 자체가 관측값에 잡힌다. SS
 #   → 부하·드레인 구간에는 원격 명령을 던지지 않는다. 덤프는 회차 후에만 돌린다.
 
 # ── 시딩 — 회차 시점에 채운다 ──────────────────────────────────────────────
-SEED_S1=load-test/seed/seed_payment_pipeline.sql (@mode='seed', @count=30000)
+SEED_S1=load-test/seed/seed_payment_pipeline.sql — @mode='reset' 을 쓴다(@mode='seed' 가 아니다).
+#   ⚠ 계획 대비 이탈이며, 대조가 더 세지는 방향이다. reset 은 코호트를 지우고 새로 만드는 대신
+#     같은 booking_id·seat_id 범위를 PENDING/HOLD 로 되돌린다. 그래서
+#     ① 두 arm 이 완전히 같은 행을 쓴다(교란 변수 하나 제거)
+#     ② 이슈가 경고한 "AUTO_INCREMENT 는 되감기지 않는다 → B arm 인자를 갱신하라" 함정이
+#        아예 발생하지 않는다
+#     ③ seed 였다면 B arm 의 행이 버퍼풀에 없어 오히려 B 가 불리했을 것이다.
+#   reset 은 inbox 의 PaymentConfirmed 행도 지운다 — 두 arm 의 inbox 크기 출발점이 같아진다
+#   (seed 는 안 지운다. 그대로 뒀다면 A arm 이 남긴 약 58,000행을 B 가 안고 시작했을 것이다).
 SEED_S2=기존 LOADTEST 코호트 재사용 + arm 마다 리셋(예매 삭제 · 좌석 AVAILABLE 복구 ·
 #   seat:lock:<TARGET> DEL). 새 공연을 만들지 않는 이유는 두 arm 이 같은 좌석을 써야
 #   대조가 성립하기 때문이다.
-SEED_RESULT_C1=<A arm 시딩 출력 — 회차 시점에 채운다>
-SEED_RESULT_C3=<B arm 시딩 출력 — AUTO_INCREMENT 가 되감기지 않아 값이 전부 달라진다>
+COHORT_S1=perf_id 19 (LTP-A) / booking_id 2000001-2030000 / seat_id 76054-106053 / user_id 4
+#   / cohort_size 30000. 두 arm 동일(reset 이므로).
+#   검증 SELECT 전부 통과: seats 30000 · contiguous_seats 1 · held 30000 · seat_number_ordered 1
+#   · bookings 30000 · pending 30000 · not_pending 0 · contiguous_bookings 1
+#   · seat_booking_aligned 1 · expiry_safe 30000 · stray_events 0
+COHORT_OFFSET_MAP=코호트 안에서 구간을 겹치지 않게 나눈다. 두 arm 동일.
+#   프리플라이트 OFFSET=0     COUNT=1
+#   워밍업1    OFFSET=1000   COUNT=2000
+#   워밍업2    OFFSET=3000   COUNT=2000
+#   워밍업3    OFFSET=5000   COUNT=2000
+#   baseline   OFFSET=7000   COUNT=3000  RATE=10
+#   스파이크   OFFSET=10000  COUNT=20000 RATE=0
+#   합계 29,001 <= 30,000.
+#   ⚠ 구간이 겹치면 두 번째 주입은 booking 이 이미 CONFIRMED 라 confirm() 이 no-op 이 되고
+#     티켓도 already_issued 가 되어 유입이 조용히 깎인다(주입 스크립트 OFFSET 주석).
+#   ⚠ #504 는 워밍업 6,000건과 본 회차 23,000건의 구간 배분을 증적에 남기지 않아
+#     COUNTER(29,001)와 VERIFY_CONFIRMED(23,000)의 관계를 재구성할 수 없다. 그래서 여기 적는다.
+PREFLIGHT_C1=2026-08-13T14:48:26Z. booking 2000001 CONFIRMED · seat 76054 SOLD ·
+#   ticket 81002 UNUSED · inbox booking-group 1 / ticket-group 1 · DLT 토픽 미생성.
+#   주입 스크립트가 보고한 그룹별 컨슈머 수: booking-group 1 / ticket-group 1 (concurrency 1 확인).
 
 # ── 실측 — 회차 후에 채운다 ────────────────────────────────────────────────
 # (A arm)
-C1_CONFIG=
-C1_CONTROL_CHECK=
-C1_S1_WARMUP=
-C1_S1_BASELINE=
-C1_S1_SPIKE=
-C1_S1_DRAIN_BOOKING=
-C1_S1_DRAIN_TICKET=
-C1_S1_RECOVERY=
-C1_S1_VERIFY=
-C1_S1_RESOURCE=
+C1_CONFIG=SPRING_KAFKA_LISTENER_CONCURRENCY=1. deploy/.env 에 키를 새로 추가하고
+#   booking·seat·ticket·payment 4개를 --force-recreate 했다(2026-08-13T14:46Z 경).
+#   docker inspect Config.Env 로 4개 전부 =1 확인. 이미지 태그는 재생성 후에도 b0f3da84… 동일.
+C1_CONTROL_CHECK=통과. 컨슈머 그룹 멤버 수 booking-group 5 / ticket-group 2 / seat-group 3 /
+#   payment-group 3 = 리스너 5·2·3·3 × 1. 회차 전(concurrency 3)의 15/6/9/9 에서 정확히 1/3 이다.
+#   교차 확인 — jvm_threads_live: booking 112→72(−40) / seat 131→107(−24) / ticket 64→48(−16)
+#   / payment 77→53(−24). 리스너를 걷어낸 만큼 줄었고 무관한 서비스(auth 42 · user 40 ·
+#   performance 46)는 변하지 않았다.
+C1_S1_WARMUP=드레인 84s → 55s → 52s (각 2,000건 무페이싱). 3차에 고원 도달.
+#   #504 스모크(90 → 61 → 57s)와 같은 모양이고 값도 근접한다 — 배포본이 다른데도 A arm 이
+#   #504 를 재현하고 있다는 첫 신호다.
+C1_S1_BASELINE=3,000건 / 명목 10/s → 실측 9/s (302s). 14:59:40Z ~ 15:04:42Z.
+#   주입 종료 3초 뒤 첫 표본이 이미 lag 0 — 드레인 경과 0s. 흡수 확인(#504 와 동일).
+C1_S1_SPIKE=20,000건 무페이싱 / 실측 10,000/s (2s). 15:04:52Z ~ 15:04:54Z.
+#   정점 booking-group 19,882 / ticket-group 19,521 @ 15:05:00Z (주입 종료 +6s). 합 39,403.
+C1_S1_DRAIN_BOOKING=42.9/s (19,882건 / 463s, peak 15:05:00Z → 0 15:12:43Z)
+#   두 그룹 동시 구간(15:05:00~15:08:45Z) 39.8/s → booking 단독 구간(15:08:45~15:12:43Z) 45.9/s.
+#   경합 이득 +15.2%. ticket-group 이 0 에 닿는 순간 booking 처리율이 뛴다 —
+#   두 그룹이 같은 2 vCPU 를 나눠 쓴다는 직접 증거다(#504 는 같은 축에서 +24%).
+C1_S1_DRAIN_TICKET=86.8/s (19,521건 / 225s, peak 15:05:00Z → 0 15:08:45Z). booking 의 2.02배.
+C1_S1_RECOVERY=주입 종료 기준 booking 465s (7분 45초) / ticket 231s (3분 51초).
+#   회복시간의 머리값은 느린 booking-group 이 정한다.
+C1_S1_VERIFY=통과. confirmed 29,001 = sold 29,001 = tickets 29,001 = inbox_booking 29,001
+#   = inbox_ticket 29,001 = 주입 총량(1 + 6,000 + 3,000 + 20,000). stray_events 0.
+#   잔여 pending 999 = 30,000 − 29,001. DLT 토픽 미생성. [CRITICAL] 로그 booking/seat/ticket 0건.
+C1_S1_RESOURCE=드레인 창(15:04:54~15:12:43Z) 호스트 CPU min 33.79 / avg 79.43 / max 87.09.
+#   hikaricp pending 전 인스턴스 0 / active max 1 (booking·seat·ticket, 풀 10).
+#   container oom_kills 0. 컨테이너 메모리 max — booking 84.98 / seat 68.99 / ticket 72.19
+#   / performance 88.63 / kafka 67.03 / redis 10.02.
+#   ⚠ MySQL 99.65~100.00% 는 사전 선언대로 대조 축에서 뺀다(EXCLUDED_AXIS).
+#   ⚠ 무부하 기저(G8 7.55%)와의 차이 71.9%p 가 드레인 귀속분이다. #504 는 같은 값을
+#     '드레인 후 유휴 28.19%' 기준으로 52%p 라고 봤다 — 기준선 정의가 달라 그대로 잇지 않는다.
+C1_S1_REPRODUCTION=#504 재현 확인. 배포본이 1f2ed5d2 → b0f3da84 로 다른데도 5개 축이 근접했다.
+#   드레인율 booking 42.9 vs 42.0 (+2.1%) / ticket 86.8 vs 85.9 (+1.0%)
+#   / 회복 465 vs 479s (−2.9%) / CPU avg 79.43 vs 80.84 / CPU max 87.09 vs 87.51.
+#   워밍업 곡선도 84→55→52s vs 90→61→57s 로 같은 모양이다.
+#   ⇒ A arm 은 유효한 before 다. 이후 B/A 비율의 분모로 쓴다.
 C1_S2_RESULT=
 C1_S2_CONTENTION=
 C1_S2_OVERSELL=
