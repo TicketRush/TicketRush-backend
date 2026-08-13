@@ -129,7 +129,21 @@ TBD
 
 ## 7. 완료 조건 대조
 
-TBD — 이슈 #554 체크박스 9개를 하나씩 대조한다.
+이슈 [#554](https://github.com/TicketRush/TicketRush-backend/issues/554) 의 체크박스 9개.
+
+| # | 완료 조건 | 결과 | 증적 |
+|---|---|---|---|
+| 1 | 회차 전 `develop → main` 배포 완료, `IMAGE_TAG` 확인 | ✅ | PR #605 머지 · CD 09:17 UTC 성공. `metadata.txt` `DEPLOY_PRECONDITION` |
+| 2 | 두 arm 이 **같은 배포본**에서 조건표대로 연속 실행, 실제 `IMAGE_TAG` 기록 | TBD | `metadata.txt` `G0_EC2` · `CONTROL_*` |
+| 3 | 배포본의 PR #589 · #591 포함 여부 기록 | ✅ | `merge-base --is-ancestor` 로 양쪽 확인. `metadata.txt` `INCLUDES_PR589` / `INCLUDES_PR591` |
+| 4 | arm 사이 초기화 확인 (재시딩 · `queue:*` 0건 · outbox 소진 · seat-service 재시작) | TBD | `metadata.txt` `G12_BETWEEN_ARM_RESET` |
+| 5 | 예측 · 판정 기준 · 무효 기준을 회차 **전에** 커밋 | ✅ | 커밋 `57930b89` (ON arm 시작 전) |
+| 6 | 꺾이는 지점(RPS · VU)과 최초 포화 지표를 수치로 특정 | TBD | `arm-stats.py` `[꺾이는 지점]` — §4 · §5 |
+| 7 | 오버셀 발생 여부를 #344 검증 SQL 로 확인 | TBD | LTQ 3쿼리, arm 별로 cleanup 전에 실행 |
+| 8 | ON/OFF 대조표가 리포트에 들어감 | TBD | §2 |
+| 9 | 증적이 `load-tests/k6/results/` 회차 디렉토리로 남음 | TBD | §11 |
+
+> 조건 6 의 "꺾이는 지점" 은 **미도달도 결과다.** §1.1 의 산술대로 이 부하 모델의 유입 상한이 33.3 RPS 라 임계 교차가 없을 수 있고, 그 경우 `KNEE=N/A` 와 도달한 최대 동작점을 적는다. 회차 전에 정해 둔 분기다(`metadata.txt` `KNEE_IF_NONE`) — 미도달을 무릎으로 바꿔 쓰지 않는다.
 
 ---
 
@@ -168,4 +182,21 @@ TBD
 
 ## 11. 증적 파일
 
-TBD
+| 파일 | 내용 |
+|---|---|
+| `metadata.txt` | 회차 조건 · 사전 게이트 G0~G14 · **회차 전에 커밋한 예측 · 판정 · 무효 기준** · 실측 |
+| `report.md` | 이 문서 |
+| `k6-summary-on.txt` · `k6-summary-off.txt` | k6 요약 (클라이언트 측정 SSOT) |
+| `timeseries-*-on.json` · `timeseries-*-off.json` | Prometheus 시계열 덤프. **보존 15일이 지나면 이것이 유일한 원자료다** |
+| `oversell-on.txt` · `oversell-off.txt` | LTQ 코호트 오버셀 검증 3쿼리 출력 (SQL 원문 포함) |
+| `grafana-capture-links.md` | Explore 캡처 링크 (쿼리 · UTC 절대 시각이 URL 에 박혀 있다) |
+| `graph-*-on.png` · `graph-*-off.png` | Grafana 수동 캡처 |
+
+회차에 쓴 도구는 저장소에 함께 커밋했다.
+
+| 도구 | 용도 |
+|---|---|
+| `load-test/bench/arm-stats.py` | arm 별 판정 창 집계 · `DEFERRAL_RATIO` · KNEE 판정 (#549 B-2 덤프로 검증) |
+| `load-test/bench/grafana-links.py` | 캡처 링크 생성 |
+| `load-test/bench/dump-timeseries.py` | 시계열 덤프 (`k6-queue-enqueue-failed` 추가) |
+| `load-test/scenarios/waiting-room.js` | `queue_enqueue_failed` 카운터 추가 (status 태그 포함) |
