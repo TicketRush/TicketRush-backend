@@ -534,6 +534,17 @@ HIKARI_DETAIL=booking-service 기준. 표는 report.md §2.3.
 #     파티션·스레드를 더 늘리거나 배치 처리를 넣으면 더 갈 여지가 있다는 뜻이고,
 #     그 상한은 별도 회차로 재야 한다.
 
+# ── 회차 후 남긴 상태 ──────────────────────────────────────────────────────
+POSTSTATE_ENV=deploy/.env 에 SPRING_KAFKA_LISTENER_CONCURRENCY=3 이 남는다(125행).
+#   회차 전에는 이 키가 아예 없었고 코드 기본값 3 으로 돌았다 — 즉 동작은 회차 전과 동일하다.
+#   지우지 않고 남기는 이유: 값을 명시해 두면 #554 의 G9 오독('키가 없다 → 병렬이 아니다')이
+#   재발하지 않는다. .env.prod.example:147 과도 일치한다.
+POSTSTATE_DB=LTP-A 코호트(perf 19)는 29,001 CONFIRMED/SOLD + 999 PENDING 상태로 남는다.
+#   S2 코호트(perf 13)는 예매 5,413건과 좌석 1석 HOLD 가 남았다 — 그 HOLD 는 2026-08-13T16:08:02Z
+#   에 TTL 만료된다. 다음 회차 전에 @mode='reset' 과 perf 13 정리를 하면 된다.
+POSTSTATE_CLEANUP=EC2 의 /tmp 임시 스크립트(inject.sh · oversell*.sh · drain-poll.sh)와
+#   .env 백업, 로컬 SSH 터널, k6 비밀번호 파일을 모두 지웠다.
+
 # ── 이 회차가 답하지 못하는 것 (회차 전에 적는다) ──────────────────────────
 LIMIT_NOT_A_SWEEP=concurrency 2 는 재지 않는다. 1 과 3 두 점뿐이라 중간값의 거동은 모른다.
 LIMIT_PARTITION_BOUND=3 이 상한이다. 파티션이 3개라 스레드를 더 늘려도 할당받을 파티션이 없다
