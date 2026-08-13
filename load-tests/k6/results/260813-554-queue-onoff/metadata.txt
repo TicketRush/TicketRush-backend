@@ -466,7 +466,22 @@ OFF_OVERSELL=
 OFF_OUTBOX=
 
 COMPARISON=
-PREDICTION_VS_ACTUAL=
+PREDICTION_VS_ACTUAL=ON arm 부분(OFF 는 회차 후 추가).
+#   [맞음] PREDICT_ON_FIRST 의 '최초 포화 미도달' — 9개 임계 중 booking p95 하나만 걸렸고
+#          그것은 워밍업이었다(ON_KNEE 참조). 실질 KNEE=N/A.
+#   [빗나감] PREDICT_ON_FIRST 의 'CPU max 70-85%' — 실측 max 88.59% 로 3.59%p 초과했다.
+#          단 최대 시점이 t+72s 로 워밍업 구간이고, 예측이 지목한 t+240~320s 가 아니다.
+#          avg 36.37% 는 예측 30-40% 안이다.
+#   [맞음] PREDICT_OVERSELL — 0행.
+#   [근접] PREDICT_DEFERRAL 의 ON 43% — 실측 47.01%.
+#   [해소] PREDICT_WRONG_IF_2(드리프트가 유휴 CPU 를 올렸을 가능성) — G8 무부하 기저가 약 7% 로
+#          낮아 이 요인은 배제된다. ON max 88.59% 를 드리프트 탓으로 돌릴 수 없다.
+#   [해소] PREDICT_WRONG_IF_3(Kafka concurrency=3) — G9 에서 미설정 확인.
+#   [반전] PREDICT_WRONG_IF_4(순서 효과가 OFF 에 유리) — arm 사이에 gateway·seat-service 를
+#          재시작해 OFF 가 오히려 콜드 스타트로 시작한다. JVM/JIT 은 OFF 가 불리하고
+#          MySQL 버퍼풀·페이지 캐시는 여전히 OFF 가 유리하다. 방향이 섞였다.
+#   [검증] 부하 모델 — 게이트웨이 RPS max 예측 453 vs 실측 444.6 (오차 1.9%).
+#          #549 B-2 에서 4.1% 였던 것보다 더 가깝다. 모델이 두 회차에서 검증됐다.
 #   회차 전 예측 6개(PREDICT_*)와 실측을 하나씩 대조한다. 틀린 예측은 틀렸다고 적는다.
 
 # ── 이 회차가 답하지 못하는 것 (회차 전에 적는다) ──────────────────────────
