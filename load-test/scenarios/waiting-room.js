@@ -120,6 +120,10 @@ const bookingForbidden = new Rate('queue_booking_forbidden');
 const statusUnavailable = new Rate('queue_status_unavailable');
 // 안전 상한에 걸려 끝난 VU. > 0 이면 입장 허용량이 유입을 소화하지 못한 것이다.
 const pollsExhausted = new Counter('queue_polls_exhausted');
+// 진입(enqueue)에서 대기 토큰을 못 얻어 여정이 시작조차 못 한 VU. 실효 코호트 = 유입 - 이 값이다.
+// #549 는 이 계측이 없어 724명(7.24%)을 http_req_failed 로 역산해서야 알았고, B-1 때는 '대기 3,420 +
+// 임계치 3,000' 으로 짐작했다 — 회차 규모를 역산에 맡기면 무엇을 잰 회차인지가 흐려진다.
+const enqueueFailed = new Counter('queue_enqueue_failed');
 // status 회차 전용 무효 판정. 폴링 대상이 회차 도중 승급하면 그 이후 폴링은 입장 토큰 SET 이 붙어
 // Redis 명령이 2회(GET+ZRANK) 에서 3회로 늘고 noeviction Redis 에 쓰기까지 생긴다. 재려던 것은
 // '대기 중인 사용자의 폴링' 인데 다른 경로를 재게 되므로 R 이 과소평가된다.
@@ -256,6 +260,9 @@ export function journey() {
   const enqueued = enqueue(userId);
   const waitingToken = jsonField(enqueued, 'result.waiting_token');
   if (!waitingToken) {
+    // 상태 코드를 태그로 남긴다 — 진입 실패가 게이트웨이 거절(4xx)인지 포화(5xx·0)인지가
+    // 갈리는데, 서버에 enqueue 결과 카운터가 없어 이 태그가 그것을 가르는 유일한 수단이다.
+    enqueueFailed.add(1, { status: String(enqueued.status) });
     return;
   }
 

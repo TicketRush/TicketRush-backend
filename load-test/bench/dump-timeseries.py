@@ -105,6 +105,9 @@ QUERIES = [
     ("k6-queue-wait-to-admit-p95", 'k6_queue_wait_to_admit_seconds_p95'),
     ("k6-queue-admitted-rate", 'k6_queue_admitted_rate'),
     ("k6-queue-status-unavailable-rate", 'k6_queue_status_unavailable_rate'),
+    # 진입 실패. 실효 코호트 = 유입 - 이 값이고, 회차의 모든 비율이 그 코호트를 분모로 쓴다.
+    # #549 는 이 축이 없어 724명(7.24%)을 http_req_failed 로 역산했다(#554 에서 신설).
+    ("k6-queue-enqueue-failed", 'k6_queue_enqueue_failed_total'),
     # 병목 후보
     ("hikari-pending", 'hikaricp_connections_pending{job="ticketrush-services"}'),
     ("hikari-active", 'hikaricp_connections_active{job="ticketrush-services"}'),
