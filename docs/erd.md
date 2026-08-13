@@ -46,16 +46,16 @@ erDiagram
   %% ===== performance-service =====
   performance ||--o{ performance_images : "FK"
   performance ||--o{ performance_facilities : "FK"
-  performance ||--o| banner : "논리 (link_performance_id)"
+  performance ||..o{ banner : "논리 (link_performance_id, FK 아님)"
 
   %% ===== seat-service =====
-  performance ||..|| seat_layout : "논리 (performance_id)"
+  performance ||..o| seat_layout : "논리 (performance_id, UNIQUE)"
   seat_layout ||--o{ seat : "논리 (seat_layout_id)"
 
   %% ===== 예매 흐름 (전부 서비스 경계를 넘는 논리 참조) =====
   user ||..o{ booking : "논리 (user_id)"
   performance ||..o{ booking : "논리 (performance_id)"
-  seat ||..o| booking : "논리 (seat_id / booking_number)"
+  seat ||..o{ booking : "논리 (seat_id / booking_number)"
   booking ||..o{ payment : "논리 (booking_id)"
   booking ||..o| ticket : "논리 (booking_id, UNIQUE)"
   booking ||..o| expired_booking : "논리 (booking_id, UNIQUE)"
