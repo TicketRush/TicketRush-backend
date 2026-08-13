@@ -149,6 +149,15 @@ QUERIES = [
     #   압도적이라 근사로 쓰지만, 다른 경로가 함께 도는 회차에서는 그대로 믿지 않는다.
     ("seat-counts-hikari-acquire-avg-ms", '1000 * sum(rate(hikaricp_connections_acquire_seconds_sum{instance="seat-service:8090"}[1m])) / sum(rate(hikaricp_connections_acquire_seconds_count{instance="seat-service:8090"}[1m]))'),
     ("seat-counts-hikari-usage-avg-ms", '1000 * sum(rate(hikaricp_connections_usage_seconds_sum{instance="seat-service:8090"}[1m])) / sum(rate(hikaricp_connections_usage_seconds_count{instance="seat-service:8090"}[1m]))'),
+    # 위 두 개는 #403(좌석 집계) 회차 전용이라 seat-service 로 고정돼 있다. 그래서 #598 에서
+    # 압박이 실제로 걸린 booking-service 를 덤프만으로는 볼 수 없었다 — pending 이 71 까지
+    # 갔는데 그게 아픈 값인지(획득 대기가 긴지) 판정하려고 EC2 를 다시 켜야 했다.
+    # 아래는 인스턴스별로 나눠 담는다. pending 은 '줄이 섰다' 만 말하고, 그 줄이 문제인지는
+    # 획득 대기 시간과 timeout 카운터가 정한다.
+    ("hikari-acquire-avg-ms", '1000 * sum by (instance) (rate(hikaricp_connections_acquire_seconds_sum{job="ticketrush-services"}[1m])) / sum by (instance) (rate(hikaricp_connections_acquire_seconds_count{job="ticketrush-services"}[1m]))'),
+    ("hikari-usage-avg-ms", '1000 * sum by (instance) (rate(hikaricp_connections_usage_seconds_sum{job="ticketrush-services"}[1m])) / sum by (instance) (rate(hikaricp_connections_usage_seconds_count{job="ticketrush-services"}[1m]))'),
+    ("hikari-acquire-rate", 'sum by (instance) (rate(hikaricp_connections_acquire_seconds_count{job="ticketrush-services"}[1m]))'),
+    ("hikari-timeout", 'hikaricp_connections_timeout_total{job="ticketrush-services"}'),
     ("k6-seat-counts-p95", 'k6_seat_counts_duration_p95'),
     ("k6-seat-counts-p99", 'k6_seat_counts_duration_p99'),
     ("k6-seat-counts-scale-mismatch", 'k6_seat_counts_scale_mismatch_rate'),
