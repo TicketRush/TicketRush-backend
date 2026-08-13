@@ -1938,14 +1938,23 @@ ticket-service:8090    4,692 → 6,033 ↑ → 4,713 → 6,248 ↑        (Prome
 |---|---|---|
 | G0 | 대상 EC2 기동 · `IMAGE_TAG` 기록 | `docker ps --format '{{.Names}}\t{{.Image}}'`. **`.env`의 `IMAGE_TAG`를 믿지 말고 실제 실행 중인 태그를 읽는다** — 아래 참조 |
 | G1 | **nginx `worker_connections` 실측** | `nginx -T \| grep -E 'worker_connections\|worker_processes'`. 기본값 1024 × 2 ≈ 2,048이면 1만 VU에 못 미친다 → 16384 + `worker_rlimit_nofile` 상향. **미조치 회차는 무효** |
-| G2 | `QUEUE_ENABLED=true` | `deploy/.env` 확인 후 `docker compose restart gateway-service` |
+| G2 | `QUEUE_ENABLED=true` | `deploy/.env` 확인 후 **`docker compose up -d --force-recreate --no-deps gateway-service`**. ⚠️ `restart`는 `env_file`을 다시 읽지 않아 값이 반영되지 않는다(#549·#554 실측). 반영 여부는 `docker inspect gateway-service`의 `Config.Env`로 확인한다 |
 | G3 | 대기열 지표 노출 | `curl -s localhost:8090/actuator/prometheus \| grep ticketrush_queue` — 미발생 상태에서도 0으로 보여야 한다 |
 | G4 | Redis 여유 | `redis_memory_used_bytes` < 48 MB. `maxmemory 64mb` + `noeviction`이라 상한에 닿으면 좌석 락 SET까지 거절된다 |
 | G5 | Prometheus targets | `job='gateway'` up |
 | G6 | 생성기 EC2 | [ADR 0010](adr/0010-in-aws-load-generator-for-ten-thousand-vu.md) — 같은 리전, spot, 회차 후 **종료** |
 | G7 | **대기열 키 리셋** | `redis-cli --scan --pattern 'queue:*' \| xargs -r redis-cli del` 후 0건 확인. **회차 A·B 양쪽 모두 필수** — 이전 회차의 `queue:opened-at:{pid}`(TTL 6h)가 남아 있으면 `threshold = 경과 × rate` 가 이미 수십만이라 전원이 첫 폴링에서 즉시 승급한다. "유입 제어가 되는가"를 보려던 회차가 그냥 스파이크가 된다 |
 
-> **⚠️ `deploy/.env`의 `IMAGE_TAG`가 실제 배포본과 다를 수 있다.** 2026-07-31 회차 B 준비 중 실측: `.env`는 `6b7301a0…`을 가리키는데 **그 태그는 ECR에도, CD 실행 기록(최근 20건)에도, 저장소 커밋에도 없었고**, 실제 컨테이너 8개는 전부 `21d2da2d…`로 떠 있었다. EC2 재시작은 기존 컨테이너를 되살릴 뿐 `.env`를 다시 읽지 않아 이 불일치가 드러나지 않는다.
+> **⚠️ EC2에 `.env`가 두 개 있다. 하나는 쓰이지 않는 잔재다.** 2026-08-13(#554) 실측으로 확인했다.
+>
+> | 경로 | 내용 | 쓰이는가 |
+> |---|---|---|
+> | `~/ticketrush/.env` | `IMAGE_TAG=6b7301a0…` | **아니다 — 잔재** |
+> | `~/ticketrush/deploy/.env` | `IMAGE_TAG=b0f3da84…` (CD 성공 SHA) | **이것이 실제** |
+>
+> `cd.yml`이 `docker compose --env-file deploy/.env`로 실행하므로 **`deploy/.env`만 유효하다.** 2026-07-31 회차 B 준비 중 "`.env`가 ECR·CD기록·저장소 어디에도 없는 태그를 가리킨다"고 기록된 그 값이 바로 이 잔재 파일이었다 — 불일치가 아니라 **엉뚱한 파일을 본 것**이다. 잔재를 고쳐도 배포에 아무 영향이 없고, 고쳤다고 믿으면 오히려 위험하다.
+>
+> 그래도 **G0에서 실행 중 태그를 직접 읽는 원칙은 유지한다.** EC2 재시작은 기존 컨테이너를 되살릴 뿐 `.env`를 다시 읽지 않으므로, 파일 값과 실행 값이 갈릴 경로는 여전히 남아 있다.
 >
 > **그대로 `docker compose up -d`를 하면 없는 이미지를 당기다 그 서비스가 내려간다.** 회차 중 `--force-recreate`가 필요한 절차(`QUEUE_ENABLED` 반영 등)가 있으므로, **G0에서 실행 중 태그를 읽어 `.env`를 먼저 맞춘 뒤** `metadata.txt`에 기록한다.
 >
@@ -2021,6 +2030,8 @@ chmod 600 ~/target.pem && ssh -f -N -L 9090:localhost:9090 -i ~/target.pem ubunt
 
 **B-4. 실행**
 
+**생성기가 Linux일 때**(원래 이 절이 전제한 구성):
+
 ```bash
 docker run --rm --network host --ulimit nofile=1048576:1048576 \
   -v $PWD/load-test:/scripts:ro \
@@ -2028,12 +2039,17 @@ docker run --rm --network host --ulimit nofile=1048576:1048576 \
   -e K6_PROMETHEUS_RW_SERVER_URL=http://localhost:9090/api/v1/write \
   grafana/k6:latest run \
   -e BASE_URL=https://api.ticketrush.store -e QUEUE_PROFILE=flood \
+  -e QUEUE_FLOOD_RAMP=5m \
   -e QUEUE_PERF_ID=<시딩값> -e QUEUE_USER_ID_MIN=<시딩값> -e QUEUE_SEAT_ID_MIN=<시딩값> \
   -e QUEUE_JWT_SECRET='...' \
   /scripts/scenarios/waiting-room.js
 ```
 
 `--network host` 없이는 터널의 `localhost:9090`에 닿지 못하고, 컨테이너 NAT이 커넥션 상한을 한 겹 더 만든다.
+
+> **⚠️ 생성기가 Windows(Docker Desktop)면 위 명령을 그대로 쓰지 않는다.** `--network host`가 동작하지 않는다. `--network host`를 빼고 remote-write 주소를 **`host.docker.internal:9090`**으로 바꾼다 — 터널이 `127.0.0.1:9090`에만 바인딩돼 있어도 컨테이너가 이 이름으로 호스트에 닿는다. #549와 #554가 실제로 쓴 형태이고, `k6-summary-*.txt`의 `output:` 줄이 그 증거다. Git Bash라면 `-v` 경로가 자동 변환되므로 `MSYS_NO_PATHCONV=1`을 앞에 붙인다.
+>
+> **⚠️ `-e QUEUE_FLOOD_RAMP=5m`을 빠뜨리지 않는다.** 기본값은 `2m`이고(`config/env.js`), **램프 2분이 곧 #549 B-1을 무효로 만든 조건이다.** 2026-08-13 이전의 이 절 명령줄에는 이 인자가 없었다 — 그대로 복사하면 B-1 형상이 재현된다. 주입 여부는 실행 전 `k6 inspect`의 `stages`로 확인한다.
 
 **⚠️ `deploy/.env`에서 `QUEUE_ADMIT_RATE=1`을 지우고 20으로 되돌린다.** 회차 A가 남긴 값이고(폴링 대상의 승급을 막는 조치였다), 이 회차는 **승급 자체가 관측 대상**이다. 1로 두면 1만 명이 다 들어가는 데 2.8시간이 걸려 회차가 성립하지 않는다 — `.env`에 남아 있는지 눈으로 확인한다. 2026-07-31 회차 B 준비 시점에 실제로 남아 있었다.
 
@@ -2071,3 +2087,9 @@ docker run --rm --network host --ulimit nofile=1048576:1048576 \
 **§6.1 재현성 규칙이 여기서 한 겹 더 걸린다.** [ADR 0010](adr/0010-in-aws-load-generator-for-ten-thousand-vu.md)이 생성기를 로컬에서 AWS로 옮겼으므로 **이 회차 수치를 ADR 0004 토폴로지 회차(#348·#403·#529 등)와 절대값으로 직접 잇지 않는다.** 비교가 필요하면 그 사실을 리포트 한계에 적는다.
 
 **15초 샘플러의 중앙값을 "최대"로 쓰지 않는다.** 묶음 C에서 두 번 틀렸다(#469 Redis 사용률 6.76 → 7.46%, #540 seat RSS 586 → 602 MiB). 시계열 덤프에서 max를 뽑거나 Grafana 캡처로 확인한다.
+
+**회차 중에 대상 서버로 명령을 던지지 않는다 — 관측 행위가 관측값에 잡힌다.** 2 vCPU 호스트에서는 SSH 세션 자체, `docker stats`(컨테이너 16개 샘플링), `docker inspect`, Prometheus range query가 전부 호스트 CPU에 나타난다. 2026-08-13(#554) 무부하 기저 측정에서 이것만으로 **`max 57.55%`**가 찍혔다 — 같은 순간 `docker stats`의 컨테이너 CPU 합계는 13%, `load average`는 0.10이었다. 명령을 던지지 않은 구간에서는 기저가 **약 7%**로 일관됐다(min 6.63 / avg 7.03 / max 7.57).
+
+> 관측은 k6 stdout과 **회차 후** 덤프로만 한다. `dump-timeseries.py`는 쿼리를 40개 넘게 던지므로 특히 회차 중에 돌리지 않는다(스크립트 docstring의 "부하가 도는 중에는 돌리지 않는다"가 같은 이유다). 상태를 꼭 봐야 했다면 그 사실과 시각을 증적에 적고 해당 구간을 해석에서 뺀다.
+
+**회차 전 무부하 기저 CPU를 5분 재서 기록한다.** 배포본이 바뀐 뒤의 회차에서 "CPU가 높다"가 부하 때문인지 코드 드리프트 때문인지 가르는 유일한 수단이다. 위 함정 때문에 **그 5분 동안에도 명령을 던지면 안 된다.**
