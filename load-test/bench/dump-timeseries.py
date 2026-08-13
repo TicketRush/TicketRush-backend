@@ -44,6 +44,12 @@ QUERIES = [
     # 호스트 자원
     ("node-cpu", '100 * (1 - avg(rate(node_cpu_seconds_total{job="node", mode="idle"}[1m])))'),
     ("node-iowait", '100 * avg(rate(node_cpu_seconds_total{job="node", mode="iowait"}[1m]))'),
+    # node-cpu(= 100 - idle)만 보면 I/O 대기 중인 시스템의 여유를 체계적으로 과소평가한다.
+    # #504 는 그 값으로 컨슈머 concurrency 의 상한을 1.4배로 추정했는데 #598 실측은 2.25배였다.
+    # 차이의 정체가 iowait 20.94%p 였다 — 작업이 아니라 비어 있는 CPU 라 여유 쪽에 넣었어야 했다.
+    # 스레드를 늘려 얻을 수 있는 것의 상한을 보려면 user+system 을 따로 봐야 한다.
+    ("node-cpu-user", '100 * avg(rate(node_cpu_seconds_total{job="node", mode="user"}[1m]))'),
+    ("node-cpu-system", '100 * avg(rate(node_cpu_seconds_total{job="node", mode="system"}[1m]))'),
     ("node-mem-used-bytes", 'node_memory_MemTotal_bytes{job="node"} - node_memory_MemAvailable_bytes{job="node"}'),
     # 회선 축. device 를 ens5 로 고정한다 — #508 이전에는 이 지표가 컨테이너 veth 를 재서
     # 실제의 1/6500 이 나왔다. 그래서 #348 회차는 회선 포화를 k6 수치로 역추정해야 했다.
@@ -143,6 +149,15 @@ QUERIES = [
     #   압도적이라 근사로 쓰지만, 다른 경로가 함께 도는 회차에서는 그대로 믿지 않는다.
     ("seat-counts-hikari-acquire-avg-ms", '1000 * sum(rate(hikaricp_connections_acquire_seconds_sum{instance="seat-service:8090"}[1m])) / sum(rate(hikaricp_connections_acquire_seconds_count{instance="seat-service:8090"}[1m]))'),
     ("seat-counts-hikari-usage-avg-ms", '1000 * sum(rate(hikaricp_connections_usage_seconds_sum{instance="seat-service:8090"}[1m])) / sum(rate(hikaricp_connections_usage_seconds_count{instance="seat-service:8090"}[1m]))'),
+    # 위 두 개는 #403(좌석 집계) 회차 전용이라 seat-service 로 고정돼 있다. 그래서 #598 에서
+    # 압박이 실제로 걸린 booking-service 를 덤프만으로는 볼 수 없었다 — pending 이 71 까지
+    # 갔는데 그게 아픈 값인지(획득 대기가 긴지) 판정하려고 EC2 를 다시 켜야 했다.
+    # 아래는 인스턴스별로 나눠 담는다. pending 은 '줄이 섰다' 만 말하고, 그 줄이 문제인지는
+    # 획득 대기 시간과 timeout 카운터가 정한다.
+    ("hikari-acquire-avg-ms", '1000 * sum by (instance) (rate(hikaricp_connections_acquire_seconds_sum{job="ticketrush-services"}[1m])) / sum by (instance) (rate(hikaricp_connections_acquire_seconds_count{job="ticketrush-services"}[1m]))'),
+    ("hikari-usage-avg-ms", '1000 * sum by (instance) (rate(hikaricp_connections_usage_seconds_sum{job="ticketrush-services"}[1m])) / sum by (instance) (rate(hikaricp_connections_usage_seconds_count{job="ticketrush-services"}[1m]))'),
+    ("hikari-acquire-rate", 'sum by (instance) (rate(hikaricp_connections_acquire_seconds_count{job="ticketrush-services"}[1m]))'),
+    ("hikari-timeout", 'hikaricp_connections_timeout_total{job="ticketrush-services"}'),
     ("k6-seat-counts-p95", 'k6_seat_counts_duration_p95'),
     ("k6-seat-counts-p99", 'k6_seat_counts_duration_p99'),
     ("k6-seat-counts-scale-mismatch", 'k6_seat_counts_scale_mismatch_rate'),

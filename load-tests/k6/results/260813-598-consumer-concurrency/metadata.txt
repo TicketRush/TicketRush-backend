@@ -1,0 +1,583 @@
+# ============================================================================
+# #598 컨슈머 concurrency A/B 회차 — 수치 SSOT
+# report.md 는 이 파일의 값을 인용한다. 값이 어긋나면 이 파일이 옳다.
+#
+# ⚠ 이 파일의 "── 판정 기준" ~ "── 이 회차가 답하지 못하는 것" 절은 회차 **시작 전에**
+#   커밋됐다(이슈 완료 조건 1). 결과를 보고 고치지 않는다(§6.1).
+# ============================================================================
+
+SERIES_ID=260813-598-consumer-concurrency
+ISSUE=#598 (선행 #596 — PR #603 머지 → PR #605 배포)
+DATE=2026-08-13 (UTC)
+APP_CODE_CHANGE=0줄 — 이 회차는 배포가 아니라 실행이다(#512 규약: test 라벨은 배포 묶음에 넣지 않는다)
+
+# ── 이 회차가 답해야 하는 것 ────────────────────────────────────────────────
+QUESTION=#596 이 Kafka 컨슈머 concurrency 를 1 에서 3 으로 올린 뒤, 예매 파이프라인의 처리 축이
+#   실제로 빨라졌는가. 그리고 병렬 소비에서도 오버셀이 0 인가.
+CONCLUSION_SCOPE=이 회차의 결론은 절대값이 아니라 회차 내부의 A/B 차이다.
+#   비교 대상 회차(#344 6398a9d6 · #504 1f2ed5d2)와는 배포본이 달라 절대값을 직접 잇지 않는다.
+
+# ── 토폴로지 ────────────────────────────────────────────────────────────────
+TARGET_HOST=EC2 54.116.243.250 — https://api.ticketrush.store
+TOPOLOGY=단일 EC2 + Docker Compose (ADR 0006 · ADR 0007). k6 는 로컬 Docker (ADR 0004)
+INSTANCE_TYPE=m7i-flex.large / INSTANCE_VCPU=2 / life-cycle=on-demand
+RUNBOOK=docs/load-test-guide.md §10(S2) · §15(S1) · §16.4(게이트) · §16.6(기저 CPU)
+PROM_SCRAPE_INTERVAL=15s
+
+# ── 회차 구조 — 시나리오 2개 × arm 2개 ─────────────────────────────────────
+SCENARIO_S1=이벤트 주입 backlog (#504 절차) — load-test/chaos/inject-payment-confirmed.sh
+#   + load-test/seed/seed_payment_pipeline.sql. k6 를 쓰지 않는다.
+#   ⇒ 주 판정축. 릴레이를 우회해 컨슈머만 노출시키는 유일한 시나리오다.
+SCENARIO_S2=동일 좌석 경합 (#344 절차) — load-test/scenarios/seat-contention.js
+#   ⇒ 안전 확인축(오버셀 0행 · seat_lock_contention).
+ARM_ORDER=A(concurrency 1) → B(concurrency 3). A→B 순서라 회차 후 원복이 필요 없다
+#   (prod 기본값이 이미 3 이므로 B 가 "현재 상태" 다).
+ARM_SUFFIX=c1 / c3
+SCENARIO_ORDER_IN_ARM=S1 → S2, 두 arm 모두 동일.
+#   ⚠ S2 가 만드는 예매는 5-6분 뒤 만료되며 SeatHoldExpiredEvent · BookingExpiredEvent 꼬리를
+#     남긴다. S2 를 먼저 돌리면 그 꼬리가 S1 의 드레인 구간에 섞인다. 두 arm 이 같은 순서라
+#     순서 효과는 A/B 대조에서 상쇄된다.
+
+# ── 대조 조건: arm 사이에서 바꾸는 것은 하나뿐 ─────────────────────────────
+VARIABLE=SPRING_KAFKA_LISTENER_CONCURRENCY (1 → 3). 이것 하나만 바꾼다
+CONTROL_IMAGE_TAG=두 arm 동일 (b0f3da84… — G0 실측)
+CONTROL_S1_PARAMS=시딩 30,000 / 프리플라이트 1 / 워밍업 3회 × 2,000 / baseline 3,000 @ RATE=10
+#   / 스파이크 20,000 @ RATE=0(무페이싱) / OFFSET baseline 0 · 스파이크 3000. #504 와 동일값.
+CONTROL_S2_PARAMS=VUS=100 / RAMP=5s / STEADY=6m / 단일 대상 좌석. #344 와 동일값.
+CONTROL_SEED=arm 마다 새로 시딩한다 — #512 규약상 before 를 과거 회차에서 재사용하지 않는다.
+#   ⚠ AUTO_INCREMENT 는 삭제해도 되감기지 않는다. B arm 의 주입 인자를 새 시딩 출력으로
+#     다시 읽어 갱신한다. #554 가 이 함정을 실제로 만났다 — 재사용하면 회차 전체가 무효다.
+CONTROL_WARMUP=워밍업 3회는 두 arm 모두 생략하지 않는다.
+#   arm 마다 컨슈머 4개를 --force-recreate 하므로 JVM 이 콜드다. #504 에서 드레인율이
+#   21 → 31 → 35/s 로 올라 3차에 고원에 도달했다. 생략하면 A/B 차이의 상당분이
+#   concurrency 가 아니라 JIT 워밍업이 된다.
+
+# ── 왜 배포가 아니라 환경변수로 arm 을 가르는가 ────────────────────────────
+ARM_MECHANISM=KafkaConfig.java:105 의 @Value("${spring.kafka.listener.concurrency:3}") 를
+#   환경변수 SPRING_KAFKA_LISTENER_CONCURRENCY 로 덮는다(relaxed binding). KafkaConfig.java:92-94
+#   가 이 회차를 명시적으로 지목하고 있다.
+#   배포로 arm 을 가르면 이미지가 달라져 concurrency 외의 변경분이 교란 변수로 섞이고,
+#   되돌리려면 이미지 롤백이 필요하다. #554 가 QUEUE_ENABLED 로 같은 선례를 세웠다.
+ARM_APPLY=deploy/.env 수정 → 컨슈머 4개(booking·seat·ticket·payment)만 --force-recreate.
+#   ⚠ restart 는 env_file 을 다시 읽지 않는다(#549·#554 실측, 런북 §16.4 G2).
+#   반영은 docker inspect 의 Config.Env 와 아래 CONTROL_CHECK 로 확인한다.
+
+# ── 통제변수 검증 (양성 대조) — 이 회차의 가장 강한 확인축 ─────────────────
+CONTROL_CHECK=컨슈머 그룹 멤버 수 = 그룹의 리스너 수 × concurrency.
+#   회차 전 실측(concurrency 3): booking-group 15 / ticket-group 6 / seat-group 9 / payment-group 9
+#   = 리스너 5 · 2 · 3 · 3 × 3. A arm 에서는 5 · 2 · 3 · 3 이 돼야 한다.
+#   kafka-consumer-groups.sh --describe --group <g> --members 로 센다.
+#   ⚠ .env 만 보고 넘어가면 #554 의 G9 오기록이 그대로 재현된다(아래 CORRECTION_554 참조).
+CONTROL_CHECK_2=jvm_threads_live_threads 감소. 회차 전 실측(concurrency 3):
+#   booking 112 / seat 131 / ticket 64 / payment 77. A arm 에서 리스너 수 × 2 만큼 줄어야 한다.
+
+# ── 회차 전에 확인한 사실 3개 (이슈 본문·#554 기록의 정정) ─────────────────
+CORRECTION_554=#554 두 arm 은 이미 concurrency 3 에서 돌았다.
+#   #554 metadata.txt:333-336(G9)·report.md:322 는 "deploy/.env 에 키가 없다 → 코드 기본값으로
+#   돈다 → PREDICT_WRONG_IF_3(=3 이면 seat_lock_contention > 0 이 정상) 이 발동하지 않는다"
+#   고 적었다. 앞의 두 절은 맞지만 결론이 틀렸다 — 그 코드 기본값이 3 이기 때문이다.
+#   이 회차의 G0 에서 키 부재를 다시 확인했고, 컨슈머 그룹 멤버 수 15/6/9/9 가 그 3 을 직접 센다.
+#   ⚠ #554 의 수치는 고치지 않는다. 그 회차의 seat_lock_contention 이 32 에서 평평했던 것은
+#     concurrency 가 1 이어서가 아니라 VU 마다 좌석이 유일해 같은 좌석 경합이 없었기 때문이다.
+CORRECTION_KEY=BookingCreatedEvent.key() 는 bookingId 다(BookingCreatedEvent.java:18). seatId 가
+#   아니므로 같은 좌석을 노리는 이벤트가 서로 다른 파티션·스레드로 갈라진다.
+#   ⇒ concurrency 3 에서 락 경합이 처음으로 실재할 수 있다. 키가 seatId 였다면 이 회차는
+#     잴 것이 없었다(같은 좌석이 항상 같은 스레드로 가 재진입 tryLock 이 성공한다).
+CORRECTION_DUMP=이슈 본문의 "k6-req-failed 가 dump-timeseries.py 목록에 없다" 는 틀렸다.
+#   dump-timeseries.py:63 에 초기 커밋(f9987b9f)부터 있다. 회차 전 계측 추가 작업이 필요 없다.
+
+# ── 주 판정축 (회차 시작 전에 못 박는다 — §6.1) ────────────────────────────
+PRIMARY_CRITERION=S1 booking-group 드레인율(브로커 축, peak → 0)의 B/A 비율.
+#   판정 분기:
+#     B/A >= 1.2  → 병렬 소비가 처리량을 올렸다. concurrency 3 유지.
+#     1.0 ~ 1.2   → 유의미한 변화 없음. 원인을 CPU·파티션 배정으로 규명해 리포트에 적는다.
+#     < 1.0       → 악화. 1 로 되돌릴 것을 권고한다.
+#   ⚠ 처리량이 안 늘었다는 결과도 유효한 결론이다(2 vCPU. #509 에서 확인된 실패 모드).
+PRIMARY_AXIS_SOURCE=브로커 축(주입 스크립트 [drain] 루프 = LEO − committed) 뿐이다.
+#   ⚠ Prometheus 의 kafka_consumer_fetch_manager_records_lag 는 "마지막 fetch 응답 시점의 lag"
+#     이라 파티션마다 갱신 시각이 달라 회복 구간에서도 톱니로 튄다. #504 실측에서 단조 감소를
+#     booking 2회 · ticket 3회 위반했고, 같은 구간 브로커 축은 표본 47개에서 위반 0회였다
+#     (런북 §15.4 line 1858). Prometheus 축은 발급률·자원 축에만 쓴다.
+SECONDARY=S2 ticketrush_seat_lock_contention_total · 실패 경로 분포 ·
+#   hikaricp_connections_pending · ticketrush_kafka_inbox_total{result="duplicate"} ·
+#   호스트 CPU · 컨테이너 RSS · container-oom-kills
+
+# ── 예측 (회차 전에 적는다 — 회차 후 대조가 목적이다) ──────────────────────
+PREDICT_A_BOOKING_DRAIN=약 42/s. #504 실측(DRAIN_BOOKING_AVG=42.0/s)의 재현.
+#   ⚠ 배포본이 1f2ed5d2 → b0f3da84 로 달라 드리프트 가능. 그래서 절대값이 아니라 B/A 로 판정한다.
+PREDICT_B_BOOKING_DRAIN=50-57/s (1.2-1.4배).
+#   근거는 #504 가 남긴 산술이다(CONCURRENCY_UPSIDE_ESTIMATE) — 드레인 귀속 CPU
+#   80.84 − 28.19 = 약 52%p, 여유 100 − 80.84 = 약 19%p → 42.0 × (52+19)/52 ≈ 57/s.
+#   2 vCPU 를 늘리지 않는 한 3배는 나오지 않는다. 이 회차는 그 추정을 확정하거나 기각한다.
+PREDICT_TICKET_DRAIN=A 약 86/s. B 는 CPU 상한에 먼저 걸려 booking 보다 개선폭이 작을 수 있다.
+PREDICT_RECOVERY=A 약 479s (#504 RECOVERY_BOOKING_FROM_INJECT_END). B 340-400s.
+PREDICT_S2_CONTENTION=A 0 (시리즈 미생성, #344 와 동일) / B > 0 — 시리즈가 처음으로 생성된다.
+#   기전: RLock 은 (clientUUID:threadId) 단위 재진입이다. concurrency 1 이면 같은 스레드가
+#   재진입해 tryLock 이 항상 성공하고 실패는 SeatFacade.java:197(이미 선점/판매) 에서 난다.
+#   concurrency 3 이면 다른 스레드의 tryLock(0,...) 이 즉시 실패해 SeatFacade.java:179
+#   (락 획득 실패) 경로로 옮겨간다. 두 경로의 로그 문자열이 달라 직접 셀 수 있다.
+PREDICT_S2_OVERSELL=양쪽 0행. 정합성을 지키는 것은 재진입성이 아니라 Seat.@Version(#427) +
+#   isAvailable() 이다. 이 회차는 그 방어선을 병렬 소비라는 새 조건에서 처음으로 때린다.
+PREDICT_HIKARI=B arm booking-service 에서 pending > 0 이 나올 수 있다.
+#   booking 은 리스너 5개 × 3 = 15 스레드인데 풀 기본값은 10 이다(KafkaConfig.java:97-99).
+#   "지금까지 pending=0 이라 풀을 튜닝하지 않았다" 는 근거가 깨지는 지점이 정확히 여기다.
+
+PREDICT_WRONG_IF_1=S1 의 병목이 컨슈머가 아니라 MySQL 이면 concurrency 를 올려도 드레인율이
+#   안 는다. #504 는 Hikari pending 0 · Tomcat busy 0 으로 "용량이 아니라 직렬화" 라고 봤지만,
+#   MySQL 자체의 잠금·IO 는 그 축에 안 잡힌다.
+PREDICT_WRONG_IF_2=워밍업 3회로 A·B 의 JIT 상태가 같아진다는 전제. #504 는 2,000건 3회에서
+#   고원(61s → 57s)에 도달했지만 그것은 concurrency 1 기준이다. 3 스레드는 워밍 경로가
+#   3벌이라 같은 3회로 덜 데워질 수 있고, 그러면 B 가 과소평가된다.
+PREDICT_WRONG_IF_3=arm 순서 효과. A → B 연속 실행이라 MySQL 버퍼풀·페이지 캐시가 B 에 유리하다.
+#   순서를 뒤집은 대조가 이 회차에 없다. (#554 LIMIT_ARM_ORDER 와 같은 한계)
+PREDICT_WRONG_IF_4=S2 의 유입 상한은 릴레이다. batch-size 300 / 5초 = 60 ev/s 이고,
+#   #344 시절(100 → 20/s)의 3배다. 컨슈머가 60/s 를 넘게 처리하면 S2 에서는 concurrency 차이가
+#   드러나지 않는다. S2 는 처리량축이 아니라 안전축으로만 읽는다.
+
+# ── 무효 기준 (두 arm 공통 — 회차 전에 못 박는다) ──────────────────────────
+INVALID_IF=두 arm 의 IMAGE_TAG 불일치 (실행 중 컨테이너에서 읽은 값 기준. .env 를 믿지 않는다)
+INVALID_IF=컨슈머 그룹 멤버 수가 선언한 concurrency 와 불일치  [양성 대조]
+INVALID_IF=회차 도중 인스턴스 중지
+INVALID_IF=회차 기간에 develop → main 배포 발생
+#   현재 develop 에 미배포 22커밋이 있고 그중 #574(ReplayRefundFailureSignalScheduler)는
+#   5분 주기 · matchIfMissing=true 라 기본 ON 이다. 배포되면 측정계에 새 주기 작업이 생기고
+#   "두 arm 이 같은 IMAGE_TAG" 라는 완료 조건이 깨진다.
+INVALID_IF=DLT 토픽 생성 (역직렬화 실패로도 lag 은 0 이 된다 — 가짜 회복)
+INVALID_IF=S1 verify 불일치 — confirmed / sold / tickets / inbox 가 주입 건수와 다르거나
+#   stray_events != 0
+INVALID_IF=S1 시딩 검증 SELECT 불통과 (contiguous_seats · seat_number_ordered ·
+#   seat_booking_aligned · pending · held · expiry_safe)
+INVALID_IF=[CRITICAL] 로그 > 0 (booking · seat · ticket)
+INVALID_IF=Prometheus targets 11개 중 down 또는 스크랩 공백
+INVALID_IF=회차 중 GET /api/v1/performance/admin/dashboard 호출
+#   PR #589(#563)가 booking·seat 에 WHERE 없는 전건 집계를 추가했고 이 배포본에 들어 있다.
+INVALID_IF=S2 시작 시 대상 좌석이 AVAILABLE 이 아니거나 대상 공연에 잔여 앱 예매가 있음
+INVALID_IF=redis_memory_used_bytes >= 48MB (noeviction 상한 근접 — 좌석 락 SET 이 거절된다)
+NOT_INVALID=호스트 CPU 포화. 이 회차가 재려는 결과 그 자체다(#509 실패 모드의 직접 관측).
+NOT_INVALID=B arm 의 hikaricp pending > 0. 무효가 아니라 #596 이 선언한 되돌릴 조건 1의 발동이다.
+NOT_INVALID=S2 의 409 응답. 정상 경합이며 expectedStatuses(200,201,409) 로 실패에서 뺀다.
+
+# ── 판정 창 ────────────────────────────────────────────────────────────────
+WINDOW_S1=스파이크 주입 종료 ~ 브로커 lag 0 도달. arm 마다 길이가 다르다(그것이 결과다).
+#   자원 축(CPU·메모리)은 이 창으로 비교한다.
+WINDOW_S2=k6 시작 t+30s ~ t+390s (램프 5s + STEADY 6m). 두 arm 동일.
+WINDOW_S2_END_SOURCE=k6 종료 후 outbox PENDING/FAILED = 0 첫 관측 시각(#344 WINDOW_END_SOURCE).
+#   릴레이 소진 전 수치는 "처리가 끝나지 않은 상태" 라 종점으로 쓰지 않는다.
+UNIT_RULE=드레인율·회복시간은 브로커 축. RPS 는 rate(...[1m]) 1분 이동평균(15초 스크랩).
+#   S2 의 퍼센타일 SSOT 는 클라이언트(k6)다.
+
+# ── 대조 축에서 빼는 것 ────────────────────────────────────────────────────
+EXCLUDED_AXIS=MySQL 컨테이너 메모리. arm 사이에 버퍼풀이 내려오지 않아 두 번째 arm 이 항상
+#   높게 시작한다. #554 가 이 축을 한 번 오독했다가 캡처를 보고 정정했다(report.md §2.3).
+#   기록 축으로만 남긴다.
+EXCLUDED_AXIS=seat-service RSS 의 arm 간 절대 비교. 부하 후 RSS 가 돌아오지 않아
+#   arm 사이 재시작 여부에 좌우된다. 두 arm 모두 재시작하므로 창 안의 증가분만 본다.
+EXCLUDED_AXIS=#344 · #504 절대값과의 직접 대조. 배포본이 다르다(§6.1).
+
+# ── 실행 절차의 런북 이탈 (회차 전에 적는다) ───────────────────────────────
+RUNBOOK_DEVIATION_1=arm-stats.py 를 이 회차에서 쓰지 않았다(회차 전 계획은 S2 에만 쓰는 것이었다).
+#   그 스크립트는 #554 의 k6 ramping-vus 두 arm 회차 전용이다 —
+#   ① DEFERRAL_RATIO 가 '램프 끝 = t+300s' 를 하드코딩한다(이 회차 S2 의 램프는 5s 다)
+#   ② KNEE_WATCH 목록이 대기열 회차의 임계다
+#   ③ arm 접미사가 on/off 가 아니면 판정 창이 (30,300) 으로 고정된다
+#   ④ S1 은 애초에 k6 를 쓰지 않아 k6-summary-<arm>.txt 가 없어 스크립트가 읽을 것이 없다
+#   ⑤ 이 회차의 주 판정축은 브로커 축(주입 스크립트 stdout)이라 Prometheus 덤프 집계가 아니다.
+#   S2 도 결국 쓰지 않았다 — 이 회차 S2 의 판정은 카운터 절대값 대조(오버셀·경합·실패 경로)이고
+#   그것은 arm-stats.py 가 내는 축이 아니다. 손집계 위험은 카운터가 서로를 검증하는 구조
+#   (성공 = version 증가분 = 비-CANCELED 예매 수 = 로그 해제 횟수)로 대신 막았다.
+#   ⚠ 이슈 본문의 "#554 가 만든 도구를 그대로 쓴다" 에 대한 의도적 이탈이다.
+#   ⚠ grafana-links.py 는 썼다(패널 2개 교체). dump-timeseries.py 는 변경 0줄로 그대로 썼다.
+RUNBOOK_DEVIATION_2=런북 §10.2 의 `--network host` + localhost:9090 을 쓰지 않는다.
+#   Windows Docker Desktop 에서 --network host 는 동작하지 않는다. host.docker.internal:9090 을
+#   쓰고 MSYS_NO_PATHCONV=1 을 붙인다(#554 와 동일).
+RUNBOOK_DEVIATION_3=런북 §16.4 G2 의 `restart` 대신 `up -d --force-recreate --no-deps` 를 쓴다.
+RUNBOOK_DEVIATION_4=오버셀 검증을 대상 공연 하나로 좁힌다(아래 OVERSELL_SQL).
+#   런북 §13.4-(7)의 `p.title LIKE 'LOADTEST-%'` 필터는 이 DB 에서 과거 회차 잔재 20,594건을
+#   함께 긁는다(회차 전 실측: LOADTEST 공연 9개에 잔재 예매). 대상 공연으로 좁히지 않으면
+#   롤업이 의미를 잃는다.
+RUNBOOK_DEVIATION_5=grafana-links.py 의 PANELS 에서 대기열 패널(queue-admission)을
+#   kafka-consumer-lag 로 교체한다. 이 회차에 대기열은 관계가 없다.
+
+# ── 오버셀 검증 SQL — 상태 무관 검사. 원문을 증적에 남긴다 ─────────────────
+# ⚠ 런북 §13.4-(7)(a) 를 그대로 쓰면 검출력이 0 이다. 그 쿼리는
+#   booking_status IN ('PENDING','CONFIRMED') 로 거르는데 예매는 5-6분이면 만료되므로
+#   검증 시점에 활성 예매가 0건이고, 쿼리가 아무 행도 보지 않은 채 "0행 = 정상" 을 낸다.
+#   #554 가 이 문제를 발견해 상태 무관 검사로 바꿔 돌렸다(§9.3). 다만 그 회차는 SQL 원문을
+#   남기지 않아 재현이 불가능했다 — 이번에는 원문과 출력을 함께 oversell-<arm>.txt 에 남긴다.
+# 각 arm 의 S2 종료 직후, cleanup 전에 실행한다. arm 사이 리셋이 증거를 지운다.
+# ⚠⚠ 회차 중 정정 — 위에 적었던 상태 무관 좌석 중복 검사는 이 시나리오에 쓸 수 없다.
+#   회차 전에 적은 것: OVERSELL_SQL_F = booking GROUP BY seat_id HAVING COUNT(*) > 1 → 0행.
+#   A arm 에서 실제로 돌려 보니 4,674행이 나왔다. 버그가 아니라 쿼리가 시나리오에 안 맞는다 —
+#   이 회차는 좌석 1석에 전 VU 가 몰리므로 '예매 N건이 같은 seat_id 를 가리킨다' 가 정상이다.
+#   #554 가 만든 그 검사는 VU 마다 좌석이 유일한 회차 전용이고, #344 형 회차로 옮겨지지 않는다.
+#   ⇒ 예매 생성은 좌석 점유가 아니다. 오버셀은 '두 예매가 동시에 그 좌석을 보유했는가' 이다.
+#   ⚠ 판정 기준(오버셀 0)은 바꾸지 않았다. 바꾼 것은 검출력이 0(정확히는 음수)인 계측 도구다.
+#     #554 가 KNEE_WATCH_7 을 교체할 때 적용한 것과 같은 구분이다(§6.1).
+#   ⚠ 아래 (a)-(e) 는 두 arm 에 동일하게 적용했다. A arm 에서 f 를 한 번 돌린 기록은
+#     oversell-c1.txt 에 남기지 않았고(파일을 정정본으로 덮었다) 이 주석이 그 사실의 증적이다.
+OVERSELL_SQL_A=SELECT COUNT(*) held_ever FROM booking WHERE performance_id=<PERF_ID> AND booking_status <> 'CANCELED';
+OVERSELL_SQL_B=SELECT booking_status, COUNT(*) c FROM booking WHERE performance_id=<PERF_ID> GROUP BY 1 WITH ROLLUP;
+OVERSELL_SQL_C=SELECT seat_id, seat_status, booking_number, version, hold_expired_at FROM seat WHERE seat_id=<TARGET_SEAT_ID>;
+OVERSELL_SQL_D=SELECT COUNT(*) held_now FROM seat WHERE seat_id=<TARGET_SEAT_ID> AND seat_status='HOLD';
+OVERSELL_SQL_E=SELECT seat_status, COUNT(*) c FROM seat WHERE performance_id=<PERF_ID> GROUP BY 1;
+# (a) 좌석을 실제로 점유한 예매 수. 이 흐름에서 CANCELED 는 보상(못 잡음)이고 그 외는 점유분이다
+# (b) 점유분 + 보상분 = 전체. 잔여가 있으면 정합성이 깨진 것이다
+# (c) version = 엔티티 관리 HOLD 쓰기 횟수 = HOLD 사이클 수.
+#     만료 해제(releaseExpiredHoldById)는 벌크 JPQL UPDATE 라 @Version 을 올리지 않는다(#344 VERSION_NOTE)
+# (d) 현재 HOLD <= 1
+# (e) 대상 1석 외에 건드려진 좌석이 없는가
+OVERSELL_CROSSCHECK=① ticketrush_seat_hold_total{result="success"} = (a) = (c)의 version 증가분
+#   ② {result="unavailable"} = CANCELED 건수  ③ ①+② = 전체 예매 = k6 seat_accepted
+#   ④ 로그의 "좌석 N 상태를 AVAILABLE로 즉시 롤백" 건수 = HOLD 사이클 수 (해제 시각이 겹치지 않는지)
+# ⚠⚠ #344 의 OVERSELL_EVIDENCE (1) max_over_time(ticketrush_seat_held[8m]) = 1 은 이 회차에서
+#   쓸 수 없다. 그 게이지는 대상 좌석이 아니라 DB 전체의 HOLD 좌석 수다 — A arm 측정 창에서
+#   min 999 / max 20,540 이 나왔고, 그 값의 정체는 같은 시각 S1 코호트(LTP-A)가 들고 있던
+#   HOLD 좌석이다. #344 가 그것을 '동시 보유 최대 1건' 으로 읽을 수 있었던 것은 그 회차 DB 에
+#   다른 HOLD 좌석이 없었기 때문이고, 그 조건은 이 회차에 성립하지 않는다.
+#   ⇒ 시간 축 증거는 위 ④(로그의 해제 시각 열)로 대체한다. 15초 스크랩보다 해상도가 높다.
+# ⚠ 15초보다 짧은 동시 보유의 보증은 여전히 구조적 근거(Seat.hold() 가 AVAILABLE 을 요구하고
+#   @Version 이 커밋 충돌을 막는다)와 SeatHoldConcurrencyTest(실 MySQL 20스레드)가 담당한다.
+
+# ── 사전 게이트 — 회차 시점에 채운다 ───────────────────────────────────────
+G0_IMAGE_TAG=b0f3da8464498eaf1e595ac2e478167fb3afee27 — 실행 중 컨테이너 8개 전부 동일.
+#   CD 성공 SHA(PR #605, 2026-08-13T09:17:34Z)와 일치하고 origin/main 팁과도 같다.
+#   ⚠ deploy/.env 에 SPRING_KAFKA_LISTENER_CONCURRENCY 키가 없음을 함께 확인했다
+#     → 회차 전 실효값 = 코드 기본값 3. 위 CORRECTION_554 의 근거다.
+G1_UPTIME=2026-08-13T14:31:57Z 부팅. 회차에 약 3시간 연속 가동이 필요하다.
+G3_INDEX=존재 확인. booking: idx_booking_status_updated_at · idx_booking_user_id_status /
+#   seat: idx_seat_performance_id_status_hold_expired_at · idx_seat_status_hold_expired_at /
+#   outbox: idx_outbox_aggtype_status_id · idx_outbox_aggtype_status_published ·
+#   idx_outbox_status_created_at (#483 힌트 대상). @Index 가 prod 적용을 보장하지 않으므로
+#   information_schema.STATISTICS 로 직접 확인했다.
+G4_REDIS=used_memory 1.40M / maxmemory 64.00M / policy noeviction. seat:lock:* 0건 · queue:* 0건.
+G5_PROM_TARGETS=11개 전부 up (gateway 1 · ticketrush-services 7 · node · redis · prometheus)
+G6_DLT=DLT 토픽 미생성. 토픽 10개 + __consumer_offsets 뿐이다.
+G7_OUTBOX=backlog 0. outbox 57,996행 전부 SENT (PENDING·FAILED 0건).
+G8_IDLE_CPU_BASELINE=약 7.5% — min 5.78 / avg 7.55 / max 13.67 (창 14:49:30~14:54:30Z, 표본 21).
+#   같은 순간 load average 0.10. #554 가 잰 약 7.0% 와 같은 자릿수다.
+#   ⚠ 첫 표본 13.67 은 직전(14:48:49Z) 프리플라이트 검증 질의의 꼬리다. 그것을 빼면 max 9.3.
+#   ⚠ 이 값은 arm A 셋업(컨슈머 4개 --force-recreate + 코호트 reset + 프리플라이트)을 모두
+#     끝낸 뒤에 쟀다. 셋업 전 상태가 아니라 회차가 실제로 출발하는 상태의 기저다.
+#   ⚠ 첫 시도(14:40~14:43)는 max 57.46 이 나왔는데 원인이 대상이 아니라 측정자였다 —
+#     그 구간에 SSH 질의를 던졌고, 같은 순간 load average 는 0.77 이었다. #554 와 같은 함정이다.
+G9_BASELINE=hikaricp_connections_pending 전 인스턴스 0.
+#   tomcat_threads_config_max_threads: seat-service 50 / 나머지 6개 200.
+#   jvm_threads_live: booking 112 / seat 131 / ticket 64 / payment 77 / performance 46 /
+#   auth 42 / user 40 (concurrency 3 상태).
+#   ticketrush_seat_lock_contention_total: 시리즈 부재(= 0). 부팅 후 아직 한 번도 증가 안 함.
+G10_PARTITIONS=payment-confirmed-topic 3 / booking-created-topic 3 (replication-factor 1).
+G11_GROUP_MEMBERS=booking-group 15 / ticket-group 6 / seat-group 9 / payment-group 9
+#   = 리스너 5 · 2 · 3 · 3 × concurrency 3. 위 CONTROL_CHECK 의 회차 전 기준선이다.
+G12_DB_PRESTATE=booking 53,578 / seat 66,520 / ticket 25,000 / inbox 643,997 / performance 15.
+#   S2 대상 후보: performance_id=13 (LOADTEST-000010, booking_open_at NULL, seat 2,080석
+#   전부 AVAILABLE, 잔여 앱 예매 0건). 첫 좌석 seat_id=26130 (Z-1) — #344 의 seat 121 과
+#   같은 좌석 번호다.
+#   ⚠ 다른 LOADTEST 공연(4-12)에는 과거 회차 잔재 예매 20,594건이 남아 있다.
+#     그래서 오버셀 SQL 을 performance_id 로 좁혔다(RUNBOOK_DEVIATION_4).
+#   ⚠ LTP-A(performance_id=19)에 #504 잔재 30,000건이 있다. S1 시딩 전에 @mode='reset' 으로 지운다.
+MEASUREMENT_HAZARD=2 vCPU 라 관측 행위 자체가 관측값에 잡힌다. SSH 세션 + docker CLI +
+#   Prometheus range query 가 각각 CPU 를 쓴다. #554 는 기저를 재다 max 57.55% 가 나왔는데
+#   원인이 측정자였다(같은 순간 컨테이너 CPU 합 13%, load average 0.10).
+#   → 부하·드레인 구간에는 원격 명령을 던지지 않는다. 덤프는 회차 후에만 돌린다.
+
+# ── 시딩 — 회차 시점에 채운다 ──────────────────────────────────────────────
+SEED_S1=load-test/seed/seed_payment_pipeline.sql — @mode='reset' 을 쓴다(@mode='seed' 가 아니다).
+#   ⚠ 계획 대비 이탈이며, 대조가 더 세지는 방향이다. reset 은 코호트를 지우고 새로 만드는 대신
+#     같은 booking_id·seat_id 범위를 PENDING/HOLD 로 되돌린다. 그래서
+#     ① 두 arm 이 완전히 같은 행을 쓴다(교란 변수 하나 제거)
+#     ② 이슈가 경고한 "AUTO_INCREMENT 는 되감기지 않는다 → B arm 인자를 갱신하라" 함정이
+#        아예 발생하지 않는다
+#     ③ seed 였다면 B arm 의 행이 버퍼풀에 없어 오히려 B 가 불리했을 것이다.
+#   reset 은 inbox 의 PaymentConfirmed 행도 지운다 — 두 arm 의 inbox 크기 출발점이 같아진다
+#   (seed 는 안 지운다. 그대로 뒀다면 A arm 이 남긴 약 58,000행을 B 가 안고 시작했을 것이다).
+SEED_S2=기존 LOADTEST 코호트 재사용 + arm 마다 리셋(예매 삭제 · 좌석 AVAILABLE 복구 ·
+#   seat:lock:<TARGET> DEL). 새 공연을 만들지 않는 이유는 두 arm 이 같은 좌석을 써야
+#   대조가 성립하기 때문이다.
+COHORT_S1=perf_id 19 (LTP-A) / booking_id 2000001-2030000 / seat_id 76054-106053 / user_id 4
+#   / cohort_size 30000. 두 arm 동일(reset 이므로).
+#   검증 SELECT 전부 통과: seats 30000 · contiguous_seats 1 · held 30000 · seat_number_ordered 1
+#   · bookings 30000 · pending 30000 · not_pending 0 · contiguous_bookings 1
+#   · seat_booking_aligned 1 · expiry_safe 30000 · stray_events 0
+COHORT_OFFSET_MAP=코호트 안에서 구간을 겹치지 않게 나눈다. 두 arm 동일.
+#   프리플라이트 OFFSET=0     COUNT=1
+#   워밍업1    OFFSET=1000   COUNT=2000
+#   워밍업2    OFFSET=3000   COUNT=2000
+#   워밍업3    OFFSET=5000   COUNT=2000
+#   baseline   OFFSET=7000   COUNT=3000  RATE=10
+#   스파이크   OFFSET=10000  COUNT=20000 RATE=0
+#   합계 29,001 <= 30,000.
+#   ⚠ 구간이 겹치면 두 번째 주입은 booking 이 이미 CONFIRMED 라 confirm() 이 no-op 이 되고
+#     티켓도 already_issued 가 되어 유입이 조용히 깎인다(주입 스크립트 OFFSET 주석).
+#   ⚠ #504 는 워밍업 6,000건과 본 회차 23,000건의 구간 배분을 증적에 남기지 않아
+#     COUNTER(29,001)와 VERIFY_CONFIRMED(23,000)의 관계를 재구성할 수 없다. 그래서 여기 적는다.
+PREFLIGHT_C1=2026-08-13T14:48:26Z. booking 2000001 CONFIRMED · seat 76054 SOLD ·
+#   ticket 81002 UNUSED · inbox booking-group 1 / ticket-group 1 · DLT 토픽 미생성.
+#   주입 스크립트가 보고한 그룹별 컨슈머 수: booking-group 1 / ticket-group 1 (concurrency 1 확인).
+
+# ── 실측 — 회차 후에 채운다 ────────────────────────────────────────────────
+# (A arm)
+C1_CONFIG=SPRING_KAFKA_LISTENER_CONCURRENCY=1. deploy/.env 에 키를 새로 추가하고
+#   booking·seat·ticket·payment 4개를 --force-recreate 했다(2026-08-13T14:46Z 경).
+#   docker inspect Config.Env 로 4개 전부 =1 확인. 이미지 태그는 재생성 후에도 b0f3da84… 동일.
+C1_CONTROL_CHECK=통과. 컨슈머 그룹 멤버 수 booking-group 5 / ticket-group 2 / seat-group 3 /
+#   payment-group 3 = 리스너 5·2·3·3 × 1. 회차 전(concurrency 3)의 15/6/9/9 에서 정확히 1/3 이다.
+#   교차 확인 — jvm_threads_live: booking 112→72(−40) / seat 131→107(−24) / ticket 64→48(−16)
+#   / payment 77→53(−24). 리스너를 걷어낸 만큼 줄었고 무관한 서비스(auth 42 · user 40 ·
+#   performance 46)는 변하지 않았다.
+C1_S1_WARMUP=드레인 84s → 55s → 52s (각 2,000건 무페이싱). 3차에 고원 도달.
+#   #504 스모크(90 → 61 → 57s)와 같은 모양이고 값도 근접한다 — 배포본이 다른데도 A arm 이
+#   #504 를 재현하고 있다는 첫 신호다.
+C1_S1_BASELINE=3,000건 / 명목 10/s → 실측 9/s (302s). 14:59:40Z ~ 15:04:42Z.
+#   주입 종료 3초 뒤 첫 표본이 이미 lag 0 — 드레인 경과 0s. 흡수 확인(#504 와 동일).
+C1_S1_SPIKE=20,000건 무페이싱 / 실측 10,000/s (2s). 15:04:52Z ~ 15:04:54Z.
+#   정점 booking-group 19,882 / ticket-group 19,521 @ 15:05:00Z (주입 종료 +6s). 합 39,403.
+C1_S1_DRAIN_BOOKING=42.9/s (19,882건 / 463s, peak 15:05:00Z → 0 15:12:43Z)
+#   두 그룹 동시 구간(15:05:00~15:08:45Z) 39.8/s → booking 단독 구간(15:08:45~15:12:43Z) 45.9/s.
+#   경합 이득 +15.2%. ticket-group 이 0 에 닿는 순간 booking 처리율이 뛴다 —
+#   두 그룹이 같은 2 vCPU 를 나눠 쓴다는 직접 증거다(#504 는 같은 축에서 +24%).
+C1_S1_DRAIN_TICKET=86.8/s (19,521건 / 225s, peak 15:05:00Z → 0 15:08:45Z). booking 의 2.02배.
+C1_S1_RECOVERY=주입 종료 기준 booking 465s (7분 45초) / ticket 231s (3분 51초).
+#   회복시간의 머리값은 느린 booking-group 이 정한다.
+C1_S1_VERIFY=통과. confirmed 29,001 = sold 29,001 = tickets 29,001 = inbox_booking 29,001
+#   = inbox_ticket 29,001 = 주입 총량(1 + 6,000 + 3,000 + 20,000). stray_events 0.
+#   잔여 pending 999 = 30,000 − 29,001. DLT 토픽 미생성. [CRITICAL] 로그 booking/seat/ticket 0건.
+C1_S1_RESOURCE=드레인 창(15:04:54~15:12:43Z) 호스트 CPU min 33.79 / avg 79.43 / max 87.09.
+#   hikaricp pending 전 인스턴스 0 / active max 1 (booking·seat·ticket, 풀 10).
+#   container oom_kills 0. 컨테이너 메모리 max — booking 84.98 / seat 68.99 / ticket 72.19
+#   / performance 88.63 / kafka 67.03 / redis 10.02.
+#   ⚠ MySQL 99.65~100.00% 는 사전 선언대로 대조 축에서 뺀다(EXCLUDED_AXIS).
+#   ⚠ 무부하 기저(G8 7.55%)와의 차이 71.9%p 가 드레인 귀속분이다. #504 는 같은 값을
+#     '드레인 후 유휴 28.19%' 기준으로 52%p 라고 봤다 — 기준선 정의가 달라 그대로 잇지 않는다.
+C1_S1_REPRODUCTION=#504 재현 확인. 배포본이 1f2ed5d2 → b0f3da84 로 다른데도 5개 축이 근접했다.
+#   드레인율 booking 42.9 vs 42.0 (+2.1%) / ticket 86.8 vs 85.9 (+1.0%)
+#   / 회복 465 vs 479s (−2.9%) / CPU avg 79.43 vs 80.84 / CPU max 87.09 vs 87.51.
+#   워밍업 곡선도 84→55→52s vs 90→61→57s 로 같은 모양이다.
+#   ⇒ A arm 은 유효한 before 다. 이후 B/A 비율의 분모로 쓴다.
+C1_S2_RESULT=15:15:36Z ~ 15:21:46Z (6m10s, exit 0). PERF_ID=13 / TARGET_SEAT_ID=26130.
+#   http_reqs 148,588 / 400.14 rps. seat_accepted 3.14%(4,674) / seat_conflict 96.85%(143,913).
+#   http_req_duration avg 245.6ms med 208.5ms p90 404.6ms p95 534.2ms max 2.44s.
+#   임계 2개 전부 통과 — p(95)<800 ✓ (534.18ms) / http_req_failed<0.01 ✓ (0.00%, 0/148,588).
+#   ⚠ #344 는 같은 프로파일에서 p95 911.79ms 로 FAIL 이었다. 절대값을 잇지 않는다(배포본이 다르고
+#     그 회차는 피크 호스트 CPU 99.87% 였다). 여기서는 '이 회차 안에서 A/B 가 같았는가' 만 본다.
+C1_S2_CONTENTION=0. ticketrush_seat_lock_contention_total 시리즈 자체가 생성되지 않았다.
+#   #344 와 같은 결과이고, 예측(PREDICT_S2_CONTENTION)대로다.
+#   ⇒ concurrency 1 에서는 tryLock==false 경로에 도달하지 못한다(RLock 재진입).
+C1_S2_FAILPATH=전량 2-C(SeatFacade.java:197 이미 선점/판매). 2-B(락 획득 실패)는 0건.
+#   seat-service 로그 실측 — "좌석이 이미 선점/판매되어 HOLD 불가" 4,666건.
+#   ⚠ 컨슈머 스레드 이름이 전부 [ntainer#0-0-C-1] 하나였다(리스너 라인 4,694건 전량).
+#     concurrency 1 의 스레드 수준 직접 증거다.
+C1_S2_INBOX=seat-group processed 4,674 / duplicate 20.
+#   리스너 수신 로그 4,694건 − 예매 4,674건 = 20 = 릴레이 재발행분. Inbox 가 전량 차단했다.
+C1_S2_OVERSELL=오버셀 0. 네 축이 맞물린다 —
+#   seat_hold_total{success} 8 = seat.version 8 = booking EXPIRED 8 = 로그의 Redis 만료 해제 8회.
+#   seat_hold_total{unavailable} 4,666 = booking CANCELED 4,666. 8 + 4,666 = 4,674 = 전체 예매
+#   = k6 seat_accepted. 잔여 0(대상 좌석 최종 AVAILABLE, 공연 2,080석 전부 AVAILABLE).
+#   HOLD 사이클 8회의 해제 시각: 15:16:16 / 15:17:10 / 15:17:50 / 15:18:29 / 15:19:22 /
+#   15:19:59 / 15:21:02 / 15:22:03Z — 40-60초 간격으로 순차. 겹친 구간이 없다.
+#   #344 는 같은 구조에서 3/3/3 이었다(사이클 3회).
+#   증적 oversell-c1.txt (SQL 원문 포함).
+# (B arm)
+C3_CONFIG=SPRING_KAFKA_LISTENER_CONCURRENCY=3. deploy/.env 의 값을 1 → 3 으로 바꾸고
+#   같은 4개 서비스를 --force-recreate 했다(15:39Z 경). docker inspect Config.Env 로 4개 전부 =3
+#   확인. 이미지 태그 b0f3da84… 동일.
+C3_CONTROL_CHECK=통과. 컨슈머 그룹 멤버 booking 15 / ticket 6 / seat 9 / payment 9
+#   = 리스너 5·2·3·3 × 3. 회차 전 기준선(G11)과 정확히 일치한다.
+#   jvm_threads_live 도 기준선 복귀 — booking 112 / seat 131 / ticket 64 / payment 77.
+#   주입 스크립트 자체 출력도 booking-group consumers=3 / ticket-group consumers=3.
+#   Prometheus targets 11/11 up.
+C3_BETWEEN_ARM_RESET=① S2 코호트: outbox(Booking·Seat) 삭제 → 예매 4,674건 삭제 → 좌석 복구
+#   → app 예매 0 · non-AVAILABLE 0 확인 ② seat:lock:* 0건 ③ outbox backlog 0
+#   ④ S1 코호트 @mode='reset' → 30,000 PENDING/HOLD · inbox 0 · 연속성 OK (seed-verify-c3.txt)
+#   ⑤ 컨슈머 4개 --force-recreate(= seat-service 재시작 포함) ⑥ targets 11/11 재확인
+#   ⚠ 대상 좌석 26130 의 version 은 8 에서 이어진다(리셋이 되돌리지 않는다). 낙관적 락 카운터라
+#     대조에 영향이 없고, B arm 의 HOLD 사이클 수는 version 증가분으로 센다.
+C3_S1_WARMUP=드레인 65s → 33s → 32s. A arm 84 → 55 → 52s 대비 전 회차 빠르다.
+#   3차 고원값 32s vs 52s = 1.63배. 본 회차 전에 이미 방향이 보였다.
+C3_S1_BASELINE=3,000건 / 명목 10/s → 실측 9/s (301s). 15:45:48Z ~ 15:50:49Z.
+#   드레인 경과 0s. A arm 과 동일하게 흡수됐다(유입 9/s 는 양쪽 드레인 용량 아래다).
+C3_S1_SPIKE=20,000건 무페이싱 / 실측 6,666/s (3s). 15:51:00Z ~ 15:51:03Z.
+#   첫 표본(15:51:12Z, 주입 종료 +9s) booking 19,563 / ticket 18,370.
+#   ⚠ A arm 의 첫 표본은 +6s 였다. 표본 시각이 달라 '정점' 절대값을 직접 비교하지 않는다 —
+#     아래 드레인율·회복시간은 전부 '주입 종료 기준' 으로 계산했다.
+C3_S1_DRAIN_BOOKING=96.6/s (20,000건 / 207s, 주입 종료 15:51:03Z → lag 0 15:54:33Z)
+#   두 그룹 동시 구간(15:51:12~15:52:56Z) 84.1/s → booking 단독 구간(15:52:56~15:54:33Z) 111.5/s.
+#   경합 이득 +32.5% (A arm 은 +15.2%). 스레드가 3배가 되면서 그룹 간 CPU 경합도 커졌다.
+C3_S1_DRAIN_TICKET=177.0/s (20,000건 / 113s, 주입 종료 → lag 0 15:52:56Z). booking 의 1.83배.
+C3_S1_RECOVERY=주입 종료 기준 booking 207s (3분 27초) / ticket 113s (1분 53초).
+C3_S1_VERIFY=통과. confirmed 29,001 = sold = tickets = inbox_booking = inbox_ticket = 29,001.
+#   stray_events 0. 잔여 pending 999. A arm 과 완전히 같은 수치다.
+#   inbox duplicate 시리즈 부재 — 병렬 소비에서도 payment-confirmed 경로에는 중복 수신이 없었다
+#   (주입이 1회성이고 릴레이를 경유하지 않기 때문이다).
+C3_S1_RESOURCE=드레인 창(15:51:03~15:54:33Z) 호스트 CPU min 21.87 / avg 82.10 / max 94.56.
+#   A arm(79.43 / 87.09) 대비 avg +2.67%p 인데 처리량은 2.25배다.
+#   hikaricp pending 전 인스턴스 0 (시계열 미생성) / active max booking 2 · seat 3 · ticket 3.
+#   ⇒ #596 이 선언한 되돌릴 조건 1(pending > 0)은 발동하지 않았다. 풀 10 에 여유가 남았다.
+#   container oom_kills 0. 앱 컨테이너 메모리 max — booking 85.43 / seat 70.22 / ticket 74.56
+#   / performance 90.00 (A arm 84.98 / 68.99 / 72.19 / 88.63 과 자릿수 동일).
+#   ⇒ 되돌릴 조건 3(RSS 가 mem_limit 근접)도 발동하지 않았다.
+C3_S1_CPU_MODE=이 회차의 핵심 발견. 모드별 분해(같은 창):
+#            non-idle   iowait   system    user   user+system
+#   A(c1)      79.43     20.94    10.20   45.57      55.77
+#   B(c3)      82.10     11.01    13.16   55.11      68.27
+#   ⇒ concurrency 1 에서 'CPU 79%' 의 20.94%p 가 iowait 이었다 — 단일 컨슈머 스레드가 DB 왕복에
+#     멈춰 있던 시간이고, 그동안 CPU 는 돌릴 것이 없어 놀았다.
+#   ⇒ 스레드를 늘리자 그 빈틈이 다른 메시지의 작업으로 채워졌다. 실제 계산량(user+system)은
+#     55.77 → 68.27 (+22%) 인데 처리량은 +125% 다. CPU 1%p 당 처리량이 약 1.8배 좋아졌다.
+C3_S2_RESULT=15:56:06Z ~ 16:02:16Z (6m10s, exit 0). PERF_ID·TARGET_SEAT_ID 는 A arm 과 동일.
+#   http_reqs 145,121 / 392.01 rps. seat_accepted 3.73%(5,413) / seat_conflict 96.26%(139,707).
+#   http_req_duration avg 251.5ms med 200.4ms p90 486.6ms p95 625.8ms max 2.45s.
+#   임계 2개 전부 통과 — p(95)<800 ✓ (625.77ms) / http_req_failed<0.01 ✓ (0.00%).
+#   A arm 대비 p95 534.2 → 625.8ms (+17.1%), rps 400.1 → 392.0 (−2.0%).
+#   ⚠ 이 축은 유입(HTTP)이라 컨슈머 병렬도와 직접 관계가 없다. 같은 시각 컨슈머 스레드가
+#     3배로 늘어 호스트 CPU 를 더 쓰는 것의 간접 영향으로 읽는다 — S2 의 판정축이 아니다.
+C3_S2_CONTENTION=3,621. ticketrush_seat_lock_contention_total 시리즈가 이 프로젝트에서 처음으로
+#   생성됐다. 회차 전 예측(PREDICT_S2_CONTENTION)대로다.
+#   ⇒ #344 의 "이 경로에서 Redisson 락 경합은 구조적으로 발생하지 않는다" 는 concurrency 1
+#     조건에서만 참이었다. 그 전제는 #596 으로 사라졌고, 이 회차가 수치로 확정했다.
+C3_S2_FAILPATH=실패가 두 경로로 갈렸다. 합이 CANCELED 와 정확히 맞는다.
+#            2-B 락 획득 실패   2-C 이미 선점/판매   합 = CANCELED   HOLD 성공
+#   A(c1)          0               4,666             4,666            8
+#   B(c3)      3,621 (67.0%)       1,785 (33.0%)      5,406            7
+#   2-C 는 seat-service 로그로 교차 확인했다 — 스레드별 1,515 + 265 + 5 = 1,785.
+#   ⚠ 2-C 가 스레드 0 에 쏠린 이유: HOLD 를 성공시킨 스레드는 그 뒤 같은 좌석 이벤트에서
+#     RLock 을 재진입해 tryLock 이 성공하고 2-C 로 떨어진다. 다른 두 스레드는 2-B 로 간다.
+C3_S2_THREADS=컨슈머 스레드 3개가 균등하게 일했다 — [ntainer#0-0-C-1] 1,815 /
+#   [ntainer#0-1-C-1] 1,841 / [ntainer#0-2-C-1] 1,813 (편차 1.6%).
+#   A arm 은 [ntainer#0-0-C-1] 하나에 4,694 였다. 파티션 3개가 실제로 나뉘어 소비된다.
+C3_S2_INBOX=seat-group processed 5,413 / duplicate 56 (A arm 4,674 / 20).
+#   수신 로그 5,469 = 5,413 + 56. 병렬 소비에서도 Inbox 가 릴레이 재발행분을 전량 차단했다.
+#   ⇒ DuplicateEventException 경로가 병렬 조건에서도 동작한다(완료 조건 6).
+C3_S2_OVERSELL=오버셀 0. 병렬 소비 조건에서 확인했다 — 이 회차의 가장 중요한 안전 확인이다.
+#   seat_hold_total{success} 7 = seat.version 증가분 7 (8 → 15)
+#   = booking EXPIRED 6 + PENDING 1 (7번째 HOLD 가 검증 시점에 TTL 안이었다).
+#   {unavailable} 1,785 + contention 3,621 = 5,406 = CANCELED. 7 + 5,406 = 5,413 = 전체 예매
+#   = k6 seat_accepted. 잔여 없음.
+#   HOLD 사이클 해제 시각 6회: 15:58:12 / 15:58:50 / 16:00:05 / 16:01:17 / 16:02:15 / 16:02:58Z
+#   — 순차이고 겹친 구간이 없다. 7번째는 16:03:02 취득 · 16:08:02 만료 예정으로 검증 시점에 진행 중.
+#   대상 공연 2,080석 중 HOLD 는 그 1석뿐(나머지 2,079 AVAILABLE).
+#   ⇒ 정합성을 지키는 것은 컨슈머 직렬화가 아니라 Seat.@Version + isAvailable() 이다.
+#     그 방어선이 병렬 소비라는 새 조건에서 처음으로 실제 경합을 맞고 버텼다.
+#   증적 oversell-c3.txt (SQL 원문 포함).
+#   ⚠ oversell-c3.txt 의 (m) 절 PromQL 창 표기가 c1 창(15:15~15:33Z)으로 잘못 찍혔다
+#     — 스크립트를 sed -i 로 만들어 창 값이 이미 치환돼 있었다. 그 절의 seat_held 게이지는
+#     어차피 이 회차에서 쓰지 않는 축이고(위 OVERSELL_CROSSCHECK 참조), 같은 블록의
+#     seat_hold_total · seat_lock_contention 은 instant 질의라 값은 정확하다.
+# (대조)
+PRIMARY_RESULT=B/A = 2.25배. 선언 분기 중 "B/A >= 1.2 → 병렬 소비가 처리량을 올렸다" 에 해당한다.
+#   booking-group 드레인율(주입 종료 기준) A 43.0/s → B 96.6/s. 회복시간 465s → 207s.
+#   계산 방식을 셋으로 바꿔도 결론이 흔들리지 않는다:
+#     ① 스크립트 자체 타이머(elapsed_from_inject_end 465 / 207s)  → 43.0 → 96.6/s = 2.25배
+#     ② 드레인 표본 시각 기준(469 / 210s)                        → 42.6 → 95.2/s = 2.23배
+#     ③ peak → 0 (19,882/463s, 19,563/201s)                      → 42.9 → 97.3/s = 2.27배
+#   ⚠ ①과 ②의 4초 차이는 폴링 간격(약 10초) + kafka-consumer-groups --describe 호출 지연이다.
+#     #504 도 같은 이유로 475s vs 479s 였다. 회복시간의 해상도가 그만큼이라는 뜻이다.
+#   ⚠ ③의 '정점' 은 두 arm 의 첫 표본 시각이 달라(+6s / +9s) 절대값 비교에 쓰지 않는다.
+#     본문 수치는 전부 ①(주입 종료 기준)이다.
+COMPARISON=대조표는 report.md §2 참조. 핵심 네 줄:
+#   ① booking 드레인율 43.0 → 96.6/s (2.25배). 주 판정축이고 선언 임계 1.2 를 크게 넘었다.
+#   ② 호스트 CPU 는 avg 79.43 → 82.10 (+2.67%p) 뿐이다. 처리량 2.25배를 CPU 2.67%p 로 샀다.
+#   ③ 그 차이의 정체는 iowait 이다 — 20.94 → 11.01%p. 직렬 소비의 상한은 CPU 용량이 아니라
+#      단일 스레드가 DB 를 기다리는 시간이었다.
+#   ④ 오버셀은 양쪽 0. 락 경합은 A 0 → B 3,621 로 시리즈가 처음 생성됐고, 그 조건에서도
+#      Seat.@Version + isAvailable() 이 버텼다.
+PREDICTION_VS_ACTUAL=회차 전 예측 8개와 실측 대조.
+#   [빗나감·크게] PREDICT_B_BOOKING_DRAIN 50-57/s (1.2-1.4배) → 실측 96.6/s (2.25배).
+#     #504 의 CONCURRENCY_UPSIDE_ESTIMATE 를 그대로 인용한 예측이고, 그 추정을 이 회차가 기각한다.
+#     틀린 이유가 이 회차의 가장 큰 소득이다 — 그 산술은 '드레인 귀속 CPU 52%p, 여유 19%p' 로
+#     여유를 계산했는데, 그 52%p 안에 iowait 20.94%p 가 섞여 있었다. iowait 은 작업이 아니라
+#     비어 있는 CPU 라 '여유' 쪽에 넣었어야 했다. 그러면 여유는 19 + 21 = 약 40%p 이고
+#     42.0 × (35+40)/35 ≈ 90/s 로 실측(96.6)에 가까워진다.
+#   [맞음] PREDICT_A_BOOKING_DRAIN 약 42/s → 실측 42.9/s (+2.1%). A arm 이 #504 를 재현했다.
+#   [맞음] PREDICT_TICKET_DRAIN A 약 86/s → 86.6/s.
+#   [빗나감] 같은 항목의 'B 는 CPU 상한에 먼저 걸려 booking 보다 개선폭이 작을 수 있다'
+#     → ticket 2.04배 vs booking 2.25배로 방향은 맞았으나, 둘 다 CPU 상한에 걸리지 않았다.
+#   [맞음] PREDICT_S2_CONTENTION A = 0 (시리즈 미생성).
+#   [맞음] PREDICT_S2_OVERSELL A arm 0행.
+#   [절반 맞음] PREDICT_HIKARI 'B arm booking 에서 pending > 0 이 나올 수 있다'
+#     → 결론은 맞았으나 이유가 다르다. S1(컨슈머 단독)에서는 두 arm 모두 0 이다 —
+#     리스너 5 × 3 = 15 스레드인데 active max 가 2 다(트랜잭션이 짧고 대부분 poll 대기).
+#     pending 이 뜬 것은 S2 이고, 거기서는 A arm(concurrency 1)도 max 71 이었다.
+#     즉 풀을 고갈시킨 것은 컨슈머가 아니라 HTTP 요청 스레드다. 위 VERDICT_596 ① 참조.
+#   [해당없음] PREDICT_WRONG_IF_1 (MySQL 이 병목) — 병목이 MySQL 이었다면 스레드를 늘려도
+#     드레인율이 안 늘었을 것이다. 2.25배가 났으므로 기각된다.
+#   [잔존] PREDICT_WRONG_IF_2 (워밍업 3회로 A·B 의 JIT 상태가 같아진다는 전제) — B arm 워밍업
+#     곡선도 65 → 33 → 32s 로 3차에 고원에 닿아 A 와 같은 모양이다. 다만 3 스레드가 덜 데워졌을
+#     가능성은 이 회차로 배제되지 않는다. 그 방향의 편향은 B 를 과소평가하므로 결론을 약화시키지
+#     않는다(실측 2.25배는 하한이다).
+#   [잔존] PREDICT_WRONG_IF_3 (arm 순서 효과) — LIMIT_ARM_ORDER 참조.
+#   [해당없음] PREDICT_WRONG_IF_4 (S2 의 유입 상한이 릴레이) — 그래서 S2 를 처리량 판정에
+#     쓰지 않았다. 설계대로다.
+VERDICT_596=concurrency 3 을 유지한다. 되돌릴 근거가 없다.
+#   #596 javadoc(KafkaConfig.java:96-103)이 선언한 되돌릴 조건 3개를 하나씩 대조한다.
+#   ① hikaricp_connections_pending > 0 → 판별력이 없는 조건이다. S1(컨슈머 단독 부하)에서는
+#      두 arm 모두 0(표본 59 / 43)이지만, S2(HTTP 400rps)에서는 A arm(concurrency 1)도
+#      max 71 이다. 풀(10)을 고갈시키는 것은 컨슈머 스레드가 아니라 HTTP 요청 스레드다 —
+#      booking-service 의 Tomcat max-threads 는 200 인데 커넥션 풀은 기본 10 이다.
+#      기준선 없이 '> 0' 으로 써 두면 어떤 회차에서든 발동한다(#554 가 container-mem-limit-pct
+#      >= 90% 를 '상시 참' 이라며 KNEE 목록에서 뺀 것과 같은 종류의 문제).
+#      ⚠ 다만 concurrency 3 이 그 압박을 키운 것은 사실이다 — S2 booking pending
+#        avg 5.70 → 13.24 (2.3배), tomcat busy avg 11.35 → 36.46 (3.2배, max 97 / 200).
+#        되돌릴 근거는 아니고 후속 튜닝 대상이다.
+#      ⚠ 이 축을 S1·S2 를 합쳐 읽으면 정반대 결론이 나온다. 반드시 나눠 본다.
+HIKARI_DETAIL=booking-service 기준. 표는 report.md §2.3.
+#          S1 pending   S2 pending(avg/max)  S2 active max  S2 tomcat busy(avg/max)
+#   A(c1)     0            5.70 / 71             10            11.35 / 66
+#   B(c3)     0           13.24 / 71             10            36.46 / 97
+#   seat-service 는 S2 에서도 pending 0 · active max 2 다. 압박은 booking 한 곳이다.
+HIKARI_VERDICT=pending > 0 은 증상이지 문제가 아니다. 아픈지는 획득 대기와 timeout 이 정한다.
+#          S2 획득대기(avg/max)  S2 점유 avg  S2 획득/s  timeout 누적
+#   A(c1)     7.08 / 19.91 ms      5.56 ms      561         0
+#   B(c3)    20.06 / 67.41 ms      7.48 ms      553         0
+#   ① 실패 0건. 획득 타임아웃(기본 30초)이 한 건도 없다. 대기 최댓값 67.41ms 는 상한의 1/450.
+#   ② 풀은 평균적으로 남는다 — 수요 553/s × 7.48ms = 4.13 커넥션-초/초, 풀 10 대비 이용률 41%.
+#      active 가 순간 10 에 붙는 것은 유입이 뭉쳐 들어오기 때문이다(k6 100 VU 가 보조를 맞춘다).
+#      풀이 작은 것이 아니라 버스트에 물린다.
+#   ③ 요청당 획득 약 2회 (561/288 = 1.95). BookingFacade.createBooking 에 @Transactional 이 없어
+#      UseCase 가 각자 트랜잭션을 여는데, 요청의 96.85% 가 좌석 검증에서 409 로 끊겨 세 번째
+#      (BookingCreateUseCase)에 닿지 않는다. BookingIssueNumberUseCase 는 DB 가 아니라 Redis
+#      SETNX 를 쓴다. 2 × 0.9685 + 3 × 0.0314 = 2.03 으로 실측과 맞는다.
+#   ⇒ 요청당 pool 비용 약 40ms = 평균 응답 251.5ms 의 약 16% (A arm 은 약 6%).
+#     임계를 넘지도 실패를 내지도 않았지만 처리량 2.25배의 대가 중 하나로 기록한다.
+#   ⚠ 회차 중에 한 번 'Tomcat max-threads 200 대 풀 10 불균형' 이라고 적었다가 실측으로 물렀다.
+#     평균 이용률 41% 에서 그 서술은 과장이다. 풀만 키우면 2 vCPU 에 동거하는 MySQL 의 동시성이
+#     올라가 점유 시간이 늘 수 있다(#509 실패 모드) — 바꾸려면 그 자체를 재는 회차가 필요하다.
+HIKARI_INSTRUMENTATION_GAP=이 판정을 회차 후에 EC2 를 다시 켜서야 낼 수 있었다.
+#   dump-timeseries.py 의 hikari 획득/점유 질의가 #403(좌석 집계) 회차 전용으로
+#   instance="seat-service:8090" 에 고정돼 있어, 정작 압박이 걸린 booking-service 를
+#   덤프만으로는 볼 수 없었다. pending·active 만으로는 '줄이 섰다' 까지만 알 수 있다.
+#   → hikari-acquire-avg-ms · hikari-usage-avg-ms · hikari-acquire-rate · hikari-timeout 을
+#     인스턴스별로 추가하고 네 창을 다시 덤프했다. 다음 회차는 이 판정을 덤프만으로 낼 수 있다.
+#   ② 호스트 CPU 가 상한인데 처리량이 안 늘었다 → 정반대다. CPU avg 79.43 → 82.10 (+2.67%p)
+#      로 거의 그대로인데 처리량이 2.25배다.
+#   ③ 컨테이너 RSS 가 mem_limit 근접 → 발동 안 함. seat-service 68.99 → 70.22%,
+#      booking 84.98 → 85.43%. OOM kill 0.
+#   추가로, 정합성 방어선이 병렬 조건에서 실제 경합 3,621건을 맞고도 오버셀 0 을 지켰다.
+#   ⚠ 3 이 상한이다. 파티션이 3개라 그 이상은 놀고, 이 회차는 파티션을 늘렸을 때를 재지 않았다.
+#   ⚠ 후속 후보 — 이 회차가 밝힌 병목은 CPU 가 아니라 iowait 이다(C3_S1_CPU_MODE).
+#     파티션·스레드를 더 늘리거나 배치 처리를 넣으면 더 갈 여지가 있다는 뜻이고,
+#     그 상한은 별도 회차로 재야 한다.
+
+# ── 회차 후 남긴 상태 ──────────────────────────────────────────────────────
+POSTSTATE_ENV=deploy/.env 에 SPRING_KAFKA_LISTENER_CONCURRENCY=3 이 남는다(125행).
+#   회차 전에는 이 키가 아예 없었고 코드 기본값 3 으로 돌았다 — 즉 동작은 회차 전과 동일하다.
+#   지우지 않고 남기는 이유: 값을 명시해 두면 #554 의 G9 오독('키가 없다 → 병렬이 아니다')이
+#   재발하지 않는다. .env.prod.example:147 과도 일치한다.
+POSTSTATE_DB=LTP-A 코호트(perf 19)는 29,001 CONFIRMED/SOLD + 999 PENDING 상태로 남는다.
+#   S2 코호트(perf 13)는 예매 5,413건과 좌석 1석 HOLD 가 남았다 — 그 HOLD 는 2026-08-13T16:08:02Z
+#   에 TTL 만료된다. 다음 회차 전에 @mode='reset' 과 perf 13 정리를 하면 된다.
+POSTSTATE_CLEANUP=EC2 의 /tmp 임시 스크립트(inject.sh · oversell*.sh · drain-poll.sh)와
+#   .env 백업, 로컬 SSH 터널, k6 비밀번호 파일을 모두 지웠다.
+
+# ── 이 회차가 답하지 못하는 것 (회차 전에 적는다) ──────────────────────────
+LIMIT_NOT_A_SWEEP=concurrency 2 는 재지 않는다. 1 과 3 두 점뿐이라 중간값의 거동은 모른다.
+LIMIT_PARTITION_BOUND=3 이 상한이다. 파티션이 3개라 스레드를 더 늘려도 할당받을 파티션이 없다
+#   (KafkaConfig.java:84-86). 이 회차는 "파티션을 늘리면 어떻게 되는가" 에 답하지 않는다.
+LIMIT_ARM_ORDER=A → B 연속 실행이라 MySQL 버퍼풀·페이지 캐시가 B 에 유리하다.
+#   순서를 뒤집은 대조가 이 회차에 없다.
+LIMIT_S1_IS_NOT_E2E=S1 은 결제 API 를 타지 않고 payment-confirmed-topic 에 직접 주입한다
+#   (StubPaymentApprovalClient 가 prod 에서 등록되지 않는다). 잰 것은 파이프라인 입구 이후다.
+LIMIT_S2_INFLOW_CAP=S2 의 유입 상한은 컨슈머가 아니라 릴레이다(batch-size 300 / 5초 = 60 ev/s).
+#   S2 로 처리량을 판정하지 않는 이유이며, 그래서 주 판정축이 S1 이다.
+LIMIT_TOPOLOGY=단일 EC2(2 vCPU)에 앱 8개 + Kafka · MySQL · Redis · 관측 스택이 동거한다
+#   (ADR 0006 · ADR 0007). "병렬 소비의 한계" 가 아니라 "이 구성에서 도달한 지점" 이다.
+LIMIT_SERIES=#344(6398a9d6) · #504(1f2ed5d2)와 배포본이 다르다. 절대값으로 직접 잇지 않는다.

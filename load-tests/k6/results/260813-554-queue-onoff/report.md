@@ -319,7 +319,7 @@ OFF : 램프 종료 후  66초간 예매 지속 → t+366s 에 0
 | # | 결과 | 왜 중요한가 |
 |---|---|---|
 | G8 무부하 기저 CPU | **약 7%** (min 6.63 / avg 7.03 / max 7.57) | 배포본 드리프트 134파일 +5,765줄이 유휴 CPU 를 밀어올리지 않았다 — 회차 CPU 를 드리프트 탓으로 돌릴 수 없다 |
-| G9 Kafka concurrency | **미설정** | `.env.prod.example` 에만 있고 실제 `.env` 엔 없다. `seat_lock_contention > 0` 이 정상이 되는 조건이 성립하지 않는다 |
+| G9 Kafka concurrency | **미설정** | `.env.prod.example` 에만 있고 실제 `.env` 엔 없다. ~~`seat_lock_contention > 0` 이 정상이 되는 조건이 성립하지 않는다~~ **[정정 — #598]** 결론이 틀렸다. `KafkaConfig.java:105` 의 코드 기본값이 `3` 이므로 **키 부재 = concurrency 3** 이고, 이 회차 두 arm 은 이미 3에서 돌았다. `seat_lock_contention` 이 32에서 평평했던 것은 concurrency 때문이 아니라 **VU 마다 좌석이 유일해 같은 좌석 경합이 구조적으로 없었기 때문**이다. 이 회차의 수치는 그대로 유효하다. 근거는 `260813-598-consumer-concurrency/report.md` §1.1·§9.3 |
 | G11 예매 홉 수 | **1.00** | 예매 1건 = booking-service 요청 1건. `SeatRestClient` 신설이 예매 경로에 영향을 주지 않아 `booking-server-rps` 축의 의미가 #549 와 같다 |
 
 **회차 전에 세운 "예측이 틀릴 수 있는 지점" 3개 중 2개가 게이트에서 제거됐다.** 남은 것은 "폴링 요청당 CPU 비용이 예매의 1/10 이 아니라 1/3 이면 부등호가 뒤집힌다" 하나이고, 그것이 이 회차가 실제로 답할 질문이다.

@@ -1,0 +1,16 @@
+guard
+guard ok
+guard
+mode ok
+guard
+user ok
+db_now	app_now_utc	mode_used	title
+2026-08-14 00:13:28	2026-08-13 15:13:28	verify	LTP-A
+perf_id	booking_id_min	seat_id_min	user_id	cohort_size
+19	2000001	76054	4	30000
+seats	contiguous_seats	held	seat_number_ordered
+30000	1	999	1
+bookings	pending	not_pending	contiguous_bookings	seat_booking_aligned	expiry_safe
+30000	999	29001	1	1	30000
+confirmed	sold	tickets	inbox_booking	inbox_ticket	stray_events
+29001	29001	29001	29001	29001	0
