@@ -218,7 +218,8 @@ CREATE TABLE `refund` (
   `requested_at` datetime(6) DEFAULT NULL,
   `status` enum('COMPLETED','FAILED','PENDING') COLLATE utf8mb4_unicode_ci DEFAULT NULL,
   PRIMARY KEY (`refund_id`),
-  UNIQUE KEY `UKqwu73qgmbrsnysqx67oewyj5d` (`payment_id`)
+  UNIQUE KEY `UKqwu73qgmbrsnysqx67oewyj5d` (`payment_id`),
+  KEY `idx_refund_status` (`status`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 /*!40101 SET character_set_client = @saved_cs_client */;
 DROP TABLE IF EXISTS `seat`;

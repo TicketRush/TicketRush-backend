@@ -1,6 +1,10 @@
 app:
   event-publisher:
     type: kafka
+  # 테스트 컨텍스트에서 스케줄러가 돌면 테스트와 무관한 DB 조회·Kafka 발행이 섞인다(#574).
+  # 스케줄러 자체의 동작은 단위 테스트로 검증한다.
+  refund-signal-replay:
+    enabled: false
 
 payment:
   pg:

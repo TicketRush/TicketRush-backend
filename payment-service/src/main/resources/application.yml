@@ -21,10 +21,31 @@ spring:
       - org.springframework.boot.data.redis.autoconfigure.DataRedisAutoConfiguration
   jpa:
     open-in-view: false
+  # payment 에 @Scheduled 가 생긴 것은 #574 가 처음이다. 기본 풀은 스레드 1개라 스케줄러가 늘면
+  # 서로 지연을 밀어낸다. 지금 스케줄러는 1개뿐이지만, 이 작업은 브로커 대기로 스레드를 길게 물 수
+  # 있어(그래서 연속 실패 시 주기를 접는다) 다음 스케줄러가 생겼을 때 그 지연을 물려받지 않도록
+  # 한 칸을 미리 둔다.
+  task:
+    scheduling:
+      pool:
+        size: 2
 
 app:
   event-publisher:
     type: kafka
+  # 미해결 환불 실패(FAILED 환불 이력)의 보상 신호를 booking 에 되풀이해 알린다(#574).
+  # 환경 무관 설정이라 base 에 둔다(backend-convention §프로파일 및 인프라 접속정보 외부화).
+  refund-signal-replay:
+    # 끄면 유실된 보상 건이 미해결 목록·관리자 재환불 API 에 영영 잡히지 않는다. 끌 때 그 대가를 안다는
+    # 전제이며, 되돌리려면 재기동이 필요하다.
+    enabled: ${REFUND_SIGNAL_REPLAY_ENABLED:true}
+    # 원 발행이 성공하면 게이트는 즉시 열리므로 이 주기는 유실됐을 때만 의미가 있다. 단 한 주기가
+    # batch-size 만큼만 훑고 커서로 이어 읽으므로, 실제 복구 지연 상한은 이 값이 아니라
+    # ceil(미해결 건수 / batch-size) × interval 이다(미해결 1,000건이면 50분).
+    interval-ms: ${REFUND_SIGNAL_REPLAY_INTERVAL_MS:300000}
+    # PG 장애로 FAILED 가 대량으로 쌓였을 때 한 주기에 전부 발행하지 않도록 상한을 둔다. 올리면 한 바퀴가
+    # 짧아지는 대신 한 주기가 스케줄러 스레드를 오래 문다.
+    batch-size: ${REFUND_SIGNAL_REPLAY_BATCH_SIZE:100}
 
 service:
   ticket:
