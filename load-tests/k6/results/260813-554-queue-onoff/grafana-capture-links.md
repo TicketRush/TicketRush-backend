@@ -146,3 +146,28 @@ http://localhost:3000/explore?orgId=1&schemaVersion=1&panes=%7B%22a%22%3A%7B%22d
 
 http://localhost:3000/explore?orgId=1&schemaVersion=1&panes=%7B%22a%22%3A%7B%22datasource%22%3A%22prometheus%22%2C%22queries%22%3A%5B%7B%22refId%22%3A%22A%22%2C%22expr%22%3A%22redis_memory_used_bytes%22%2C%22datasource%22%3A%7B%22type%22%3A%22prometheus%22%2C%22uid%22%3A%22prometheus%22%7D%7D%5D%2C%22range%22%3A%7B%22from%22%3A%221786620264000%22%2C%22to%22%3A%221786621800000%22%7D%7D%7D
 
+
+---
+
+## 📌 추가 캡처 (2026-08-13 사후) — 인프라 컨테이너 메모리
+
+**위 18장을 찍은 뒤에 누락이 확인돼 추가한다.** 기존 `컨테이너 메모리` 패널이 `seat/booking/gateway` 3개만 필터해서, **OFF arm 에서 MySQL 이 100% 에 닿은 사실이 그림으로 남지 않았다**(리포트 §2.3). 아래 2장을 추가로 찍으면 대조표의 그 행이 캡처로도 뒷받침된다.
+
+> ⚠️ **MySQL 이 100% 라도 그 자체가 이상은 아니다.** `mem_limit` 안에서 버퍼풀·캐시가 차오른 것이고 이 회차의 OOM kill 은 0건이었다(ADR 0006). 그림을 인용할 때 이 문장을 함께 적는다.
+
+> ⚠️ 위 18장과 **같은 시간 창**을 쓴다(ON `10:57:48Z-11:22:00Z` / OFF `11:24:24Z-11:50:00Z`). 창이 다르면 대조가 성립하지 않는다.
+
+### 컨테이너 메모리 % — MySQL/Kafka/Redis (ON arm)
+저장 파일명: `graph-container-mem-infra-on.png`
+
+> MySQL 이 100% 에 닿아도 OOM kill 이 0 이면 정상 운영값이다 — kill 카운터와 함께 읽는다
+
+http://localhost:3000/explore?orgId=1&schemaVersion=1&panes=%7B%22a%22%3A%7B%22datasource%22%3A%22prometheus%22%2C%22queries%22%3A%5B%7B%22refId%22%3A%22A%22%2C%22expr%22%3A%22100%20%2A%20ticketrush_container_memory_usage_bytes%7Bcontainer%3D~%5C%22ticketrush-mysql%7Cticketrush-kafka%7Cticketrush-redis%5C%22%7D%20%2F%20ticketrush_container_memory_limit_bytes%7Bcontainer%3D~%5C%22ticketrush-mysql%7Cticketrush-kafka%7Cticketrush-redis%5C%22%7D%22%2C%22datasource%22%3A%7B%22type%22%3A%22prometheus%22%2C%22uid%22%3A%22prometheus%22%7D%7D%5D%2C%22range%22%3A%7B%22from%22%3A%221786618668000%22%2C%22to%22%3A%221786620120000%22%7D%7D%7D
+
+### 컨테이너 메모리 % — MySQL/Kafka/Redis (OFF arm)
+저장 파일명: `graph-container-mem-infra-off.png`
+
+> MySQL 이 100% 에 닿아도 OOM kill 이 0 이면 정상 운영값이다 — kill 카운터와 함께 읽는다
+
+http://localhost:3000/explore?orgId=1&schemaVersion=1&panes=%7B%22a%22%3A%7B%22datasource%22%3A%22prometheus%22%2C%22queries%22%3A%5B%7B%22refId%22%3A%22A%22%2C%22expr%22%3A%22100%20%2A%20ticketrush_container_memory_usage_bytes%7Bcontainer%3D~%5C%22ticketrush-mysql%7Cticketrush-kafka%7Cticketrush-redis%5C%22%7D%20%2F%20ticketrush_container_memory_limit_bytes%7Bcontainer%3D~%5C%22ticketrush-mysql%7Cticketrush-kafka%7Cticketrush-redis%5C%22%7D%22%2C%22datasource%22%3A%7B%22type%22%3A%22prometheus%22%2C%22uid%22%3A%22prometheus%22%7D%7D%5D%2C%22range%22%3A%7B%22from%22%3A%221786620264000%22%2C%22to%22%3A%221786621800000%22%7D%7D%7D
+

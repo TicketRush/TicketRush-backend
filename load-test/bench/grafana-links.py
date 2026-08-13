@@ -34,6 +34,13 @@ PANELS = [
               ' / ticketrush_container_memory_limit_bytes{container=~"seat-service|booking-service|gateway-service"}',
          "라벨은 name= 이 아니라 container= 다"),
     ]),
+    # 앱 컨테이너만 찍으면 인프라 쪽 압박을 놓친다 — #554 OFF arm 에서 MySQL 이 100% 에 닿았는데
+    # 앱 3개만 필터한 위 패널에는 그 사실이 남지 않았다.
+    ("container-mem-infra", "컨테이너 메모리 % — MySQL/Kafka/Redis", [
+        ("A", '100 * ticketrush_container_memory_usage_bytes{container=~"ticketrush-mysql|ticketrush-kafka|ticketrush-redis"}'
+              ' / ticketrush_container_memory_limit_bytes{container=~"ticketrush-mysql|ticketrush-kafka|ticketrush-redis"}',
+         "MySQL 이 100% 에 닿아도 OOM kill 이 0 이면 정상 운영값이다 — kill 카운터와 함께 읽는다"),
+    ]),
     ("hikari-tomcat", "HikariCP active/pending · Tomcat busy", [
         ("A", 'hikaricp_connections_active{job="ticketrush-services"}', ""),
         ("B", 'hikaricp_connections_pending{job="ticketrush-services"}', ""),
