@@ -512,14 +512,25 @@ A arm 에서 돌리니 **4,674행**이 나왔다. 버그가 아니라 **쿼리�
 | `verify-c1.txt` · `-c3.txt` · `seed-verify-c3.txt` | `@mode='verify'` / arm 사이 `reset` 출력 |
 | `k6-summary-c1.txt` · `-c3.txt` | S2 k6 stdout (임계 결과 포함) |
 | `oversell-c1.txt` · `-c3.txt` | **SQL 원문 + 출력**. 회차 중 교체한 검사(§9.1) |
-| `timeseries-*-{s1c1,s2c1,s1c3,s2c3}.json` | 각 46 / 60 / 46 / 61건. `dump-timeseries.py` |
-| `grafana-capture-links.md` | 44개 패널 링크 (11 패널 × 4 창) |
-| `graph-*-{s1c1,s2c1,s1c3,s2c3}.png` | Grafana 캡처 |
+| `timeseries-*-{s1c1,s2c1,s1c3,s2c3}.json` | 각 48 / 62 / 48 / 63건. `dump-timeseries.py` |
+| **`graph-*-{s1c1,s2c1,s1c3,s2c3}.svg`** | **39장. 곡선 증적의 SSOT.** 위 JSON 에서 `plot-timeseries.py` 로 생성 |
+| `grafana-capture-links.md` | 48개 패널 링크 (12 패널 × 4 창). 보조 수단 |
+
+**곡선 증적을 Grafana 캡처가 아니라 SVG 로 남긴 이유**
+
+1. **브라우저 자동화가 안정적으로 안 됐다** — Grafana Explore 에서 CDP `Page.captureScreenshot` 이 5회 중 4회 렌더러 타임아웃으로 실패했다.
+2. **캡처는 15일 뒤 재현이 안 된다** — Prometheus 보존이 15일이라 2026-08-28 이후 링크는 빈 화면이다. SVG 는 커밋된 JSON 에서 언제든 다시 만들 수 있다.
+3. **그림과 수치의 출처가 같아진다** — 리포트가 인용하는 그 JSON 에서 직접 그리므로 둘이 어긋날 수 없다.
+
+> `#554` 의 *"캡처는 덤프의 그림 버전이 아니다"* 는 **집계 스크립트의 min/avg/max 요약**에 대한 경고였다. `timeseries-*.json` 자체에는 모든 표본이 들어 있어 곡선 정보가 손실되지 않는다.
+
+**`seat-lock-contention` 은 `s2c1` 에서 SVG 가 생성되지 않는다.** 그것이 결과다 — Micrometer 는 첫 증가 후에 시계열을 만들므로, concurrency 1 에서는 파일 자체가 없다.
 
 **저장소에 커밋한 도구 변경**
 
 | 대상 | 내용 |
 |---|---|
-| `load-test/bench/grafana-links.py` | 대기열 패널 → `kafka-consumer-lag` + `consumer-threads` 두 개로 교체 |
-| `load-test/bench/dump-timeseries.py` | **변경 0줄.** 필요한 시리즈가 전부 이미 있었다 |
+| **`load-test/bench/plot-timeseries.py`** | **신설.** 덤프 JSON 에서 곡선 SVG 를 그린다. 외부 의존성 0(표준 라이브러리만) |
+| `load-test/bench/grafana-links.py` | 대기열 패널 → `kafka-consumer-lag` + `consumer-threads` + `host-cpu-modes` 로 교체·추가 |
+| `load-test/bench/dump-timeseries.py` | `node-cpu-user` · `node-cpu-system` 추가. 이 회차의 핵심 축인 CPU 모드 분해가 목록에 없어 저장소만으로는 재현이 안 됐다 |
 | `load-test/bench/arm-stats.py` | **쓰지 않았다.** `#554` 의 k6 `ramping-vus` 두 arm 회차 전용이고, S1 은 k6 를 쓰지 않아 `k6-summary-<arm>.txt` 가 없다. `metadata.txt` `RUNBOOK_DEVIATION_1` 에 사유를 적었다 |

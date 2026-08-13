@@ -44,6 +44,12 @@ QUERIES = [
     # 호스트 자원
     ("node-cpu", '100 * (1 - avg(rate(node_cpu_seconds_total{job="node", mode="idle"}[1m])))'),
     ("node-iowait", '100 * avg(rate(node_cpu_seconds_total{job="node", mode="iowait"}[1m]))'),
+    # node-cpu(= 100 - idle)만 보면 I/O 대기 중인 시스템의 여유를 체계적으로 과소평가한다.
+    # #504 는 그 값으로 컨슈머 concurrency 의 상한을 1.4배로 추정했는데 #598 실측은 2.25배였다.
+    # 차이의 정체가 iowait 20.94%p 였다 — 작업이 아니라 비어 있는 CPU 라 여유 쪽에 넣었어야 했다.
+    # 스레드를 늘려 얻을 수 있는 것의 상한을 보려면 user+system 을 따로 봐야 한다.
+    ("node-cpu-user", '100 * avg(rate(node_cpu_seconds_total{job="node", mode="user"}[1m]))'),
+    ("node-cpu-system", '100 * avg(rate(node_cpu_seconds_total{job="node", mode="system"}[1m]))'),
     ("node-mem-used-bytes", 'node_memory_MemTotal_bytes{job="node"} - node_memory_MemAvailable_bytes{job="node"}'),
     # 회선 축. device 를 ens5 로 고정한다 — #508 이전에는 이 지표가 컨테이너 veth 를 재서
     # 실제의 1/6500 이 나왔다. 그래서 #348 회차는 회선 포화를 k6 수치로 역추정해야 했다.

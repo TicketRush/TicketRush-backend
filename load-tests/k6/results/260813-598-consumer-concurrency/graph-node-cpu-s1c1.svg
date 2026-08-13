@@ -1,0 +1,32 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1100" height="420" viewBox="0 0 1100 420" font-family="ui-monospace,Menlo,Consolas,monospace">
+<rect width="1100" height="420" fill="#181b1f"/>
+<text x="70" y="24" fill="#ccccdc" font-size="15">호스트 CPU (100 - idle). 무부하 기저 7.55%</text>
+<text x="70" y="40" fill="#8e8e9e" font-size="11">2026-08-13T14:59:00Z ~ 2026-08-13T15:13:30Z  step 15s  arm=s1c1</text>
+<line x1="70" y1="324.0" x2="1076" y2="324.0" stroke="#2c3235"/>
+<text x="62" y="328.0" fill="#8e8e9e" font-size="10" text-anchor="end">0</text>
+<line x1="70" y1="268.0" x2="1076" y2="268.0" stroke="#2c3235"/>
+<text x="62" y="272.0" fill="#8e8e9e" font-size="10" text-anchor="end">18.94</text>
+<line x1="70" y1="212.0" x2="1076" y2="212.0" stroke="#2c3235"/>
+<text x="62" y="216.0" fill="#8e8e9e" font-size="10" text-anchor="end">37.87</text>
+<line x1="70" y1="156.0" x2="1076" y2="156.0" stroke="#2c3235"/>
+<text x="62" y="160.0" fill="#8e8e9e" font-size="10" text-anchor="end">56.81</text>
+<line x1="70" y1="100.0" x2="1076" y2="100.0" stroke="#2c3235"/>
+<text x="62" y="104.0" fill="#8e8e9e" font-size="10" text-anchor="end">75.74</text>
+<line x1="70" y1="44.0" x2="1076" y2="44.0" stroke="#2c3235"/>
+<text x="62" y="48.0" fill="#8e8e9e" font-size="10" text-anchor="end">94.68</text>
+<line x1="70.0" y1="44" x2="70.0" y2="324" stroke="#2c3235"/>
+<text x="70.0" y="340" fill="#8e8e9e" font-size="10" text-anchor="middle">14:59:00Z</text>
+<line x1="271.2" y1="44" x2="271.2" y2="324" stroke="#2c3235"/>
+<text x="271.2" y="340" fill="#8e8e9e" font-size="10" text-anchor="middle">15:01:54Z</text>
+<line x1="472.4" y1="44" x2="472.4" y2="324" stroke="#2c3235"/>
+<text x="472.4" y="340" fill="#8e8e9e" font-size="10" text-anchor="middle">15:04:48Z</text>
+<line x1="673.6" y1="44" x2="673.6" y2="324" stroke="#2c3235"/>
+<text x="673.6" y="340" fill="#8e8e9e" font-size="10" text-anchor="middle">15:07:42Z</text>
+<line x1="874.8" y1="44" x2="874.8" y2="324" stroke="#2c3235"/>
+<text x="874.8" y="340" fill="#8e8e9e" font-size="10" text-anchor="middle">15:10:36Z</text>
+<line x1="1076.0" y1="44" x2="1076.0" y2="324" stroke="#2c3235"/>
+<text x="1076.0" y="340" fill="#8e8e9e" font-size="10" text-anchor="middle">15:13:30Z</text>
+<path d="M70.0,64.7 L87.3,81.2 L104.7,163.3 L122.0,234.6 L139.4,257.8 L156.7,240.0 L174.1,224.7 L191.4,246.7 L208.8,246.2 L226.1,250.0 L243.4,253.7 L260.8,257.4 L278.1,256.4 L295.5,253.8 L312.8,250.9 L330.2,249.1 L347.5,250.2 L364.9,252.2 L382.2,253.7 L399.6,254.3 L416.9,252.5 L434.2,252.4 L451.6,250.1 L468.9,251.1 L486.3,224.1 L503.6,167.6 L521.0,102.1 L538.3,71.9 L555.7,67.7 L573.0,73.1 L590.3,69.7 L607.7,72.4 L625.0,72.1 L642.4,71.5 L659.7,72.7 L677.1,70.1 L694.4,72.0 L711.8,66.4 L729.1,71.4 L746.4,67.5 L763.8,76.6 L781.1,76.8 L798.5,89.9 L815.8,89.9 L833.2,94.5 L850.5,91.4 L867.9,90.4 L885.2,92.6 L902.6,88.8 L919.9,94.0 L937.2,90.0 L954.6,94.2 L971.9,93.2 L989.3,91.5 L1006.6,95.2 L1024.0,89.5 L1041.3,124.8 L1058.7,192.3 L1076.0,268.4" fill="none" stroke="#73bf69" stroke-width="1.6"/>
+<rect x="70" y="352" width="10" height="3" fill="#73bf69"/>
+<text x="86" y="360" fill="#ccccdc" font-size="10">node-cpu node-cpu  min 18.79 / avg 58.07 / max 87.67</text>
+</svg>
