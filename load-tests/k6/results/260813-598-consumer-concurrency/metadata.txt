@@ -487,9 +487,11 @@ PREDICTION_VS_ACTUAL=회차 전 예측 8개와 실측 대조.
 #     → ticket 2.04배 vs booking 2.25배로 방향은 맞았으나, 둘 다 CPU 상한에 걸리지 않았다.
 #   [맞음] PREDICT_S2_CONTENTION A = 0 (시리즈 미생성).
 #   [맞음] PREDICT_S2_OVERSELL A arm 0행.
-#   [빗나감] PREDICT_HIKARI 'B arm booking 에서 pending > 0 이 나올 수 있다' → 0 이었다.
-#     booking 은 리스너 5 × 3 = 15 스레드인데 active max 가 2 다. 컨슈머 스레드가 커넥션을
-#     동시에 붙잡지 않는다는 뜻이다(트랜잭션이 짧고 스레드 대부분이 poll 대기 상태).
+#   [절반 맞음] PREDICT_HIKARI 'B arm booking 에서 pending > 0 이 나올 수 있다'
+#     → 결론은 맞았으나 이유가 다르다. S1(컨슈머 단독)에서는 두 arm 모두 0 이다 —
+#     리스너 5 × 3 = 15 스레드인데 active max 가 2 다(트랜잭션이 짧고 대부분 poll 대기).
+#     pending 이 뜬 것은 S2 이고, 거기서는 A arm(concurrency 1)도 max 71 이었다.
+#     즉 풀을 고갈시킨 것은 컨슈머가 아니라 HTTP 요청 스레드다. 위 VERDICT_596 ① 참조.
 #   [해당없음] PREDICT_WRONG_IF_1 (MySQL 이 병목) — 병목이 MySQL 이었다면 스레드를 늘려도
 #     드레인율이 안 늘었을 것이다. 2.25배가 났으므로 기각된다.
 #   [잔존] PREDICT_WRONG_IF_2 (워밍업 3회로 A·B 의 JIT 상태가 같아진다는 전제) — B arm 워밍업
@@ -499,11 +501,23 @@ PREDICTION_VS_ACTUAL=회차 전 예측 8개와 실측 대조.
 #   [잔존] PREDICT_WRONG_IF_3 (arm 순서 효과) — LIMIT_ARM_ORDER 참조.
 #   [해당없음] PREDICT_WRONG_IF_4 (S2 의 유입 상한이 릴레이) — 그래서 S2 를 처리량 판정에
 #     쓰지 않았다. 설계대로다.
-VERDICT_596=concurrency 3 을 유지한다. 되돌리거나 조정할 근거가 없다.
+VERDICT_596=concurrency 3 을 유지한다. 되돌릴 근거가 없다.
 #   #596 javadoc(KafkaConfig.java:96-103)이 선언한 되돌릴 조건 3개를 하나씩 대조한다.
-#   ① hikaricp_connections_pending > 0 → 발동 안 함. B arm 에서도 시계열이 생기지 않았고
-#      active 최대가 booking 2 / seat 3 / ticket 3 이다(풀 10). 리스너 스레드가 15개여도
-#      커넥션을 동시에 붙잡지 않는다 — 트랜잭션이 짧고 스레드 대부분이 poll 대기다.
+#   ① hikaricp_connections_pending > 0 → 판별력이 없는 조건이다. S1(컨슈머 단독 부하)에서는
+#      두 arm 모두 0(표본 59 / 43)이지만, S2(HTTP 400rps)에서는 A arm(concurrency 1)도
+#      max 71 이다. 풀(10)을 고갈시키는 것은 컨슈머 스레드가 아니라 HTTP 요청 스레드다 —
+#      booking-service 의 Tomcat max-threads 는 200 인데 커넥션 풀은 기본 10 이다.
+#      기준선 없이 '> 0' 으로 써 두면 어떤 회차에서든 발동한다(#554 가 container-mem-limit-pct
+#      >= 90% 를 '상시 참' 이라며 KNEE 목록에서 뺀 것과 같은 종류의 문제).
+#      ⚠ 다만 concurrency 3 이 그 압박을 키운 것은 사실이다 — S2 booking pending
+#        avg 5.70 → 13.24 (2.3배), tomcat busy avg 11.35 → 36.46 (3.2배, max 97 / 200).
+#        되돌릴 근거는 아니고 후속 튜닝 대상이다.
+#      ⚠ 이 축을 S1·S2 를 합쳐 읽으면 정반대 결론이 나온다. 반드시 나눠 본다.
+HIKARI_DETAIL=booking-service 기준. 표는 report.md §2.3.
+#          S1 pending      S2 pending(avg/max)   S2 active max   S2 tomcat busy(avg/max)
+#   A(c1)     0                5.70 / 71             10             11.35 / 66
+#   B(c3)     0               13.24 / 71             10             36.46 / 97
+#   seat-service 는 S2 에서도 pending 0 · active max 2 다. 압박은 booking 한 곳이다.
 #   ② 호스트 CPU 가 상한인데 처리량이 안 늘었다 → 정반대다. CPU avg 79.43 → 82.10 (+2.67%p)
 #      로 거의 그대로인데 처리량이 2.25배다.
 #   ③ 컨테이너 RSS 가 mem_limit 근접 → 발동 안 함. seat-service 68.99 → 70.22%,

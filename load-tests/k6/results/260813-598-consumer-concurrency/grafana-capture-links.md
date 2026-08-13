@@ -14,6 +14,8 @@ Grafana(<http://localhost:3000>)에 **먼저 로그인**한 뒤 아래 링크를
 
 ## S1C1 arm — 2026-08-13T14:59:00Z ~ 2026-08-13T15:13:30Z
 
+## S1C1 arm — 2026-08-13T14:59:00Z ~ 2026-08-13T15:13:30Z
+
 ### 예매 서버 RPS vs VU
 저장 파일명: `graph-booking-rps-vs-vus-s1c1.png`
 
@@ -33,6 +35,15 @@ http://localhost:3000/explore?orgId=1&schemaVersion=1&panes=%7B%22a%22%3A%7B%22d
 > 무부하 기저는 약 7%
 
 http://localhost:3000/explore?orgId=1&schemaVersion=1&panes=%7B%22a%22%3A%7B%22datasource%22%3A%22prometheus%22%2C%22queries%22%3A%5B%7B%22refId%22%3A%22A%22%2C%22expr%22%3A%22100%20-%20%28avg%28rate%28node_cpu_seconds_total%7Bmode%3D%5C%22idle%5C%22%7D%5B1m%5D%29%29%20%2A%20100%29%22%2C%22datasource%22%3A%7B%22type%22%3A%22prometheus%22%2C%22uid%22%3A%22prometheus%22%7D%7D%5D%2C%22range%22%3A%7B%22from%22%3A%221786633140000%22%2C%22to%22%3A%221786634010000%22%7D%7D%7D
+
+### 호스트 CPU 모드 분해 — iowait 은 작업이 아니다
+저장 파일명: `graph-host-cpu-modes-s1c1.png`
+
+> user
+> system
+> iowait — 이 폭이 곧 스레드를 늘려 채울 수 있는 여유다
+
+http://localhost:3000/explore?orgId=1&schemaVersion=1&panes=%7B%22a%22%3A%7B%22datasource%22%3A%22prometheus%22%2C%22queries%22%3A%5B%7B%22refId%22%3A%22A%22%2C%22expr%22%3A%22100%20%2A%20avg%28rate%28node_cpu_seconds_total%7Bmode%3D%5C%22user%5C%22%7D%5B1m%5D%29%29%22%2C%22datasource%22%3A%7B%22type%22%3A%22prometheus%22%2C%22uid%22%3A%22prometheus%22%7D%7D%2C%7B%22refId%22%3A%22B%22%2C%22expr%22%3A%22100%20%2A%20avg%28rate%28node_cpu_seconds_total%7Bmode%3D%5C%22system%5C%22%7D%5B1m%5D%29%29%22%2C%22datasource%22%3A%7B%22type%22%3A%22prometheus%22%2C%22uid%22%3A%22prometheus%22%7D%7D%2C%7B%22refId%22%3A%22C%22%2C%22expr%22%3A%22100%20%2A%20avg%28rate%28node_cpu_seconds_total%7Bmode%3D%5C%22iowait%5C%22%7D%5B1m%5D%29%29%22%2C%22datasource%22%3A%7B%22type%22%3A%22prometheus%22%2C%22uid%22%3A%22prometheus%22%7D%7D%5D%2C%22range%22%3A%7B%22from%22%3A%221786633140000%22%2C%22to%22%3A%221786634010000%22%7D%7D%7D
 
 ### Kafka 컨슈머 랙 — 랙 유무 신호로만
 저장 파일명: `graph-kafka-consumer-lag-s1c1.png`
@@ -109,6 +120,15 @@ http://localhost:3000/explore?orgId=1&schemaVersion=1&panes=%7B%22a%22%3A%7B%22d
 
 http://localhost:3000/explore?orgId=1&schemaVersion=1&panes=%7B%22a%22%3A%7B%22datasource%22%3A%22prometheus%22%2C%22queries%22%3A%5B%7B%22refId%22%3A%22A%22%2C%22expr%22%3A%22100%20-%20%28avg%28rate%28node_cpu_seconds_total%7Bmode%3D%5C%22idle%5C%22%7D%5B1m%5D%29%29%20%2A%20100%29%22%2C%22datasource%22%3A%7B%22type%22%3A%22prometheus%22%2C%22uid%22%3A%22prometheus%22%7D%7D%5D%2C%22range%22%3A%7B%22from%22%3A%221786634100000%22%2C%22to%22%3A%221786634640000%22%7D%7D%7D
 
+### 호스트 CPU 모드 분해 — iowait 은 작업이 아니다
+저장 파일명: `graph-host-cpu-modes-s2c1.png`
+
+> user
+> system
+> iowait — 이 폭이 곧 스레드를 늘려 채울 수 있는 여유다
+
+http://localhost:3000/explore?orgId=1&schemaVersion=1&panes=%7B%22a%22%3A%7B%22datasource%22%3A%22prometheus%22%2C%22queries%22%3A%5B%7B%22refId%22%3A%22A%22%2C%22expr%22%3A%22100%20%2A%20avg%28rate%28node_cpu_seconds_total%7Bmode%3D%5C%22user%5C%22%7D%5B1m%5D%29%29%22%2C%22datasource%22%3A%7B%22type%22%3A%22prometheus%22%2C%22uid%22%3A%22prometheus%22%7D%7D%2C%7B%22refId%22%3A%22B%22%2C%22expr%22%3A%22100%20%2A%20avg%28rate%28node_cpu_seconds_total%7Bmode%3D%5C%22system%5C%22%7D%5B1m%5D%29%29%22%2C%22datasource%22%3A%7B%22type%22%3A%22prometheus%22%2C%22uid%22%3A%22prometheus%22%7D%7D%2C%7B%22refId%22%3A%22C%22%2C%22expr%22%3A%22100%20%2A%20avg%28rate%28node_cpu_seconds_total%7Bmode%3D%5C%22iowait%5C%22%7D%5B1m%5D%29%29%22%2C%22datasource%22%3A%7B%22type%22%3A%22prometheus%22%2C%22uid%22%3A%22prometheus%22%7D%7D%5D%2C%22range%22%3A%7B%22from%22%3A%221786634100000%22%2C%22to%22%3A%221786634640000%22%7D%7D%7D
+
 ### Kafka 컨슈머 랙 — 랙 유무 신호로만
 저장 파일명: `graph-kafka-consumer-lag-s2c1.png`
 
@@ -184,6 +204,15 @@ http://localhost:3000/explore?orgId=1&schemaVersion=1&panes=%7B%22a%22%3A%7B%22d
 
 http://localhost:3000/explore?orgId=1&schemaVersion=1&panes=%7B%22a%22%3A%7B%22datasource%22%3A%22prometheus%22%2C%22queries%22%3A%5B%7B%22refId%22%3A%22A%22%2C%22expr%22%3A%22100%20-%20%28avg%28rate%28node_cpu_seconds_total%7Bmode%3D%5C%22idle%5C%22%7D%5B1m%5D%29%29%20%2A%20100%29%22%2C%22datasource%22%3A%7B%22type%22%3A%22prometheus%22%2C%22uid%22%3A%22prometheus%22%7D%7D%5D%2C%22range%22%3A%7B%22from%22%3A%221786635900000%22%2C%22to%22%3A%221786636530000%22%7D%7D%7D
 
+### 호스트 CPU 모드 분해 — iowait 은 작업이 아니다
+저장 파일명: `graph-host-cpu-modes-s1c3.png`
+
+> user
+> system
+> iowait — 이 폭이 곧 스레드를 늘려 채울 수 있는 여유다
+
+http://localhost:3000/explore?orgId=1&schemaVersion=1&panes=%7B%22a%22%3A%7B%22datasource%22%3A%22prometheus%22%2C%22queries%22%3A%5B%7B%22refId%22%3A%22A%22%2C%22expr%22%3A%22100%20%2A%20avg%28rate%28node_cpu_seconds_total%7Bmode%3D%5C%22user%5C%22%7D%5B1m%5D%29%29%22%2C%22datasource%22%3A%7B%22type%22%3A%22prometheus%22%2C%22uid%22%3A%22prometheus%22%7D%7D%2C%7B%22refId%22%3A%22B%22%2C%22expr%22%3A%22100%20%2A%20avg%28rate%28node_cpu_seconds_total%7Bmode%3D%5C%22system%5C%22%7D%5B1m%5D%29%29%22%2C%22datasource%22%3A%7B%22type%22%3A%22prometheus%22%2C%22uid%22%3A%22prometheus%22%7D%7D%2C%7B%22refId%22%3A%22C%22%2C%22expr%22%3A%22100%20%2A%20avg%28rate%28node_cpu_seconds_total%7Bmode%3D%5C%22iowait%5C%22%7D%5B1m%5D%29%29%22%2C%22datasource%22%3A%7B%22type%22%3A%22prometheus%22%2C%22uid%22%3A%22prometheus%22%7D%7D%5D%2C%22range%22%3A%7B%22from%22%3A%221786635900000%22%2C%22to%22%3A%221786636530000%22%7D%7D%7D
+
 ### Kafka 컨슈머 랙 — 랙 유무 신호로만
 저장 파일명: `graph-kafka-consumer-lag-s1c3.png`
 
@@ -258,6 +287,15 @@ http://localhost:3000/explore?orgId=1&schemaVersion=1&panes=%7B%22a%22%3A%7B%22d
 > 무부하 기저는 약 7%
 
 http://localhost:3000/explore?orgId=1&schemaVersion=1&panes=%7B%22a%22%3A%7B%22datasource%22%3A%22prometheus%22%2C%22queries%22%3A%5B%7B%22refId%22%3A%22A%22%2C%22expr%22%3A%22100%20-%20%28avg%28rate%28node_cpu_seconds_total%7Bmode%3D%5C%22idle%5C%22%7D%5B1m%5D%29%29%20%2A%20100%29%22%2C%22datasource%22%3A%7B%22type%22%3A%22prometheus%22%2C%22uid%22%3A%22prometheus%22%7D%7D%5D%2C%22range%22%3A%7B%22from%22%3A%221786636560000%22%2C%22to%22%3A%221786637100000%22%7D%7D%7D
+
+### 호스트 CPU 모드 분해 — iowait 은 작업이 아니다
+저장 파일명: `graph-host-cpu-modes-s2c3.png`
+
+> user
+> system
+> iowait — 이 폭이 곧 스레드를 늘려 채울 수 있는 여유다
+
+http://localhost:3000/explore?orgId=1&schemaVersion=1&panes=%7B%22a%22%3A%7B%22datasource%22%3A%22prometheus%22%2C%22queries%22%3A%5B%7B%22refId%22%3A%22A%22%2C%22expr%22%3A%22100%20%2A%20avg%28rate%28node_cpu_seconds_total%7Bmode%3D%5C%22user%5C%22%7D%5B1m%5D%29%29%22%2C%22datasource%22%3A%7B%22type%22%3A%22prometheus%22%2C%22uid%22%3A%22prometheus%22%7D%7D%2C%7B%22refId%22%3A%22B%22%2C%22expr%22%3A%22100%20%2A%20avg%28rate%28node_cpu_seconds_total%7Bmode%3D%5C%22system%5C%22%7D%5B1m%5D%29%29%22%2C%22datasource%22%3A%7B%22type%22%3A%22prometheus%22%2C%22uid%22%3A%22prometheus%22%7D%7D%2C%7B%22refId%22%3A%22C%22%2C%22expr%22%3A%22100%20%2A%20avg%28rate%28node_cpu_seconds_total%7Bmode%3D%5C%22iowait%5C%22%7D%5B1m%5D%29%29%22%2C%22datasource%22%3A%7B%22type%22%3A%22prometheus%22%2C%22uid%22%3A%22prometheus%22%7D%7D%5D%2C%22range%22%3A%7B%22from%22%3A%221786636560000%22%2C%22to%22%3A%221786637100000%22%7D%7D%7D
 
 ### Kafka 컨슈머 랙 — 랙 유무 신호로만
 저장 파일명: `graph-kafka-consumer-lag-s2c3.png`

@@ -26,6 +26,15 @@ PANELS = [
     ("host-cpu", "호스트 CPU", [
         ("A", '100 - (avg(rate(node_cpu_seconds_total{mode="idle"}[1m])) * 100)', "무부하 기저는 약 7%"),
     ]),
+    # 100 - idle 하나만 보면 I/O 대기 중인 시스템의 여유를 체계적으로 과소평가한다 — #504 가
+    # 그렇게 상한을 1.4배로 추정했는데 #598 실측은 2.25배였다. 스레드를 늘려 얻을 수 있는 것의
+    # 상한을 추정하려면 iowait 을 빼고 user+system 을 봐야 한다.
+    ("host-cpu-modes", "호스트 CPU 모드 분해 — iowait 은 작업이 아니다", [
+        ("A", '100 * avg(rate(node_cpu_seconds_total{mode="user"}[1m]))', "user"),
+        ("B", '100 * avg(rate(node_cpu_seconds_total{mode="system"}[1m]))', "system"),
+        ("C", '100 * avg(rate(node_cpu_seconds_total{mode="iowait"}[1m]))',
+         "iowait — 이 폭이 곧 스레드를 늘려 채울 수 있는 여유다"),
+    ]),
     # 대기열 패널이 있던 자리다(#554). #598 은 대기열과 무관하고, 대신 컨슈머 축을 봐야 한다.
     # ⚠ records-lag 는 절대량·곡선 판단에 쓰지 않는다 — "마지막 fetch 응답 시점의 lag" 이라
     #   파티션마다 갱신 시각이 달라 회복 구간에도 톱니로 튄다(런북 §15.4, #504 실측).
