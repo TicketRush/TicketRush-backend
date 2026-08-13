@@ -26,8 +26,17 @@ PANELS = [
     ("host-cpu", "호스트 CPU", [
         ("A", '100 - (avg(rate(node_cpu_seconds_total{mode="idle"}[1m])) * 100)', "무부하 기저는 약 7%"),
     ]),
-    ("queue-admission", "대기열 승급 — result 별", [
-        ("A", 'sum by (result) (rate(ticketrush_queue_admission_total{job="gateway"}[1m]))', ""),
+    # 대기열 패널이 있던 자리다(#554). #598 은 대기열과 무관하고, 대신 컨슈머 축을 봐야 한다.
+    # ⚠ records-lag 는 절대량·곡선 판단에 쓰지 않는다 — "마지막 fetch 응답 시점의 lag" 이라
+    #   파티션마다 갱신 시각이 달라 회복 구간에도 톱니로 튄다(런북 §15.4, #504 실측).
+    #   backlog 의 SSOT 는 브로커 축이고 이 패널은 랙 유무 신호로만 읽는다.
+    ("kafka-consumer-lag", "Kafka 컨슈머 랙 — 랙 유무 신호로만", [
+        ("A", 'max by (instance, topic) (kafka_consumer_fetch_manager_records_lag{job="ticketrush-services"})',
+         "절대량·곡선 판단 금지. backlog SSOT 는 브로커 축이다"),
+    ]),
+    ("consumer-threads", "컨슈머 스레드 — concurrency 가 실제로 먹었는지", [
+        ("A", 'jvm_threads_live_threads{job="ticketrush-services"}',
+         "A arm 에서 리스너 수 × 2 만큼 줄어야 한다 (booking 5 · seat 3 · ticket 2 · payment 3)"),
     ]),
     ("container-mem", "컨테이너 메모리 % — seat/booking/gateway", [
         ("A", '100 * ticketrush_container_memory_usage_bytes{container=~"seat-service|booking-service|gateway-service"}'
