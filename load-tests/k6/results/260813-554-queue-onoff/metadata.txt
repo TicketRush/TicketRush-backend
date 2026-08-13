@@ -15,6 +15,9 @@ TOPOLOGY=k6 local (docker, ADR 0004) --SSH tunnel(9090)--> EC2 deploy stack (ADR
 INSTANCE_TYPE=m7i-flex.large / INSTANCE_VCPU=2 / life-cycle=on-demand
 GENERATOR=로컬 Docker — 호스트 31.6 GiB / Docker 할당 24 GiB(.wslconfig) / 12 vCPU / swap 4 GiB
 #   ADR 0010(생성기 AWS EC2)은 #549 가 실측으로 기각했다. 생성기 EC2 를 만들지 않는다.
+K6_VERSION=v2.2.0 (commit/00a9a1b7f5, go1.26.5, linux/amd64) — grafana/k6:latest, 두 arm 동일.
+#   ⚠ #549 회차와는 k6 버전이 다를 수 있다(latest 태그를 쓴다). arm 사이에는 같으므로 이 회차의
+#   ON/OFF 대조에는 영향이 없고, #549 와의 절대값 비교를 피하는 이유가 하나 더 늘어난 것이다.
 RUNBOOK=docs/load-test-guide.md §16.4 (아래 RUNBOOK_DEVIATION 참조)
 SCENARIO=load-test/scenarios/waiting-room.js (QUEUE_PROFILE=flood)
 IMAGE_TAG=<회차 시점 실행 중 태그 — G0 에서 기록>
@@ -119,8 +122,26 @@ KNEE_WATCH_2=gateway-5xx-rps >= 1/s (2연속)
 KNEE_WATCH_3=server-p95-by-instance{booking-service:8090} >= 150ms (2연속. B-2 42.9ms 의 3.5배)
 KNEE_WATCH_4=k6-req-connecting-p95 >= 100ms (2연속)
 KNEE_WATCH_5=hikari-pending >= 1 (any instance, 2연속)
-KNEE_WATCH_6=tomcat-busy >= 0.8 × tomcat_threads_config_max (2연속. 임계가 G10 값에 종속)
-KNEE_WATCH_7=container-mem-limit-pct >= 90% (any, 1회)
+KNEE_WATCH_6=tomcat-busy >= 0.8 × tomcat_threads_config_max (2연속)
+#   G10 실측으로 확정: booking·나머지 160 / seat-service 40 (max-threads 200 / 50).
+AGGREGATION_TOOL=load-test/bench/arm-stats.py (#554 에서 신설).
+#   arm 마다 판정 창이 다르고(ON t+300~500s / OFF t+30~300s) DEFERRAL_RATIO 는 시각 기준이
+#   하나만 어긋나도 결론이 뒤집혀서, 손집계를 하지 않는다. 15초 샘플러의 중앙값을 '최대' 로 쓰는
+#   사고(§16.6, 묶음 C 에서 두 번)도 이 스크립트가 막는다.
+AGGREGATION_TOOL_VALIDATION=#549 B-2 덤프로 검증했다 — KNEE=N/A · 호스트 CPU max 79.53%
+#   (#549 기록과 일치) · 게이트웨이 RPS max 434.36(위 MODEL_ON 예측 453 과 4% 오차).
+#   ⚠ 단 예매 RPS 판정창 avg 는 19.74 로 #549 기록 20.17 과 다르다(표본 14 · max 21.00 은 일치).
+#     #549 가 어떤 집계로 20.17 을 냈는지 증적에 없다 — 이번 회차 수치는 전부 이 스크립트로
+#     내고, #549 값과 소수점을 직접 비교하지 않는다.
+KNEE_WATCH_7=container-oom-kills > 0 (any, 1회)
+#   ⚠ 회차 전에 'container-mem-limit-pct >= 90%' 로 적었다가 OFF arm 시작 전에 교체했다.
+#   사유: 그 임계가 이 프로젝트에서 상시 참이다 — #549 B-2(유효 회차)의 공통 창에서도
+#   booking-service 가 96.28-98.34% 였다. ADR 0006 의 mem_limit 설계상 정상 운영값이라,
+#   그대로 두면 어떤 arm 이든 시작하자마자 '포화' 로 오판된다.
+#   ⚠ 이 교체의 근거는 이번 회차 결과가 아니라 #549 B-2 덤프다(ON arm 결과를 보기 전에
+#     arm-stats.py 를 그 회차로 검증하다 발견했다). §6.1 의 '결과를 보고 기준을 고치지 않는다'
+#     에 걸리지 않는다 — 고친 것은 결과가 아니라 측정 불가능한 임계다.
+#   mem-limit-pct 는 KNEE 판정에서 빠지고 기록 축으로만 남는다.
 KNEE_WATCH_8=redis-mem-used >= 48 MB (1회)
 KNEE_WATCH_9=k6_queue_status_unavailable_rate > 0 (1회)
 KNEE=가장 먼저 교차한 지표의 시각 t* 에서 (k6_vus, booking-server-rps, gateway-rps) 3튜플.
@@ -277,39 +298,87 @@ INSTRUMENTATION=waiting-room.js 에 queue_enqueue_failed Counter 를 추가했�
 
 # ── 사전 게이트 — 회차 시점에 채운다 ───────────────────────────────────────
 # G0~G7 은 런북 §16.4, G8~G14 는 이 회차에서 추가한 것이다.
-G0_EC2=
-G1_NGINX=
-G2_QUEUE_ENABLED=
-G3_METRICS=
-G4_REDIS=
-G5_PROM_TARGETS=
-G6_GENERATOR=
-G7_QUEUE_RESET=
-G8_IDLE_CPU_BASELINE=
-#   무부하 기저 CPU 5분. 134파일 드리프트와 부하를 회차 후에 가르는 유일한 수단이다.
-G9_KAFKA_CONCURRENCY=
-#   SPRING_KAFKA_LISTENER_CONCURRENCY 실제 값. .env.prod.example:147 에 3 이 새로 생겼다(#596).
-#   seat_lock_contention 해석이 여기 달렸다(런북 §13.5).
-G10_TOMCAT_MAX_THREADS=
-#   인스턴스별로 기록. seat-service 만 50 이 명시돼 있고(application.yml:33) booking-service 는
-#   미설정 = 기본 200 이다. KNEE_WATCH_6 의 임계가 이 값에 종속이다.
-G11_SMOKE_HOP_COUNT=
+G0_EC2=기동(2026-08-13 10:37 UTC 부팅). 실행 중 태그 b0f3da8464498eaf1e595ac2e478167fb3afee27
+#   — 정지 전 확인값과 동일하고 CD 성공 SHA 와도 일치한다.
+#   ⚠ #549 가 만난 '유령 IMAGE_TAG' 의 정체를 이번에 확인했다. EC2 에 .env 가 두 개 있다:
+#     ~/ticketrush/.env        → IMAGE_TAG=6b7301a0…  (쓰이지 않는 잔재. #549 가 본 그 값이다)
+#     ~/ticketrush/deploy/.env → IMAGE_TAG=b0f3da84…  (CD 가 실제로 쓰는 파일. cd.yml 의
+#                                 `docker compose --env-file deploy/.env` 가 근거)
+#     즉 '.env 가 존재하지 않는 태그를 가리킨다' 가 아니라 '엉뚱한 파일을 본 것' 이었다.
+#     이번 회차는 deploy/.env 만 만졌고 잔재 파일은 손대지 않았다.
+G1_NGINX=worker_connections 16384 / worker_rlimit_nofile 65535 / worker_processes auto
+#   (2 vCPU → 2). systemctl active. #522 조치가 재부팅 후에도 유지된다.
+G2_QUEUE_ENABLED=true (deploy/.env → gateway --force-recreate → 컨테이너 env 로 주입 확인)
+#   QUEUE_ADMIT_RATE=20 / QUEUE_STATUS_RPS_CAPACITY=400 도 같은 파일에 이미 있었다.
+#   재생성 후 이미지가 b0f3da84… 로 동일함을 확인했다(태그가 어긋나면 게이트웨이가 내려간다).
+G3_METRICS=ticketrush_queue_* 9개 시계열 전부 사전 등록으로 노출 확인
+#   admission{admitted,unavailable,waiting} · entry_token{invalid,missing,unavailable,valid}
+#   · poll_interval_seconds · waiting
+G4_REDIS=used_memory 1.36M / maxmemory 64.00M / policy noeviction (무효 기준 48MB 대비 여유)
+G5_PROM_TARGETS=11개 전부 up (gateway 1 · ticketrush-services 7 · node · redis · prometheus)
+G6_GENERATOR=로컬 Docker (ADR 0010 은 #549 실측으로 기각됨 — 생성기 EC2 를 만들지 않는다)
+G7_QUEUE_RESET=queue:* 0건 확인 후 시작
+G8_IDLE_CPU_BASELINE=약 7.0% — min 6.63 / avg 7.03 / max 7.57 (창 10:50:30~10:52:15Z, 표본 8).
+#   교차 확인: 창 10:47:00~10:50:00Z 표본 13 에서 min 6.72 / avg 7.57 / max 9.86.
+#   → 배포본 드리프트(134파일 +5,765줄)가 유휴 CPU 기저를 밀어올리지 않았다.
+#     PREDICT_WRONG_IF_2 의 전제가 회차 전에 해소된 셈이다.
+#   ⚠ 이 값은 '5분 연속 무명령 창' 이 아니다. 처음 5분 창(10:47~10:52)을 그대로 재니
+#     max 57.55% 가 나왔는데, 원인은 대상이 아니라 측정자였다 — 그 구간에 내가 SSH 점검 명령을
+#     던졌다. 같은 순간 docker stats 의 컨테이너 CPU 합계는 13%, load average 는 0.10 이었다.
+MEASUREMENT_HAZARD=2 vCPU 호스트라 관측 행위 자체가 관측값에 잡힌다.
+#   SSH 세션 + docker CLI(16개 컨테이너 샘플링) + Prometheus range query 가 각각 CPU 를 쓴다.
+#   기저 측정에서 30~57% 스파이크가 전부 여기서 나왔다.
+#   → 회차 중에는 원격 명령을 던지지 않는다. 관측은 k6 stdout 과 회차 후 덤프로만 한다.
+#     런북 §16 에 이 경고가 없다 — 회차 후 반영 대상이다.
+G9_KAFKA_CONCURRENCY=미설정. deploy/.env 에 SPRING_KAFKA_LISTENER_CONCURRENCY 키가 없다.
+#   #596 이 .env.prod.example 에 넣었지만 실제 .env 에는 반영되지 않아 코드 기본값으로 돈다.
+#   → PREDICT_WRONG_IF_3 이 발동하지 않는다. seat_lock_contention > 0 은 정상이 아니라
+#     그대로 해석 대상이다.
+G10_TOMCAT_MAX_THREADS=booking-service 200 / seat-service 50 / 나머지(auth·user·payment·
+#   performance·ticket) 200. tomcat_threads_config_max_threads 실측.
+#   → KNEE_WATCH_6 임계(0.8 ×): booking 160 · seat 40 · 나머지 160.
+G11_SMOKE_HOP_COUNT=예매 1건 = booking-service 요청 1건. 내부 REST 홉이 늘지 않았다.
+#   스모크(VU 50) 후 http_server_requests_seconds_count: booking-service 50(÷50 = 1.00),
+#   gateway-service 196. seat·user·performance-service 는 카운터가 아예 없다(요청 0건 —
+#   Micrometer 는 첫 요청 후에 시계열을 만든다).
+#   → booking-server-rps 축의 의미가 #549 와 같다. SeatRestClient(97줄) 신설이 예매 생성 경로에
+#     영향을 주지 않았다(BookingValidateReferencesUseCase 가 공유 DB 를 직접 본다).
 #   스모크에서 예매 1건당 서버 요청 홉 수. 새 빌드가 BookingFacade 179줄 변경이고
 #   booking-service 에 SeatRestClient(97줄)가 신설됐다. 예매 경로가 내부 REST 홉을 새로 타면
 #   booking-server-rps 축의 의미가 달라진다
 #   (BookingCreateUseCase·BookingValidateReferencesUseCase 자체는 무변경 — diff 에 안 나온다).
 G12_BETWEEN_ARM_RESET=
-G13_FLOOD_RAMP=
-G14_DUMP_QUERIES=
+G13_FLOOD_RAMP=-e QUEUE_FLOOD_RAMP=5m 명시 주입. k6 inspect 로 stages 확인:
+#   [{5m0s → 10000}, {15m0s → 10000}, {30s → 0}]. 두 arm 모두 같은 값으로 돈다.
+G14_DUMP_QUERIES=k6-queue-enqueue-failed(k6_queue_enqueue_failed_total) 를 dump-timeseries.py
+#   QUERIES 에 추가했다(커밋 150c8822). 없으면 코호트 대조 무효 기준을 회차 후에 못 잰다.
 
 # ── 시딩 — 회차 시점에 채운다 ──────────────────────────────────────────────
 SEED=load-test/seed/seed_queue_flood.sql
-SEED_RESULT_ON=
+SEED_PRESTATE=LTQ 잔재 0건 확인 후 시딩(#549 회차의 cleanup 이 완결돼 있었다). 시딩 전 seat 총 66,520행.
+SEED_RESULT_ON=user 10,000행(id 91921-101920, 연속 OK) / seat 10,000석(id 230375-240374, 연속 OK)
+QUEUE_PERF_ID=30 / QUEUE_USER_ID_MIN=91920 / QUEUE_SEAT_ID_MIN=230374 / QUEUE_FLOOD_VUS=10000
 SEED_RESULT_OFF=
 # arm 사이 재시딩하면 AUTO_INCREMENT 가 되감기지 않아 seat_id·user_id 범위가 바뀐다.
 # OFF arm 의 -e 인자를 새 시딩 출력으로 갱신한다 — ON arm 값을 재사용하면 회차 전체가 404 다.
 
+# ── 회차 전 처치 ───────────────────────────────────────────────────────────
+SMOKE=VU 50 / 램프 20s / 유지 1m (ON 조건, Prometheus remote-write 없이).
+#   queue_admitted 100.00%(50/50) · queue_booking_ok 100.00%(50/50) · booking_forbidden 0%
+#   · status_unavailable 0% · polls_per_user 정확히 1 · wait_to_admit avg 3.03s
+#   · http_req_duration p95 94.73ms · http_req_failed 0.00%(0/151)
+#   http_reqs 151 = open 1 + (enqueue+status+booking) × 50 인데 iterations 는 215 회다 →
+#   1회 여정 가드가 실제 시나리오에서 동작함을 이 숫자가 고정한다(가드가 없었다면 215회분의
+#   예매가 나갔다). 수치 자체는 폐기한다(§6.1 규칙 4).
+#   ⚠ polls_per_user=1 · admitted 100% 는 대기열이 안 켜졌다는 뜻이 아니다. threshold = 경과 × 20
+#     이라 50명은 2.5초면 전원 허용선 안에 든다. 본 회차(1만 명)에서는 성립하지 않는다.
+SMOKE_ENQUEUE_FAILED=요약에 출력되지 않았다. k6 는 값이 0인 Counter 를 출력하지 않는다 —
+#   진입 실패 0건이라는 뜻이지 계측 부재가 아니다. 본 회차에서 > 0 이면 그때 값이 찍힌다.
+SMOKE_CLEANUP=예매 삭제 + 좌석 AVAILABLE 복구 → LTQ 좌석 10,000 전부 AVAILABLE · 예매 0건 확인.
+#   queue:* 0건 · seat 락 키 0건 · Redis used_memory 1.70M.
+
 # ── 실측 — 회차 후에 채운다 ────────────────────────────────────────────────
+ON_START_UTC=2026-08-13T10:57:48Z
 # ON_*  / OFF_*
 
 # ── 이 회차가 답하지 못하는 것 (회차 전에 적는다) ──────────────────────────
