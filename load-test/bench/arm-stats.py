@@ -102,6 +102,39 @@ def knee(outdir: Path, arm: str, t0: int):
     return min(hits, key=lambda x: x[0])
 
 
+def k6_summary(outdir: Path, arm: str):
+    """k6 요약에서 대조표에 들어가는 커스텀 지표를 뽑는다.
+
+    서버 시계열에 없는 것들이다 — 실효 코호트(queue_enqueue_failed)·사용자당 폴링 횟수·
+    대기 시간 p95 는 클라이언트만 안다. 16개 항목을 눈으로 옮기면 틀린다.
+    """
+    path = outdir / f"k6-summary-{arm}.txt"
+    if not path.exists():
+        return
+    want = (
+        "queue_admitted", "queue_booking_ok", "queue_booking_forbidden",
+        "queue_status_unavailable", "queue_polls_per_user", "queue_wait_to_admit_seconds",
+        "queue_status_duration", "queue_polls_exhausted", "queue_enqueue_failed",
+        "http_reqs", "http_req_failed", "http_req_duration", "iterations", "vus_max",
+        "data_sent",
+    )
+    print("\n[k6 요약 — 클라이언트 측정]")
+    seen = set()
+    for line in path.read_text(encoding="utf-8", errors="replace").replace("\r", "").splitlines():
+        s = line.strip()
+        # THRESHOLDS 절에도 지표 이름이 헤더로 한 번 나온다. 값 줄만 집는다(이름 뒤 점선 + 콜론).
+        if ":" not in s:
+            continue
+        name = s.split(".")[0].strip()
+        if name in want and name not in seen:
+            seen.add(name)
+            print(f"  {s}")
+    # 0 인 Counter 는 k6 가 출력하지 않는다 — 없는 것과 0 을 구분해 적는다.
+    for miss in ("queue_enqueue_failed", "queue_polls_exhausted"):
+        if miss not in seen:
+            print(f"  {miss:30s} 요약에 없음 = 0건 (k6 는 값이 0인 Counter 를 출력하지 않는다)")
+
+
 def main():
     if len(sys.argv) < 4:
         print(__doc__)
@@ -147,6 +180,8 @@ def main():
             w = window(pts, t0, 30, 300)
             if w and max(x[1] for x in w) > 0:
                 print(describe(w, f"{title} {label}"))
+
+    k6_summary(outdir, arm)
 
     print("\n[꺾이는 지점]")
     k = knee(outdir, arm, t0)
