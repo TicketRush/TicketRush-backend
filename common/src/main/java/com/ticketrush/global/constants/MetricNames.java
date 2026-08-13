@@ -66,6 +66,15 @@ public class MetricNames {
   // 이 태그가 소유자 차단을 구분하는 유일한 축이다.
   public static final String PAYMENT_CONFIRM_BOOKING_GUARD_BLOCKED =
       "ticketrush.payment.confirm.booking_guard.blocked";
+  // 아직 해결되지 않은 환불 실패(FAILED 환불 이력) 건수(#574). Gauge.
+  // 0이 아니면 "과금이 남았는데 환불이 성사되지 않은" 건이 그만큼 있다는 뜻이라, 수치 자체가 곧
+  // 미해결 사고 건수다. PAYMENT_REFUND_FAILED(발생 카운터)와 달리 이쪽은 잔량이라 해결되면 내려간다.
+  public static final String PAYMENT_REFUND_UNRESOLVED =
+      "ticketrush.payment.refund.unresolved"; // Gauge
+  // 미해결 환불 실패의 보상 신호를 재발행한 횟수(#574). 재발행은 수신 측이 이미 처리했더라도
+  // 나가므로 이 값이 곧 유실 건수는 아니다 — 유실 여부는 EVENT_PUBLISH_FAILED 쪽에서 읽는다.
+  public static final String PAYMENT_REFUND_SIGNAL_REPLAYED =
+      "ticketrush.payment.refund.signal.replayed";
 
   // ticket
   public static final String TICKET_ISSUE = "ticketrush.ticket.issue";
@@ -80,6 +89,10 @@ public class MetricNames {
   // 발행을 띄우고 콜백을 기다리는 중인 건수(#483). backlog가 in-flight 행도 세므로 둘을 겹쳐 봐야
   // "콜백 대기(정상)"와 "릴레이 정지(장애)"가 갈린다.
   public static final String OUTBOX_IN_FLIGHT = "ticketrush.outbox.in_flight"; // Gauge
+  // Kafka 발행이 브로커 응답 콜백에서 실패한 횟수(#574). 발행은 fire-and-forget이라 실패가 호출자에게
+  // 전파되지 않으므로, 이 카운터가 "발행 유실이 실제로 일어나는가"를 보는 유일한 축이다. outbox 모드는
+  // 릴레이가 상태로 남겨 재발행하지만 kafka 모드는 그대로 사라진다.
+  public static final String EVENT_PUBLISH_FAILED = "ticketrush.event.publish.failed";
 
   // ===== Tag keys =====
   public static final String TAG_RESULT = "result";
@@ -94,6 +107,8 @@ public class MetricNames {
   // 사고 보상은 발생 자체의 의미가 달라(후자는 곧 사고 건수다) 알림 임계도 따로 잡아야 하는데,
   // 이 태그가 없으면 두 건이 PAYMENT_REFUND 한 시계열에 섞여 보상 발생률을 볼 수 없다.
   public static final String TAG_TRIGGER = "trigger";
+  // 발행 대상 Kafka 토픽(#574). 토픽은 코드에 상수로 고정된 유한 집합이라 태그로 안전하다.
+  public static final String TAG_TOPIC = "topic";
 
   // ===== Tag values =====
   public static final String RESULT_SUCCESS = "success";
