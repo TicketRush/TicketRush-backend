@@ -181,6 +181,22 @@ def main():
             if w and max(x[1] for x in w) > 0:
                 print(describe(w, f"{title} {label}"))
 
+    print("\n[무너진 뒤 회복 — outbox backlog]")
+    # 이슈 #554 의 관측 축이고 #549 에 선례가 없다. 회차 종료 후 backlog 가 언제 0 으로
+    # 돌아오는지가 '회복' 이다. 덤프 창이 소진 시점까지 덮여 있어야 값이 나온다.
+    for slug in ("outbox-backlog",):
+        for label, pts in load(outdir, slug, arm):
+            if not pts or max(v for _, v in pts) == 0:
+                continue
+            peak_t, peak = max(pts, key=lambda x: x[1])
+            drained = next((t for t, v in pts if t > peak_t and v == 0), None)
+            line = (f"  {label:26s} peak {peak:6.0f} (t+{peak_t - t0}s)")
+            if drained:
+                line += f"  → 0 도달 t+{drained - t0}s  (peak 이후 {drained - peak_t}s)"
+            else:
+                line += f"  → 창 끝({pts[-1][0] - t0}s)까지 0 미도달, 마지막 {pts[-1][1]:.0f}"
+            print(line)
+
     k6_summary(outdir, arm)
 
     print("\n[꺾이는 지점]")
