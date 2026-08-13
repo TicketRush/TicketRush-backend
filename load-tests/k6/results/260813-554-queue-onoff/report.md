@@ -32,7 +32,13 @@ ARRIVAL_RATE = QUEUE_FLOOD_VUS(10,000) / QUEUE_FLOOD_RAMP(300s) = 33.33 여정/s
 | booking | 20 RPS (admit-rate) | 33.3 RPS (도착률) |
 | **게이트웨이 총** | **≈453 RPS** | **≈100 RPS** |
 
-이 모델의 ON 총 요청 예측 약 167,000 은 #549 B-2 실측 **167,083** 과 8% 안에서 맞고, 게이트웨이 RPS max 예측 453 도 그 회차 실측 **434.36** 과 4% 오차다.
+이 모델은 세 번 검증됐다.
+
+| 검증 | 예측 | 실측 | 오차 |
+|---|---|---|---|
+| #549 B-2 총 요청 수 | 약 167,000 | 167,083 | 8% 안 |
+| #549 B-2 게이트웨이 RPS max | 453 | 434.36 | 4.1% |
+| **이번 ON arm 게이트웨이 RPS max** | **453** | **444.6** | **1.9%** |
 
 **따라서 이 회차는 "대기열이 붕괴를 막는다" 를 증명할 수 없다.** OFF arm 이 도달하는 예매 33.3 RPS 는 [#344](https://github.com/TicketRush/TicketRush-backend/issues/344) 붕괴점(booking 단독 258 RPS 에서 호스트 CPU 99.87%)의 **12.9%** 다. 그리고 대기열을 끄면 전체 요청의 88% 인 폴링이 사라져 **OFF arm 이 ON 보다 서버 부하가 4.5배 가볍다.**
 
@@ -52,6 +58,7 @@ TBD — `arm-stats.py` 출력으로 채운다.
 | `queue_wait_to_admit_seconds` p95 | 182.6s (avg 98.9s) | TBD | 사용자 체감 대가 |
 | `queue_status_duration` p95 | 28.5ms (avg 15.14ms) | TBD | |
 | `http_req_duration` p95 | 42.34ms (avg 17.76ms) | TBD | |
+| **게이트웨이 총 RPS** (공통 창 max) | **439.9** (회차 전체 max 444.6) | TBD | 대기열의 자기 비용. 모델 예측 ON 453 / OFF 100 |
 | 총 요청 수 | 178,473 | TBD | 상태 확인만 158,691 |
 | 호스트 CPU max / avg (회차 전체) | 88.59% / 36.37% | TBD | 무부하 기저 약 7% |
 | seat-service 컨테이너 mem max | 81.37% | TBD | 공통 창 |
