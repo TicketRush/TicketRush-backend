@@ -225,6 +225,9 @@ curl http://localhost:8080/actuator/health
 - 서비스별 원본 스펙은 `/v3/api-docs/{user|auth|performance|booking|payment|seat|ticket}`에서 직접 받을 수 있습니다
 - 해당 서비스가 떠 있지 않으면 그 항목만 로딩에 실패합니다 — 게이트웨이가 각 서비스로 프록시하는 구조이기 때문입니다
 
+<img src="docs/images/swagger-ui.jpg" width="700" alt="게이트웨이 통합 Swagger UI — performance-service 선택 화면">
+
+
 ## 📚 Deep Dive Docs
 
 | 문서                                                            | 내용                          |
