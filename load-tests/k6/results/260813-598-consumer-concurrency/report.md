@@ -107,7 +107,97 @@
 
 ## 4. A arm (`c1`) 실측
 
-<!-- 회차 후에 채운다 -->
+### 4.1 통제변수 검증 — 값이 실제로 먹었다
+
+| 축 | 회차 전 (concurrency 3) | A arm (concurrency 1) |
+|---|---|---|
+| `booking-group` 멤버 | 15 | **5** |
+| `ticket-group` 멤버 | 6 | **2** |
+| `seat-group` 멤버 | 9 | **3** |
+| `payment-group` 멤버 | 9 | **3** |
+| `jvm_threads_live` booking | 112 | **72** (−40) |
+| `jvm_threads_live` seat | 131 | **107** (−24) |
+| `jvm_threads_live` ticket | 64 | **48** (−16) |
+| `jvm_threads_live` payment | 77 | **53** (−24) |
+
+무관한 서비스(`auth` 42 · `user` 40 · `performance` 46)는 변하지 않았다. 주입 스크립트도 `booking-group consumers=1` / `ticket-group consumers=1` 을 자체 출력으로 보고했다.
+
+`docker inspect` 의 `Config.Env` 에서 4개 서비스 전부 `SPRING_KAFKA_LISTENER_CONCURRENCY=1` 을 확인했고, 재생성 후에도 이미지 태그는 `b0f3da84…` 로 동일했다.
+
+### 4.2 주 판정축 — S1 드레인율
+
+워밍업 3회 드레인이 **84s → 55s → 52s** 로 3차에 고원에 닿았다(`#504` 는 90 → 61 → 57s). JIT 가 데워졌다.
+
+baseline 3,000건을 명목 10/s(실측 9/s)로 302초 흘렸고 **주입 종료 3초 뒤 첫 표본이 이미 lag 0** 이었다 — 드레인 용량 아래의 유입은 흡수된다.
+
+스파이크 20,000건을 2초에 무페이싱으로 넣었다(실측 10,000/s).
+
+| 축 | A arm | `#504` |
+|---|---|---|
+| 정점 (주입 종료 +6s) | booking 19,882 / ticket 19,521 | 19,870 / 19,505 |
+| **booking 드레인율** | **42.9/s** | 42.0/s |
+| ticket 드레인율 | 86.8/s (booking 의 2.02배) | 85.9/s (2.05배) |
+| 회복 (주입 종료 → lag 0) | booking **465s** / ticket 231s | 479s / 233s |
+| 두 그룹 동시 구간 | 39.8/s | 36.2/s |
+| booking 단독 구간 | 45.9/s (**+15.2%**) | 44.8/s (+24%) |
+
+`ticket-group` 이 0에 닿는 순간 `booking-group` 처리율이 뛴다. **두 그룹이 같은 2 vCPU 를 나눠 쓴다는 직접 증거**다.
+
+### 4.3 무효 기준 대조 — 전부 통과
+
+| 무효 기준 | 결과 |
+|---|---|
+| `IMAGE_TAG` 불일치 | 해당 없음 (`b0f3da84…`) |
+| 그룹 멤버 수 불일치 | 통과 (§4.1) |
+| DLT 토픽 생성 | 미생성 |
+| verify 불일치 / `stray_events != 0` | `confirmed = sold = tickets = inbox_booking = inbox_ticket = 29,001` = 주입 총량, `stray_events 0` |
+| 시딩 검증 SELECT | 전부 통과 (`contiguous_seats 1` · `seat_booking_aligned 1` · `expiry_safe 30,000`) |
+| `[CRITICAL]` 로그 | booking 0 / seat 0 / ticket 0 |
+| Prometheus targets | 11/11 up |
+| 인스턴스 중지 · 배포 | 없음 |
+
+### 4.4 자원 축
+
+드레인 창(15:04:54Z ~ 15:12:43Z) 기준.
+
+- 호스트 CPU **min 33.79 / avg 79.43 / max 87.09** (`#504` 80.84 / 87.51). 무부하 기저 7.55% 대비 드레인 귀속 71.9%p.
+- HikariCP **pending 전 인스턴스 0**, active max 1 (풀 10). `#596` 이 선언한 되돌릴 조건 1은 A arm 에서 당연히 발동하지 않는다.
+- `container_oom_kills` 0. 컨테이너 메모리 max — booking 84.98% / seat 68.99% / ticket 72.19% / performance 88.63%.
+- MySQL 99.65~100.00% 는 **사전 선언대로 대조 축에서 뺐다**(`EXCLUDED_AXIS`).
+- `ticketrush_kafka_inbox_total{result="duplicate"}` 시리즈 부재(= 0). `#504` 와 같다.
+
+### 4.5 이 arm 이 `#504` 를 재현했다
+
+배포본이 `1f2ed5d2` → `b0f3da84` 로 다른데도 5개 축이 전부 근접했다(드레인율 +2.1% / +1.0%, 회복 −2.9%, CPU avg·max 각 1.4·0.4%p). **A arm 은 유효한 before 이고, 이후 B/A 비율의 분모로 쓴다.**
+
+`#512` 규약이 요구한 "before 를 이 회차 안에서 새로 뜬다" 를 충족하면서, 동시에 그 규약이 왜 필요한지도 이 회차가 보여줬다 — 값이 근접했다는 사실은 **재측정한 뒤에야** 알 수 있는 것이다.
+
+### 4.6 S2 — 오버셀과 락 경합
+
+15:15:36Z ~ 15:21:46Z, `PERF_ID=13` / `TARGET_SEAT_ID=26130`(Z-1, `#344` 의 좌석 121과 같은 좌석 번호).
+
+- `http_reqs` 148,588 / 400.14 rps. `seat_accepted` 3.14%(4,674) / `seat_conflict` 96.85%(143,913).
+- 임계 2개 전부 통과 — `p(95)<800` ✓ 534.18ms / `http_req_failed<0.01` ✓ 0.00%.
+- **`ticketrush_seat_lock_contention_total` 시리즈 자체가 생성되지 않았다(= 0).** `#344` 와 같고, 회차 전 예측대로다.
+- 실패 경로는 **전량 2-C**(`SeatFacade.java:197` 이미 선점/판매). 2-B(락 획득 실패)는 0건.
+- **리스너 라인 4,694건이 전부 스레드 `[ntainer#0-0-C-1]` 하나에서 났다.** concurrency 1 의 스레드 수준 직접 증거다.
+- Inbox: `seat-group processed 4,674 / duplicate 20`. 4,694 − 4,674 = 20 은 릴레이 재발행분이고 전량 차단됐다.
+
+**오버셀 0** — 네 축이 맞물린다.
+
+| 축 | 값 |
+|---|---|
+| `seat_hold_total{success}` | 8 |
+| `seat.version` | 8 |
+| `booking_status = EXPIRED` | 8 |
+| 로그 "Redis 만료 → AVAILABLE 롤백" | 8회 |
+| `seat_hold_total{unavailable}` | 4,666 |
+| `booking_status = CANCELED` | 4,666 |
+| 합계 | 8 + 4,666 = 4,674 = 전체 예매 = k6 `seat_accepted` |
+
+HOLD 사이클 8회의 해제 시각은 15:16:16 / 15:17:10 / 15:17:50 / 15:18:29 / 15:19:22 / 15:19:59 / 15:21:02 / 15:22:03Z 로 40~60초 간격의 순차다. **겹친 구간이 없다.** `#344` 는 같은 구조에서 3/3/3 이었다.
+
+> **회차 중 정정 — 오버셀 검증 SQL 두 개가 이 시나리오에 안 맞았다.** 상세는 §9.1·§9.2. 판정 기준(오버셀 0)은 바꾸지 않았고, 바꾼 것은 검출력이 없는 계측 도구다.
 
 ## 5. B arm (`c3`) 실측
 

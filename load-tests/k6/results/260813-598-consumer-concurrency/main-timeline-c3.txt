@@ -1,0 +1,5 @@
+########## BASELINE 3000 @10/s ##########
+[inject] topic   payment-confirmed-topic  partitions=3
+[inject] group   booking-group  consumers=3
+[inject] group   ticket-group  consumers=3
+[inject] begin   count=3000 offset=7000 rate=10 run=1786635948265758  2026-08-13 15:45:48 UTC

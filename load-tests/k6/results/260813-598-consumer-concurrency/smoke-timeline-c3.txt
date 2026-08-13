@@ -1,0 +1,44 @@
+########## PREFLIGHT ##########
+[inject] topic   payment-confirmed-topic  partitions=3
+[inject] group   booking-group  consumers=3
+[inject] group   ticket-group  consumers=3
+[inject] begin   count=1 offset=0 rate=0 run=1786635743231589  2026-08-13 15:42:23 UTC
+[inject] end     count=1 elapsed=2s actual_rate=0/s  2026-08-13 15:42:25 UTC
+[drain]  begin   2026-08-13 15:42:25 UTC
+[drain]  2026-08-13T15:42:30Z booking-group=0 ticket-group=0 total=0
+[drain]  drained elapsed_from_inject_end=0s  2026-08-13 15:42:30 UTC
+########## WARMUP offset=1000 ##########
+[inject] topic   payment-confirmed-topic  partitions=3
+[inject] group   booking-group  consumers=3
+[inject] group   ticket-group  consumers=3
+[inject] begin   count=2000 offset=1000 rate=0 run=1786635757234799  2026-08-13 15:42:37 UTC
+[inject] end     count=2000 elapsed=2s actual_rate=1000/s  2026-08-13 15:42:39 UTC
+[drain]  begin   2026-08-13 15:42:39 UTC
+[drain]  2026-08-13T15:42:52Z booking-group=1921 ticket-group=1632 total=3553
+[drain]  2026-08-13T15:43:09Z booking-group=1616 ticket-group=666 total=2282
+[drain]  2026-08-13T15:43:25Z booking-group=1099 ticket-group=0 total=1099
+[drain]  2026-08-13T15:43:39Z booking-group=240 ticket-group=0 total=240
+[drain]  2026-08-13T15:43:48Z booking-group=0 ticket-group=0 total=0
+[drain]  drained elapsed_from_inject_end=65s  2026-08-13 15:43:48 UTC
+########## WARMUP offset=3000 ##########
+[inject] topic   payment-confirmed-topic  partitions=3
+[inject] group   booking-group  consumers=3
+[inject] group   ticket-group  consumers=3
+[inject] begin   count=2000 offset=3000 rate=0 run=1786635834246497  2026-08-13 15:43:54 UTC
+[inject] end     count=2000 elapsed=3s actual_rate=666/s  2026-08-13 15:43:57 UTC
+[drain]  begin   2026-08-13 15:43:57 UTC
+[drain]  2026-08-13T15:44:10Z booking-group=1676 ticket-group=969 total=2645
+[drain]  2026-08-13T15:44:25Z booking-group=792 ticket-group=0 total=792
+[drain]  2026-08-13T15:44:34Z booking-group=0 ticket-group=0 total=0
+[drain]  drained elapsed_from_inject_end=33s  2026-08-13 15:44:34 UTC
+########## WARMUP offset=5000 ##########
+[inject] topic   payment-confirmed-topic  partitions=3
+[inject] group   booking-group  consumers=3
+[inject] group   ticket-group  consumers=3
+[inject] begin   count=2000 offset=5000 rate=0 run=1786635881255944  2026-08-13 15:44:41 UTC
+[inject] end     count=2000 elapsed=2s actual_rate=1000/s  2026-08-13 15:44:43 UTC
+[drain]  begin   2026-08-13 15:44:43 UTC
+[drain]  2026-08-13T15:44:55Z booking-group=1571 ticket-group=697 total=2268
+[drain]  2026-08-13T15:45:10Z booking-group=584 ticket-group=0 total=584
+[drain]  2026-08-13T15:45:18Z booking-group=0 ticket-group=0 total=0
+[drain]  drained elapsed_from_inject_end=32s  2026-08-13 15:45:18 UTC
