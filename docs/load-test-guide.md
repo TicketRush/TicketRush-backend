@@ -2208,13 +2208,15 @@ dropped > 0 AND 여정 VU < 0.95 × maxVUs        → 대상 포화 신호
 ```bash
 # 계단마다 1회
 python load-test/bench/dump-timeseries.py <START_UTC> <END_UTC> <OUTDIR> a20
-python load-test/bench/arm-stats.py <OUTDIR> a20 <START_UTC> --ramp-end 150
+python load-test/bench/arm-stats.py <OUTDIR> a20 <START_UTC> --window 150 310 --ramp-end 150
 
 # 전 계단이 끝난 뒤 가로 대조표 — report.md 에 그대로 붙인다
-python load-test/bench/arm-stats.py <OUTDIR> --table a20=<UTC> a40=<UTC> a30=<UTC> --ramp-end 150
+python load-test/bench/arm-stats.py <OUTDIR> --table a20=<UTC> a40=<UTC> a30=<UTC> --ramp-end 150 --span 310
 ```
 
 `--ramp-end 150`은 유입 종료 시각이다(램프 10s + 유지 140s). 이 인자를 빼면 기본 300이 적용돼 **판정창이 소화 구간의 절반을 잘라먹는다.**
+
+**판정창은 `t+150s ~ t+310s`로 못 박는다(`--window 150 310` · `--span 310`).** 끝을 "회차 끝"으로 두면 안 된다 — **SSE 구독자 시나리오가 전 계단 10분 고정이라 k6 프로세스는 `t+600s`까지 살아 있는데 소화는 `t+300s`에 끝난다.** 그대로 두면 판정창의 60%가 무부하 구간이라 `avg`가 계단과 무관하게 희석된다. 두 인자를 빠뜨렸을 때의 결과도 각각 다르다: `--window`를 안 주면 arm 이름이 `on`이 아니라서 기본 `t+30~300s`로 떨어져 **램프가 판정에 섞이고**, `--span`을 안 주면 기본 3600으로 **무부하 꼬리가 통째로 들어온다.**
 
 > **⚠️ 예매 RPS만 보고 계단을 비교하지 않는다.** 이슈 #555 본문은 *"계단을 올리면 폴링 수요도 `T = ceil(waiting/R)`로 함께 오른다"*고 적었는데 **방향이 반대다.** `pollSeconds`에 `min 3 / max 60`이 씌워져 있어(`application.yml`) `waiting ≥ 1,200`인 동안 폴링 RPS는 `waiting/T ≈ R = 400`에 **고정**되고, admit을 올리면 대기가 빨리 빠져 **폴링 총량은 오히려 줄어든다.** 결론은 그대로 유효하고 이유가 다르다 — **계단마다 CPU 예산의 분모가 달라진다.** 대조표의 폴링 RPS·게이트웨이 RPS 컬럼이 그래서 필수다.
 

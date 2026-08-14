@@ -109,7 +109,18 @@ PREDICT_AXIS=어느 축이 먼저 걸리는지는 두 방향이 동일하게 열
 # ── 판정 기준 (회차 전에 정한다 — §6.1) ────────────────────────────────────
 PRIMARY_CRITERION=허용량을 올려도 실제 처리량이 따라오지 않는 첫 계단. 판정은 계단 대조표의
 #   '예매 서버 RPS(판정창 avg)' 가 직전 계단 대비 admit 증가분의 50% 미만만 오르는 계단.
-#   판정창은 t+150s(유입 종료) ~ 회차 끝이다.
+#   판정창은 t+150s(유입 종료) ~ t+310s(소화 종료 = 램프 10s + C/m 300s)다. 160초 / 15초 스크랩
+#   = 약 11표본.
+#   ⚠ '회차 끝' 으로 두지 않는 이유를 회차 전에 적는다. SSE 구독자 시나리오는 전 계단 10분 고정이라
+#     (통제 변수) k6 프로세스는 t+600s 까지 산다. 소화는 t+300s 에 끝나므로 '회차 끝' 을 창의 끝으로
+#     잡으면 판정창의 60% 가 무부하 구간이 되어 avg 가 계단과 무관하게 희석된다. 이것은 결과를 보고
+#     고친 것이 아니라 산술로 드러난 정의의 구멍이고, 첫 계단 실행 전에 고정했다.
+#   ⚠ 포화 계단은 소화가 t+300s 에 안 끝난다. 그 경우 창 전체가 부하 구간이라 판정이 더 선명해질
+#     뿐 기준은 그대로 쓴다 — 창을 계단마다 늘리지 않는다(늘리면 계단끼리 비교가 깨진다).
+#   집계 인자로는 이렇게 들어간다:
+#     계단별  arm-stats.py <OUTDIR> a<m> <START_UTC> --window 150 310 --ramp-end 150
+#     대조표  arm-stats.py <OUTDIR> --table a20=<UTC> a40=<UTC> ... --ramp-end 150 --span 310
+#     (--window 를 빼면 arm 이름이 'on' 이 아니라서 기본값 t+30~300s 로 떨어져 램프가 섞인다)
 #   세 신호(실제 처리량 정체 · dropped 발생 · 호스트 CPU 수렴)가 갈리면 처리량 정체를 우선한다.
 SECONDARY=1만 명 기준 소화 시간을 rate 별로 기록한다 — SSOT 는 queue_drain_seconds 의 max
 #   (Trend 의 max 는 remote-write 로 나가지 않아 k6 요약이 유일한 출처다). 코호트가 계단마다
@@ -155,27 +166,41 @@ POST_CHECK=오버셀 0행 — 런북 §13.4-(7)(a1)(VU 마다 좌석이 유일�
 #   ⚠ 이 기준들은 회차 전에 확정했다. 결과를 보고 고치지 않는다.
 
 # ── 사전 게이트 (런북 §16.4 + §16.7) ───────────────────────────────────────
-G0_EC2=<기동 · 실행 중 IMAGE_TAG 를 컨테이너에서 직접 읽어 기록>
+G0_EC2=PASS. 2026-08-14 08:03 UTC 기동(인스턴스가 내려가 있어 사용자가 켰다). 실행 중 태그를
+#   컨테이너에서 직접 읽었다 — IMAGE_TAG=b0f3da8464498eaf1e595ac2e478167fb3afee27, 앱 8개 전부 동일.
+#   deploy/.env 값과도 일치한다. #554 와 같은 배포본이다(PR #611 은 develop 머지라 CD 가 돌지 않았다).
 #   ⚠ .env 를 믿지 않는다. EC2 재기동은 기존 컨테이너를 되살릴 뿐 .env 를 다시 읽지 않는다.
-G1_NGINX=<worker_connections 16384 / worker_rlimit_nofile 65535 실측 확인>
-G2_QUEUE_ENABLED=<true. up -d --force-recreate --no-deps gateway-service 후 docker inspect 확인>
-G2_QUEUE_ADMIT_RATE=<계단값. restart 는 env_file 을 다시 읽지 않는다>
-G3_METRICS=<curl actuator/prometheus | grep ticketrush_queue — 0 으로라도 보여야 한다>
-G4_REDIS=<redis_memory_used_bytes < 48MB>
-G5_PROM_TARGETS=<job='gateway' up>
-G6_K6_IMAGE=<docker compose --profile loadtest build k6-sse 완료. 이 회차는 이 이미지에서만
-#   돈다 — 기본 grafana/k6 는 'unknown dependency : k6/x/sse' 로 즉사한다(실측 확인)>
-G7_QUEUE_RESET=<queue:* 삭제 후 0건. 계단마다 필수 — 이전 계단의 queue:opened-at 이 남으면
-#   threshold 가 이미 수십만이라 전원이 첫 폴링에서 즉시 승급한다>
-G8_SEED=<seed_queue_flood.sql 의 @cohort_size 를 계단값으로. 출력 -e 인자 4줄을 그대로 사용.
-#   연속성이 GAP 이면 cleanup 후 재시딩한다>
+G1_NGINX=PASS. worker_processes auto / worker_rlimit_nofile 65535 / worker_connections 16384.
+G2_QUEUE_ENABLED=PASS. .env 가 false 였다 → true 로 바꾸고
+#   docker compose -p ticketrush-prod --env-file .env -f docker-compose.prod.yml
+#     up -d --force-recreate --no-deps gateway-service
+#   실행 후 docker inspect 의 Config.Env 로 QUEUE_ENABLED=true 확인.
+G2_QUEUE_ADMIT_RATE=20 (1계단). Config.Env 에서 확인. restart 는 env_file 을 다시 읽지 않는다.
+G3_METRICS=PASS. ticketrush_queue_{admission_total,entry_token_total,poll_interval_seconds,waiting}
+#   전부 0 으로 노출된다.
+G4_REDIS=PASS. used_memory=1,368,808 B (1.31 MB) << 48 MB. maxmemory 64MB / noeviction.
+G5_PROM_TARGETS=PASS. 11/11 up (gateway 포함 앱 8 + node + redis-exporter + prometheus).
+G6_K6_IMAGE=PASS. docker compose --profile loadtest build k6-sse 완료 → ticketrush/k6-sse:local.
+#   이 회차는 이 이미지에서만 돈다 — 기본 grafana/k6 는 'unknown dependency : k6/x/sse' 로 즉사한다.
+G7_QUEUE_RESET=PASS. queue:* 삭제 후 0건(스모크 전 1회, 본 계단 전 1회). 계단마다 필수 —
+#   이전 계단의 queue:opened-at 이 남으면 threshold 가 이미 수십만이라 전원이 첫 폴링에서 즉시 승급한다.
+G8_SEED=PASS. @cohort_size=6000 / @rows_per=25 / @cols_per=240. user·seat 양쪽 연속성 OK.
+#   스모크가 코호트 129명을 소모해 cleanup 후 재시딩했고, 본 계단은 재시딩 뒤 오프셋을 쓴다:
+#     QUEUE_PERF_ID=33 / QUEUE_USER_ID_MIN=126494 / QUEUE_SEAT_ID_MIN=264948 / QUEUE_COHORT_SIZE=6000
+#   ⚠ 시딩 SQL 의 출력 마지막 줄이 QUEUE_FLOOD_VUS= 였다 — #555 에서 사라진 변수다. 그대로 넣으면
+#     k6 가 조용히 무시하고 코호트가 기본값에 남아, 계단마다 코호트가 바뀌는 이 회차에서 2계단부터
+#     queue_cohort_exhausted 로 무효가 된다. QUEUE_COHORT_SIZE= 로 고쳤다(회차 전).
 G9_BASELINE=<무부하 기저 CPU 5분. 그 5분 동안 명령을 던지지 않는다 — #554 에서 관측 행위만으로
 #   max 57.55% 가 찍혔다(명령 없는 창의 기저는 약 7%)>
-G10_INSPECT=<k6 inspect 로 stages · preAllocatedVUs=maxVUs 확인. 계단 인자를 빠뜨리면
-#   다른 계단을 1회차 형상으로 돌리게 된다>
-G11_MYSQL_RESTART_POLICY=<계단 사이 MySQL 재시작 여부를 여기 적고 전 계단에 동일 적용.
-#   #554 에서 MySQL 메모리가 첫 arm 중 72% → 100% 로 차오른 뒤 내려오지 않았다(§2.3).
-#   재시작하면 버퍼풀 워밍업을 날려 첫 계단이 불리해진다 — 어느 쪽이든 고정한다>
+G10_INSPECT=PASS. flood=ramping-arrival-rate / stages 10s→target 40, 2m20s→target 40 /
+#   preAllocatedVUs=maxVUs=4000 / gracefulStop 10m, subscribers=constant-vus 100 VU 10m.
+G11_MYSQL_RESTART_POLICY=재시작하지 않는다. 전 계단 동일 적용.
+#   #554 에서 MySQL 메모리가 첫 arm 중 72% → 100% 로 차오른 뒤 내려오지 않았다(§2.3). 컨테이너
+#   상한은 768 MB(docker inspect HostConfig.Memory=805306368)이고 이 포화는 InnoDB 버퍼풀 보유이지
+#   메모리 압박이 아니다. 재시작하면 버퍼풀을 날려 그 계단만 디스크 I/O 를 더 타고, 무엇보다 앱 8개의
+#   커넥션 풀이 동시에 끊겨 그 오류가 회차 초반에 섞인다 — 확실한 오염을 피하려 재시작하지 않는 쪽을
+#   골랐다. 계단 사이 cleanup + 재시딩이 매번 같은 테이블을 훑으므로 워밍업 조건은 계단끼리 같다.
+#   대가는 LIMIT_ORDER 에 적는다.
 
 G12_SMOKE=<소규모 스모크 1회(도착률 1~2/s · 1~2분)를 첫 계단 전에 돈다. 수치는 폐기 전제
 #   (§6.1 규칙 4)이고, 확인 대상은 값이 아니라 **여정이 한 바퀴 도는가** 다.
@@ -190,7 +215,20 @@ G12_SMOKE=<소규모 스모크 1회(도착률 1~2/s · 1~2분)를 첫 계단 전
 #     ② SSE 를 여정 안에 두면 이벤트가 없을 때 VU 가 갇히고 주 지표가 통째로 사라진다
 #        → 별도 구독자 시나리오로 분리했다(커밋 d91e101e).
 #   분리 후 재실행: iterations 129/계획 130 · booking_ok 100% · drain max 72.5s · dropped 0.
-#   회차 전 스모크는 대상 EC2 에서 같은 항목으로 한 번 더 확인한다 — 위는 로컬 검증이다.>
+#
+#   대상 EC2 스모크(2026-08-14 08:14 UTC, 도착률 2/s · 유지 60s · 구독자 5) — PASS.
+#     iterations 129 / 계획 130, flood interrupted 0 (subscribers 5 interrupted 은 gracefulStop 0s
+#       의 정상 종료다 — 여정 시나리오가 아니다)
+#     queue_booking_ok 100% (129/129) / queue_seatmap_ok 100% (129/129)
+#     queue_drain_seconds 표본 존재 (avg 40.6 / max 72.6s)
+#     queue_cohort_exhausted 0 · dropped_iterations 0 · queue_sse_subscribe_failed 0
+#     queue_status_unavailable 0 · queue_booking_forbidden 0
+#     SSE 645 이벤트 수신 / sse_connect avg 473ms — 구독 축이 실제로 붙는다
+#     http_req_failed 0.00% (0/517) / p95 65.41ms
+#   ⚠ 이 수치는 폐기 전제다(§6.1 규칙 4). 확인한 것은 값이 아니라 여정이 한 바퀴 돈다는 사실이다.
+#   ⚠ queue_admitted 가 100.00% 지만 SANITY 위반이 아니다 — 도착률 2/s 가 admit 20/s 보다 낮아
+#     대기가 아예 안 쌓이는 형상이라 전원 즉시 승급이 정상이다(polls_per_user max 1 이 그 증거).
+#     본 계단은 a=2m 이라 대기가 쌓이고, 거기서 1.000 이면 그때는 스크립트를 의심한다.>
 
 # ── 실측 (회차 후 채운다) ──────────────────────────────────────────────────
 # 계단마다 한 블록씩. arm 접미사는 a<admit> 로 통일한다(-a20, -a40, ...).
