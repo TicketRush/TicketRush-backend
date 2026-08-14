@@ -2022,7 +2022,7 @@ docker exec -i ticketrush-mysql mysql -uroot -p"$PW" ticket_rush \
   --init-command="SET @i_confirm_loadtest_db=1" < load-test/seed/seed_queue_flood.sql
 ```
 
-끝에 출력되는 **`-e 인자` 4줄을 그대로 k6 실행에 넣는다**(`QUEUE_PERF_ID` · `QUEUE_USER_ID_MIN` · `QUEUE_SEAT_ID_MIN` · `QUEUE_FLOOD_VUS`). 오프셋이 `MIN(id) - 1`인 것은 시나리오가 `id = 오프셋 + exec.vu.idInTest`로 매기고 `idInTest`가 1부터이기 때문이다.
+끝에 출력되는 **`-e 인자` 4줄을 그대로 k6 실행에 넣는다**(`QUEUE_PERF_ID` · `QUEUE_USER_ID_MIN` · `QUEUE_SEAT_ID_MIN` · 코호트 크기). 오프셋이 `MIN(id) - 1`인 것은 시나리오가 `id = 오프셋 + 1 + exec.scenario.iterationInTest`로 매기기 때문이다 — **#555 에서 `exec.vu.idInTest`(1-base)에서 `iterationInTest`(0-base)로 바꿨다.** `ramping-arrival-rate`는 VU 를 재사용하므로 VU 번호로 사람을 매기면 같은 계정·좌석이 여러 번 나온다. 오프셋 값 자체는 바뀌지 않고 0-base 보정을 시나리오가 한다.
 
 **연속성이 `GAP`이면 그대로 쓰지 않는다.** 구멍에 걸린 VU의 예매가 404로 튕겨 예매 경로 RPS가 과소 집계된다 — `cleanup_load.sql` 후 재시딩한다. `prod`는 `seat_id`가 이미 13만대까지 소진돼 있어 좌석과 계정의 번호대가 겹치지 않는다. **오프셋 없이 돌리면 회차 전체가 404다.**
 

@@ -101,7 +101,10 @@ ORDER BY r.ri, c.ci;
 
 -- ---- 검증 + k6 실행 인자 ---------------------------------------------------
 -- 아래 k6_env_arg 4줄을 그대로 k6 실행에 넣는다. 오프셋이 -1 인 이유: 시나리오가
---   userId = QUEUE_USER_ID_MIN + exec.vu.idInTest 로 매기고 idInTest 는 1부터 시작한다.
+--   userId = QUEUE_USER_ID_MIN + 1 + exec.scenario.iterationInTest 로 매긴다.
+--   (#555 에서 exec.vu.idInTest(1-base) → iterationInTest(0-base) 로 바꿨다. arrival-rate 는
+--    VU 를 재사용하므로 VU 번호로 사람을 매기면 같은 계정·좌석이 여러 번 나온다. 오프셋 값
+--    자체는 바뀌지 않는다 — 0-base 보정을 시나리오 쪽에서 한다.)
 -- 연속성이 'GAP' 이면 그대로 쓰면 안 된다 — 구멍에 걸린 VU 의 예매가 404 로 튕겨
 -- 예매 경로 RPS 가 과소 집계된다. cleanup 후 재시딩할 것.
 -- 별칭은 ASCII 로 둔다. 이 결과는 SSH 를 거쳐 Windows 터미널까지 오는데, 그 경로의 인코딩까지

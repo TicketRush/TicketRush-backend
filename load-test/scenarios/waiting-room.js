@@ -33,9 +33,13 @@ import {
   QUEUE_STATUS_PRE_ALLOCATED_VUS,
   QUEUE_STATUS_MAX_VUS,
   QUEUE_PRELOAD_SIZE,
-  QUEUE_FLOOD_VUS,
-  QUEUE_FLOOD_RAMP,
-  QUEUE_FLOOD_DURATION,
+  QUEUE_ARRIVAL_RATE,
+  QUEUE_ARRIVAL_RAMP_SECONDS,
+  QUEUE_ARRIVAL_HOLD_SECONDS,
+  QUEUE_COHORT_SIZE,
+  QUEUE_FLOOD_PRE_ALLOCATED_VUS,
+  QUEUE_FLOOD_MAX_VUS,
+  QUEUE_GRACEFUL_STOP,
   QUEUE_FALLBACK_POLL,
   QUEUE_JITTER,
   QUEUE_MAX_POLLS,
@@ -51,12 +55,6 @@ const USER_ID_MIN = Number(__ENV.QUEUE_USER_ID_MIN || 1);
 const SEAT_ID_MIN = Number(__ENV.QUEUE_SEAT_ID_MIN || USER_ID_MIN);
 // 대기열 개시(ADMIN) 전용. 실제 계정일 필요는 없다 — 개시는 Redis 만 건드리고 DB 를 타지 않는다.
 const ADMIN_USER_ID = Number(__ENV.QUEUE_ADMIN_USER_ID || 1);
-// 여정을 마친 VU 가 다시 줄을 서지 않게 하는 표식. k6 는 VU 마다 JS 런타임이 분리되므로 이 값은
-// 그 VU 만의 상태다(공유 변수가 아니다).
-let journeyDone = false;
-// 여정을 마친 VU 가 회차 끝까지 머무는 간격. 요청을 보내지 않으므로 비용은 타이머뿐이고, 회차 종료
-// 시점의 대기는 gracefulStop 이 끊는다.
-const IDLE_SLEEP_SECONDS = 30;
 
 // 계단 사이 전환 램프. ramping-arrival-rate 의 stage 는 target 까지 선형 변화하므로 "계단" 을
 // 만들려면 (짧은 램프 + 유지) 두 개가 필요하다. seat-counts.js 와 같은 형태다.
@@ -85,16 +83,25 @@ const SCENARIOS = {
     },
   },
   flood: {
-    // VU 1개 = 대기자 1명. 진입 후에는 서버가 지시한 주기로만 깨어나므로 커넥션을 물고 있지 않다 —
-    // 폴링을 택한 이유가 정확히 이것이다(ADR 0009 기각안 1).
+    // iteration 1개 = 대기자 1명. 진입 후에는 서버가 지시한 주기로만 깨어나므로 커넥션을 물고
+    // 있지 않다 — 폴링을 택한 이유가 정확히 이것이다(ADR 0009 기각안 1).
+    //
+    // stages 는 계단이 아니라 코호트 주입기다. QUEUE_ADMIT_RATE 는 서버값이고 반영에 게이트웨이
+    // --force-recreate 가 필요해서(런북 §16.4 G2) **계단 하나 = 회차 하나**이고, 이 형상은
+    // 계단 사이의 통제 변수다. 도착률은 그 회차의 admit 보다 커야 대기가 실제로 쌓인다.
     flood: {
-      executor: 'ramping-vus',
-      startVUs: 0,
+      executor: 'ramping-arrival-rate',
+      timeUnit: '1s',
+      startRate: 0,
+      preAllocatedVUs: QUEUE_FLOOD_PRE_ALLOCATED_VUS,
+      maxVUs: QUEUE_FLOOD_MAX_VUS,
       stages: [
-        { target: QUEUE_FLOOD_VUS, duration: QUEUE_FLOOD_RAMP },
-        { target: QUEUE_FLOOD_VUS, duration: QUEUE_FLOOD_DURATION },
-        { target: 0, duration: '30s' },
+        { target: QUEUE_ARRIVAL_RATE, duration: `${QUEUE_ARRIVAL_RAMP_SECONDS}s` },
+        { target: QUEUE_ARRIVAL_RATE, duration: `${QUEUE_ARRIVAL_HOLD_SECONDS}s` },
       ],
+      // 유입이 끝나도 대기 중인 사람이 남아 있다. 여기서 끊으면 소화 시간(주 지표)이 통째로
+      // 사라진다 — 마지막 순번은 개시로부터 코호트/admit 초에 승급한다.
+      gracefulStop: QUEUE_GRACEFUL_STOP,
       exec: 'journey',
     },
   },
@@ -130,6 +137,16 @@ const enqueueFailed = new Counter('queue_enqueue_failed');
 //   threshold = 경과 x admit-rate 라 PRELOAD 1만 - admit-rate 20 이면 8분 20초에 승급한다.
 //   회차가 20분(4계단 x 5분)이므로 반드시 걸린다 → status 회차는 QUEUE_ADMIT_RATE 를 낮춘다(런북 §16.4).
 const statusAdmittedLeak = new Rate('queue_status_admitted_leak');
+// 코호트를 넘어선 iteration. 좌석·계정이 시딩된 만큼만 있으므로 그 뒤는 전부 404 가 되고
+// 예매 경로 RPS 가 과소 집계된다. > 0 이면 회차 무효다(도착률 x 유입시간 > 코호트).
+const cohortExhausted = new Counter('queue_cohort_exhausted');
+// 이 회차의 주 지표 — 대기열 개시부터 이 사람이 예매를 마치기까지. max 가 '전원 소화 시간' 이다.
+// 승급 임계치가 개시 시각의 함수라(WaitingRoomPolicy.admittedThreshold) 개시 시각이 기준점으로
+// 정확하고, 같은 k6 프로세스의 같은 시계라 EC2 와 생성기의 시계 차를 타지 않는다.
+const drainSeconds = new Trend('queue_drain_seconds');
+// 승급 이후 구간(좌석맵 + SSE 체류 + 예매). dropped_iterations 를 가르는 보조축이다 —
+// 이것이 평평한데 dropped 가 나면 생성기 VU 부족이고, 이것이 부풀면 대상 포화다.
+const postAdmitSeconds = new Trend('queue_post_admit_seconds');
 
 function signAccessToken(userId, role) {
   const header = encoding.b64encode(JSON.stringify({ alg: 'HS256', typ: 'JWT' }), 'rawurl');
@@ -202,10 +219,27 @@ export function setup() {
   }
 
   openQueue();
+  // 승급 임계치 = (지금 - 개시) x admit-rate 다(WaitingRoomPolicy.admittedThreshold).
+  // 소화 시간의 기준점이 이 시각이라 openQueue() 직후에 잡는다.
+  const openedAtMs = Date.now();
 
   if (QUEUE_PROFILE !== 'status') {
-    console.log(`[setup] profile=flood perfId=${QUEUE_PERF_ID} vus=${QUEUE_FLOOD_VUS} (대기열 개시 완료)`);
-    return {};
+    // 계획 iteration = 램프(평균 절반) + 유지. 코호트를 넘으면 그 뒤는 전부 404 라 회차가
+    // 무효가 된다 — 20분과 EC2 과금을 쓰기 전에 여기서 끊는다.
+    const planned = Math.ceil(
+      QUEUE_ARRIVAL_RATE * (QUEUE_ARRIVAL_RAMP_SECONDS / 2 + QUEUE_ARRIVAL_HOLD_SECONDS),
+    );
+    if (planned > QUEUE_COHORT_SIZE) {
+      fail(
+        `계획 iteration ${planned} 이 코호트 ${QUEUE_COHORT_SIZE} 를 넘는다. ` +
+          `QUEUE_ARRIVAL_RATE/HOLD 를 줄이거나 seed_queue_flood.sql 의 @cohort_size 를 키울 것.`,
+      );
+    }
+    console.log(
+      `[setup] profile=flood perfId=${QUEUE_PERF_ID} 도착률=${QUEUE_ARRIVAL_RATE}/s ` +
+        `계획 iteration=${planned} / 코호트=${QUEUE_COHORT_SIZE} (대기열 개시 완료)`,
+    );
+    return { openedAtMs };
   }
 
   // ZRANK 는 skiplist 탐색이라 ZSET 크기에 로그 비례한다. 빈 대기열을 재면 실회차보다 낙관적인
@@ -236,27 +270,35 @@ export function pollOnly(data) {
 }
 
 /**
- * flood 회차 — 진입 → 서버 지시 폴링 → 입장 → 예매의 전 여정. <b>VU 하나가 정확히 한 번 탄다.</b>
+ * flood 회차 — 진입 → 서버 지시 폴링 → 입장 → 예매의 전 여정. <b>iteration 하나가 한 명이다.</b>
  *
- * ramping-vus 는 exec 가 리턴하면 같은 VU 로 즉시 다음 이터레이션을 시작한다. 그런데 userId 가 VU 에
- * 고정이고 재진입해도 순번이 보존되므로(WaitingRoomService.registerIfAbsent), 두 번째 이터레이션의 VU 는
- * 이미 임계치 아래라 첫 폴링에서 즉시 승급해 또 예매한다. 한 바퀴에 sleep 이 하나뿐이라 T 가 하한
- * 3초까지 내려간 구간에서는 VU 당 3초에 예매 1건 — 1만 VU 면 약 3,300 RPS 로, #344 실측(booking 단독
- * 258 RPS 에서 호스트 CPU 99.87%)의 13배다.
+ * 이전에는 ramping-vus + VU 별 `journeyDone` 가드로 "VU 1개 = 대기자 1명" 을 지켰다. 그 조합이
+ * 실효 도착률을 `VU수 / 램프시간` 상수로 못 박아 <b>단일 동작점</b>을 만들었고, #554 가 그 사실을
+ * 자기 한계로 확정했다(report §8 — "다이얼이 없어 원리상 스윕이 아니다").
  *
- * 그러면 '예매 RPS 가 유입 규모와 무관하게 평평한가' 를 보려던 회차에서 <b>평평하지 않은 이유가
- * 대기열이 아니라 생성기</b>가 된다. 위 flood 정의가 선언한 모델(VU 1개 = 대기자 1명)을 여기서 지킨다.
+ * arrival-rate 에서는 도착률이 곧 다이얼이고, 한 사람 = 한 iteration 이라 가드가 필요 없다.
+ * 대신 <b>사람의 신원을 VU 가 아니라 iteration 번호로 매겨야 한다</b> — VU 는 재사용되므로
+ * `exec.vu.idInTest` 로 매기면 같은 계정·좌석이 여러 번 나온다. 재진입은 순번이 보존되므로
+ * (WaitingRoomService.registerIfAbsent) 두 번째부터는 즉시 승급해 예매만 반복하게 되고,
+ * 그러면 '예매 RPS 가 허용량에서 평평한가' 를 보려던 회차에서 평평하지 않은 이유가 대기열이
+ * 아니라 생성기가 된다.
  */
-export function journey() {
-  if (journeyDone) {
-    sleep(IDLE_SLEEP_SECONDS);
+export function journey(data) {
+  // exec.scenario.iterationInTest = 이 시나리오의 전역 0-base 단조 카운터.
+  // __VU*1000+__ITER 은 arrival-rate 에서 쓰면 안 된다(VU 재사용으로 인덱스가 충돌한다).
+  const idx = exec.scenario.iterationInTest;
+  if (idx >= QUEUE_COHORT_SIZE) {
+    // 코호트 밖이면 계정·좌석이 없어 예매가 404 다. 그 iteration 을 그대로 돌리면 예매 경로
+    // RPS 가 과소 집계되므로 세고 빠진다 — setup() 이 계획 iteration 으로 미리 끊지만,
+    // 도착률이 실제로 초과 달성되는 경우까지 여기서 잡는다.
+    cohortExhausted.add(1);
     return;
   }
-  // 진입 실패·폴링 상한 소진도 '한 명의 결과' 다. 재시도하면 그 VU 가 두 명으로 집계돼 유입 규모가
-  // 흐려지므로, 성공 여부와 무관하게 시도는 1회로 못 박는다.
-  journeyDone = true;
 
-  const userId = USER_ID_MIN + exec.vu.idInTest;
+  // 시드 SQL 이 출력하는 오프셋은 MIN(id) - 1 이다. idInTest 가 1-base 이던 시절의 규약이라
+  // 0-base 인 iterationInTest 에서는 +1 이 필요하다. 이걸 놓치면 코호트 전체가 한 칸 밀려
+  // 마지막 한 건이 404 가 된다.
+  const userId = USER_ID_MIN + 1 + idx;
   const enqueued = enqueue(userId);
   const waitingToken = jsonField(enqueued, 'result.waiting_token');
   if (!waitingToken) {
@@ -297,9 +339,10 @@ export function journey() {
   }
   waitToAdmit.add((Date.now() - startedAt) / 1000);
 
+  const admittedAt = Date.now();
   const res = http.post(
     `${BASE_URL}/api/v1/booking`,
-    JSON.stringify({ performance_id: QUEUE_PERF_ID, seat_id: seatFor() }),
+    JSON.stringify({ performance_id: QUEUE_PERF_ID, seat_id: seatFor(idx) }),
     {
       headers: {
         'Content-Type': 'application/json',
@@ -312,14 +355,23 @@ export function journey() {
   // 403 이 나오면 게이트가 입장 토큰을 거절한 것이다 — 승급 직후라 0 이어야 정상이고, 0 이 아니면
   // 입장 토큰 TTL(5m)보다 폴링→예매 지연이 길었다는 뜻이다.
   bookingForbidden.add(res.status === 403);
-  bookingOk.add(res.status === 200 || res.status === 201);
+  const ok = res.status === 200 || res.status === 201;
+  bookingOk.add(ok);
+
+  postAdmitSeconds.add((Date.now() - admittedAt) / 1000);
+  if (ok) {
+    // 주 지표. 개시 시각이 승급 산식의 기준점이라(admittedThreshold = 경과 x rate) 이 값이
+    // 곧 '대기열이 열린 뒤 이 사람이 예매를 마치기까지' 다. max 가 전원 소화 시간이다.
+    drainSeconds.add((Date.now() - data.openedAtMs) / 1000);
+  }
 }
 
-// 좌석은 비가역 소모라 VU 마다 다른 좌석을 노린다. 경합 자체는 이 회차의 관측 대상이 아니다
-// (오버셀 0건은 #344 검증 SQL 이 회차 후에 확인한다).
+// 좌석은 비가역 소모라 사람마다 다른 좌석을 노린다. 경합 자체는 이 회차의 관측 대상이 아니다
+// (오버셀 0건은 런북 §13.4-(7)(a1) 이 회차 후에 확인한다).
 //
-// user id 가 아니라 VU 번호로 매긴다 — 좌석과 계정은 서로 다른 AUTO_INCREMENT 라 prod 에서 번호대가
-// 겹치지 않는다. 두 오프셋이 각자 자기 범위의 시작점을 가리키고, VU 번호가 둘을 1:1 로 잇는다.
-function seatFor() {
-  return SEAT_ID_MIN + exec.vu.idInTest;
+// user id 가 아니라 iteration 번호로 매긴다 — 좌석과 계정은 서로 다른 AUTO_INCREMENT 라 prod 에서
+// 번호대가 겹치지 않는다. 두 오프셋이 각자 자기 범위의 시작점을 가리키고, iteration 번호가 둘을
+// 1:1 로 잇는다. userId 와 같은 +1 규약을 쓴다.
+function seatFor(idx) {
+  return SEAT_ID_MIN + 1 + idx;
 }
