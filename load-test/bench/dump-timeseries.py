@@ -126,6 +126,15 @@ QUERIES = [
     # 진입 실패. 실효 코호트 = 유입 - 이 값이고, 회차의 모든 비율이 그 코호트를 분모로 쓴다.
     # #549 는 이 축이 없어 724명(7.24%)을 http_req_failed 로 역산했다(#554 에서 신설).
     ("k6-queue-enqueue-failed", 'k6_queue_enqueue_failed_total'),
+    # #555 계단 회차. 주 지표는 소화 시간이고 그 SSOT 는 k6 요약의 max 다(전원 소화 시간) —
+    # 여기 시계열은 곡선을 그리기 위한 p95 다. post-admit 은 dropped_iterations 를 '생성기 VU
+    # 부족' 과 '대상 포화' 로 가르는 보조축이고, cohort-exhausted 는 > 0 이면 회차 무효다.
+    ("k6-queue-drain-p95", 'k6_queue_drain_seconds_p95'),
+    ("k6-queue-post-admit-p95", 'k6_queue_post_admit_seconds_p95'),
+    ("k6-queue-seatmap-p95", 'k6_queue_seatmap_duration_p95'),
+    ("k6-queue-sse-connect-p95", 'k6_queue_sse_connect_duration_p95'),
+    ("k6-queue-cohort-exhausted", 'k6_queue_cohort_exhausted_total'),
+    ("k6-queue-sse-subscribe-failed", 'k6_queue_sse_subscribe_failed_total'),
     # 병목 후보
     ("hikari-pending", 'hikaricp_connections_pending{job="ticketrush-services"}'),
     ("hikari-active", 'hikaricp_connections_active{job="ticketrush-services"}'),
