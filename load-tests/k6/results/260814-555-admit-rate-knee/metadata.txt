@@ -340,7 +340,55 @@ ARM=a12 / START_UTC=2026-08-14T08:56:07Z / END_UTC=2026-08-14T09:06:47Z
 # 계단표 산술은 그대로 적용한다: a = 2m = 32 / C = 300m = 4,800 / hold 140s /
 #   VU_MODEL_PEAK = C/2 = 2,400 / maxVUs = 1.2 x = 2,880 / 계획 iter 4,640 (< C).
 # 판정창·판정 기준·무효 조건은 바꾸지 않는다.
-# ARM=a16 / START_UTC= / END_UTC= / RESULT=
+ARM=a16 / START_UTC=2026-08-14T10:41:05Z / END_UTC=2026-08-14T10:51:08Z
+#   RESULT=포화. 단 INVALID_IF(queue_status_unavailable = 76 / 41,830) 에 걸려 형식상 INVALID.
+#   계단표대로 실행: m=16 / a=32 / C=4,800 / hold 140s / preAllocatedVUs=maxVUs=2,880.
+#     iterations 4,637 / 계획 4,640 · dropped 0 · queue_cohort_exhausted 0 ·
+#     queue_polls_exhausted 0 · queue_booking_forbidden 0 · redis max 5.39MB (< 48MB).
+#   실측 (판정창 t+150~310s, 11표본):
+#     예매 서버 RPS   avg 9.98 / max 23.51
+#     폴링 RPS        avg 325.7        게이트웨이 RPS  avg 382.9
+#     호스트 CPU      avg 64.61 / max 98.39 %
+#     queue_drain_seconds max 471.3s   (모델 C/m = 300s → 1.571배)
+#   여정 열화: queue_seatmap_ok 63.06% (2,425/3,845) — a12 의 100% 에서 무너지기 시작했다.
+#     queue_seatmap_duration p95 2.88s / max 56.03s · http_req_failed 7.04% ·
+#     queue_post_admit_seconds avg 1.04 (a12 0.67 → a20 15.52 사이) ·
+#     SSE 148,091 이벤트(246.7/s) — a12 의 515,200(858/s) 에서 팬아웃이 굶기 시작했다.
+#   게이트웨이 500 = 1,034건 (a12 는 0건).
+#   포화 축: seat-service Hikari pending max 36 / active max 10 (풀 고갈) ·
+#     Tomcat busy max 26 · booking-service 컨테이너 메모리 96.85~98.31%.
+#     a20 과 같은 축이고 정도만 덜하다.
+#   POST_CHECK 오버셀 (a1) PASS — 3,842 / 3,842 / 3,842 일치, 중복 0행 (oversell-a16.txt).
+#     포화가 좌석 정합성을 깨뜨리지는 않았다.
+#   Redis 는 이 계단에서도 멀쩡했다 — used_memory max 5.67MB, 명령 max 956/s,
+#     rejected_connections 0, blocked_clients 0. a20 과 같은 결론이다.
+
+# ── 판정 (계단 3개) ────────────────────────────────────────────────────────
+# PRIMARY_CRITERION 적용 — 직전 계단 대비 admit 증가분의 50% 미만만 오르면 포화:
+#   12 → 16   admit +4,  예매 서버 RPS 9.23 → 9.98  = +0.75 (증가분의 18.8%)  → 포화
+#   16 → 20   admit +4,  예매 서버 RPS 9.98 → 12.26 = +2.28 (증가분의 57.0%)  → 기준상 미포화
+#   ⚠ 뒤 줄을 "20 이 안 포화" 로 읽지 않는다. a20 은 유입 45% 가 진입조차 못 해 실효 코호트가
+#     3,193명으로 줄어든 회차다 — 대기가 얕아 승급이 빨랐고 그래서 예매 RPS 가 되레 높게 찍혔다.
+#     같은 이유로 a20 의 소화 시간 356.3s 도 a16 의 471.3s 보다 짧다. 코호트가 다르므로
+#     이 세 값을 나란히 놓고 단조성을 논할 수 없다(LIMIT_COHORT).
+# SECONDARY(소화 시간) — 이쪽이 훨씬 선명하다. C/m 정규화 비율(실측 / 300s):
+#   a12  359.0s → 1.197     a16  471.3s → 1.571     a20  356.3s → 1.188(붕괴로 코호트가 준 값)
+#   허용량을 12 → 16 으로 올렸는데 소화가 오히려 31% 느려졌다. 처리량 정체보다 강한 신호다.
+# 세 신호 대조: ① 처리량 정체 — 성립  ② dropped_iterations — 세 계단 모두 0
+#   ③ 호스트 CPU 수렴 — a12 max 65.32% → a16 max 98.39% 로 a16 에서 이미 수렴했다.
+#
+# 잠정 결론: 무릎은 12 와 16 사이다. 12 는 통과(CPU max 65.3% · 좌석맵 100% · 5xx 0건),
+#   16 부터 포화(CPU max 98.4% · 좌석맵 63% · 500 1,034건 · 소화 1.571배).
+#   현행 운영값 20 은 무릎보다 위다. PREDICT_KNEE 25~30/s 는 틀렸고 방향도 낙관 쪽으로 틀렸다.
+#
+# ⚠ 확정하지 못하는 이유 — INVALID_IF 규칙의 구조적 결함
+#   queue_status_unavailable > 0 을 무효로 둔 규칙이 a20 과 a16 에서 연달아 걸렸다. 두 계단
+#   모두 Redis 는 멀쩡했고(메모리 5~6MB · rejected 0 · blocked 0) 호스트 CPU 만 98% 였다.
+#   런북 §16.4 가 "게이트웨이가 CPU 를 못 잡으면 서버가 즉답해도 터진다" 고 적은 그대로다.
+#   즉 이 규칙은 '포화' 를 '무효' 로 바꾸는 대리 지표이고, 포화 계단은 원리상 이 규칙을 통과할 수
+#   없다 — 무릎을 찾는 회차에서 무릎을 무효로 만든다. 두 계단에서 같은 방식으로 재현됐다.
+#   기준을 결과에 맞춰 고치지 않는다. 규칙을 어떻게 할지는 사람이 정하고, 그때까지 무릎은
+#   '잠정' 으로 둔다.
 # ARM=a40 / START_UTC= / END_UTC= / RESULT=
 # ARM=<무릎계단>-nosse / START_UTC= / END_UTC= / RESULT=   (SSE 대조)
 KNEE=
