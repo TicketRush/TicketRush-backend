@@ -67,6 +67,18 @@ QUERIES = [
     ("k6-rps", 'sum(rate(k6_http_reqs_total[1m]))'),
     ("k6-rps-by-name", 'sum by (name) (rate(k6_http_reqs_total[1m]))'),
     ("k6-req-failed", 'k6_http_req_failed_rate'),
+    # ⚠ 위 k6-req-failed 는 method/name/status/error 라벨로 쪼개져 있어 '전체 실패율' 을 주지 않는다.
+    #   #554 는 그래서 http_req_failed 가 임계(1%)를 넘고도 자동 판정에 잡히지 않았다(report §5.4).
+    #   원인 분해에는 그것을 쓰고, KNEE 판정에는 아래 집계본을 쓴다.
+    #   두 벌을 두는 것은 expected_response 라벨이 k6_http_reqs_total 에 붙는지 확인할 수단이
+    #   회차 전에는 없기 때문이다 — 한쪽이 비면 다른 쪽으로 판정한다(빈 시계열은 파일을 남기지 않고
+    #   마지막에 '시계열 없음' 으로 보고된다). 실패 비용이 쿼리 하나라 둘 다 둔다.
+    ("k6-req-failed-ratio", 'sum(rate(k6_http_reqs_total{expected_response="false"}[1m]))'
+                            ' / sum(rate(k6_http_reqs_total[1m]))'),
+    # 폴백. expected_response 가 없을 때 쓴다. 4xx 를 실패로 세지 않아 위 값보다 작게 나오지만,
+    # #554 의 진입 실패 455건은 전부 status="0"(dial 실패)이라 이 형태로도 잡힌다.
+    ("k6-req-failed-ratio-status", 'sum(rate(k6_http_reqs_total{status=~"0|5.."}[1m]))'
+                                   ' / sum(rate(k6_http_reqs_total[1m]))'),
     ("k6-req-duration-p95", 'k6_http_req_duration_p95'),
     # 지연을 단계별로 쪼갠다 — waiting(TTFB, 서버가 첫 바이트를 줄 때까지) 대비
     # receiving(본문 수신)이 크면 병목은 처리가 아니라 전송이다(= 응답 크기·압축 부재).
@@ -114,6 +126,17 @@ QUERIES = [
     # 진입 실패. 실효 코호트 = 유입 - 이 값이고, 회차의 모든 비율이 그 코호트를 분모로 쓴다.
     # #549 는 이 축이 없어 724명(7.24%)을 http_req_failed 로 역산했다(#554 에서 신설).
     ("k6-queue-enqueue-failed", 'k6_queue_enqueue_failed_total'),
+    # #555 계단 회차. 주 지표는 소화 시간이고 그 SSOT 는 k6 요약의 max 다(전원 소화 시간) —
+    # 여기 시계열은 곡선을 그리기 위한 p95 다. post-admit 은 dropped_iterations 를 '생성기 VU
+    # 부족' 과 '대상 포화' 로 가르는 보조축이고, cohort-exhausted 는 > 0 이면 회차 무효다.
+    ("k6-queue-drain-p95", 'k6_queue_drain_seconds_p95'),
+    ("k6-queue-post-admit-p95", 'k6_queue_post_admit_seconds_p95'),
+    ("k6-queue-seatmap-p95", 'k6_queue_seatmap_duration_p95'),
+    ("k6-queue-sse-connect-p95", 'k6_queue_sse_connect_duration_p95'),
+    ("k6-queue-sse-events-received", 'rate(k6_queue_sse_events_received_total[1m])'),
+    ("k6-queue-sse-connection-closed", 'k6_queue_sse_connection_closed_total'),
+    ("k6-queue-cohort-exhausted", 'k6_queue_cohort_exhausted_total'),
+    ("k6-queue-sse-subscribe-failed", 'k6_queue_sse_subscribe_failed_total'),
     # 병목 후보
     ("hikari-pending", 'hikaricp_connections_pending{job="ticketrush-services"}'),
     ("hikari-active", 'hikaricp_connections_active{job="ticketrush-services"}'),

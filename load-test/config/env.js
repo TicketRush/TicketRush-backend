@@ -202,14 +202,67 @@ export const QUEUE_STATUS_MAX_VUS = Number(__ENV.QUEUE_STATUS_MAX_VUS || 800);
 // ZRANK 는 skiplist 탐색이라 ZSET 크기에 로그 비례한다. 빈 대기열을 재면 실회차보다 낙관적인
 // 값이 나오므로, setup() 이 이만큼을 미리 채운 뒤 계단을 시작한다.
 export const QUEUE_PRELOAD_SIZE = Number(__ENV.QUEUE_PRELOAD_SIZE || 10000);
-// 사전 적재 동시성. 진입은 1인 1회라 이 구간 자체는 측정 대상이 아니다(회차 시작 전에 끝난다).
-export const QUEUE_PRELOAD_CONCURRENCY = Number(__ENV.QUEUE_PRELOAD_CONCURRENCY || 50);
 
 // --- flood 회차 --------------------------------------------------------------
-// VU 1개 = 대기자 1명. 진입 후에는 서버가 지시한 주기로만 폴링하므로 커넥션을 물고 있지 않다.
-export const QUEUE_FLOOD_VUS = Number(__ENV.QUEUE_FLOOD_VUS || 10000);
-export const QUEUE_FLOOD_RAMP = __ENV.QUEUE_FLOOD_RAMP || '2m';
-export const QUEUE_FLOOD_DURATION = __ENV.QUEUE_FLOOD_DURATION || '15m';
+// iteration 1개 = 대기자 1명. 진입 후에는 서버가 지시한 주기로만 폴링하므로 커넥션을 물고 있지 않다.
+//
+// ⚠ 2026-08-14(#555)에 ramping-vus → ramping-arrival-rate 로 옮겼다. #554 가 자기 한계로
+//   확정한 사실이다(report §8): ramping-vus + VU 당 1회 여정 가드는 실효 도착률이
+//   QUEUE_FLOOD_VUS / QUEUE_FLOOD_RAMP = 10,000/300s = 33.3/s 상수인 **단일 동작점**이다.
+//   VU 를 올려도 여정이 1회로 끝나 도착률이 안 오른다 — 다이얼이 없어 계단을 만들 수 없다.
+//
+// 계단은 k6 stages 가 아니다. QUEUE_ADMIT_RATE 는 서버값(gateway application.yml)이고 반영에
+// 게이트웨이 --force-recreate 가 필요하므로(런북 §16.4 G2), **계단 하나 = 회차 하나**다.
+// 여기 stages 는 계단이 아니라 코호트 주입기이고, 계단 사이의 통제 변수다.
+
+// 도착률(여정/s). ⚠ 회차의 QUEUE_ADMIT_RATE 보다 충분히 커야 한다 — 도착률 ≤ admit 이면
+// 대기가 안 쌓이고 예매 RPS 가 도착률에서 평평해져, admit 이 아니라 부하 모델을 재게 된다.
+// 그것이 #554 가 걸린 함정이다(§10.1 "33.73 은 부하 모델이 만든 상한이지 시스템의 한계가 아니다").
+// 기본값은 계단 1회차(admit 20)용 = 2 x admit. 계단마다 함께 올린다(런북 §16.7 표).
+export const QUEUE_ARRIVAL_RATE = Number(__ENV.QUEUE_ARRIVAL_RATE || 40);
+// 초 단위 숫자로 받는다(다른 시나리오의 duration 문자열과 다르다) — setup() 이 계획 iteration 을
+// 도착률 x 시간으로 계산해 코호트와 대조하기 때문이다. 문자열이면 파서를 하나 더 들여야 한다.
+export const QUEUE_ARRIVAL_RAMP_SECONDS = Number(__ENV.QUEUE_ARRIVAL_RAMP_SECONDS || 10);
+export const QUEUE_ARRIVAL_HOLD_SECONDS = Number(__ENV.QUEUE_ARRIVAL_HOLD_SECONDS || 140);
+
+// 시딩된 코호트 크기(seed_queue_flood.sql 의 @cohort_size). 좌석·계정이 이만큼만 있으므로
+// iteration 이 이 수를 넘으면 그 뒤는 전부 404 다 — 시나리오가 소진을 세고 회차를 무효로 만든다.
+//
+// 계단마다 키운다: C = admit x 300s. 소화 시간이 C/admit 이라 계단마다 5분 판정창(15초 스크랩
+// x 20표본)이 같게 확보된다. 고정하면 계단이 올라갈수록 회차가 짧아져(admit 160 이면 1분 2초)
+// 표본이 4개뿐이라 판정이 안 선다.
+export const QUEUE_COHORT_SIZE = Number(__ENV.QUEUE_COHORT_SIZE || 6000);
+
+// arrival-rate 는 VU 를 미리 할당한다. 대기자가 곧 점유 VU 라 유입 종료 시점이 피크다:
+//   peak VU ≈ C x (1 - admit/도착률).  기본값(C=6,000 · admit 20 · 도착률 40) → 3,000
+// ⚠ SSE 구독자는 별도 시나리오라 이 예산에 들어가지 않는다. 다만 k6 의 vus_max 는 전역 합이므로
+//   dropped 판별에서 구독자 수를 빼고 비교한다(런북 §16.7).
+// preAllocated 와 max 를 같게 둔다 — 다르면 k6 가 VU 를 지연 생성하고 그 생성 지연 자체가
+// dropped_iterations 를 만들어, 이 회차에서 dropped 를 '대상 포화' 와 구분할 수 없게 된다.
+export const QUEUE_FLOOD_PRE_ALLOCATED_VUS = Number(__ENV.QUEUE_FLOOD_PRE_ALLOCATED_VUS || 4000);
+export const QUEUE_FLOOD_MAX_VUS = Number(__ENV.QUEUE_FLOOD_MAX_VUS || 4000);
+
+// SSE 동시 구독자 수. 여정과 분리된 별도 시나리오이고, 이 값이 SSE 축의 통제 변수다.
+//
+// ⚠ 여정 안에 두지 않는 이유는 2026-08-14 스모크가 실측으로 확정했다. sse.open 은 블로킹이고
+//   타임아웃 파라미터가 없어 이벤트가 도착해야만 닫을 수 있는데, 좌석 이벤트가 흐르지 않자
+//   VU 50개가 전부 갇혔다(0 complete / 50 interrupted). 예매는 DB 에 들어갔는데
+//   queue_booking_ok 와 queue_drain_seconds 가 기록되지 않아 **주 지표가 통째로 사라졌다.**
+//   실회차에서도 회차 초반 첫 승급자는 자기 이벤트 말고 깰 것이 없어 같은 일이 난다.
+//
+// 팬아웃 = 구독자 x 이벤트율이고 이벤트율은 admit rate 다. #403 은 구독자 600명 x 5 events/s =
+// 3,000 sends/s 까지 검증했고 #540 에서 그 규모에 seat-service RSS 가 602/640 MiB(94.1%)였다.
+// 기본 100명이면 admit 20 에서 2,000 sends/s(검증 범위의 67%), admit 80 에서 8,000(2.7배)이다.
+// → admit 을 올리면 이 축이 먼저 꺾일 수 있고, 그것이 이슈 #555 의 두 번째 가설이다.
+//   무릎이 잡힌 계단에서 QUEUE_SSE_SUBSCRIBERS=0 대조 회차 1회로 가른다(시나리오가 아예 빠진다).
+export const QUEUE_SSE_SUBSCRIBERS = Number(__ENV.QUEUE_SSE_SUBSCRIBERS || 100);
+// 구독 유지 시간. 여정 전체(유입 + 소화 + 여유)를 덮어야 계단 내내 구독자 수가 통제된다.
+export const QUEUE_SSE_DURATION = __ENV.QUEUE_SSE_DURATION || '10m';
+
+// 유입이 끝나도 대기 중인 사람이 남아 있다. 마지막 순번은 개시로부터 C/admit 초에 승급하므로
+// 그때까지 VU 를 끊으면 안 된다 — 끊으면 소화 시간(주 지표)이 측정되지 않는다.
+// 기본값 10m = C/admit(300s) 의 2배. 계단마다 확인한다.
+export const QUEUE_GRACEFUL_STOP = __ENV.QUEUE_GRACEFUL_STOP || '10m';
 
 // --- 폴링 모델 ---------------------------------------------------------------
 // 서버가 next_poll_after_seconds 를 못 준 경우(5xx·타임아웃·본문 파싱 실패)의 폴백. 이 값이 없거나
@@ -233,4 +286,9 @@ export const QUEUE_JITTER = Number(__ENV.QUEUE_JITTER || 0.2);
 // 없다) 이 상한은 300 을 유지한다. #549 B-2 실측이 avg 15.9 / max 39 회라 여유가 크고, 상한이
 // 너무 낮을 때의 실패(판정 지표가 거짓 신호를 낸다)가 너무 높을 때의 실패(VU 가 오래 갇힌다)보다
 // 나쁘기 때문이다. R 이나 min-poll-seconds 를 바꾸면 이 값도 다시 계산한다.
+//
+// #555 계단 회차에서 다시 계산했다. 코호트를 C = admit x 300s 로 잡으므로 **어느 계단이든
+// 최대 대기가 C/admit = 300초로 같다.** T 는 waiting 에 따라 하한 3초까지 내려가므로 최악이
+// 300/3 = 100회다. 300 을 유지한다 — admit 이 바뀌어도 상한이 흔들리지 않는 것이 이 코호트
+// 설계의 부수 효과다.
 export const QUEUE_MAX_POLLS = Number(__ENV.QUEUE_MAX_POLLS || 300);
