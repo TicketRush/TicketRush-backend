@@ -1281,18 +1281,41 @@ echo "SELECT event_type, status, COUNT(*) FROM outbox
 
 **(7) 정합성 검증 — oversell 0**
 
+> **⚠️ (a) 는 회차 형태에 따라 갈린다. 상태 필터(`booking_status IN ('PENDING','CONFIRMED')`)는 쓰지 않는다.**
+>
+> 예매는 5-6분이면 만료되므로(§13.1-(e)) **20분짜리 회차의 종료 시점에는 활성 예매가 0건**이다. 상태로 거르면 쿼리가 아무 행도 보지 않은 채 "0행 = 정상" 을 낸다 — 검출력이 0 이다. #554 가 회차 중에 발견해 상태 무관 검사로 바꿔 돌았다(report §9.3).
+>
+> **그리고 상태 무관 검사도 아무 회차에나 쓸 수 없다.** #598 이 #554 의 검사를 #344 형 회차에 그대로 적용해 **4,674행을 오검출**했다 — 버그가 아니라 쿼리가 시나리오에 안 맞았다. 아래 (a1)/(a2) 중 회차 형태에 맞는 것을 고른다. **판정 기준(오버셀 0)은 바뀌지 않는다. 바뀌는 것은 검출 도구다.**
+>
+> **SQL 원문을 `oversell-<arm>.txt` 에 함께 남긴다.** #554 는 출력만 남겨 재현이 불가능했고 #598 이 그것을 지적했다.
+
 ```bash
-# (a) 한 좌석에 활성 예매가 둘 이상이면 oversell. 0행이어야 한다.
-echo "SELECT b.seat_id, COUNT(*) c FROM booking b
-        JOIN performance p ON p.performance_id=b.performance_id AND p.title LIKE 'LOADTEST-%'
-       WHERE b.booking_number NOT LIKE 'LT-%'
-         AND b.booking_status IN ('PENDING','CONFIRMED')
-       GROUP BY b.seat_id HAVING c > 1;" | SQL
+# (a1) VU 마다 좌석이 유일한 회차 (openrun-e2e · waiting-room 계열).
+#      예매 1건 = 좌석 1석이 전제이므로 '같은 좌석을 가리키는 예매 2건' 이 곧 oversell 이다.
+#      대상 공연으로 좁힌다 — p.title LIKE 'LOADTEST-%' 는 과거 회차 잔재까지 긁는다
+#      (#598 회차 전 실측: LOADTEST 공연 9개에 예매 20,594건 잔재).
+echo "SELECT seat_id, COUNT(*) c FROM booking
+       WHERE performance_id=$PERF_ID GROUP BY seat_id HAVING c > 1;" | SQL   # 0행
+
+# (a1-2) 1회 여정 가드 확인. 같은 사람이 두 번 예매했으면 시나리오가 깨진 것이다.
+echo "SELECT user_id, COUNT(*) c FROM booking
+       WHERE performance_id=$PERF_ID GROUP BY user_id HAVING c > 1;" | SQL   # 0행
+
+# (a1-3) 총괄 — 셋이 같아야 한다. 위 두 쿼리가 0행인 것과 같은 말이지만 수치로 남는다.
+echo "SELECT COUNT(*) bookings, COUNT(DISTINCT seat_id) distinct_seats,
+             COUNT(DISTINCT user_id) distinct_users
+        FROM booking WHERE performance_id=$PERF_ID;" | SQL
+
+# (a2) 한 좌석에 전 VU 가 몰리는 회차 (seat-contention, #344 형).
+#      (a1) 을 쓰지 않는다 — '예매 N건이 같은 seat_id' 가 이 회차에서는 정상이다.
+#      오버셀 = '두 예매가 동시에 그 좌석을 보유했는가' 이고, 예매 생성은 좌석 점유가 아니다.
+#      seat.version 사이클 수와 hold_total{result} 카운터로 판정한다 —
+#      원문은 260813-598-consumer-concurrency/metadata.txt 의 OVERSELL_SQL_A~E.
 
 # (b) 유령 HOLD — 좌석은 HOLD 인데 대응 booking 이 없거나 이미 PENDING 을 벗어났다. 0행이어야 한다.
 #     "HOLD 좌석 수 <= 예매 수" 로 재면 안 된다. §13.1-(e) 대로 예매가 5-6분이면 만료돼
 #     좌석이 풀리므로 종료 시점 HOLD 는 예매 수보다 훨씬 작고, 그 부등식은 항상 참이라 검출력이 0 이다.
-#     시드 코호트(LT-*)는 reset_e2e.sql 이 일부러 보존하므로 (a) 와 같은 필터로 제외한다.
+#     시드 코호트(LT-*)는 reset_e2e.sql 이 일부러 보존하므로 booking_number 로 제외한다.
 echo "SELECT s.seat_id, s.booking_number, b.booking_status
         FROM seat s
         JOIN performance p ON p.performance_id=s.performance_id AND p.title LIKE 'LOADTEST-%'
@@ -2079,6 +2102,7 @@ docker run --rm --network host --ulimit nofile=1048576:1048576 \
 | `queue_booking_forbidden` | 0 | 승급 직후 예매라 0이어야 한다. >0이면 폴링→예매 지연이 입장 토큰 TTL(5m)을 넘었다 |
 | `queue_admitted` | 해석 대상 | 0과 1 사이여야 한다. 정확히 1.000이면 지표가 아니라 스크립트를 의심한다 |
 | **`queue_status_admitted_leak`** (회차 A) | **0** | >0이면 폴링 대상이 회차 도중 승급해 측정 경로가 2회에서 3회로 바뀌었다. `R` 을 재지 못한 회차이므로 **폐기하고 `QUEUE_ADMIT_RATE` 를 낮춰 다시 돈다** |
+| 오버셀 검증 | §13.4-(7) **(a1)** | 이 회차는 VU 마다 좌석이 유일하다. 상태 필터 버전은 검출력이 0 이고(#554 §9.3), (a2) 는 #344 형 전용이다(#598). **SQL 원문을 `oversell-<arm>.txt` 에 함께 남긴다** |
 | 생성기 종료 | 필수 | CD가 건드리지 않아 "떠 있는 줄 몰랐다"가 가능하다(ADR 0010) |
 
 **§6.1 재현성 규칙이 여기서 한 겹 더 걸린다.** [ADR 0010](adr/0010-in-aws-load-generator-for-ten-thousand-vu.md)이 생성기를 로컬에서 AWS로 옮겼으므로 **이 회차 수치를 ADR 0004 토폴로지 회차(#348·#403·#529 등)와 절대값으로 직접 잇지 않는다.** 비교가 필요하면 그 사실을 리포트 한계에 적는다.
