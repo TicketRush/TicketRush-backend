@@ -1938,7 +1938,13 @@ ticket-service:8090    4,692 → 6,033 ↑ → 4,713 → 6,248 ↑        (Prome
 | 프로파일 | executor | 무엇을 재나 |
 |---|---|---|
 | `status` | `ramping-arrival-rate` 계단 `200 → 400 → 800 → 1600` × 5분 | **`R`.** 상태 확인 경로 단독. 사용자 행동이 아니라 경로 용량이라 sleep이 없다 |
-| `flood` | `ramping-vus` → 10,000 | **유입 제어.** 진입 → 서버 지시 폴링 → 입장 → 예매의 전 여정 |
+| `flood` | `ramping-arrival-rate` (도착률 고정) | **유입 제어 + admit 무릎.** 진입 → 서버 지시 폴링 → 입장 → 좌석맵 → SSE 체류 → 예매의 전 여정 |
+
+> **`flood`는 2026-08-14(#555)에 `ramping-vus`에서 옮겼다.** `ramping-vus` + VU당 1회 여정 가드는 실효 도착률이 `VU수 / 램프시간` 상수라 **단일 동작점**이고, #554가 그것을 자기 한계로 확정했다(report §8 — "다이얼이 없어 원리상 스윕이 아니다"). 계단 회차의 판정은 도착률을 통제할 수 있어야 성립한다.
+>
+> **승급 후 여정도 함께 보강했다.** 그 전에는 예매 1콜뿐이라 `admit`을 올려도 예매 API만 때리는 회차였고, #344가 이미 258 RPS를 찍었으니 그냥 통과한다 — **"admit 100/s 가능"이라는 낙관적인 거짓 결론**이 남는다. 좌석맵 조회와 SSE 구독 체류를 넣었다. **좌석 선점은 새로 넣을 호출이 없다** — HOLD 진입점은 seat-service의 `BookingCreatedEventListener`(Kafka) 하나이고 `SeatController`는 GET뿐이라(§10.1), 여정의 `POST /api/v1/booking`이 그 역할이다.
+>
+> **⚠️ `k6/x/sse` import 때문에 `waiting-room.js`는 이제 `k6-sse` 이미지에서만 돈다.** `status` 프로파일도 같은 파일이라 함께 영향을 받는다 — **회차 A도 이 이미지로 돌려야 한다.** 기본 `grafana/k6`로 실행하면 import 해석 실패로 즉시 죽는다(부하가 시작조차 안 되므로 조용한 오염은 아니다). 회차 간 비교에는 한 겹 더 걸린다: 이 바이너리는 xk6 빌드라 #549·#554(`grafana/k6:latest`)와 다르다 → `metadata.txt`의 `LIMIT_SERIES`에 적는다.
 
 계단 시작점이 200인 근거: 이 경로는 `GET`(대기 토큰) + `ZRANK` 두 번이고 **DB를 타지 않는다.** 게이트웨이 홉 + DB 집계를 포함한 #529의 396.75 RPS보다 빠를 수밖에 없으므로 그 위에서 시작한다.
 
@@ -1987,11 +1993,14 @@ ticket-service:8090    4,692 → 6,033 ↑ → 4,713 → 6,248 ↑        (Prome
 **회차 A (R 실측)**
 
 ```bash
-# 생성기 EC2에서. QUEUE_JWT_SECRET 은 게이트웨이 jwt.secret 과 같은 값이며 커밋하지 않는다.
+# ⚠ 이미지가 k6-sse 다(#555). waiting-room.js 가 k6/x/sse 를 import 하므로 status 프로파일도
+#   기본 grafana/k6 에서는 즉시 죽는다. 회차 전에 1회 빌드:
+#     docker compose --profile loadtest build k6-sse
+# QUEUE_JWT_SECRET 은 게이트웨이 jwt.secret 과 같은 값이며 커밋하지 않는다.
 docker run --rm -v $PWD/load-test:/scripts:ro \
   -e K6_OUT=experimental-prometheus-rw \
   -e K6_PROMETHEUS_RW_SERVER_URL=http://<EC2>:9090/api/v1/write \
-  grafana/k6:latest run \
+  ticketrush/k6-sse:local run \
   -e BASE_URL=https://api.ticketrush.store -e QUEUE_PROFILE=status \
   -e QUEUE_PERF_ID=1 -e QUEUE_JWT_SECRET='...' \
   /scripts/scenarios/waiting-room.js
@@ -2057,9 +2066,11 @@ docker run --rm --network host --ulimit nofile=1048576:1048576 \
   -v $PWD/load-test:/scripts:ro \
   -e K6_OUT=experimental-prometheus-rw \
   -e K6_PROMETHEUS_RW_SERVER_URL=http://localhost:9090/api/v1/write \
-  grafana/k6:latest run \
+  ticketrush/k6-sse:local run \
   -e BASE_URL=https://api.ticketrush.store -e QUEUE_PROFILE=flood \
-  -e QUEUE_FLOOD_RAMP=5m \
+  -e QUEUE_ARRIVAL_RATE=<계단표> -e QUEUE_ARRIVAL_HOLD_SECONDS=<계단표> \
+  -e QUEUE_COHORT_SIZE=<시딩값> \
+  -e QUEUE_FLOOD_PRE_ALLOCATED_VUS=<계단표> -e QUEUE_FLOOD_MAX_VUS=<계단표> \
   -e QUEUE_PERF_ID=<시딩값> -e QUEUE_USER_ID_MIN=<시딩값> -e QUEUE_SEAT_ID_MIN=<시딩값> \
   -e QUEUE_JWT_SECRET='...' \
   /scripts/scenarios/waiting-room.js
@@ -2069,7 +2080,9 @@ docker run --rm --network host --ulimit nofile=1048576:1048576 \
 
 > **⚠️ 생성기가 Windows(Docker Desktop)면 위 명령을 그대로 쓰지 않는다.** `--network host`가 동작하지 않는다. `--network host`를 빼고 remote-write 주소를 **`host.docker.internal:9090`**으로 바꾼다 — 터널이 `127.0.0.1:9090`에만 바인딩돼 있어도 컨테이너가 이 이름으로 호스트에 닿는다. #549와 #554가 실제로 쓴 형태이고, `k6-summary-*.txt`의 `output:` 줄이 그 증거다. Git Bash라면 `-v` 경로가 자동 변환되므로 `MSYS_NO_PATHCONV=1`을 앞에 붙인다.
 >
-> **⚠️ `-e QUEUE_FLOOD_RAMP=5m`을 빠뜨리지 않는다.** 기본값은 `2m`이고(`config/env.js`), **램프 2분이 곧 #549 B-1을 무효로 만든 조건이다.** 2026-08-13 이전의 이 절 명령줄에는 이 인자가 없었다 — 그대로 복사하면 B-1 형상이 재현된다. 주입 여부는 실행 전 `k6 inspect`의 `stages`로 확인한다.
+> **⚠️ 계단 인자를 빠뜨리지 않는다.** `QUEUE_ARRIVAL_RATE` · `QUEUE_ARRIVAL_HOLD_SECONDS` · `QUEUE_COHORT_SIZE` · VU 두 개는 계단마다 다르다(§16.7 표). 기본값은 계단 1회차(admit 20)용이라 그대로 복사하면 **다른 계단을 1회차 형상으로 돌리게 된다.** 주입 여부는 실행 전 `k6 inspect`의 `stages` · `maxVUs`로 확인한다.
+>
+> 이 자리에 있던 `QUEUE_FLOOD_RAMP=5m` 경고는 #555에서 사라졌다 — `ramping-vus`를 떠나며 그 변수가 없어졌다. 램프 2분이 #549 B-1을 무효로 만든 조건이었다는 사실은 유효하고, 지금은 **도착률이 그 역할을 한다**: 도착률이 admit보다 크지 않으면 대기가 안 쌓여 admit이 아니라 부하 모델을 재게 된다.
 
 **⚠️ `deploy/.env`에서 `QUEUE_ADMIT_RATE=1`을 지우고 20으로 되돌린다.** 회차 A가 남긴 값이고(폴링 대상의 승급을 막는 조치였다), 이 회차는 **승급 자체가 관측 대상**이다. 1로 두면 1만 명이 다 들어가는 데 2.8시간이 걸려 회차가 성립하지 않는다 — `.env`에 남아 있는지 눈으로 확인한다. 2026-07-31 회차 B 준비 시점에 실제로 남아 있었다.
 
@@ -2102,6 +2115,9 @@ docker run --rm --network host --ulimit nofile=1048576:1048576 \
 | `queue_booking_forbidden` | 0 | 승급 직후 예매라 0이어야 한다. >0이면 폴링→예매 지연이 입장 토큰 TTL(5m)을 넘었다 |
 | `queue_admitted` | 해석 대상 | 0과 1 사이여야 한다. 정확히 1.000이면 지표가 아니라 스크립트를 의심한다 |
 | **`queue_status_admitted_leak`** (회차 A) | **0** | >0이면 폴링 대상이 회차 도중 승급해 측정 경로가 2회에서 3회로 바뀌었다. `R` 을 재지 못한 회차이므로 **폐기하고 `QUEUE_ADMIT_RATE` 를 낮춰 다시 돈다** |
+| `queue_cohort_exhausted` (#555) | **0** | >0이면 도착률 × 유입시간이 시딩 코호트를 넘었다. 그 뒤 iteration 은 계정·좌석이 없어 404 라 예매 경로 RPS 가 과소 집계된다 |
+| `queue_sse_subscribe_failed` (#555) | 해석 대상 | 구독이 안 돼도 예매는 성공하므로 요약만 보면 정상으로 보인다. 크면 SSE 축이 통째로 빈 회차다 |
+| `dropped_iterations` (#555) | **§16.7 규칙으로 가른다** | 이 회차에서는 포화 신호이자 생성기 VU 부족 신호다. `vus_max` 가 `maxVUs` 에 붙었는지 + `queue_post_admit_seconds` 가 부풀었는지로 판정한다 |
 | 오버셀 검증 | §13.4-(7) **(a1)** | 이 회차는 VU 마다 좌석이 유일하다. 상태 필터 버전은 검출력이 0 이고(#554 §9.3), (a2) 는 #344 형 전용이다(#598). **SQL 원문을 `oversell-<arm>.txt` 에 함께 남긴다** |
 | 생성기 종료 | 필수 | CD가 건드리지 않아 "떠 있는 줄 몰랐다"가 가능하다(ADR 0010) |
 
@@ -2114,3 +2130,87 @@ docker run --rm --network host --ulimit nofile=1048576:1048576 \
 > 관측은 k6 stdout과 **회차 후** 덤프로만 한다. `dump-timeseries.py`는 쿼리를 40개 넘게 던지므로 특히 회차 중에 돌리지 않는다(스크립트 docstring의 "부하가 도는 중에는 돌리지 않는다"가 같은 이유다). 상태를 꼭 봐야 했다면 그 사실과 시각을 증적에 적고 해당 구간을 해석에서 뺀다.
 
 **회차 전 무부하 기저 CPU를 5분 재서 기록한다.** 배포본이 바뀐 뒤의 회차에서 "CPU가 높다"가 부하 때문인지 코드 드리프트 때문인지 가르는 유일한 수단이다. 위 함정 때문에 **그 5분 동안에도 명령을 던지면 안 된다.**
+
+### 16.7 admit-rate 무릎 계단 회차 (#555)
+
+`admit-rate-per-second`의 무릎을 계단으로 찾는다. **`QUEUE_ADMIT_RATE`는 서버값이고 반영에 게이트웨이 `--force-recreate`가 필요하므로(G2 — `restart`는 `env_file`을 다시 읽지 않는다), 계단 하나 = 회차 하나다.** k6의 `stages`는 계단이 아니라 코호트 주입기이고 계단 사이의 통제 변수다.
+
+**부하 모델의 전제 — 도착률은 admit보다 커야 한다.** 도착률 ≤ admit이면 대기가 안 쌓이고 예매 RPS가 도착률에서 평평해져 **admit이 아니라 부하 모델을 재게 된다.** #554가 걸린 함정이 그것이다(§10.1 — "33.73은 부하 모델이 만든 상한이지 시스템의 한계가 아니다").
+
+#### 계단표 — 회차 전에 이 값을 `metadata.txt`에 박는다
+
+도착률 `a = 2m`, 코호트 `C = 300m`으로 두면 **소화 시간이 어느 계단에서나 300초로 같아** 계단마다 동일한 5분 판정창(15초 스크랩 × 20표본)이 확보된다. 코호트를 고정하면 계단이 올라갈수록 회차가 짧아져(admit 160이면 1분 2초) 표본이 4개뿐이라 판정이 안 선다.
+
+`QUEUE_ARRIVAL_HOLD_SECONDS`는 **전 계단 140초로 같다**(`C/a = 150s`가 admit과 무관하게 상수다).
+
+| admit `m` | 도착률 `a` | 코호트 `C` | 계획 iter | `VU_MODEL_PEAK` | `maxVUs` | 소화 시간 |
+|---|---|---|---|---|---|---|
+| 12 | 24 | 3,600 | 3,480 | 1,920 | 2,400 | 300s |
+| **20** | **40** | **6,000** | **5,800** | **3,200** | **4,000** | 300s |
+| 30 | 60 | 9,000 | 8,700 | 4,800 | 5,800 | 300s |
+| 40 | 80 | 12,000 | 11,600 | 6,400 | 7,700 | 300s |
+| 80 | 160 | 24,000 | 23,200 | 12,800 | 15,400 | 300s |
+| 160 | 320 | 48,000 | 46,400 | 25,600 | 30,800 | 300s |
+
+- `VU_MODEL_PEAK = C × (1 − m/a) + m × 체류초` = `C/2 + 10m`. 유입 종료 시점이 피크다.
+- `maxVUs`는 그 값의 1.2배. **`preAllocatedVUs`와 같게 둔다** — 다르면 k6가 VU를 지연 생성하고 그 지연 자체가 `dropped_iterations`를 만들어, 이 회차에서 dropped를 "대상 포화"와 구분할 수 없게 된다.
+- 굵은 줄이 `config/env.js` 기본값이다.
+
+> **⚠️ 상한 계단은 생성기가 먼저 깨질 수 있다.** `m=160`은 25,600 VU이고, #549는 **1만 VU에서 커넥션 16,701**을 봤다. 깨지면 그 계단은 무효이고 **"상한 미도달 사유"로 기록한다** — 시스템의 한계가 아니라 생성기의 한계다. 판별은 아래 dropped 규칙으로 한다.
+
+#### 계단 수열 — 이분 탐색
+
+회차당 EC2 실질 40~60분(재기동·재시딩·`--force-recreate`·덤프)이라 등비 나열보다 거칠게 잡고 쪼개는 편이 회차 수가 적다.
+
+```
+1회차  m = 20   기준선. 여정이 바뀌었으므로 #549 B-2(19.60-21.00 RPS)와 직접 잇지 않는다
+2회차  m = 40   예측 무릎(아래) 위. 통과하면 예측이 틀린 것이고 그 자체가 결과다
+3회차  분기
+   20 통과 · 40 포화 → m = 30        → 무릎을 20/30/40 중 하나로 확정
+   20 · 40 모두 통과 → m = 80        → 통과하면 m = 160
+   20 이 이미 포화   → m = 12 → 8    → "현재 20 이 낙관적이었다" 가 결론
++1회차  무릎이 잡힌 계단에서 QUEUE_SSE_ENABLED=0 대조 1회 — SSE 무릎인지 admit 무릎인지를 가른다
+```
+
+**정지 규칙:** 첫 포화 계단을 찾고 그 아래 한 계단이 통과하면 종료. 최소 3회차 + 대조 1회.
+
+**예측(회차 전에 적어 둔다).** #554의 ON/OFF 두 점에서 요청당 CPU를 역산하면 폴링·진입 `p ≈ 0.068~0.077 %CPU/요청`, 예매 `b ≈ 1.33~1.60 %CPU/RPS`다. 좌석맵은 #539 after 곡선에서 `≈ 0.91 %CPU/RPS`. CPU 예산 93%p에서 폴링 `400 × 0.077 = 30.8%p`를 빼면 62%p가 남고, 보강 후 여정은 `62 / (1.4 + 0.91) ≈ 27/s`다. → **예측 무릎 25~30/s.** 맞다면 **현행 20이 이미 무릎 부근**이고, #554가 준 "OFF가 33.73 RPS를 미포화 통과"는 **좌석맵·SSE 없는 여정의 수치라 보강 후 하한 근거로 그대로 쓸 수 없다.**
+
+#### `dropped_iterations`를 가르는 규칙 — 회차 전에 못 박는다
+
+이 회차에서 dropped는 **포화 신호이자 생성기 VU 부족 신호**다. 구분하지 못하면 무효다.
+
+```
+dropped == 0                               → 모호성 없음
+dropped > 0 AND vus_max ≥ 0.95 × maxVUs    → 생성기 VU 부족. 회차 무효, 풀을 키워 재실행
+dropped > 0 AND vus_max < 0.95 × maxVUs    → 대상 포화 신호
+```
+
+**보조축**은 `queue_post_admit_seconds`(승급 → 좌석맵·SSE·예매)다. 이것이 평평한데 dropped면 서버는 멀쩡하고 VU 점유가 설계대로인 것 = 생성기 부족. **이것이 부풀면 승급 이후 경로가 느려진 것 = 이 회차가 찾는 무릎의 직접 증거다.**
+
+#### 계단 사이에 하는 일
+
+1. k6 종료 후 **10분 더 기다렸다가** 덤프한다. #554 §9.6 — OFF arm은 예매 종료 후 CPU가 5분 반 더 50%대를 유지했고 그 하강이 seat outbox 소진 시점과 맞았다. "유입이 끝난 시점"이 아니라 "후처리가 끝난 시점"까지 덮어야 한다.
+2. `cleanup_load.sql`(LTQ) → **`@cohort_size`를 다음 계단 값으로 바꿔 재시딩** → `-e 인자` 4줄 갱신.
+3. `queue:*` 리셋(G7). 안 하면 이전 계단의 `queue:opened-at`이 남아 임계치가 이미 수십만이라 전원이 첫 폴링에서 즉시 승급한다.
+4. `deploy/.env`의 `QUEUE_ADMIT_RATE` 교체 → `docker compose up -d --force-recreate --no-deps gateway-service` → `docker inspect`의 `Config.Env`로 반영 확인.
+5. **`develop → main` 배포를 하지 않는다.** 계단 전체가 같은 `IMAGE_TAG` 위에서 돌아야 한다. 필요하면 계단 **시작 전**에 한다.
+6. **MySQL 재시작 여부를 정하고 전 계단에 동일하게 적용한다.** #554에서 MySQL 컨테이너 메모리가 첫 arm 중 72% → 100%로 차오른 뒤 내려오지 않아 두 번째 arm이 100%에서 시작했다(§2.3). 재시작하면 버퍼풀 워밍업을 날려 첫 계단이 불리해진다 — **어느 쪽이든 `metadata.txt`에 적는다.**
+7. 점검 명령이 **다음 계단의 시작 구간에 물리지 않게** 한다(§16.6 — 2 vCPU에서는 관측 행위가 관측값에 잡힌다).
+
+#### 집계
+
+```bash
+# 계단마다 1회
+python load-test/bench/dump-timeseries.py <START_UTC> <END_UTC> <OUTDIR> a20
+python load-test/bench/arm-stats.py <OUTDIR> a20 <START_UTC> --ramp-end 150
+
+# 전 계단이 끝난 뒤 가로 대조표 — report.md 에 그대로 붙인다
+python load-test/bench/arm-stats.py <OUTDIR> --table a20=<UTC> a40=<UTC> a30=<UTC> --ramp-end 150
+```
+
+`--ramp-end 150`은 유입 종료 시각이다(램프 10s + 유지 140s). 이 인자를 빼면 기본 300이 적용돼 **판정창이 소화 구간의 절반을 잘라먹는다.**
+
+> **⚠️ 예매 RPS만 보고 계단을 비교하지 않는다.** 이슈 #555 본문은 *"계단을 올리면 폴링 수요도 `T = ceil(waiting/R)`로 함께 오른다"*고 적었는데 **방향이 반대다.** `pollSeconds`에 `min 3 / max 60`이 씌워져 있어(`application.yml`) `waiting ≥ 1,200`인 동안 폴링 RPS는 `waiting/T ≈ R = 400`에 **고정**되고, admit을 올리면 대기가 빨리 빠져 **폴링 총량은 오히려 줄어든다.** 결론은 그대로 유효하고 이유가 다르다 — **계단마다 CPU 예산의 분모가 달라진다.** 대조표의 폴링 RPS·게이트웨이 RPS 컬럼이 그래서 필수다.
+
+**주 지표는 RPS가 아니라 소화 시간이다.** SSOT는 `queue_drain_seconds`의 **max**(k6 요약) — 대기열 개시부터 그 사람이 예매를 마치기까지이고, 승급 임계치가 개시 시각의 함수라 기준점이 정확하다. Trend의 max는 시계열로 나가지 않으므로 요약이 유일한 출처다.
