@@ -235,8 +235,17 @@ G12_SMOKE=<소규모 스모크 1회(도착률 1~2/s · 1~2분)를 첫 계단 전
 # 계단마다 한 블록씩. arm 접미사는 a<admit> 로 통일한다(-a20, -a40, ...).
 ARM=a20 / START_UTC=2026-08-14T08:26:47Z / END_UTC=2026-08-14T08:37:47Z
 #   RESULT=INVALID — 사전에 정한 무효 조건에 걸렸다. 결과를 보고 기준을 고치지 않는다.
-#   무효 사유 (1) queue_status_unavailable = 7 / 7,706 (0.09%) > 0 → INVALID_IF 직격.
-#   무효 사유 (2) 관측 결손 — k6 remote-write 가 회차 85초 지점(08:28:12Z)부터 끊겼다.
+#   무효 사유 queue_status_unavailable = 7 / 7,706 (0.09%) > 0 → INVALID_IF 직격.
+#   ⚠ 다만 그 규칙의 전제가 이 계단에서는 성립하지 않는다. 규칙은 ">0 이면 fail-closed 발동 =
+#     Redis 장애를 잰 것" 이라고 적었는데, a20 내내 Redis 는 멀쩡했다 — used_memory max 5.9MB
+#     (상한 48MB), 명령 처리 max 489/s, rejected_connections 0, blocked_clients 0,
+#     connected_clients max 29. 런북 §16.4 가 못 박은 그대로다:
+#     "RedisCommandTimeoutException 을 Redis 장애로 읽지 않는다 — 게이트웨이가 CPU 를 못 잡으면
+#      서버가 즉답해도 터진다." 호스트 CPU 가 97.8% 였으므로 이 7건은 CPU 기아의 결과다.
+#     즉 이 INVALID_IF 는 '포화 그 자체' 를 무효로 만드는 대리 지표라, 포화 계단에서는 구조적으로
+#     항상 걸린다. 기준을 결과에 맞춰 고치지 않으므로 a20 은 INVALID 로 둔다. 규칙의 결함은
+#     사실로 기록하고 처리 방향은 사람이 정한다(#555 리포트 · 후속 이슈 대상).
+#   관측 한계 (무효 사유가 아니다 — 사전 확정 목록에 없다) k6 remote-write 가 85초 지점(08:28:12Z)부터 끊겼다.
 #     ssh -f -N 로 포크한 터널이 회수돼 이후 'connection refused' 였다. 서버측 시계열 69건은
 #     EC2 Prometheus 가 그대로 긁어 무사하지만 k6_* 계열은 통째로 비었다 — dump 가
 #     k6-req-duration-p95 · k6-dropped-iterations · k6-queue-* 등 37개 슬러그를 '데이터 부재' 로
@@ -284,6 +293,44 @@ ARM=a20 / START_UTC=2026-08-14T08:26:47Z / END_UTC=2026-08-14T08:37:47Z
 #     실제는 그보다 나쁘다 — 무릎은 20 이하다. 다만 이 계단이 무효이므로 확정하지 않는다.
 #   PREDICT_AXIS 대조: 두 후보(좌석맵 ~100/s · SSE 구독자 누적) 중 SSE 실행기 쪽은 아니었다.
 #     실제로 먼저 닿은 것은 seat-service 의 DB 커넥션 풀과 컨테이너 메모리다 — 예측에 없던 축이다.
+ARM=a12 / START_UTC=2026-08-14T08:56:07Z / END_UTC=2026-08-14T09:06:47Z
+#   RESULT=VALID / 통과(미포화). 사전 확정 무효 조건을 전부 통과했다:
+#     queue_status_unavailable 0 / 31,432 · queue_polls_exhausted 0 · queue_booking_forbidden 0 ·
+#     queue_cohort_exhausted 0 · dropped_iterations 0 · redis used_memory max 4.65MB (< 48MB) ·
+#     관리자 대시보드 미호출 · 계단 중 배포 없음(IMAGE_TAG 동일).
+#   계단표대로 실행: m=12 / a=24 / C=3,600 / hold 140s / preAllocatedVUs=maxVUs=2,200 /
+#     구독자 100명 10분 고정. iterations 3,478 / 계획 3,480.
+#   실측 (판정창 t+150~310s, 11표본):
+#     예매 서버 RPS   avg 9.23 / max 16.78
+#     폴링 RPS        avg 261.9        게이트웨이 RPS  avg 309.7
+#     호스트 CPU      avg 38.30 / max 65.32 %   (공통창 t+30~300s 기준 avg 42.02 / max 73.66)
+#     queue_drain_seconds max 359.0s   (모델 C/m = 300s)
+#   여정이 온전히 돌았다: queue_seatmap_ok 100.00% (2,780/2,780) · queue_booking_ok 99.96% ·
+#     queue_polls_per_user avg 11.31 / max 25 (실제로 대기가 쌓였다는 증거 — a20 은 2.41 이었다) ·
+#     queue_wait_to_admit_seconds avg 64.7 / max 225.0 ·
+#     queue_post_admit_seconds avg 0.67 (a20 은 15.52 — 승급 이후 경로가 멀쩡하다) ·
+#     SSE 515,200 이벤트 수신(858/s). a20 의 44,628 은 팬아웃이 굶은 결과였음이 이 대조로 드러난다.
+#   서버 오류 0건 — 게이트웨이 status 분해에서 500 = 0 / 503 = 0 (a20 은 500 이 1,898건).
+#   POST_CHECK 오버셀 (a1) PASS — performance_id=34 에서 2,780 / 2,780 / 2,780 일치, 중복 0행.
+#     원문은 oversell-a12.txt.
+#
+#   ⚠ 이 계단은 포화하지 않았다. 예매 RPS 9.23 이 admit 12 에 못 미치는 것은 공급 부족이다:
+#     queue_enqueue_failed 698건(3,478 중 20%)으로 실효 코호트가 2,780명이 됐고,
+#     2,780 / 300s = 9.27/s 가 관측값 9.23 과 사실상 같다. admit 이 막은 것이 아니라
+#     대기열에 들어온 사람이 그만큼이었다.
+#   ⚠ 그 진입 실패의 원인은 이 계단으로 특정하지 못한다. 게이트웨이는 5xx 를 한 건도 내지
+#     않았으므로 애플리케이션 오류가 아니고, 남는 후보는 nginx/생성기 커넥션 계층이다.
+#     그것을 가르는 지표(k6-req-connecting-p95 · queue_enqueue_failed 의 status 태그)가
+#     LIMIT_K6_TIMESERIES 로 전부 비었다.
+
+# ── 여기까지의 판정 (계단 2개) ─────────────────────────────────────────────
+# PRIMARY_CRITERION 적용: 12 → 20 에서 admit 이 +8 인데 예매 서버 RPS 는 9.23 → 12.26 으로
+#   +3.03 만 올랐다. 증가분의 37.9% 이므로 사전 기준(50% 미만)에 a20 이 포화 계단으로 걸린다.
+#   ⚠ 단 a20 은 INVALID 라 이 판정을 확정으로 쓰지 않는다. 유효한 포화 계단이 아직 없다.
+# 세 신호 대조: ① 처리량 정체 — 위와 같이 성립  ② dropped_iterations 는 양쪽 0
+#   ③ 호스트 CPU 수렴 — a12 max 73.66% → a20 max 97.78%, a20 에서 수렴했다.
+# 잠정: 무릎은 (12, 20] 구간에 있다. 12 는 미포화, 20 은 붕괴(HTTP 500 1,898건 · seatmap 38%).
+# PREDICT_KNEE 25~30/s 는 틀렸다 — 실제는 그보다 낮다.
 # ARM=a40 / START_UTC= / END_UTC= / RESULT=
 # ARM=<무릎계단>-nosse / START_UTC= / END_UTC= / RESULT=   (SSE 대조)
 KNEE=
@@ -291,6 +338,19 @@ KNEE_AXIS=
 DRAIN_BY_RATE=
 
 # ── 이 회차가 답하지 못하는 것 (회차 전에 적는다) ──────────────────────────
+LIMIT_K6_TIMESERIES=k6 측 시계열이 a20·a12 양쪽에서 통째로 비었다. remote-write 를 로컬 k6 →
+#   SSH 터널 → EC2 Prometheus 로 보내는데, 그 터널이 두 회차 모두 부하 중에 끊겼다(a20 은 t+85s,
+#   a12 는 회차 내내 104회 오류). 원인은 터널 자체가 아니라 대상이다 — 호스트 CPU 가 97% 대로
+#   차면 sshd 가 keepalive 에 제때 응답하지 못해 세션이 끊긴다. 즉 **포화를 재려는 회차일수록
+#   관측 경로가 먼저 끊기는 구조**다. 3회차부터는 자동 재접속 래퍼로 돌린다.
+#   비어 있는 것: k6-req-failed-ratio(KNEE_WATCH 항목이라 그 감시가 두 계단에서 무력했다) ·
+#   k6-req-connecting-p95(생성기/nginx 커넥션 계층을 가르는 유일한 지표) · k6-queue-* 전부 ·
+#   k6-dropped-iterations. 집계값은 k6 요약 텍스트에 남아 있어 판정은 섰지만, 시간 분해가 없어
+#   "언제 꺾였는가" 는 서버측 시계열로만 봤다.
+LIMIT_OVERSELL_A20=a20 의 오버셀 검증을 남기지 못했다. 계단 사이 절차가 cleanup(LTQ 코호트 삭제)
+#   → 재시딩 순서라 a12 준비 시점에 a20 코호트가 지워졌다. 사후 조회는 0행이 나오지만 그것은
+#   "오버셀 없음" 이 아니라 "검증 대상이 없음" 이다. 런북 §16.7 에 오버셀 검증을 cleanup 앞
+#   순서로 못 박았다(2026-08-14). a12 는 정상적으로 남겼다(oversell-a12.txt).
 LIMIT_K6_BINARY=k6 바이너리가 xk6 빌드라 #549·#554(grafana/k6:latest)와 다르다. §6.1
 #   재현성 규칙이 한 겹 더 걸린다 — 절대값으로 직접 잇지 않는다.
 LIMIT_JOURNEY=여정이 바뀌었다(좌석맵 + SSE 체류 추가). #549 B-2 · #554 의 수치는 참고로만
