@@ -241,6 +241,19 @@ export const QUEUE_COHORT_SIZE = Number(__ENV.QUEUE_COHORT_SIZE || 6000);
 export const QUEUE_FLOOD_PRE_ALLOCATED_VUS = Number(__ENV.QUEUE_FLOOD_PRE_ALLOCATED_VUS || 4000);
 export const QUEUE_FLOOD_MAX_VUS = Number(__ENV.QUEUE_FLOOD_MAX_VUS || 4000);
 
+// 승급 후 좌석 선택 화면 체류 시간(초). SSE 구독을 이만큼 물고 있다가 닫는다.
+//
+// 이 값이 SSE 축의 부하를 정하는 다이얼이다 — 동시 구독자 ≈ admit x 체류초, 이벤트율 ≈ admit 이라
+// 팬아웃(구독자 x 이벤트율)은 admit 의 제곱으로 큰다. #403 은 구독자 600명 x 5 events/s = 3,000
+// sends/s 까지만 검증했고, #540 에서 그 규모에 seat-service RSS 가 602/640 MiB(94.1%)였다.
+// 기본 10초면 admit 20 에서 200명, admit 40 에서 400명으로 그 검증 범위 안이다.
+//
+// ⚠ 계단을 올리면 이 축이 admit 보다 먼저 꺾일 수 있다 — 그것이 이슈 #555 의 두 번째 가설이고,
+//   무릎이 잡힌 계단에서 QUEUE_SSE_ENABLED=0 대조 회차 1회로 가른다.
+export const QUEUE_SEAT_DWELL_SECONDS = Number(__ENV.QUEUE_SEAT_DWELL_SECONDS || 10);
+// 0 이면 SSE 구독을 건너뛴다(대조 회차 전용). 좌석맵과 예매는 그대로 돈다.
+export const QUEUE_SSE_ENABLED = (__ENV.QUEUE_SSE_ENABLED || '1') !== '0';
+
 // 유입이 끝나도 대기 중인 사람이 남아 있다. 마지막 순번은 개시로부터 C/admit 초에 승급하므로
 // 그때까지 VU 를 끊으면 안 된다 — 끊으면 소화 시간(주 지표)이 측정되지 않는다.
 // 기본값 10m = C/admit(300s) 의 2배. 계단마다 확인한다.
