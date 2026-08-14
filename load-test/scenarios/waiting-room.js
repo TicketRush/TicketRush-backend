@@ -160,6 +160,7 @@ const cohortExhausted = new Counter('queue_cohort_exhausted');
 const drainSeconds = new Trend('queue_drain_seconds');
 // 승급 이후 구간(좌석맵 + SSE 체류 + 예매). dropped_iterations 를 가르는 보조축이다 —
 // 이것이 평평한데 dropped 가 나면 생성기 VU 부족이고, 이것이 부풀면 대상 포화다.
+// ⚠ SSE 체류(기본 10초)가 베이스라인으로 깔려 있다. 보는 것은 절대값이 아니라 그 위의 변동이다.
 const postAdmitSeconds = new Trend('queue_post_admit_seconds');
 // 승급 후 여정 — 좌석맵. #549·#554 는 승급 후가 예매 1콜뿐이라 admit 을 올려도 예매 API 만
 // 때리는 회차였다. 그 상태로 나온 상한은 낙관적인 거짓 결론이다(#555 본문).
@@ -276,15 +277,20 @@ function dwellAndBook(userId, seatId, entryToken) {
   sse.open(STREAM_URL, { tags: { name: 'queue_sse' } }, function (client) {
     client.on('event', function (e) {
       const now = Date.now();
-      if (e.name === 'connected') {
-        sseConnectDuration.add(now - startedAt);
+      // 첫 이벤트가 체류의 시작이다. 'connected' 로만 걸면 서버가 그 이벤트를 안 보내는
+      // 경우(계약 변경)에 예매도 못 걸고 close 조건도 영원히 거짓이라 VU 가 갇힌다 —
+      // 어느 이벤트든 하나를 받았으면 구독은 성립한 것이므로 거기서 시작한다.
+      if (connectedAt === 0) {
+        if (e.name === 'connected') {
+          sseConnectDuration.add(now - startedAt);
+        }
         connectedAt = now;
         res = bookSeat(userId, seatId, entryToken);
         return;
       }
       // 남의 좌석 이벤트도 체류 시간을 재는 시계 역할을 한다. 파싱하지 않는다 — 이벤트를
       // 파싱하는 비용은 생성기 쪽이라 측정 대상이 아닌 곳에서 지연을 만든다(#403 선례).
-      if (connectedAt > 0 && now - connectedAt >= DWELL_MS) {
+      if (now - connectedAt >= DWELL_MS) {
         client.close();
       }
     });
