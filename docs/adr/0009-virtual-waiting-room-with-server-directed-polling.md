@@ -8,6 +8,8 @@
 
 폴링 주기 `T`와 keep-alive 방향은 [#546](https://github.com/TicketRush/TicketRush-backend/issues/546) 실측으로 확정했다(2026-07-31). §3·§5가 그 수치로 갱신됐다.
 
+입장 허용량 `admit-rate-per-second`는 [#555](https://github.com/TicketRush/TicketRush-backend/issues/555) 계단 실측으로 **20 → 12**로 내렸다(2026-08-14). §3.5가 그 근거이고, 그 회차가 **무릎을 만드는 것이 `admit` 자체가 아니라 좌석 SSE 팬아웃**임을 대조 회차로 확정했다.
+
 [ADR 0004](0004-load-test-execution-topology.md)의 측정 토폴로지, [ADR 0006](0006-eight-gib-container-memory-limits.md)의 메모리 예산, [ADR 0007](0007-observability-stack-colocation.md)의 관측 스택 배치, [ADR 0008](0008-accept-redis-spof-with-fail-closed.md)의 Redis SPOF 수용을 전제로 한다.
 
 ## 맥락
@@ -96,6 +98,44 @@ T = ceil(10,000 / 400) = 25초
 >
 > **두 점으로 그은 선이다.** 함수 형태를 알려면 커넥션을 계단으로 올리는 별도 회차가 필요하다. 그 전까지는 보수적인 쪽을 택한다.
 
+### 3.5 입장 허용량 `admit-rate-per-second` — 20에서 12로 (#555 실측, 2026-08-14)
+
+**이 ADR을 쓸 당시 이 값에는 실측 근거가 없었다.** 설정 주석이 유일한 근거였고 그 주석은 [#344](https://github.com/TicketRush/TicketRush-backend/issues/344)의 "booking 단독 258 RPS"를 인용했는데, **그 258 RPS는 예매 처리량이 아니다** — 98.61%(94,359건)가 좌석 점유 반려 409였고 실제 예매 생성은 1,324건 / 6분 36초 = **약 3.3 RPS**였다. 폴링 용량 `R`은 200/400/800/1600 계단으로 무릎을 찾았지만 `admit`은 같은 작업을 한 번도 하지 않았다.
+
+[#555](https://github.com/TicketRush/TicketRush-backend/issues/555)에서 계단 회차로 실측했다. 계단 하나 = 회차 하나이고(서버값이라 게이트웨이 `--force-recreate`가 필요하다), 도착률 `a = 2m` · 코호트 `C = 300m`으로 두어 어느 계단에서나 동일한 5분 판정창을 확보했다.
+
+**무릎은 12와 16 사이다.** 판정 기준은 회차 **전에** 확정했다 — *"직전 계단 대비 admit 증가분의 50% 미만만 오르는 계단."*
+
+| 구간 | admit 증가 | 예매 서버 RPS 증가 | 비율 | |
+|---|---|---|---|---|
+| 시리즈 B `12 → 16` | +4 | 8.22 → 9.84 = +1.62 | **40.5%** | 포화 |
+| 시리즈 B `16 → 20` | +4 | 9.84 → 13.02 = +3.18 | 79.5% | 기준 위 |
+| 시리즈 A `12 → 16` | +4 | 9.23 → 9.98 = +0.75 | **18.8%** | 포화 |
+
+두 시리즈는 대상 설정이 달라 절대값으로 잇지 않는데도 **판정이 독립적으로 같은 구간을 가리켰다.** `admit-rate-per-second`를 **20 → 12**로 내린다. 12는 무릎의 정확한 값이 아니라 **통과가 확인된 가장 높은 계단**이다(좌석맵 성공률 99.49% · 폴링 p95 2.03s · 호스트 CPU max 61.89%).
+
+#### 무릎을 만드는 것은 `admit`이 아니라 좌석 SSE 팬아웃이다
+
+포화 축은 seat-service였고, 그 서비스의 HTTP는 **2.18 RPS**뿐이었다 — CPU를 먹는 것은 HTTP 경로가 아니다. 좌석맵 성공률이 두 시리즈에서 같은 지점에서 절벽처럼 떨어진다:
+
+| admit | 시리즈 A | 시리즈 B |
+|---|---|---|
+| 12 | 100.00% | 99.49% |
+| 16 | **63.06%** | **63.51%** |
+| 20 | 38.14% | 73.26% |
+
+**대조 회차가 인과를 확정했다.** `admit 16`에서 SSE 구독자만 100 → 0으로 두자 좌석맵 63.06% → **100.00%**, 호스트 CPU avg 64.61% → **33.65%**, 폴링 p95 2.73s → **180ms**로 돌아왔다. 구독자를 고정 100명으로 두면 팬아웃 sends/s = `100 × admit`이므로 **`admit`이 곧 seat-service의 부하**다.
+
+따라서 **이 값을 낮추는 것은 증상 완화다.** 근본은 seat-service의 팬아웃 비용이고 별도 이슈로 남는다.
+
+#### 이 실측의 한계
+
+- **유입이 생성기 쪽 WAN 경로에서 잘렸다.** 계단마다 17~20%가 대기열 진입에 실패했고 k6의 실패 `status`가 전부 `0`(전송 계층)이었다. 대상의 `TcpAttemptFails`는 70건뿐인데 k6는 `connection refused`를 1,260건 봤고, 대상은 `TcpRetransSegs 263,142`를 기록했다. 예매 서버 RPS가 어느 계단에서나 8~13/s에 묶여 **처리량 축의 분해능이 낮다** — 결론이 좌석맵·CPU·소화 시간 축에 더 기댄다.
+- **회차 도중 nginx/커널 백로그를 고쳤다.** `tcp_max_syn_backlog 512` · nginx `:443` 백로그 511(기본값)에서 SYN 큐가 15,826번 넘쳤다(`TcpExtTCPReqQFullDoCookies`). §5가 "nginx가 커넥션을 쥔다"고 적었지만 **`worker_connections`만으로는 부족했다** — 벽은 그보다 아래 계층이었다. 고친 뒤 시리즈 B 세 회차 모두 증가 0이다.
+- 12와 16 사이는 재지 않았다. 상한(80·160)도 돌지 않았다 — 16에서 이미 포화했다.
+
+증적: `load-tests/k6/results/260814-555-admit-rate-knee/` (판정 기준은 첫 계단 **이전**에 커밋했다).
+
 ### 4. 상태 확인 경로 초경량화
 
 폴링 주기 다이얼은 그 경로가 가벼울 때만 의미가 있다. 무거운 것이 하나라도 끼면 주기를 아무리 늘려도 상한이 낮게 고정된다.
@@ -136,9 +176,13 @@ T = ceil(10,000 / 400) = 25초
 - **Redis SPOF 위에 기능이 하나 더 올라간다.** [ADR 0008](0008-accept-redis-spof-with-fail-closed.md)의 fail-closed 원칙상 Redis가 죽으면 대기열도 전면 차단이다. 대기열만 fail-open으로 두는 선택지는 **오픈 시각에 유입 제어가 통째로 사라진다**는 뜻이라 택하지 않는다.
 - **폴링 주기만큼 순번 갱신이 늦다.** 25초 주기면 사용자는 최대 25초 묵은 순번을 본다. 티켓팅에서 이 정도 지연은 수용 가능하다고 판단하지만, 대기 인원이 적을 때는 주기를 줄여 체감을 개선한다.
 - ~~**`R` 실측이 남는다.**~~ [#546](https://github.com/TicketRush/TicketRush-backend/issues/546)에서 확정했다(`R=1,400` / `T=8초`). 남은 것은 1만 VU 유입 제어 검증([#472](https://github.com/TicketRush/TicketRush-backend/issues/472) 완료 조건)이다.
+- **`admit`을 낮추는 것은 증상 완화다.** [#555](https://github.com/TicketRush/TicketRush-backend/issues/555)가 무릎의 원인을 좌석 SSE 팬아웃으로 특정했다(§3.5). 구독자 고정 100명일 때 팬아웃 sends/s = `100 × admit`이라, `admit`을 올릴 여지는 seat-service의 팬아웃 비용을 먼저 낮춰야 생긴다. 그 전까지 `admit`은 두 축을 함께 조이는 다이얼이다.
 
 **후속 작업**
 
 - [#472](https://github.com/TicketRush/TicketRush-backend/issues/472) 대기열 구현 및 1만 VU 유입 제어 검증
 - ~~상태 확인 경로 `R` 실측 → 폴링 주기 `T` 확정 → 이 ADR §3 갱신~~ — [#546](https://github.com/TicketRush/TicketRush-backend/issues/546)에서 완료(`R=1,400` / `T=8초`)
 - 대기열 지표 추가(대기 인원, 입장 허용률, 상태 확인 RPS, 폴링 주기) — 관측 없이는 주기 다이얼을 돌릴 근거가 없다
+- ~~입장 허용량 `admit-rate-per-second` 실측 → 이 ADR 갱신~~ — [#555](https://github.com/TicketRush/TicketRush-backend/issues/555)에서 완료(무릎 12~16, 값 12로 반영, §3.5)
+- **좌석 SSE 팬아웃 비용 절감** — #555가 특정한 무릎의 원인이다. 이것을 낮추기 전에는 `admit`을 올릴 수 없다
+- **nginx·커널 백로그 설정의 프로비저닝 자동화** — #555에서 `tcp_max_syn_backlog`와 nginx `listen backlog`를 올렸으나 CD가 배포하지 않는다. 인스턴스를 새로 만들면 유실된다
