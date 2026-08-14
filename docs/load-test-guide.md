@@ -1969,6 +1969,7 @@ ticket-service:8090    4,692 → 6,033 ↑ → 4,713 → 6,248 ↑        (Prome
 |---|---|---|
 | G0 | 대상 EC2 기동 · `IMAGE_TAG` 기록 | `docker ps --format '{{.Names}}\t{{.Image}}'`. **`.env`의 `IMAGE_TAG`를 믿지 말고 실제 실행 중인 태그를 읽는다** — 아래 참조 |
 | G1 | **nginx `worker_connections` 실측** | `nginx -T \| grep -E 'worker_connections\|worker_processes'`. 기본값 1024 × 2 ≈ 2,048이면 1만 VU에 못 미친다 → 16384 + `worker_rlimit_nofile` 상향. **미조치 회차는 무효** |
+| G1b | **커널 백로그 실측** | `ss -lnt`의 `:443` Send-Q(= accept 백로그) · `sysctl net.ipv4.tcp_max_syn_backlog net.core.somaxconn` · `nstat -az \| grep -E 'ListenOverflows\|ListenDrops\|TCPReqQFullDoCookies'`를 **회차 전후로 각 1회** 찍는다. 회차 후 값에서 전 값을 뺀 증가분이 0이 아니면 **유입이 애플리케이션이 아니라 TCP 계층에서 잘린 것**이다 |
 | G2 | `QUEUE_ENABLED=true` | `deploy/.env` 확인 후 **`docker compose up -d --force-recreate --no-deps gateway-service`**. ⚠️ `restart`는 `env_file`을 다시 읽지 않아 값이 반영되지 않는다(#549·#554 실측). 반영 여부는 `docker inspect gateway-service`의 `Config.Env`로 확인한다 |
 | G3 | 대기열 지표 노출 | `curl -s localhost:8090/actuator/prometheus \| grep ticketrush_queue` — 미발생 상태에서도 0으로 보여야 한다 |
 | G4 | Redis 여유 | `redis_memory_used_bytes` < 48 MB. `maxmemory 64mb` + `noeviction`이라 상한에 닿으면 좌석 락 SET까지 거절된다 |
@@ -1976,6 +1977,8 @@ ticket-service:8090    4,692 → 6,033 ↑ → 4,713 → 6,248 ↑        (Prome
 | G6 | 생성기 EC2 | [ADR 0010](adr/0010-in-aws-load-generator-for-ten-thousand-vu.md) — 같은 리전, spot, 회차 후 **종료** |
 | G7 | **대기열 키 리셋** | `redis-cli --scan --pattern 'queue:*' \| xargs -r redis-cli del` 후 0건 확인. **회차 A·B 양쪽 모두 필수** — 이전 회차의 `queue:opened-at:{pid}`(TTL 6h)가 남아 있으면 `threshold = 경과 × rate` 가 이미 수십만이라 전원이 첫 폴링에서 즉시 승급한다. "유입 제어가 되는가"를 보려던 회차가 그냥 스파이크가 된다 |
 
+> **⚠️ `worker_connections`가 넉넉해도 백로그가 벽이 된다(G1b — 2026-08-14 #555 실측).** 그 회차는 `worker_connections 16384` · `worker_rlimit_nofile 65535`로 G1을 통과했는데, 네 계단 모두에서 유입의 17-20%가 대기열 진입에 실패했다. k6의 `status` 태그가 **전부 `0`(HTTP 응답 없음 = 전송 계층 실패)**이었고 로그는 `dial tcp <IP>:443: connect: connection refused` 1,650건이었다. 대상 커널이 원인을 확정했다 — `tcp_max_syn_backlog 512` · nginx `:443` 백로그 **511**(`listen 443 ssl;`에 `backlog=`가 없어 nginx 기본값이 잡힌다. `somaxconn`은 4096인데 nginx가 더 낮게 잡는다) · `TcpExtTCPReqQFullDoCookies` **15,826**(SYN 큐 오버플로) · `ListenOverflows` 0. **accept 큐가 아니라 SYN 큐가 벽이었다.** 그 결과 예매 서버 RPS가 어느 계단에서나 약 10/s에 묶여 처리량 축으로 계단을 가르는 힘이 약해졌다. 부하 도구가 아니라 배포본 설정의 문제이므로 실제 티켓 오픈에서도 같은 벽에 닿는다.
+>
 > **⚠️ 유효한 `.env`는 `~/ticketrush/deploy/.env` 하나다.** `cd.yml`이 `docker compose --env-file deploy/.env`로 실행하므로 그것만 읽힌다.
 >
 > 2026-08-13(#554) 이전에는 `~/ticketrush/.env`가 함께 있었고 그 안의 `IMAGE_TAG`는 `6b7301a0…`이었다. 2026-07-31 회차 B 준비 중 "`.env`가 ECR·CD기록·저장소 어디에도 없는 태그를 가리킨다"고 기록된 그 값이 **바로 이 잔재 파일이었다** — 불일치가 아니라 **엉뚱한 파일을 본 것**이다. #554에서 참조가 없음을 확인하고 삭제했으므로 이제 헷갈릴 파일이 없다.

@@ -390,7 +390,54 @@ ARM=a16 / START_UTC=2026-08-14T10:41:05Z / END_UTC=2026-08-14T10:51:08Z
 #   기준을 결과에 맞춰 고치지 않는다. 규칙을 어떻게 할지는 사람이 정하고, 그때까지 무릎은
 #   '잠정' 으로 둔다.
 # ARM=a40 / START_UTC= / END_UTC= / RESULT=
-# ARM=<무릎계단>-nosse / START_UTC= / END_UTC= / RESULT=   (SSE 대조)
+ARM=a16-nosse / START_UTC=2026-08-14T11:05:06Z / END_UTC=2026-08-14T11:12:02Z   (SSE 대조)
+#   RESULT=VALID. 사전 무효 조건 전부 통과 — queue_status_unavailable 0 / 42,048 ·
+#     queue_polls_exhausted 0 · queue_booking_forbidden 0 · queue_cohort_exhausted 0 ·
+#     dropped 0 · redis max 5.54MB. iterations 4,638 / 계획 4,640, interrupted 0.
+#   조건: a16 과 모든 것이 같고 QUEUE_SSE_SUBSCRIBERS 만 100 → 0. k6 inspect 에서
+#     subscribers 시나리오가 통째로 사라진 것을 확인하고 돌렸다.
+#   POST_CHECK 오버셀 (a1) PASS — 3,717 / 3,717 / 3,717 (oversell-a16-nosse.txt).
+#
+#   ── SSE 축의 몫 (a16 대비, 같은 admit · 같은 코호트) ──────────────────────
+#     지표                       a16(구독자 100)   a16-nosse(0)     차이
+#     queue_seatmap_ok             63.06%          100.00%       +36.94%p
+#     queue_status_unavailable     76건            0건            무효 조건이 사라진다
+#     queue_status_duration p95    2.73s           180.25ms      15.1배 개선
+#     queue_post_admit avg         1.04s           0.42s         2.5배 개선
+#     queue_drain_seconds max      471.3s          413.3s        -58.0s
+#     호스트 CPU avg/max           64.61/98.39     33.65/73.22   avg -30.96%p
+#     게이트웨이 500               1,034건         (아래 참조)
+#     예매 서버 RPS avg            9.98            9.95          차이 없음
+#   해석: 구독자 100명이 호스트 CPU 를 avg 약 31%p 먹고 있었고, 그것이 좌석맵과 폴링 응답을
+#     밀어냈다. **admit 16 자체는 이 여정을 감당한다** — SSE 축을 빼면 좌석맵이 100% 로
+#     돌아오고 무효 조건이 0 이 된다. 즉 a16 에서 관측된 포화는 admit 무릎이 아니라
+#     SSE 팬아웃 축의 무릎이다. 이슈 #555 가 세운 두 가설 중 두 번째가 맞았다.
+#   ⚠ 다만 소화 시간은 SSE 를 빼도 413.3s 로 모델 300s 의 1.378배다. SSE 만으로 전부
+#     설명되지는 않는다 — 아래 LIMIT_SYN_BACKLOG 가 남은 몫을 설명한다.
+
+# ── 회차 전체를 관통한 제약 — TCP SYN 큐 (회차 후 발견) ────────────────────
+# 네 계단 모두에서 queue_enqueue_failed 가 일정하게 났다:
+#   a12 698/3,478(20.1%) · a16 792/4,637(17.1%) · a16-nosse 921/4,638(19.9%) ·
+#   a20 2,599/5,792(44.9%)
+# k6 의 status 태그가 원인을 가른다 — a16-nosse 는 921건 **전부** status=0 이었다.
+#   status=0 은 HTTP 응답을 받지 못한 것, 즉 서버 응답이 아니라 전송 계층 실패다.
+#   (a16 은 status=0 이 784건, status=503 이 8건)
+# k6 로그의 실제 오류: "dial tcp 54.116.243.250:443: connect: connection refused" 1,650건 ·
+#   "EOF" 485건 · "dial: i/o timeout" 188건. 대상 IP 의 443 이 TCP 레벨에서 거절했다.
+# 대상 커널 카운터가 확정한다 (EC2 를 08:03 UTC 에 켰으므로 전부 이 회차들의 것이다):
+#   net.ipv4.tcp_max_syn_backlog = 512
+#   nginx :443 accept 백로그 = 511   (listen 443 ssl; 에 backlog= 가 없어 nginx 기본값)
+#   net.core.somaxconn = 4096        (커널은 여유가 있는데 nginx 가 더 낮게 잡는다)
+#   TcpExtListenOverflows = 0 / TcpExtListenDrops = 0   → accept 큐는 넘치지 않았다
+#   TcpExtTCPReqQFullDoCookies = 15,826                 → **SYN 큐가 15,826번 넘쳤다**
+# 즉 유입은 애플리케이션도 생성기도 아닌 **TCP SYN 큐**에서 잘렸다. 그래서 실효 코호트가
+#   계단마다 17~20% 줄었고 예매 서버 RPS 가 어느 계단에서나 약 10/s 에 묶였다
+#   (a12 9.23 · a16 9.98 · a16-nosse 9.95). 처리량 축으로 계단을 가르는 힘이 약해진 이유다.
+# ⚠ 사전 게이트 G1 의 구멍이다. G1 은 worker_connections(16384)와 worker_rlimit_nofile
+#   (65535)만 봤고 둘 다 정상이었다 — 벽은 그보다 아래 계층이었다. 런북 §16.4 G1 에
+#   백로그 항목을 추가했다.
+# ⚠ 이것은 부하 도구의 문제가 아니라 **배포본의 설정**이다. 실제 티켓 오픈에서도 같은 벽에
+#   닿는다. 별도 이슈 대상이다(nginx listen backlog + tcp_max_syn_backlog 상향).
 KNEE=
 KNEE_AXIS=
 DRAIN_BY_RATE=
