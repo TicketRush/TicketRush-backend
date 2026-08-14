@@ -1,0 +1,26 @@
+{
+ "query": "ticketrush_seat_lock_contention_total",
+ "start": "2026-08-14T08:26:47Z",
+ "end": "2026-08-14T08:47:47Z",
+ "step": "15s",
+ "data": [
+  {
+   "metric": {
+    "__name__": "ticketrush_seat_lock_contention_total",
+    "instance": "seat-service:8090",
+    "job": "ticketrush-services",
+    "stack": "mvc"
+   },
+   "values": [
+    [
+     1786696187,
+     "1"
+    ],
+    [
+     1786696202,
+     "1"
+    ]
+   ]
+  }
+ ]
+}

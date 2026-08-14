@@ -190,8 +190,9 @@ G8_SEED=PASS. @cohort_size=6000 / @rows_per=25 / @cols_per=240. user·seat 양�
 #   ⚠ 시딩 SQL 의 출력 마지막 줄이 QUEUE_FLOOD_VUS= 였다 — #555 에서 사라진 변수다. 그대로 넣으면
 #     k6 가 조용히 무시하고 코호트가 기본값에 남아, 계단마다 코호트가 바뀌는 이 회차에서 2계단부터
 #     queue_cohort_exhausted 로 무효가 된다. QUEUE_COHORT_SIZE= 로 고쳤다(회차 전).
-G9_BASELINE=<무부하 기저 CPU 5분. 그 5분 동안 명령을 던지지 않는다 — #554 에서 관측 행위만으로
-#   max 57.55% 가 찍혔다(명령 없는 창의 기저는 약 7%)>
+G9_BASELINE=PASS. 2026-08-14 08:20:52~08:25:48 UTC, 20표본. min 5.92 / avg 6.29 / max 7.40 %.
+#   그 5분 동안 EC2 에 명령을 던지지 않았다. #554 의 무부하 기저(약 7%)와 일치하므로 배포본
+#   드리프트로 인한 기저 상승은 없다.
 G10_INSPECT=PASS. flood=ramping-arrival-rate / stages 10s→target 40, 2m20s→target 40 /
 #   preAllocatedVUs=maxVUs=4000 / gracefulStop 10m, subscribers=constant-vus 100 VU 10m.
 G11_MYSQL_RESTART_POLICY=재시작하지 않는다. 전 계단 동일 적용.
@@ -232,7 +233,57 @@ G12_SMOKE=<소규모 스모크 1회(도착률 1~2/s · 1~2분)를 첫 계단 전
 
 # ── 실측 (회차 후 채운다) ──────────────────────────────────────────────────
 # 계단마다 한 블록씩. arm 접미사는 a<admit> 로 통일한다(-a20, -a40, ...).
-# ARM=a20 / START_UTC= / END_UTC= / RESULT=
+ARM=a20 / START_UTC=2026-08-14T08:26:47Z / END_UTC=2026-08-14T08:37:47Z
+#   RESULT=INVALID — 사전에 정한 무효 조건에 걸렸다. 결과를 보고 기준을 고치지 않는다.
+#   무효 사유 (1) queue_status_unavailable = 7 / 7,706 (0.09%) > 0 → INVALID_IF 직격.
+#   무효 사유 (2) 관측 결손 — k6 remote-write 가 회차 85초 지점(08:28:12Z)부터 끊겼다.
+#     ssh -f -N 로 포크한 터널이 회수돼 이후 'connection refused' 였다. 서버측 시계열 69건은
+#     EC2 Prometheus 가 그대로 긁어 무사하지만 k6_* 계열은 통째로 비었다 — dump 가
+#     k6-req-duration-p95 · k6-dropped-iterations · k6-queue-* 등 37개 슬러그를 '데이터 부재' 로
+#     보고했다. 그래서 KNEE_WATCH 의 k6-req-failed-ratio 항목을 이 계단에서 평가할 수 없고,
+#     생성기측 커넥션 지표(k6-req-connecting-p95)가 없어 생성기 영향을 배제하지도 못한다.
+#
+#   ⚠ 무효지만 버리지 않는다. 부하 모델의 전제가 깨진 방식이 그 자체로 결과다.
+#   부하 모델 붕괴: 계획 유입 5,800명 중 2,599명(45%)이 queue_enqueue_failed 로 대기열에
+#     들어가지도 못했다. 그 결과 ticketrush_queue_waiting 이 max 753명에 그쳤다 —
+#     모델값 VU_MODEL_PEAK = C/2 = 3,000 의 1/4 이다. 대기가 안 쌓였으므로 이 계단은
+#     "admit 20 이 유입을 소화하는가" 를 잰 것이 아니다.
+#   실측 (판정창 t+150~310s, 11표본):
+#     예매 서버 RPS   avg 12.26 / max 37.42   (admit 20 에 못 미친다)
+#     게이트웨이 RPS  avg 51.78 / max 139.64
+#     폴링 RPS        avg 22.75 / max 61.45
+#     호스트 CPU      avg 69.82 / max 97.78 %  (기저 6.29% 대비)
+#     대기 인원       avg 97.73 / max 691
+#   여정 붕괴: queue_seatmap_ok 38.14% (1,218/3,193) · queue_booking_ok 82.77% ·
+#     http_req_failed 31.05% · queue_status_duration p95 = 59.99s(= 타임아웃) ·
+#     queue_drain_seconds max 356.3s.
+#
+#   포화 축 (증적: arm-stats-a20.txt · timeseries-*-a20.json)
+#     ① 호스트 CPU 가 세 JVM 으로 다 찬다 — proc_cpu seat 0.442 + gateway 0.257 +
+#        booking 0.219 = 1.83 / 2 vCPU. 호스트 max 97.8% 와 맞는다.
+#     ② 최대 소비자는 seat-service 인데 그 HTTP 는 2.18 RPS 뿐이다. 좌석맵 서버 RPS 는
+#        avg 0.78 / max 14.29 인데 클라이언트는 3,193건을 던졌다 — 서버가 받지 못했다.
+#     ③ seat-service Hikari active max 10 / pending max 28 → 커넥션 풀 고갈.
+#        Tomcat busy max 50. 컨테이너 메모리 16.6% → 100%.
+#        booking-service 컨테이너 메모리도 95.05~99.96%.
+#     ④ SSE 축은 한산했다 — executor_queued 0 · rejected 0 · caller_runs 0 · active max 2.
+#        구독자 100명이 44,628 이벤트(74.4/s)를 받았고 sse_connect avg 403ms 로 정상이었다.
+#        ⚠ 그러므로 이 계단의 무릎은 'SSE 실행기 포화' 가 아니다. 다만 팬아웃·직렬화·TLS 가
+#          seat-service CPU 에 얼마나 실렸는지는 이 계단만으로 못 가른다 — STEP_CONTROL
+#          (구독자 0) 이 그것을 가르는 유일한 수단이고, 그 필요성이 예측이 아니라 실측으로
+#          확인됐다.
+#     ⑤ outbox backlog booking-service peak 1,569 (t+525s) → 0 도달 t+555s.
+#        후처리가 회차 종료 후까지 이어졌다(§16.7 "10분 뒤 덤프" 규율이 실제로 필요했다).
+#   DEFERRAL_RATIO = 68.84% (t+150s 이후 2,029건 / 전체 2,947건)
+#   KNEE(자동) = booking p95 >= 150ms, t+165s (08:29:32Z)
+#   DROPPED_RULE 적용: dropped_iterations 0, vus max 2,578 < maxVUs 4,000 → 생성기 VU
+#     부족은 아니다. 다만 (2) 때문에 생성기측 커넥션 지표가 없어 생성기 무관을 단정하지 않는다.
+#
+#   예측 대조: PREDICT_KNEE 25~30/s 는 틀렸다. admit 20 에서 이미 호스트가 97.8% 로 차고
+#     여정이 무너진다. PREDICT_IMPLICATION("맞다면 현행 20 이 이미 무릎 부근")은 방향이 맞았고
+#     실제는 그보다 나쁘다 — 무릎은 20 이하다. 다만 이 계단이 무효이므로 확정하지 않는다.
+#   PREDICT_AXIS 대조: 두 후보(좌석맵 ~100/s · SSE 구독자 누적) 중 SSE 실행기 쪽은 아니었다.
+#     실제로 먼저 닿은 것은 seat-service 의 DB 커넥션 풀과 컨테이너 메모리다 — 예측에 없던 축이다.
 # ARM=a40 / START_UTC= / END_UTC= / RESULT=
 # ARM=<무릎계단>-nosse / START_UTC= / END_UTC= / RESULT=   (SSE 대조)
 KNEE=
