@@ -67,6 +67,18 @@ QUERIES = [
     ("k6-rps", 'sum(rate(k6_http_reqs_total[1m]))'),
     ("k6-rps-by-name", 'sum by (name) (rate(k6_http_reqs_total[1m]))'),
     ("k6-req-failed", 'k6_http_req_failed_rate'),
+    # ⚠ 위 k6-req-failed 는 method/name/status/error 라벨로 쪼개져 있어 '전체 실패율' 을 주지 않는다.
+    #   #554 는 그래서 http_req_failed 가 임계(1%)를 넘고도 자동 판정에 잡히지 않았다(report §5.4).
+    #   원인 분해에는 그것을 쓰고, KNEE 판정에는 아래 집계본을 쓴다.
+    #   두 벌을 두는 것은 expected_response 라벨이 k6_http_reqs_total 에 붙는지 확인할 수단이
+    #   회차 전에는 없기 때문이다 — 한쪽이 비면 다른 쪽으로 판정한다(빈 시계열은 파일을 남기지 않고
+    #   마지막에 '시계열 없음' 으로 보고된다). 실패 비용이 쿼리 하나라 둘 다 둔다.
+    ("k6-req-failed-ratio", 'sum(rate(k6_http_reqs_total{expected_response="false"}[1m]))'
+                            ' / sum(rate(k6_http_reqs_total[1m]))'),
+    # 폴백. expected_response 가 없을 때 쓴다. 4xx 를 실패로 세지 않아 위 값보다 작게 나오지만,
+    # #554 의 진입 실패 455건은 전부 status="0"(dial 실패)이라 이 형태로도 잡힌다.
+    ("k6-req-failed-ratio-status", 'sum(rate(k6_http_reqs_total{status=~"0|5.."}[1m]))'
+                                   ' / sum(rate(k6_http_reqs_total[1m]))'),
     ("k6-req-duration-p95", 'k6_http_req_duration_p95'),
     # 지연을 단계별로 쪼갠다 — waiting(TTFB, 서버가 첫 바이트를 줄 때까지) 대비
     # receiving(본문 수신)이 크면 병목은 처리가 아니라 전송이다(= 응답 크기·압축 부재).

@@ -1,7 +1,8 @@
 #!/usr/bin/env python3
 """회차 arm 하나의 판정 수치를 덤프에서 계산한다 (#554 ON/OFF 대조).
 
-    python load-test/bench/arm-stats.py <덤프디렉터리> <arm접미사> <시작UTC> [--window 초 초]
+    python load-test/bench/arm-stats.py <덤프디렉터리> <arm접미사> <시작UTC>
+                                        [--window 초 초] [--ramp-end 초]
 
 손으로 세면 틀린다 — #554 는 arm 마다 판정 창이 다르고(ON t+300~500s, OFF t+30~300s),
 DEFERRAL_RATIO 는 '램프 종료 이후 예매 비율' 이라 시각 기준이 하나만 어긋나도 결론이 뒤집힌다.
@@ -29,6 +30,14 @@ KNEE_WATCH = [
     ("container-oom-kills", "컨테이너 OOM kill 발생", 0.0, 1, "gt"),
     ("redis-mem-used", "Redis >= 48MB", 48 * 1024 * 1024, 1, "ge"),
     ("k6-queue-status-unavailable-rate", "status 503 발생", 0.0, 1, "gt"),
+    # #554 가 임계로 선언해 놓고 재지 못한 축이다(report §5.4 — "임계를 정해 놓고 재지 못하면
+    # 기준이 아니다"). 값이 비율(0-1)이라 임계도 0.01 이다.
+    ("k6-req-failed-ratio", "k6 실패율 >= 1%", 0.01, 2, "ge"),
+    # #555 여정 보강으로 SSE 가 부하 축에 들어온다. 팬아웃은 (구독자 x 이벤트율)이고 둘 다
+    # admit rate 에 비례하므로 admit 의 제곱으로 큰다 — 무릎이 admit 이 아니라 SSE 일 때
+    # 그 사실이 이름으로 나와야 한다. 800 = queueCapacity 1000 의 0.8 배(tomcat-busy 와 같은 선).
+    ("sse-executor-queued", "SSE 큐 >= 800 (capacity 1000)", 800.0, 2, "ge"),
+    ("sse-rejected-total", "SSE 이벤트 거절 발생", 0.0, 1, "gt"),
 ]
 
 
@@ -79,11 +88,21 @@ def deferral_ratio(pts, t0: int, ramp_end: int, step: int = 15):
     return after / total * 100.0, after, total
 
 
-def knee(outdir: Path, arm: str, t0: int):
-    """임계를 가장 먼저 교차한 지표. 없으면 None."""
+def knee(outdir: Path, arm: str, t0: int, ramp_end: int = 300):
+    """임계를 가장 먼저 교차한 지표. 없으면 None.
+
+    ramp_end = 램프(유입) 종료 시각(초). 그 이전 표본은 보지 않는다.
+
+    #554 에서 `booking p95 >= 150ms` 가 t+42~87s 에 걸렸는데 포화가 아니라 JIT 워밍업이었다
+    (report §4.5 — 같은 구간에서 VU 는 917 -> 10,000 으로 10배 늘었는데 p95 는 219 -> 132ms 로
+    단조 감소했다. 101표본 중 4개만 넘었다). 임계값을 올리면 진짜 포화도 놓치므로 구간을 자른다.
+
+    상한은 두지 않는다 — 소화 구간 끝까지가 관측 대상이다.
+    """
     hits = []
     for slug, name, thr, need, op in KNEE_WATCH:
         for label, pts in load(outdir, slug, arm):
+            pts = [p for p in pts if p[0] >= t0 + ramp_end]
             # seat-service 만 tomcat max-threads 가 50 이라 임계가 다르다(application.yml:33).
             # 나머지는 미설정 = 기본 200. 0.8 배가 각각 40 / 160 이다.
             if slug == "tomcat-busy" and "seat-service" in label:
@@ -147,7 +166,14 @@ def main():
         i = sys.argv.index("--window")
         lo, hi = int(sys.argv[i + 1]), int(sys.argv[i + 2])
 
-    print(f"=== arm={arm}  t0={start}  판정창 t+{lo}s~t+{hi}s ===\n")
+    # 램프(유입) 종료 시각. KNEE 판정과 DEFERRAL_RATIO 가 함께 쓴다.
+    # ⚠ 기본값 300 은 #554 형상(램프 5분) 이다. 유입 형상이 다른 회차는 반드시 넘겨라 —
+    #   안 넘기면 램프 구간이 판정에 섞여 JIT 워밍업을 포화로 읽는다(#554 §4.5).
+    ramp_end = 300
+    if "--ramp-end" in sys.argv:
+        ramp_end = int(sys.argv[sys.argv.index("--ramp-end") + 1])
+
+    print(f"=== arm={arm}  t0={start}  판정창 t+{lo}s~t+{hi}s  램프종료 t+{ramp_end}s ===\n")
 
     print("[주 판정축]")
     booking = load(outdir, "booking-server-rps", arm)
@@ -155,9 +181,9 @@ def main():
         pts = booking[0][1]
         print(describe(window(pts, t0, lo, hi), "예매 서버 RPS (판정창)"))
         print(describe(pts, "예매 서버 RPS (회차 전체)"))
-        d = deferral_ratio(pts, t0, 300)
+        d = deferral_ratio(pts, t0, ramp_end)
         if d:
-            print(f"  {'DEFERRAL_RATIO (t+300s 이후 비율)':38s} {d[0]:6.2f}%   "
+            print(f"  {f'DEFERRAL_RATIO (t+{ramp_end}s 이후 비율)':38s} {d[0]:6.2f}%   "
                   f"(이후 {d[1]:.0f}건 / 전체 {d[2]:.0f}건)")
 
     print("\n[자원 축 — 공통 비교 창 t+30s~t+300s]")
@@ -199,8 +225,8 @@ def main():
 
     k6_summary(outdir, arm)
 
-    print("\n[꺾이는 지점]")
-    k = knee(outdir, arm, t0)
+    print(f"\n[꺾이는 지점 — 램프 종료(t+{ramp_end}s) 이후만 본다]")
+    k = knee(outdir, arm, t0, ramp_end)
     if k:
         t, name, label, v = k
         rel = t - t0
