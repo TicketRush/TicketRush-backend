@@ -184,5 +184,7 @@ T = ceil(10,000 / 400) = 25초
 - ~~상태 확인 경로 `R` 실측 → 폴링 주기 `T` 확정 → 이 ADR §3 갱신~~ — [#546](https://github.com/TicketRush/TicketRush-backend/issues/546)에서 완료(`R=1,400` / `T=8초`)
 - 대기열 지표 추가(대기 인원, 입장 허용률, 상태 확인 RPS, 폴링 주기) — 관측 없이는 주기 다이얼을 돌릴 근거가 없다
 - ~~입장 허용량 `admit-rate-per-second` 실측 → 이 ADR 갱신~~ — [#555](https://github.com/TicketRush/TicketRush-backend/issues/555)에서 완료(무릎 12~16, 값 12로 반영, §3.5)
-- **좌석 SSE 팬아웃 비용 절감** — #555가 특정한 무릎의 원인이다. 이것을 낮추기 전에는 `admit`을 올릴 수 없다
-- **nginx·커널 백로그 설정의 프로비저닝 자동화** — #555에서 `tcp_max_syn_backlog`와 nginx `listen backlog`를 올렸으나 CD가 배포하지 않는다. 인스턴스를 새로 만들면 유실된다
+- **좌석 SSE 팬아웃 비용 절감** — #555가 특정한 무릎의 원인이다. 이것을 낮추기 전에는 `admit`을 올릴 수 없다.
+  - **병목은 실행기 큐가 아니다.** #555 전 회차에서 `executor_queued_tasks` 0 · 거부 0 · `caller_runs` 0이었다(#532의 역압 정책은 정상 동작했다). 비용은 **이벤트를 구독자 수만큼 직렬화해 써 내는 CPU 그 자체**다 — 같은 회차에서 seat-service의 HTTP는 2.18 RPS뿐인데 프로세스 CPU는 0.44(2 vCPU 중)였다.
+  - **#555의 구독자 100명은 과대가 아니라 과소 가정이다.** 동시 구독자 ≈ `admit × 좌석 선택 화면 체류시간`이므로 `admit 12` + 체류 30초만 해도 360명이고, [#403](https://github.com/TicketRush/TicketRush-backend/issues/403)은 600명까지 검증했다. **실제 오픈은 측정보다 나쁘다.**
+- ~~**nginx·커널 백로그 설정의 프로비저닝 자동화**~~ — 별도 후속으로 두지 않는다. `/etc/sysctl.d/99-ticketrush.conf`와 `/etc/nginx/sites-available/`는 디스크 파일이고 nginx는 `enabled`라 **재부팅에는 살아남는다**(2026-08-14 실측 확인). 유실되는 경우는 인스턴스를 새로 만들 때뿐인데 이 배포는 IaC가 아예 없어 **전체가 수동**이다. 백로그만 자동화 대상으로 떼어내는 것은 범위가 어긋난다 — 인프라 코드화를 하게 되면 그때 함께 들어갈 항목이고, 그때까지의 안전장치는 `deploy/sysctl/99-ticketrush.conf`의 적용 절차 주석이다.
