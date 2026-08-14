@@ -442,6 +442,44 @@ KNEE=
 KNEE_AXIS=
 DRAIN_BY_RATE=
 
+# ══ 시리즈 B — 벽을 걷어내고 다시 잰다 (2026-08-14, 시리즈 A 이후) ═════════
+# 시리즈 A(a12·a16·a16-nosse·a20)가 두 가지 벽에 막혔다. 둘 다 고치고 다시 돈다.
+# ⚠ arm 접두를 a → b 로 바꾼다. 대상 설정이 달라졌으므로 **시리즈 A 와 절대값으로 잇지
+#   않는다**(§6.1 재현성 규칙). 시리즈 A 는 그대로 증적으로 남는다.
+#
+# 고친 것 (1) TCP SYN 큐 — 시리즈 A 의 유입을 17~20% 잘라 먹던 벽
+#   nginx  listen 443 ssl backlog=4096  (기본값 511 이 잡히고 있었다)
+#          deploy/nginx/api.ticketrush.store.conf. backlog 는 reload 로 안 바뀌어 restart 했다.
+#   커널   net.ipv4.tcp_max_syn_backlog  512  → 8192   ← 실제로 넘친 큐
+#          net.core.somaxconn           4096  → 8192
+#          net.core.netdev_max_backlog  1000  → 8192
+#          deploy/sysctl/99-ticketrush.conf → /etc/sysctl.d/99-ticketrush.conf
+#   적용 후 실측: ss -lnt 의 :443 Send-Q 가 511 → 4096, https health 200.
+#   ⚠ 벽이 걷히면 유입이 늘어난다 = 부하가 세진다. 따라서 시리즈 B 의 무릎은 시리즈 A 의
+#     잠정값(12~16)보다 **낮거나 같다**. A 의 값은 무릎의 상한이었다.
+#
+# 고친 것 (2) INVALID_IF(queue_status_unavailable > 0) 의 단독 적용 — 포화를 무효로 바꾸던 규칙
+#   시리즈 B 부터는 두 단계로 판정한다(런북 §16.6 에 못 박음). 회차 전에 정한다:
+#     queue_status_unavailable > 0 이면 같은 창의 Redis 상태를 먼저 본다
+#       (redis_memory_used_bytes · rejected_connections · blocked_clients · 명령 rate)
+#     → Redis 에 이상 징후가 있으면 무효 (원래 의도: Redis 장애를 잰 회차)
+#     → Redis 가 멀쩡하면 무효가 아니라 **포화 신호로 기록**한다
+#   ⚠ 이것은 결과를 보고 기준을 완화한 것이 아니다. 시리즈 A 의 a16·a20 을 이 규칙으로
+#     소급 재판정하지 않는다 — 그 둘은 INVALID 로 남는다. 새 규칙은 시리즈 B 에만 쓴다.
+#
+# 고친 것 (3) 관측 경로 — k6 remote-write 터널이 포화 회차마다 끊겼다
+#   자동 재접속 래퍼로 돌린다(while true; do ssh -N -L 9090:...; sleep 3; done).
+#   a16 부터 k6-req-failed-ratio · k6-queue-enqueue-failed 가 실제로 들어오기 시작했고,
+#   그 status 태그가 SYN 큐 진단의 결정적 근거가 됐다.
+#
+# 그대로 두는 것: 계단표 산술(a=2m · C=300m · hold 140s) · 판정창(t+150~310s) ·
+#   PRIMARY_CRITERION · SECONDARY · 나머지 INVALID_IF · SANITY · POST_CHECK ·
+#   G11(MySQL 재시작 없음) · 구독자 100명 고정.
+#
+# ARM=b12 / START_UTC= / END_UTC= / RESULT=
+# ARM=b16 / START_UTC= / END_UTC= / RESULT=
+# ARM=b20 / START_UTC= / END_UTC= / RESULT=
+
 # ── 이 회차가 답하지 못하는 것 (회차 전에 적는다) ──────────────────────────
 LIMIT_K6_TIMESERIES=k6 측 시계열이 a20·a12 양쪽에서 통째로 비었다. remote-write 를 로컬 k6 →
 #   SSH 터널 → EC2 Prometheus 로 보내는데, 그 터널이 두 회차 모두 부하 중에 끊겼다(a20 은 t+85s,

@@ -2111,7 +2111,7 @@ docker run --rm --network host --ulimit nofile=1048576:1048576 \
 
 | 항목 | 기준 | 왜 |
 |---|---|---|
-| `queue_status_unavailable` | 0 | >0이면 fail-closed(ADR 0008)가 발동한 것이다. 대기열 성능이 아니라 Redis 장애를 측정한 회차다 |
+| `queue_status_unavailable` | **Redis 건강 상태와 함께 본다** | >0이면 fail-closed(ADR 0008)가 발동한 것이다. **단 ">0 = 무효"로 단독 적용하지 않는다** — 아래 참조 |
 | `ticketrush_queue_entry_token{result="unavailable"}` | 0 | 같은 이유 |
 | nginx `worker_connections` | 실측·상향 완료 | 미조치면 앱이 아니라 nginx가 벽이다(§16.1) |
 | `redis_memory_used_bytes` | < 48 MB | `noeviction` 상한에 닿으면 좌석 락 SET까지 거절돼 대기열 밖 경로가 함께 무너진다 |
@@ -2126,6 +2126,14 @@ docker run --rm --network host --ulimit nofile=1048576:1048576 \
 | `dropped_iterations` (#555) | **§16.7 규칙으로 가른다** | 이 회차에서는 포화 신호이자 생성기 VU 부족 신호다. `vus_max` 가 `maxVUs` 에 붙었는지 + `queue_post_admit_seconds` 가 부풀었는지로 판정한다 |
 | 오버셀 검증 | §13.4-(7) **(a1)** | 이 회차는 VU 마다 좌석이 유일하다. 상태 필터 버전은 검출력이 0 이고(#554 §9.3), (a2) 는 #344 형 전용이다(#598). **SQL 원문을 `oversell-<arm>.txt` 에 함께 남긴다** |
 | 생성기 종료 | 필수 | CD가 건드리지 않아 "떠 있는 줄 몰랐다"가 가능하다(ADR 0010) |
+
+> **⚠️ `queue_status_unavailable > 0`을 단독 무효 조건으로 쓰면 포화 회차를 잴 수 없다(2026-08-14 #555 실측).** 그 회차는 이 조건을 `INVALID_IF`로 못 박고 시작했는데 **admit 16과 20에서 연달아 걸렸고, 두 계단 모두 Redis는 멀쩡했다** — `used_memory` 5~6 MB(상한 48 MB), `rejected_connections` 0, `blocked_clients` 0, 명령 처리 max 956/s. 걸린 것은 호스트 CPU 98%뿐이었다. 바로 위 §16.4가 적어 둔 *"`RedisCommandTimeoutException`을 Redis 장애로 읽지 않는다 — 게이트웨이가 CPU를 못 잡으면 서버가 즉답해도 터진다"*가 그대로 재현된 것이다. **즉 이 지표는 포화의 결과이기도 해서, 무릎을 찾는 회차에서 무릎을 무효로 만든다.**
+>
+> **그래서 판정을 두 단계로 나눈다.** `queue_status_unavailable > 0`이면 먼저 **같은 창의 Redis 상태를 본다**(`redis_memory_used_bytes` · `redis_rejected_connections_total` · `redis_blocked_clients` · `redis_commands_processed_total` rate, 필요하면 `redis-cli slowlog`).
+> - Redis에 이상 징후가 **있으면** → 무효. Redis 장애를 잰 회차다(원래 의도).
+> - Redis가 **멀쩡하면** → 무효가 아니라 **포화 신호로 기록한다.** 게이트웨이가 CPU를 못 잡아 fail-closed가 발동한 것이고, 그것이 이 회차가 찾던 현상이다.
+>
+> **이 판정은 회차 전에 `metadata.txt`에 이 형태로 적어 두고 시작한다.** 결과를 보고 규칙을 고치는 것과 구분되는 유일한 방법이다.
 
 **§6.1 재현성 규칙이 여기서 한 겹 더 걸린다.** [ADR 0010](adr/0010-in-aws-load-generator-for-ten-thousand-vu.md)이 생성기를 로컬에서 AWS로 옮겼으므로 **이 회차 수치를 ADR 0004 토폴로지 회차(#348·#403·#529 등)와 절대값으로 직접 잇지 않는다.** 비교가 필요하면 그 사실을 리포트 한계에 적는다.
 
