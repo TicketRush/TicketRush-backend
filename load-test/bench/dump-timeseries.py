@@ -133,6 +133,8 @@ QUERIES = [
     ("k6-queue-post-admit-p95", 'k6_queue_post_admit_seconds_p95'),
     ("k6-queue-seatmap-p95", 'k6_queue_seatmap_duration_p95'),
     ("k6-queue-sse-connect-p95", 'k6_queue_sse_connect_duration_p95'),
+    ("k6-queue-sse-events-received", 'rate(k6_queue_sse_events_received_total[1m])'),
+    ("k6-queue-sse-connection-closed", 'k6_queue_sse_connection_closed_total'),
     ("k6-queue-cohort-exhausted", 'k6_queue_cohort_exhausted_total'),
     ("k6-queue-sse-subscribe-failed", 'k6_queue_sse_subscribe_failed_total'),
     # 병목 후보

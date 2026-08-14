@@ -40,8 +40,8 @@ KNEE_WATCH = [
     # #554 가 임계로 선언해 놓고 재지 못한 축이다(report §5.4 — "임계를 정해 놓고 재지 못하면
     # 기준이 아니다"). 값이 비율(0-1)이라 임계도 0.01 이다.
     ("k6-req-failed-ratio", "k6 실패율 >= 1%", 0.01, 2, "ge"),
-    # #555 여정 보강으로 SSE 가 부하 축에 들어온다. 팬아웃은 (구독자 x 이벤트율)이고 둘 다
-    # admit rate 에 비례하므로 admit 의 제곱으로 큰다 — 무릎이 admit 이 아니라 SSE 일 때
+    # #555 에서 SSE 가 부하 축에 들어온다(별도 구독자 시나리오). 팬아웃 = 구독자 x 이벤트율이고
+    # 구독자는 고정이라 이벤트율(= admit rate)에 선형으로 큰다 — 무릎이 admit 이 아니라 SSE 일 때
     # 그 사실이 이름으로 나와야 한다. 800 = queueCapacity 1000 의 0.8 배(tomcat-busy 와 같은 선).
     ("sse-executor-queued", "SSE 큐 >= 800 (capacity 1000)", 800.0, 2, "ge"),
     ("sse-rejected-total", "SSE 이벤트 거절 발생", 0.0, 1, "gt"),
@@ -145,7 +145,8 @@ def k6_summary(outdir: Path, arm: str):
         # Trend 는 시계열로 p95 만 나가므로 max 는 이 요약이 유일한 출처다.
         "queue_drain_seconds", "queue_post_admit_seconds", "queue_seatmap_duration",
         "queue_seatmap_ok", "queue_sse_connect_duration", "queue_sse_subscribe_failed",
-        "queue_sse_connection_error", "queue_cohort_exhausted",
+        "queue_sse_connection_error", "queue_sse_connection_closed",
+        "queue_sse_events_received", "queue_cohort_exhausted",
         "http_reqs", "http_req_failed", "http_req_duration", "iterations", "vus_max",
         "dropped_iterations", "data_sent",
     )
@@ -163,7 +164,7 @@ def k6_summary(outdir: Path, arm: str):
     # 0 인 Counter 는 k6 가 출력하지 않는다 — 없는 것과 0 을 구분해 적는다.
     for miss in ("queue_enqueue_failed", "queue_polls_exhausted", "queue_cohort_exhausted",
                  "queue_sse_subscribe_failed", "queue_sse_connection_error",
-                 "dropped_iterations"):
+                 "queue_sse_connection_closed", "dropped_iterations"):
         if miss not in seen:
             print(f"  {miss:30s} 요약에 없음 = 0건 (k6 는 값이 0인 Counter 를 출력하지 않는다)")
 

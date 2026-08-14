@@ -1938,11 +1938,13 @@ ticket-service:8090    4,692 → 6,033 ↑ → 4,713 → 6,248 ↑        (Prome
 | 프로파일 | executor | 무엇을 재나 |
 |---|---|---|
 | `status` | `ramping-arrival-rate` 계단 `200 → 400 → 800 → 1600` × 5분 | **`R`.** 상태 확인 경로 단독. 사용자 행동이 아니라 경로 용량이라 sleep이 없다 |
-| `flood` | `ramping-arrival-rate` (도착률 고정) | **유입 제어 + admit 무릎.** 진입 → 서버 지시 폴링 → 입장 → 좌석맵 → SSE 체류 → 예매의 전 여정 |
+| `flood` | `ramping-arrival-rate` (도착률 고정) + `constant-vus` SSE 구독자 | **유입 제어 + admit 무릎.** 여정 = 진입 → 서버 지시 폴링 → 입장 → 좌석맵 → 예매. SSE 구독자는 **별도 시나리오**로 동시에 돈다 |
 
 > **`flood`는 2026-08-14(#555)에 `ramping-vus`에서 옮겼다.** `ramping-vus` + VU당 1회 여정 가드는 실효 도착률이 `VU수 / 램프시간` 상수라 **단일 동작점**이고, #554가 그것을 자기 한계로 확정했다(report §8 — "다이얼이 없어 원리상 스윕이 아니다"). 계단 회차의 판정은 도착률을 통제할 수 있어야 성립한다.
 >
-> **승급 후 여정도 함께 보강했다.** 그 전에는 예매 1콜뿐이라 `admit`을 올려도 예매 API만 때리는 회차였고, #344가 이미 258 RPS를 찍었으니 그냥 통과한다 — **"admit 100/s 가능"이라는 낙관적인 거짓 결론**이 남는다. 좌석맵 조회와 SSE 구독 체류를 넣었다. **좌석 선점은 새로 넣을 호출이 없다** — HOLD 진입점은 seat-service의 `BookingCreatedEventListener`(Kafka) 하나이고 `SeatController`는 GET뿐이라(§10.1), 여정의 `POST /api/v1/booking`이 그 역할이다.
+> **승급 후 여정도 함께 보강했다.** 그 전에는 예매 1콜뿐이라 `admit`을 올려도 예매 API만 때리는 회차였고, #344가 이미 258 RPS를 찍었으니 그냥 통과한다 — **"admit 100/s 가능"이라는 낙관적인 거짓 결론**이 남는다. 좌석맵 조회를 여정에 넣고, **SSE 부하 축은 별도 시나리오**(`constant-vus` 구독자 고정)로 세웠다.
+>
+> **⚠️ SSE를 여정 안에 두지 않는 이유는 실측이다.** `sse.open`은 블로킹이고 타임아웃 파라미터가 없어 **이벤트가 도착해 핸들러가 깨어나야만** 닫을 수 있다(`seat-sse-fanout.js`의 probe도 같은 전제를 주석에 적어 둔 한계다). 2026-08-14 스모크에서 좌석 이벤트가 흐르지 않자 VU 50개가 전부 갇혔고(`0 complete / 50 interrupted`), 예매는 DB에 50건 들어갔는데 `queue_booking_ok`·`queue_drain_seconds`는 기록되지 않았다 — **주 지표가 통째로 사라진다.** 실회차에서도 회차 초반 첫 승급자는 자기 이벤트 말고 깰 것이 없어 같은 일이 난다. 분리하면 데드락이 원천 제거되고 **구독자 수가 통제 변수**가 된다. **좌석 선점은 새로 넣을 호출이 없다** — HOLD 진입점은 seat-service의 `BookingCreatedEventListener`(Kafka) 하나이고 `SeatController`는 GET뿐이라(§10.1), 여정의 `POST /api/v1/booking`이 그 역할이다.
 >
 > **⚠️ `k6/x/sse` import 때문에 `waiting-room.js`는 이제 `k6-sse` 이미지에서만 돈다.** `status` 프로파일도 같은 파일이라 함께 영향을 받는다 — **회차 A도 이 이미지로 돌려야 한다.** 기본 `grafana/k6`로 실행하면 import 해석 실패로 즉시 죽는다(부하가 시작조차 안 되므로 조용한 오염은 아니다). 회차 간 비교에는 한 겹 더 걸린다: 이 바이너리는 xk6 빌드라 #549·#554(`grafana/k6:latest`)와 다르다 → `metadata.txt`의 `LIMIT_SERIES`에 적는다.
 
@@ -2069,7 +2071,7 @@ docker run --rm --network host --ulimit nofile=1048576:1048576 \
   ticketrush/k6-sse:local run \
   -e BASE_URL=https://api.ticketrush.store -e QUEUE_PROFILE=flood \
   -e QUEUE_ARRIVAL_RATE=<계단표> -e QUEUE_ARRIVAL_HOLD_SECONDS=<계단표> \
-  -e QUEUE_COHORT_SIZE=<시딩값> \
+  -e QUEUE_COHORT_SIZE=<시딩값> -e QUEUE_SSE_SUBSCRIBERS=100 \
   -e QUEUE_FLOOD_PRE_ALLOCATED_VUS=<계단표> -e QUEUE_FLOOD_MAX_VUS=<계단표> \
   -e QUEUE_PERF_ID=<시딩값> -e QUEUE_USER_ID_MIN=<시딩값> -e QUEUE_SEAT_ID_MIN=<시딩값> \
   -e QUEUE_JWT_SECRET='...' \
@@ -2116,7 +2118,8 @@ docker run --rm --network host --ulimit nofile=1048576:1048576 \
 | `queue_admitted` | 해석 대상 | 0과 1 사이여야 한다. 정확히 1.000이면 지표가 아니라 스크립트를 의심한다 |
 | **`queue_status_admitted_leak`** (회차 A) | **0** | >0이면 폴링 대상이 회차 도중 승급해 측정 경로가 2회에서 3회로 바뀌었다. `R` 을 재지 못한 회차이므로 **폐기하고 `QUEUE_ADMIT_RATE` 를 낮춰 다시 돈다** |
 | `queue_cohort_exhausted` (#555) | **0** | >0이면 도착률 × 유입시간이 시딩 코호트를 넘었다. 그 뒤 iteration 은 계정·좌석이 없어 404 라 예매 경로 RPS 가 과소 집계된다 |
-| `queue_sse_subscribe_failed` (#555) | 해석 대상 | 구독이 안 돼도 예매는 성공하므로 요약만 보면 정상으로 보인다. 크면 SSE 축이 통째로 빈 회차다 |
+| `queue_sse_subscribe_failed` (#555) | 해석 대상 | 구독이 안 돼도 여정은 성공하므로 요약만 보면 정상으로 보인다. 크면 SSE 축이 통째로 빈 회차다 |
+| `queue_sse_connection_closed` (#555) | 해석 대상 | 구독자가 회차 중 끊기고 재연결한 횟수. 크면 서버가 커넥션을 못 붙들고 있다 — 그것도 SSE 축의 포화 신호다 |
 | `dropped_iterations` (#555) | **§16.7 규칙으로 가른다** | 이 회차에서는 포화 신호이자 생성기 VU 부족 신호다. `vus_max` 가 `maxVUs` 에 붙었는지 + `queue_post_admit_seconds` 가 부풀었는지로 판정한다 |
 | 오버셀 검증 | §13.4-(7) **(a1)** | 이 회차는 VU 마다 좌석이 유일하다. 상태 필터 버전은 검출력이 0 이고(#554 §9.3), (a2) 는 #344 형 전용이다(#598). **SQL 원문을 `oversell-<arm>.txt` 에 함께 남긴다** |
 | 생성기 종료 | 필수 | CD가 건드리지 않아 "떠 있는 줄 몰랐다"가 가능하다(ADR 0010) |
@@ -2145,14 +2148,14 @@ docker run --rm --network host --ulimit nofile=1048576:1048576 \
 
 | admit `m` | 도착률 `a` | 코호트 `C` | 계획 iter | `VU_MODEL_PEAK` | `maxVUs` | 소화 시간 |
 |---|---|---|---|---|---|---|
-| 12 | 24 | 3,600 | 3,480 | 1,920 | 2,400 | 300s |
-| **20** | **40** | **6,000** | **5,800** | **3,200** | **4,000** | 300s |
-| 30 | 60 | 9,000 | 8,700 | 4,800 | 5,800 | 300s |
-| 40 | 80 | 12,000 | 11,600 | 6,400 | 7,700 | 300s |
-| 80 | 160 | 24,000 | 23,200 | 12,800 | 15,400 | 300s |
-| 160 | 320 | 48,000 | 46,400 | 25,600 | 30,800 | 300s |
+| 12 | 24 | 3,600 | 3,480 | 1,800 | 2,200 | 300s |
+| **20** | **40** | **6,000** | **5,800** | **3,000** | **4,000** | 300s |
+| 30 | 60 | 9,000 | 8,700 | 4,500 | 5,400 | 300s |
+| 40 | 80 | 12,000 | 11,600 | 6,000 | 7,200 | 300s |
+| 80 | 160 | 24,000 | 23,200 | 12,000 | 14,400 | 300s |
+| 160 | 320 | 48,000 | 46,400 | 24,000 | 28,800 | 300s |
 
-- `VU_MODEL_PEAK = C × (1 − m/a) + m × 체류초` = `C/2 + 10m`. 유입 종료 시점이 피크다.
+- `VU_MODEL_PEAK = C × (1 − m/a)` = `C/2`. 유입 종료 시점이 피크다. **SSE 구독자는 별도 시나리오라 이 예산에 들어가지 않는다.**
 - `maxVUs`는 그 값의 1.2배. **`preAllocatedVUs`와 같게 둔다** — 다르면 k6가 VU를 지연 생성하고 그 지연 자체가 `dropped_iterations`를 만들어, 이 회차에서 dropped를 "대상 포화"와 구분할 수 없게 된다.
 - 굵은 줄이 `config/env.js` 기본값이다.
 
@@ -2181,12 +2184,14 @@ docker run --rm --network host --ulimit nofile=1048576:1048576 \
 이 회차에서 dropped는 **포화 신호이자 생성기 VU 부족 신호**다. 구분하지 못하면 무효다.
 
 ```
-dropped == 0                               → 모호성 없음
-dropped > 0 AND vus_max ≥ 0.95 × maxVUs    → 생성기 VU 부족. 회차 무효, 풀을 키워 재실행
-dropped > 0 AND vus_max < 0.95 × maxVUs    → 대상 포화 신호
+여정 VU = vus_max − QUEUE_SSE_SUBSCRIBERS      ← k6 의 vus_max 는 전 시나리오의 합이다
+
+dropped == 0                                  → 모호성 없음
+dropped > 0 AND 여정 VU ≥ 0.95 × maxVUs        → 생성기 VU 부족. 회차 무효, 풀을 키워 재실행
+dropped > 0 AND 여정 VU < 0.95 × maxVUs        → 대상 포화 신호
 ```
 
-**보조축**은 `queue_post_admit_seconds`(승급 → 좌석맵·SSE·예매)다. 이것이 평평한데 dropped면 서버는 멀쩡하고 VU 점유가 설계대로인 것 = 생성기 부족. **이것이 부풀면 승급 이후 경로가 느려진 것 = 이 회차가 찾는 무릎의 직접 증거다.**
+**보조축**은 `queue_post_admit_seconds`(승급 → 좌석맵 → 예매)다. 이것이 평평한데 dropped면 서버는 멀쩡하고 VU 점유가 설계대로인 것 = 생성기 부족. **이것이 부풀면 승급 이후 경로가 느려진 것 = 이 회차가 찾는 무릎의 직접 증거다.**
 
 #### 계단 사이에 하는 일
 

@@ -13,7 +13,8 @@
 //   ① 부하 모델 — ramping-vus + VU 당 1회 가드는 실효 도착률이 상수인 단일 동작점이라
 //      계단을 만들 수 없었다(#554 §8). ramping-arrival-rate 로 옮겼다.
 //   ② 승급 후 여정 — 예매 1콜뿐이라 admit 을 올려도 예매 API 만 때리는 회차였다. 그 상태의
-//      상한은 거짓 결론이므로 좌석맵 조회와 SSE 구독 체류를 넣었다.
+//      상한은 거짓 결론이므로 좌석맵 조회를 넣고, SSE 부하 축을 별도 시나리오로 세웠다
+//      (여정 안에 두면 VU 가 갇힌다 — subscribe() 주석의 스모크 실측).
 // 좌석 선점은 새로 넣을 호출이 없다 — HTTP 진입점이 없어 예매 생성이 그 역할이다(bookSeat 주석).
 //
 // ── 서버 지시 폴링 — 저장소에 선례가 없는 패턴 ───────────────────────────────
@@ -52,8 +53,8 @@ import {
   QUEUE_FLOOD_PRE_ALLOCATED_VUS,
   QUEUE_FLOOD_MAX_VUS,
   QUEUE_GRACEFUL_STOP,
-  QUEUE_SEAT_DWELL_SECONDS,
-  QUEUE_SSE_ENABLED,
+  QUEUE_SSE_SUBSCRIBERS,
+  QUEUE_SSE_DURATION,
   QUEUE_FALLBACK_POLL,
   QUEUE_JITTER,
   QUEUE_MAX_POLLS,
@@ -118,6 +119,21 @@ const SCENARIOS = {
       gracefulStop: QUEUE_GRACEFUL_STOP,
       exec: 'journey',
     },
+    // SSE 구독자 축. 여정과 분리된 것이 설계다 — subscribe() 주석 참조.
+    // 구독자 수가 통제 변수이고, 팬아웃은 (구독자 x 이벤트율)이라 이벤트율만 admit 에 따라 변한다.
+    // QUEUE_SSE_SUBSCRIBERS=0 이면 이 시나리오가 아예 빠진다(SSE 없는 대조 회차).
+    ...(QUEUE_SSE_SUBSCRIBERS > 0
+      ? {
+          subscribers: {
+            executor: 'constant-vus',
+            vus: QUEUE_SSE_SUBSCRIBERS,
+            duration: QUEUE_SSE_DURATION,
+            // 블로킹된 구독 VU 를 기다리지 않는다. 여정과 달리 이쪽은 끊어도 잃을 지표가 없다.
+            gracefulStop: '0s',
+            exec: 'subscribe',
+          },
+        }
+      : {}),
   },
 };
 
@@ -158,17 +174,18 @@ const cohortExhausted = new Counter('queue_cohort_exhausted');
 // 승급 임계치가 개시 시각의 함수라(WaitingRoomPolicy.admittedThreshold) 개시 시각이 기준점으로
 // 정확하고, 같은 k6 프로세스의 같은 시계라 EC2 와 생성기의 시계 차를 타지 않는다.
 const drainSeconds = new Trend('queue_drain_seconds');
-// 승급 이후 구간(좌석맵 + SSE 체류 + 예매). dropped_iterations 를 가르는 보조축이다 —
-// 이것이 평평한데 dropped 가 나면 생성기 VU 부족이고, 이것이 부풀면 대상 포화다.
-// ⚠ SSE 체류(기본 10초)가 베이스라인으로 깔려 있다. 보는 것은 절대값이 아니라 그 위의 변동이다.
+// 승급 이후 구간(좌석맵 + 예매). dropped_iterations 를 가르는 보조축이다 — 이것이 평평한데
+// dropped 가 나면 생성기 VU 부족이고, 이것이 부풀면 대상 포화다.
 const postAdmitSeconds = new Trend('queue_post_admit_seconds');
 // 승급 후 여정 — 좌석맵. #549·#554 는 승급 후가 예매 1콜뿐이라 admit 을 올려도 예매 API 만
 // 때리는 회차였다. 그 상태로 나온 상한은 낙관적인 거짓 결론이다(#555 본문).
 const seatmapDuration = new Trend('queue_seatmap_duration', true);
 const seatmapOk = new Rate('queue_seatmap_ok');
-// SSE 구독. 연결 지연과 실패를 따로 센다 — 구독이 안 되면 이 회차의 SSE 축이 통째로 비는데
-// 예매는 그대로 성공하므로 요약만 보면 정상으로 보인다.
+// SSE 구독자 축(별도 시나리오). 구독이 안 되면 이 회차의 SSE 축이 통째로 비는데 여정은 그대로
+// 성공하므로 요약만 보면 정상으로 보인다 — 실패와 재연결을 따로 센다.
 const sseConnectDuration = new Trend('queue_sse_connect_duration', true);
+const sseEventsReceived = new Counter('queue_sse_events_received');
+const sseConnectionClosed = new Counter('queue_sse_connection_closed');
 const sseSubscribeFailed = new Counter('queue_sse_subscribe_failed');
 const sseConnectionError = new Counter('queue_sse_connection_error');
 
@@ -229,7 +246,6 @@ function nextPollSeconds(res) {
 
 const SEATMAP_URL = `${BASE_URL}/api/v1/seat/${QUEUE_PERF_ID}/seat-layouts`;
 const STREAM_URL = `${BASE_URL}/api/v1/seat/${QUEUE_PERF_ID}/seat-status/stream`;
-const DWELL_MS = QUEUE_SEAT_DWELL_SECONDS * 1000;
 
 /**
  * 좌석 선점. <b>HTTP 진입점이 없어 예매 생성이 그 역할을 한다.</b>
@@ -255,57 +271,42 @@ function bookSeat(userId, seatId, entryToken) {
 }
 
 /**
- * 좌석 선택 화면 체류 — SSE 를 구독한 채 머물다가 닫는다. 예매는 <b>구독 안에서</b> 건다.
+ * SSE 구독자 축 — 여정과 <b>분리된 별도 시나리오</b>다. 커넥션을 회차 끝까지 물고 있는 것이 의도다.
  *
- * sse.open 은 커넥션이 닫힐 때까지 블로킹이라 바깥에서 sleep 으로 체류를 만들 수 없다. 그래서
- * seat-sse-fanout.js 의 probe 와 같은 구조를 쓴다 — 구독이 성립한 뒤(connected) 예매를 걸고,
- * 체류 시간이 지나면 닫는다.
+ * <b>왜 여정 안에 두지 않는가 — 2026-08-14 스모크가 답을 줬다.</b> 여정 안에서 "구독 → 체류 →
+ * 닫기" 를 하려면 닫는 트리거가 필요한데, {@code sse.open} 은 블로킹이고 타임아웃 파라미터가
+ * 없어 <b>이벤트가 도착해 핸들러가 깨어나야만</b> 닫을 수 있다. 스모크에서 좌석 이벤트가 흐르지
+ * 않자 VU 50개가 전부 갇혔고(0 complete / 50 interrupted), 예매는 DB 에 50건 들어갔는데
+ * queue_booking_ok 와 queue_drain_seconds 는 기록되지 않았다 — <b>주 지표가 통째로 사라진다.</b>
+ * 실회차에서도 회차 초반 첫 승급자는 자기 이벤트 말고 깰 것이 없어 같은 일이 난다.
  *
- * <b>예매를 구독보다 먼저 걸면 안 된다.</b> 이 핸들러는 이벤트가 와야 깨어나는데, 회차 첫 승급자는
- * 자기 예매가 만드는 이벤트 말고는 깨울 것이 없다. 순서가 반대면 그 이벤트가 구독 이전에 발행돼
- * 영원히 깨어나지 못한다.
+ * 분리하면 세 가지가 정리된다. ① 데드락이 원천 제거된다(닫지 않는 것이 의도이므로).
+ * ② 구독자 수가 통제 변수가 된다 — 여정 안에 두면 admit rate 에 딸려 변한다.
+ * ③ 여정 VU 예산과 dropped 판별이 깨끗해진다.
  *
- * ⚠ 그래도 회차 맨 처음 한두 명은 자기 이벤트 1개만 받고 체류 시간을 못 채워 갇힐 수 있다
- *   (이후 승급자들의 이벤트가 흐르기 시작하면 풀린다). 그 VU 는 gracefulStop 이 끊고, 예매와
- *   소화 시간은 이미 기록된 뒤다.
+ * seat-sse-fanout.js 의 subscribe() 와 같은 구조다 — 이벤트를 파싱하지 않고 세기만 한다.
+ * 파싱 비용은 생성기 쪽이라 측정 대상이 아닌 곳에서 지연을 만든다(#403 선례).
  */
-function dwellAndBook(userId, seatId, entryToken) {
+export function subscribe() {
   const startedAt = Date.now();
-  let connectedAt = 0;
-  let res = null;
-
-  sse.open(STREAM_URL, { tags: { name: 'queue_sse' } }, function (client) {
+  const ok = sse.open(STREAM_URL, { tags: { name: 'queue_sse' } }, function (client) {
     client.on('event', function (e) {
-      const now = Date.now();
-      // 첫 이벤트가 체류의 시작이다. 'connected' 로만 걸면 서버가 그 이벤트를 안 보내는
-      // 경우(계약 변경)에 예매도 못 걸고 close 조건도 영원히 거짓이라 VU 가 갇힌다 —
-      // 어느 이벤트든 하나를 받았으면 구독은 성립한 것이므로 거기서 시작한다.
-      if (connectedAt === 0) {
-        if (e.name === 'connected') {
-          sseConnectDuration.add(now - startedAt);
-        }
-        connectedAt = now;
-        res = bookSeat(userId, seatId, entryToken);
+      if (e.name === 'connected') {
+        sseConnectDuration.add(Date.now() - startedAt);
         return;
       }
-      // 남의 좌석 이벤트도 체류 시간을 재는 시계 역할을 한다. 파싱하지 않는다 — 이벤트를
-      // 파싱하는 비용은 생성기 쪽이라 측정 대상이 아닌 곳에서 지연을 만든다(#403 선례).
-      if (now - connectedAt >= DWELL_MS) {
-        client.close();
-      }
+      sseEventsReceived.add(1);
     });
     client.on('error', function () {
       sseConnectionError.add(1);
     });
   });
-
-  if (res === null) {
-    // 구독이 안 됐거나 connected 이벤트를 못 받았다. 예매까지 건너뛰면 그 사람이 통째로 사라져
-    // 예매 경로 RPS 가 과소 집계되므로, 구독 없이 예매만 진행하고 그 사실을 센다.
+  // 여기 도달했다 = 커넥션이 닫혔다. constant-vus 가 곧바로 다음 iteration 을 시작해 재연결하므로
+  // 동시 구독자 수는 유지된다. 이 값이 크면 서버가 커넥션을 못 붙들고 있다는 뜻이다.
+  sseConnectionClosed.add(1);
+  if (ok === null || ok === false) {
     sseSubscribeFailed.add(1);
-    res = bookSeat(userId, seatId, entryToken);
   }
-  return res;
 }
 
 function pollStatus(waitingToken) {
@@ -458,10 +459,8 @@ export function journey(data) {
   seatmapDuration.add(map.timings.duration);
   seatmapOk.add(map.status === 200);
 
-  // 승급 후 여정 ②③ SSE 구독 체류 + 좌석 선점(= 예매 생성). 대조 회차는 구독을 건너뛴다.
-  const res = QUEUE_SSE_ENABLED
-    ? dwellAndBook(userId, seatId, entryToken)
-    : bookSeat(userId, seatId, entryToken);
+  // 승급 후 여정 ② 좌석 선점(= 예매 생성). SSE 구독은 별도 시나리오가 맡는다(subscribe 주석).
+  const res = bookSeat(userId, seatId, entryToken);
   // 403 이 나오면 게이트가 입장 토큰을 거절한 것이다 — 승급 직후라 0 이어야 정상이고, 0 이 아니면
   // 입장 토큰 TTL(5m)보다 폴링→예매 지연이 길었다는 뜻이다.
   bookingForbidden.add(res.status === 403);

@@ -235,24 +235,29 @@ export const QUEUE_COHORT_SIZE = Number(__ENV.QUEUE_COHORT_SIZE || 6000);
 
 // arrival-rate 는 VU 를 미리 할당한다. 대기자가 곧 점유 VU 라 유입 종료 시점이 피크다:
 //   peak VU ≈ C x (1 - admit/도착률).  기본값(C=6,000 · admit 20 · 도착률 40) → 3,000
-//   + SSE 체류 몫 admit x 체류초 = 20 x 10 = 200
+// ⚠ SSE 구독자는 별도 시나리오라 이 예산에 들어가지 않는다. 다만 k6 의 vus_max 는 전역 합이므로
+//   dropped 판별에서 구독자 수를 빼고 비교한다(런북 §16.7).
 // preAllocated 와 max 를 같게 둔다 — 다르면 k6 가 VU 를 지연 생성하고 그 생성 지연 자체가
 // dropped_iterations 를 만들어, 이 회차에서 dropped 를 '대상 포화' 와 구분할 수 없게 된다.
 export const QUEUE_FLOOD_PRE_ALLOCATED_VUS = Number(__ENV.QUEUE_FLOOD_PRE_ALLOCATED_VUS || 4000);
 export const QUEUE_FLOOD_MAX_VUS = Number(__ENV.QUEUE_FLOOD_MAX_VUS || 4000);
 
-// 승급 후 좌석 선택 화면 체류 시간(초). SSE 구독을 이만큼 물고 있다가 닫는다.
+// SSE 동시 구독자 수. 여정과 분리된 별도 시나리오이고, 이 값이 SSE 축의 통제 변수다.
 //
-// 이 값이 SSE 축의 부하를 정하는 다이얼이다 — 동시 구독자 ≈ admit x 체류초, 이벤트율 ≈ admit 이라
-// 팬아웃(구독자 x 이벤트율)은 admit 의 제곱으로 큰다. #403 은 구독자 600명 x 5 events/s = 3,000
-// sends/s 까지만 검증했고, #540 에서 그 규모에 seat-service RSS 가 602/640 MiB(94.1%)였다.
-// 기본 10초면 admit 20 에서 200명, admit 40 에서 400명으로 그 검증 범위 안이다.
+// ⚠ 여정 안에 두지 않는 이유는 2026-08-14 스모크가 실측으로 확정했다. sse.open 은 블로킹이고
+//   타임아웃 파라미터가 없어 이벤트가 도착해야만 닫을 수 있는데, 좌석 이벤트가 흐르지 않자
+//   VU 50개가 전부 갇혔다(0 complete / 50 interrupted). 예매는 DB 에 들어갔는데
+//   queue_booking_ok 와 queue_drain_seconds 가 기록되지 않아 **주 지표가 통째로 사라졌다.**
+//   실회차에서도 회차 초반 첫 승급자는 자기 이벤트 말고 깰 것이 없어 같은 일이 난다.
 //
-// ⚠ 계단을 올리면 이 축이 admit 보다 먼저 꺾일 수 있다 — 그것이 이슈 #555 의 두 번째 가설이고,
-//   무릎이 잡힌 계단에서 QUEUE_SSE_ENABLED=0 대조 회차 1회로 가른다.
-export const QUEUE_SEAT_DWELL_SECONDS = Number(__ENV.QUEUE_SEAT_DWELL_SECONDS || 10);
-// 0 이면 SSE 구독을 건너뛴다(대조 회차 전용). 좌석맵과 예매는 그대로 돈다.
-export const QUEUE_SSE_ENABLED = (__ENV.QUEUE_SSE_ENABLED || '1') !== '0';
+// 팬아웃 = 구독자 x 이벤트율이고 이벤트율은 admit rate 다. #403 은 구독자 600명 x 5 events/s =
+// 3,000 sends/s 까지 검증했고 #540 에서 그 규모에 seat-service RSS 가 602/640 MiB(94.1%)였다.
+// 기본 100명이면 admit 20 에서 2,000 sends/s(검증 범위의 67%), admit 80 에서 8,000(2.7배)이다.
+// → admit 을 올리면 이 축이 먼저 꺾일 수 있고, 그것이 이슈 #555 의 두 번째 가설이다.
+//   무릎이 잡힌 계단에서 QUEUE_SSE_SUBSCRIBERS=0 대조 회차 1회로 가른다(시나리오가 아예 빠진다).
+export const QUEUE_SSE_SUBSCRIBERS = Number(__ENV.QUEUE_SSE_SUBSCRIBERS || 100);
+// 구독 유지 시간. 여정 전체(유입 + 소화 + 여유)를 덮어야 계단 내내 구독자 수가 통제된다.
+export const QUEUE_SSE_DURATION = __ENV.QUEUE_SSE_DURATION || '10m';
 
 // 유입이 끝나도 대기 중인 사람이 남아 있다. 마지막 순번은 개시로부터 C/admit 초에 승급하므로
 // 그때까지 VU 를 끊으면 안 된다 — 끊으면 소화 시간(주 지표)이 측정되지 않는다.
