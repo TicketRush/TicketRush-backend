@@ -312,6 +312,7 @@ CPU 가 상한이라고 해서 곧바로 대기열로 간 것이 아니다. **�
 | 문서 | 내용 |
 |---|---|
 | [`load-test-guide.md`](load-test-guide.md) | 실행 절차·시나리오별 런북·재현성 규약 |
+| [`capacity-planning.md`](capacity-planning.md) | 이 문서의 수치에서 역산한 예상 트래픽·인프라 설계 기준 |
 | [ADR 0006](adr/0006-eight-gib-container-memory-limits.md) | 컨테이너별 메모리 상한 |
 | [ADR 0007](adr/0007-observability-stack-colocation.md) | 관측 스택을 측정 대상과 같은 EC2 에 두는 결정 |
 | [ADR 0009](adr/0009-virtual-waiting-room-with-server-directed-polling.md) | 대기열 설계와 폴링 주기 산식(§3 · §3.5 에 정정 이력) |

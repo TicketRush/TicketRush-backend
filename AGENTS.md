@@ -30,6 +30,7 @@ TicketRush 백엔드의 **도구 중립 AI 진입점**입니다. Claude Code·Gi
 | [`docs/mapstruct-guide.md`](docs/mapstruct-guide.md) | MapStruct 매퍼 사용법 |
 | [`docs/load-test-guide.md`](docs/load-test-guide.md) | 부하 테스트 실행 절차 · 시나리오별 런북 · 회차 재현성 규약 |
 | [`docs/performance-report.md`](docs/performance-report.md) | 성능 측정 종합(병목 이동 · 개선 전후 · 한계). **수치 SSOT 는 각 회차 `metadata.txt`** |
+| [`docs/capacity-planning.md`](docs/capacity-planning.md) | 예상 트래픽 · 인프라 설계 기준(실측 역산). 일평균 사용자 · 피크 TPS · 서버 스펙 |
 | [`docs/adr/`](docs/adr/) | 아키텍처 결정 기록(ADR) — 결정 근거·이력 |
 | `AGENTS.md` | 진입점 · 빌드 명령 · 문서 라우팅(이 표) |
 

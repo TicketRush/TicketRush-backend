@@ -226,6 +226,9 @@ curl http://localhost:8080/actuator/health
 병목이 회선 → 컨테이너 메모리 → 호스트 CPU → 유입 제어로 옮겨간 서사와, 아직 증명하지 못한
 한계(1만 명 동시 대기 미재현·수평 확장 미검증 등)는 [performance-report.md](docs/performance-report.md)에 있습니다.
 
+이 수치들에서 거꾸로 계산한 **예상 트래픽·인프라 설계 기준**(일평균 사용자 수·피크 TPS·서버 스펙)은
+[capacity-planning.md](docs/capacity-planning.md)에 있습니다.
+
 ---
 
 ## 📖 API 문서 (Swagger)
@@ -260,4 +263,5 @@ curl http://localhost:8080/actuator/health
 | [ai-workflow-guide.md](docs/ai-workflow-guide.md)             | Claude Code AI 개발 워크플로우     |
 | [load-test-guide.md](docs/load-test-guide.md)                 | 부하 테스트 실행 런북              |
 | [performance-report.md](docs/performance-report.md)           | 성능 측정 종합 리포트 (병목 이동·개선 전후·한계) |
+| [capacity-planning.md](docs/capacity-planning.md)             | 예상 트래픽·인프라 설계 기준 (실측 역산) |
 | [adr/](docs/adr/)                                             | 아키텍처 결정 기록(ADR)             |
