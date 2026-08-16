@@ -1,0 +1,40 @@
+=== arm=a12  t0=2026-08-14T08:56:07Z  판정창 t+150s~t+310s  램프종료 t+150s ===
+
+[주 판정축]
+  예매 서버 RPS (판정창)                        표본  11  min       0.00  avg       9.23  max      16.78
+  예매 서버 RPS (회차 전체)                      표본  83  min       0.00  avg       2.23  max      16.78
+  DEFERRAL_RATIO (t+150s 이후 비율)           71.18%   (이후 1979건 / 전체 2780건)
+
+[자원 축 — 공통 비교 창 t+30s~t+300s]
+  호스트 CPU %                              표본  19  min       6.73  avg      42.02  max      73.66
+  Redis bytes redis-exporter:9121        표본  19  min 1777120.00  avg 3367630.74  max 4647832.00
+  outbox backlog booking-service:8090    표본  19  min       0.00  avg      41.37  max     176.00
+  outbox backlog seat-service:8090       표본  19  min       0.00  avg       0.00  max       0.00
+
+[인스턴스별 — 공통 창]
+  Hikari active booking-service:8090     표본  19  min       0.00  avg       0.53  max      10.00
+  Hikari pending booking-service:8090    표본  19  min       0.00  avg       1.05  max      20.00
+  Tomcat busy booking-service:8090       표본  19  min       0.00  avg       0.74  max      13.00
+  Tomcat busy seat-service:8090          표본  19  min       0.00  avg       0.11  max       1.00
+  컨테이너 mem % auth-service                표본  19  min      75.95  avg      77.01  max      77.18
+  컨테이너 mem % booking-service             표본  19  min      95.40  avg      96.12  max      96.96
+  컨테이너 mem % gateway-service             표본  19  min      46.94  avg      62.22  max      68.97
+  컨테이너 mem % grafana                     표본  19  min      65.75  avg      65.75  max      65.75
+  컨테이너 mem % payment-service             표본  19  min      85.17  avg      85.21  max      85.27
+  컨테이너 mem % performance-service         표본  19  min      88.52  avg      88.59  max      88.63
+  컨테이너 mem % prometheus                  표본  19  min      43.66  avg      43.91  max      44.20
+  컨테이너 mem % seat-service                표본  19  min      83.83  avg      91.49  max      97.74
+  컨테이너 mem % ticket-service              표본  19  min      81.30  avg      81.35  max      81.44
+  컨테이너 mem % ticketrush-container-mem-sampler 표본  19  min       8.90  avg      11.82  max      13.88
+  컨테이너 mem % ticketrush-kafka            표본  19  min      56.94  avg      57.06  max      57.19
+  컨테이너 mem % ticketrush-mysql            표본  19  min      99.61  avg      99.79  max      99.98
+  컨테이너 mem % ticketrush-node-exporter    표본  19  min      68.32  avg      69.07  max      70.41
+  컨테이너 mem % ticketrush-redis            표본  19  min      10.27  avg      12.27  max      14.26
+  컨테이너 mem % ticketrush-redis-exporter   표본  19  min      49.38  avg      52.19  max      56.38
+  컨테이너 mem % user-service                표본  19  min      70.93  avg      70.97  max      71.04
+
+[무너진 뒤 회복 — outbox backlog]
+  booking-service:8090       peak    436 (t+510s)  → 0 도달 t+585s  (peak 이후 75s)
+  seat-service:8090          peak    388 (t+405s)  → 0 도달 t+600s  (peak 이후 195s)
+
+[k6 요약 — 클라이언트 측정]

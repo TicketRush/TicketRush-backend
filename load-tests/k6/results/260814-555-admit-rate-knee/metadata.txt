@@ -109,7 +109,18 @@ PREDICT_AXIS=어느 축이 먼저 걸리는지는 두 방향이 동일하게 열
 # ── 판정 기준 (회차 전에 정한다 — §6.1) ────────────────────────────────────
 PRIMARY_CRITERION=허용량을 올려도 실제 처리량이 따라오지 않는 첫 계단. 판정은 계단 대조표의
 #   '예매 서버 RPS(판정창 avg)' 가 직전 계단 대비 admit 증가분의 50% 미만만 오르는 계단.
-#   판정창은 t+150s(유입 종료) ~ 회차 끝이다.
+#   판정창은 t+150s(유입 종료) ~ t+310s(소화 종료 = 램프 10s + C/m 300s)다. 160초 / 15초 스크랩
+#   = 약 11표본.
+#   ⚠ '회차 끝' 으로 두지 않는 이유를 회차 전에 적는다. SSE 구독자 시나리오는 전 계단 10분 고정이라
+#     (통제 변수) k6 프로세스는 t+600s 까지 산다. 소화는 t+300s 에 끝나므로 '회차 끝' 을 창의 끝으로
+#     잡으면 판정창의 60% 가 무부하 구간이 되어 avg 가 계단과 무관하게 희석된다. 이것은 결과를 보고
+#     고친 것이 아니라 산술로 드러난 정의의 구멍이고, 첫 계단 실행 전에 고정했다.
+#   ⚠ 포화 계단은 소화가 t+300s 에 안 끝난다. 그 경우 창 전체가 부하 구간이라 판정이 더 선명해질
+#     뿐 기준은 그대로 쓴다 — 창을 계단마다 늘리지 않는다(늘리면 계단끼리 비교가 깨진다).
+#   집계 인자로는 이렇게 들어간다:
+#     계단별  arm-stats.py <OUTDIR> a<m> <START_UTC> --window 150 310 --ramp-end 150
+#     대조표  arm-stats.py <OUTDIR> --table a20=<UTC> a40=<UTC> ... --ramp-end 150 --span 310
+#     (--window 를 빼면 arm 이름이 'on' 이 아니라서 기본값 t+30~300s 로 떨어져 램프가 섞인다)
 #   세 신호(실제 처리량 정체 · dropped 발생 · 호스트 CPU 수렴)가 갈리면 처리량 정체를 우선한다.
 SECONDARY=1만 명 기준 소화 시간을 rate 별로 기록한다 — SSOT 는 queue_drain_seconds 의 max
 #   (Trend 의 max 는 remote-write 로 나가지 않아 k6 요약이 유일한 출처다). 코호트가 계단마다
@@ -155,27 +166,42 @@ POST_CHECK=오버셀 0행 — 런북 §13.4-(7)(a1)(VU 마다 좌석이 유일�
 #   ⚠ 이 기준들은 회차 전에 확정했다. 결과를 보고 고치지 않는다.
 
 # ── 사전 게이트 (런북 §16.4 + §16.7) ───────────────────────────────────────
-G0_EC2=<기동 · 실행 중 IMAGE_TAG 를 컨테이너에서 직접 읽어 기록>
+G0_EC2=PASS. 2026-08-14 08:03 UTC 기동(인스턴스가 내려가 있어 사용자가 켰다). 실행 중 태그를
+#   컨테이너에서 직접 읽었다 — IMAGE_TAG=b0f3da8464498eaf1e595ac2e478167fb3afee27, 앱 8개 전부 동일.
+#   deploy/.env 값과도 일치한다. #554 와 같은 배포본이다(PR #611 은 develop 머지라 CD 가 돌지 않았다).
 #   ⚠ .env 를 믿지 않는다. EC2 재기동은 기존 컨테이너를 되살릴 뿐 .env 를 다시 읽지 않는다.
-G1_NGINX=<worker_connections 16384 / worker_rlimit_nofile 65535 실측 확인>
-G2_QUEUE_ENABLED=<true. up -d --force-recreate --no-deps gateway-service 후 docker inspect 확인>
-G2_QUEUE_ADMIT_RATE=<계단값. restart 는 env_file 을 다시 읽지 않는다>
-G3_METRICS=<curl actuator/prometheus | grep ticketrush_queue — 0 으로라도 보여야 한다>
-G4_REDIS=<redis_memory_used_bytes < 48MB>
-G5_PROM_TARGETS=<job='gateway' up>
-G6_K6_IMAGE=<docker compose --profile loadtest build k6-sse 완료. 이 회차는 이 이미지에서만
-#   돈다 — 기본 grafana/k6 는 'unknown dependency : k6/x/sse' 로 즉사한다(실측 확인)>
-G7_QUEUE_RESET=<queue:* 삭제 후 0건. 계단마다 필수 — 이전 계단의 queue:opened-at 이 남으면
-#   threshold 가 이미 수십만이라 전원이 첫 폴링에서 즉시 승급한다>
-G8_SEED=<seed_queue_flood.sql 의 @cohort_size 를 계단값으로. 출력 -e 인자 4줄을 그대로 사용.
-#   연속성이 GAP 이면 cleanup 후 재시딩한다>
-G9_BASELINE=<무부하 기저 CPU 5분. 그 5분 동안 명령을 던지지 않는다 — #554 에서 관측 행위만으로
-#   max 57.55% 가 찍혔다(명령 없는 창의 기저는 약 7%)>
-G10_INSPECT=<k6 inspect 로 stages · preAllocatedVUs=maxVUs 확인. 계단 인자를 빠뜨리면
-#   다른 계단을 1회차 형상으로 돌리게 된다>
-G11_MYSQL_RESTART_POLICY=<계단 사이 MySQL 재시작 여부를 여기 적고 전 계단에 동일 적용.
-#   #554 에서 MySQL 메모리가 첫 arm 중 72% → 100% 로 차오른 뒤 내려오지 않았다(§2.3).
-#   재시작하면 버퍼풀 워밍업을 날려 첫 계단이 불리해진다 — 어느 쪽이든 고정한다>
+G1_NGINX=PASS. worker_processes auto / worker_rlimit_nofile 65535 / worker_connections 16384.
+G2_QUEUE_ENABLED=PASS. .env 가 false 였다 → true 로 바꾸고
+#   docker compose -p ticketrush-prod --env-file .env -f docker-compose.prod.yml
+#     up -d --force-recreate --no-deps gateway-service
+#   실행 후 docker inspect 의 Config.Env 로 QUEUE_ENABLED=true 확인.
+G2_QUEUE_ADMIT_RATE=20 (1계단). Config.Env 에서 확인. restart 는 env_file 을 다시 읽지 않는다.
+G3_METRICS=PASS. ticketrush_queue_{admission_total,entry_token_total,poll_interval_seconds,waiting}
+#   전부 0 으로 노출된다.
+G4_REDIS=PASS. used_memory=1,368,808 B (1.31 MB) << 48 MB. maxmemory 64MB / noeviction.
+G5_PROM_TARGETS=PASS. 11/11 up (gateway 포함 앱 8 + node + redis-exporter + prometheus).
+G6_K6_IMAGE=PASS. docker compose --profile loadtest build k6-sse 완료 → ticketrush/k6-sse:local.
+#   이 회차는 이 이미지에서만 돈다 — 기본 grafana/k6 는 'unknown dependency : k6/x/sse' 로 즉사한다.
+G7_QUEUE_RESET=PASS. queue:* 삭제 후 0건(스모크 전 1회, 본 계단 전 1회). 계단마다 필수 —
+#   이전 계단의 queue:opened-at 이 남으면 threshold 가 이미 수십만이라 전원이 첫 폴링에서 즉시 승급한다.
+G8_SEED=PASS. @cohort_size=6000 / @rows_per=25 / @cols_per=240. user·seat 양쪽 연속성 OK.
+#   스모크가 코호트 129명을 소모해 cleanup 후 재시딩했고, 본 계단은 재시딩 뒤 오프셋을 쓴다:
+#     QUEUE_PERF_ID=33 / QUEUE_USER_ID_MIN=126494 / QUEUE_SEAT_ID_MIN=264948 / QUEUE_COHORT_SIZE=6000
+#   ⚠ 시딩 SQL 의 출력 마지막 줄이 QUEUE_FLOOD_VUS= 였다 — #555 에서 사라진 변수다. 그대로 넣으면
+#     k6 가 조용히 무시하고 코호트가 기본값에 남아, 계단마다 코호트가 바뀌는 이 회차에서 2계단부터
+#     queue_cohort_exhausted 로 무효가 된다. QUEUE_COHORT_SIZE= 로 고쳤다(회차 전).
+G9_BASELINE=PASS. 2026-08-14 08:20:52~08:25:48 UTC, 20표본. min 5.92 / avg 6.29 / max 7.40 %.
+#   그 5분 동안 EC2 에 명령을 던지지 않았다. #554 의 무부하 기저(약 7%)와 일치하므로 배포본
+#   드리프트로 인한 기저 상승은 없다.
+G10_INSPECT=PASS. flood=ramping-arrival-rate / stages 10s→target 40, 2m20s→target 40 /
+#   preAllocatedVUs=maxVUs=4000 / gracefulStop 10m, subscribers=constant-vus 100 VU 10m.
+G11_MYSQL_RESTART_POLICY=재시작하지 않는다. 전 계단 동일 적용.
+#   #554 에서 MySQL 메모리가 첫 arm 중 72% → 100% 로 차오른 뒤 내려오지 않았다(§2.3). 컨테이너
+#   상한은 768 MB(docker inspect HostConfig.Memory=805306368)이고 이 포화는 InnoDB 버퍼풀 보유이지
+#   메모리 압박이 아니다. 재시작하면 버퍼풀을 날려 그 계단만 디스크 I/O 를 더 타고, 무엇보다 앱 8개의
+#   커넥션 풀이 동시에 끊겨 그 오류가 회차 초반에 섞인다 — 확실한 오염을 피하려 재시작하지 않는 쪽을
+#   골랐다. 계단 사이 cleanup + 재시딩이 매번 같은 테이블을 훑으므로 워밍업 조건은 계단끼리 같다.
+#   대가는 LIMIT_ORDER 에 적는다.
 
 G12_SMOKE=<소규모 스모크 1회(도착률 1~2/s · 1~2분)를 첫 계단 전에 돈다. 수치는 폐기 전제
 #   (§6.1 규칙 4)이고, 확인 대상은 값이 아니라 **여정이 한 바퀴 도는가** 다.
@@ -190,18 +216,378 @@ G12_SMOKE=<소규모 스모크 1회(도착률 1~2/s · 1~2분)를 첫 계단 전
 #     ② SSE 를 여정 안에 두면 이벤트가 없을 때 VU 가 갇히고 주 지표가 통째로 사라진다
 #        → 별도 구독자 시나리오로 분리했다(커밋 d91e101e).
 #   분리 후 재실행: iterations 129/계획 130 · booking_ok 100% · drain max 72.5s · dropped 0.
-#   회차 전 스모크는 대상 EC2 에서 같은 항목으로 한 번 더 확인한다 — 위는 로컬 검증이다.>
+#
+#   대상 EC2 스모크(2026-08-14 08:14 UTC, 도착률 2/s · 유지 60s · 구독자 5) — PASS.
+#     iterations 129 / 계획 130, flood interrupted 0 (subscribers 5 interrupted 은 gracefulStop 0s
+#       의 정상 종료다 — 여정 시나리오가 아니다)
+#     queue_booking_ok 100% (129/129) / queue_seatmap_ok 100% (129/129)
+#     queue_drain_seconds 표본 존재 (avg 40.6 / max 72.6s)
+#     queue_cohort_exhausted 0 · dropped_iterations 0 · queue_sse_subscribe_failed 0
+#     queue_status_unavailable 0 · queue_booking_forbidden 0
+#     SSE 645 이벤트 수신 / sse_connect avg 473ms — 구독 축이 실제로 붙는다
+#     http_req_failed 0.00% (0/517) / p95 65.41ms
+#   ⚠ 이 수치는 폐기 전제다(§6.1 규칙 4). 확인한 것은 값이 아니라 여정이 한 바퀴 돈다는 사실이다.
+#   ⚠ queue_admitted 가 100.00% 지만 SANITY 위반이 아니다 — 도착률 2/s 가 admit 20/s 보다 낮아
+#     대기가 아예 안 쌓이는 형상이라 전원 즉시 승급이 정상이다(polls_per_user max 1 이 그 증거).
+#     본 계단은 a=2m 이라 대기가 쌓이고, 거기서 1.000 이면 그때는 스크립트를 의심한다.>
 
 # ── 실측 (회차 후 채운다) ──────────────────────────────────────────────────
 # 계단마다 한 블록씩. arm 접미사는 a<admit> 로 통일한다(-a20, -a40, ...).
-# ARM=a20 / START_UTC= / END_UTC= / RESULT=
+ARM=a20 / START_UTC=2026-08-14T08:26:47Z / END_UTC=2026-08-14T08:37:47Z
+#   RESULT=INVALID — 사전에 정한 무효 조건에 걸렸다. 결과를 보고 기준을 고치지 않는다.
+#   무효 사유 queue_status_unavailable = 7 / 7,706 (0.09%) > 0 → INVALID_IF 직격.
+#   ⚠ 다만 그 규칙의 전제가 이 계단에서는 성립하지 않는다. 규칙은 ">0 이면 fail-closed 발동 =
+#     Redis 장애를 잰 것" 이라고 적었는데, a20 내내 Redis 는 멀쩡했다 — used_memory max 5.9MB
+#     (상한 48MB), 명령 처리 max 489/s, rejected_connections 0, blocked_clients 0,
+#     connected_clients max 29. 런북 §16.4 가 못 박은 그대로다:
+#     "RedisCommandTimeoutException 을 Redis 장애로 읽지 않는다 — 게이트웨이가 CPU 를 못 잡으면
+#      서버가 즉답해도 터진다." 호스트 CPU 가 97.8% 였으므로 이 7건은 CPU 기아의 결과다.
+#     즉 이 INVALID_IF 는 '포화 그 자체' 를 무효로 만드는 대리 지표라, 포화 계단에서는 구조적으로
+#     항상 걸린다. 기준을 결과에 맞춰 고치지 않으므로 a20 은 INVALID 로 둔다. 규칙의 결함은
+#     사실로 기록하고 처리 방향은 사람이 정한다(#555 리포트 · 후속 이슈 대상).
+#   관측 한계 (무효 사유가 아니다 — 사전 확정 목록에 없다) k6 remote-write 가 85초 지점(08:28:12Z)부터 끊겼다.
+#     ssh -f -N 로 포크한 터널이 회수돼 이후 'connection refused' 였다. 서버측 시계열 69건은
+#     EC2 Prometheus 가 그대로 긁어 무사하지만 k6_* 계열은 통째로 비었다 — dump 가
+#     k6-req-duration-p95 · k6-dropped-iterations · k6-queue-* 등 37개 슬러그를 '데이터 부재' 로
+#     보고했다. 그래서 KNEE_WATCH 의 k6-req-failed-ratio 항목을 이 계단에서 평가할 수 없고,
+#     생성기측 커넥션 지표(k6-req-connecting-p95)가 없어 생성기 영향을 배제하지도 못한다.
+#
+#   ⚠ 무효지만 버리지 않는다. 부하 모델의 전제가 깨진 방식이 그 자체로 결과다.
+#   부하 모델 붕괴: 계획 유입 5,800명 중 2,599명(45%)이 queue_enqueue_failed 로 대기열에
+#     들어가지도 못했다. 그 결과 ticketrush_queue_waiting 이 max 753명에 그쳤다 —
+#     모델값 VU_MODEL_PEAK = C/2 = 3,000 의 1/4 이다. 대기가 안 쌓였으므로 이 계단은
+#     "admit 20 이 유입을 소화하는가" 를 잰 것이 아니다.
+#   실측 (판정창 t+150~310s, 11표본):
+#     예매 서버 RPS   avg 12.26 / max 37.42   (admit 20 에 못 미친다)
+#     게이트웨이 RPS  avg 51.78 / max 139.64
+#     폴링 RPS        avg 22.75 / max 61.45
+#     호스트 CPU      avg 69.82 / max 97.78 %  (기저 6.29% 대비)
+#     대기 인원       avg 97.73 / max 691
+#   여정 붕괴: queue_seatmap_ok 38.14% (1,218/3,193) · queue_booking_ok 82.77% ·
+#     http_req_failed 31.05% · queue_status_duration p95 = 59.99s(= 타임아웃) ·
+#     queue_drain_seconds max 356.3s.
+#
+#   포화 축 (증적: arm-stats-a20.txt · timeseries-*-a20.json)
+#     ① 호스트 CPU 가 세 JVM 으로 다 찬다 — proc_cpu seat 0.442 + gateway 0.257 +
+#        booking 0.219 = 1.83 / 2 vCPU. 호스트 max 97.8% 와 맞는다.
+#     ② 최대 소비자는 seat-service 인데 그 HTTP 는 2.18 RPS 뿐이다. 좌석맵 서버 RPS 는
+#        avg 0.78 / max 14.29 인데 클라이언트는 3,193건을 던졌다 — 서버가 받지 못했다.
+#     ③ seat-service Hikari active max 10 / pending max 28 → 커넥션 풀 고갈.
+#        Tomcat busy max 50. 컨테이너 메모리 16.6% → 100%.
+#        booking-service 컨테이너 메모리도 95.05~99.96%.
+#     ④ SSE 축은 한산했다 — executor_queued 0 · rejected 0 · caller_runs 0 · active max 2.
+#        구독자 100명이 44,628 이벤트(74.4/s)를 받았고 sse_connect avg 403ms 로 정상이었다.
+#        ⚠ 그러므로 이 계단의 무릎은 'SSE 실행기 포화' 가 아니다. 다만 팬아웃·직렬화·TLS 가
+#          seat-service CPU 에 얼마나 실렸는지는 이 계단만으로 못 가른다 — STEP_CONTROL
+#          (구독자 0) 이 그것을 가르는 유일한 수단이고, 그 필요성이 예측이 아니라 실측으로
+#          확인됐다.
+#     ⑤ outbox backlog booking-service peak 1,569 (t+525s) → 0 도달 t+555s.
+#        후처리가 회차 종료 후까지 이어졌다(§16.7 "10분 뒤 덤프" 규율이 실제로 필요했다).
+#   DEFERRAL_RATIO = 68.84% (t+150s 이후 2,029건 / 전체 2,947건)
+#   KNEE(자동) = booking p95 >= 150ms, t+165s (08:29:32Z)
+#   DROPPED_RULE 적용: dropped_iterations 0, vus max 2,578 < maxVUs 4,000 → 생성기 VU
+#     부족은 아니다. 다만 (2) 때문에 생성기측 커넥션 지표가 없어 생성기 무관을 단정하지 않는다.
+#
+#   예측 대조: PREDICT_KNEE 25~30/s 는 틀렸다. admit 20 에서 이미 호스트가 97.8% 로 차고
+#     여정이 무너진다. PREDICT_IMPLICATION("맞다면 현행 20 이 이미 무릎 부근")은 방향이 맞았고
+#     실제는 그보다 나쁘다 — 무릎은 20 이하다. 다만 이 계단이 무효이므로 확정하지 않는다.
+#   PREDICT_AXIS 대조: 두 후보(좌석맵 ~100/s · SSE 구독자 누적) 중 SSE 실행기 쪽은 아니었다.
+#     실제로 먼저 닿은 것은 seat-service 의 DB 커넥션 풀과 컨테이너 메모리다 — 예측에 없던 축이다.
+ARM=a12 / START_UTC=2026-08-14T08:56:07Z / END_UTC=2026-08-14T09:06:47Z
+#   RESULT=VALID / 통과(미포화). 사전 확정 무효 조건을 전부 통과했다:
+#     queue_status_unavailable 0 / 31,432 · queue_polls_exhausted 0 · queue_booking_forbidden 0 ·
+#     queue_cohort_exhausted 0 · dropped_iterations 0 · redis used_memory max 4.65MB (< 48MB) ·
+#     관리자 대시보드 미호출 · 계단 중 배포 없음(IMAGE_TAG 동일).
+#   계단표대로 실행: m=12 / a=24 / C=3,600 / hold 140s / preAllocatedVUs=maxVUs=2,200 /
+#     구독자 100명 10분 고정. iterations 3,478 / 계획 3,480.
+#   실측 (판정창 t+150~310s, 11표본):
+#     예매 서버 RPS   avg 9.23 / max 16.78
+#     폴링 RPS        avg 261.9        게이트웨이 RPS  avg 309.7
+#     호스트 CPU      avg 38.30 / max 65.32 %   (공통창 t+30~300s 기준 avg 42.02 / max 73.66)
+#     queue_drain_seconds max 359.0s   (모델 C/m = 300s)
+#   여정이 온전히 돌았다: queue_seatmap_ok 100.00% (2,780/2,780) · queue_booking_ok 99.96% ·
+#     queue_polls_per_user avg 11.31 / max 25 (실제로 대기가 쌓였다는 증거 — a20 은 2.41 이었다) ·
+#     queue_wait_to_admit_seconds avg 64.7 / max 225.0 ·
+#     queue_post_admit_seconds avg 0.67 (a20 은 15.52 — 승급 이후 경로가 멀쩡하다) ·
+#     SSE 515,200 이벤트 수신(858/s). a20 의 44,628 은 팬아웃이 굶은 결과였음이 이 대조로 드러난다.
+#   서버 오류 0건 — 게이트웨이 status 분해에서 500 = 0 / 503 = 0 (a20 은 500 이 1,898건).
+#   POST_CHECK 오버셀 (a1) PASS — performance_id=34 에서 2,780 / 2,780 / 2,780 일치, 중복 0행.
+#     원문은 oversell-a12.txt.
+#
+#   ⚠ 이 계단은 포화하지 않았다. 예매 RPS 9.23 이 admit 12 에 못 미치는 것은 공급 부족이다:
+#     queue_enqueue_failed 698건(3,478 중 20%)으로 실효 코호트가 2,780명이 됐고,
+#     2,780 / 300s = 9.27/s 가 관측값 9.23 과 사실상 같다. admit 이 막은 것이 아니라
+#     대기열에 들어온 사람이 그만큼이었다.
+#   ⚠ 그 진입 실패의 원인은 이 계단으로 특정하지 못한다. 게이트웨이는 5xx 를 한 건도 내지
+#     않았으므로 애플리케이션 오류가 아니고, 남는 후보는 nginx/생성기 커넥션 계층이다.
+#     그것을 가르는 지표(k6-req-connecting-p95 · queue_enqueue_failed 의 status 태그)가
+#     LIMIT_K6_TIMESERIES 로 전부 비었다.
+
+# ── 여기까지의 판정 (계단 2개) ─────────────────────────────────────────────
+# PRIMARY_CRITERION 적용: 12 → 20 에서 admit 이 +8 인데 예매 서버 RPS 는 9.23 → 12.26 으로
+#   +3.03 만 올랐다. 증가분의 37.9% 이므로 사전 기준(50% 미만)에 a20 이 포화 계단으로 걸린다.
+#   ⚠ 단 a20 은 INVALID 라 이 판정을 확정으로 쓰지 않는다. 유효한 포화 계단이 아직 없다.
+# 세 신호 대조: ① 처리량 정체 — 위와 같이 성립  ② dropped_iterations 는 양쪽 0
+#   ③ 호스트 CPU 수렴 — a12 max 73.66% → a20 max 97.78%, a20 에서 수렴했다.
+# 잠정: 무릎은 (12, 20] 구간에 있다. 12 는 미포화, 20 은 붕괴(HTTP 500 1,898건 · seatmap 38%).
+# PREDICT_KNEE 25~30/s 는 틀렸다 — 실제는 그보다 낮다.
+# ── 3계단 선택 — 회차 전에 적는다 ─────────────────────────────────────────
+# 계단표에 없던 m=16 을 넣는다. 사전 수열은 20 → 40 → 분기였고 분기 중 "20 이 이미 포화 →
+# 12 → 8" 을 탔는데, 12 가 통과해 무릎이 (12, 20] 로 좁혀졌다. 남은 일은 그 구간의 이분점이다.
+# a20 재실행을 고르지 않은 이유: a20 의 무효 사유(queue_status_unavailable > 0)는 CPU 기아의
+#   결과이므로 같은 조건에서 재현될 공산이 크고, 그러면 또 무효다. 유효한 포화 계단을 얻으려면
+#   덜 극단적인 계단이 필요하다. m=16 은 그 둘을 동시에 만족한다.
+# 계단표 산술은 그대로 적용한다: a = 2m = 32 / C = 300m = 4,800 / hold 140s /
+#   VU_MODEL_PEAK = C/2 = 2,400 / maxVUs = 1.2 x = 2,880 / 계획 iter 4,640 (< C).
+# 판정창·판정 기준·무효 조건은 바꾸지 않는다.
+ARM=a16 / START_UTC=2026-08-14T10:41:05Z / END_UTC=2026-08-14T10:51:08Z
+#   RESULT=포화. 단 INVALID_IF(queue_status_unavailable = 76 / 41,830) 에 걸려 형식상 INVALID.
+#   계단표대로 실행: m=16 / a=32 / C=4,800 / hold 140s / preAllocatedVUs=maxVUs=2,880.
+#     iterations 4,637 / 계획 4,640 · dropped 0 · queue_cohort_exhausted 0 ·
+#     queue_polls_exhausted 0 · queue_booking_forbidden 0 · redis max 5.39MB (< 48MB).
+#   실측 (판정창 t+150~310s, 11표본):
+#     예매 서버 RPS   avg 9.98 / max 23.51
+#     폴링 RPS        avg 325.7        게이트웨이 RPS  avg 382.9
+#     호스트 CPU      avg 64.61 / max 98.39 %
+#     queue_drain_seconds max 471.3s   (모델 C/m = 300s → 1.571배)
+#   여정 열화: queue_seatmap_ok 63.06% (2,425/3,845) — a12 의 100% 에서 무너지기 시작했다.
+#     queue_seatmap_duration p95 2.88s / max 56.03s · http_req_failed 7.04% ·
+#     queue_post_admit_seconds avg 1.04 (a12 0.67 → a20 15.52 사이) ·
+#     SSE 148,091 이벤트(246.7/s) — a12 의 515,200(858/s) 에서 팬아웃이 굶기 시작했다.
+#   게이트웨이 500 = 1,034건 (a12 는 0건).
+#   포화 축: seat-service Hikari pending max 36 / active max 10 (풀 고갈) ·
+#     Tomcat busy max 26 · booking-service 컨테이너 메모리 96.85~98.31%.
+#     a20 과 같은 축이고 정도만 덜하다.
+#   POST_CHECK 오버셀 (a1) PASS — 3,842 / 3,842 / 3,842 일치, 중복 0행 (oversell-a16.txt).
+#     포화가 좌석 정합성을 깨뜨리지는 않았다.
+#   Redis 는 이 계단에서도 멀쩡했다 — used_memory max 5.67MB, 명령 max 956/s,
+#     rejected_connections 0, blocked_clients 0. a20 과 같은 결론이다.
+
+# ── 판정 (계단 3개) ────────────────────────────────────────────────────────
+# PRIMARY_CRITERION 적용 — 직전 계단 대비 admit 증가분의 50% 미만만 오르면 포화:
+#   12 → 16   admit +4,  예매 서버 RPS 9.23 → 9.98  = +0.75 (증가분의 18.8%)  → 포화
+#   16 → 20   admit +4,  예매 서버 RPS 9.98 → 12.26 = +2.28 (증가분의 57.0%)  → 기준상 미포화
+#   ⚠ 뒤 줄을 "20 이 안 포화" 로 읽지 않는다. a20 은 유입 45% 가 진입조차 못 해 실효 코호트가
+#     3,193명으로 줄어든 회차다 — 대기가 얕아 승급이 빨랐고 그래서 예매 RPS 가 되레 높게 찍혔다.
+#     같은 이유로 a20 의 소화 시간 356.3s 도 a16 의 471.3s 보다 짧다. 코호트가 다르므로
+#     이 세 값을 나란히 놓고 단조성을 논할 수 없다(LIMIT_COHORT).
+# SECONDARY(소화 시간) — 이쪽이 훨씬 선명하다. C/m 정규화 비율(실측 / 300s):
+#   a12  359.0s → 1.197     a16  471.3s → 1.571     a20  356.3s → 1.188(붕괴로 코호트가 준 값)
+#   허용량을 12 → 16 으로 올렸는데 소화가 오히려 31% 느려졌다. 처리량 정체보다 강한 신호다.
+# 세 신호 대조: ① 처리량 정체 — 성립  ② dropped_iterations — 세 계단 모두 0
+#   ③ 호스트 CPU 수렴 — a12 max 65.32% → a16 max 98.39% 로 a16 에서 이미 수렴했다.
+#
+# 잠정 결론: 무릎은 12 와 16 사이다. 12 는 통과(CPU max 65.3% · 좌석맵 100% · 5xx 0건),
+#   16 부터 포화(CPU max 98.4% · 좌석맵 63% · 500 1,034건 · 소화 1.571배).
+#   현행 운영값 20 은 무릎보다 위다. PREDICT_KNEE 25~30/s 는 틀렸고 방향도 낙관 쪽으로 틀렸다.
+#
+# ⚠ 확정하지 못하는 이유 — INVALID_IF 규칙의 구조적 결함
+#   queue_status_unavailable > 0 을 무효로 둔 규칙이 a20 과 a16 에서 연달아 걸렸다. 두 계단
+#   모두 Redis 는 멀쩡했고(메모리 5~6MB · rejected 0 · blocked 0) 호스트 CPU 만 98% 였다.
+#   런북 §16.4 가 "게이트웨이가 CPU 를 못 잡으면 서버가 즉답해도 터진다" 고 적은 그대로다.
+#   즉 이 규칙은 '포화' 를 '무효' 로 바꾸는 대리 지표이고, 포화 계단은 원리상 이 규칙을 통과할 수
+#   없다 — 무릎을 찾는 회차에서 무릎을 무효로 만든다. 두 계단에서 같은 방식으로 재현됐다.
+#   기준을 결과에 맞춰 고치지 않는다. 규칙을 어떻게 할지는 사람이 정하고, 그때까지 무릎은
+#   '잠정' 으로 둔다.
 # ARM=a40 / START_UTC= / END_UTC= / RESULT=
-# ARM=<무릎계단>-nosse / START_UTC= / END_UTC= / RESULT=   (SSE 대조)
-KNEE=
-KNEE_AXIS=
-DRAIN_BY_RATE=
+ARM=a16-nosse / START_UTC=2026-08-14T11:05:06Z / END_UTC=2026-08-14T11:12:02Z   (SSE 대조)
+#   RESULT=VALID. 사전 무효 조건 전부 통과 — queue_status_unavailable 0 / 42,048 ·
+#     queue_polls_exhausted 0 · queue_booking_forbidden 0 · queue_cohort_exhausted 0 ·
+#     dropped 0 · redis max 5.54MB. iterations 4,638 / 계획 4,640, interrupted 0.
+#   조건: a16 과 모든 것이 같고 QUEUE_SSE_SUBSCRIBERS 만 100 → 0. k6 inspect 에서
+#     subscribers 시나리오가 통째로 사라진 것을 확인하고 돌렸다.
+#   POST_CHECK 오버셀 (a1) PASS — 3,717 / 3,717 / 3,717 (oversell-a16-nosse.txt).
+#
+#   ── SSE 축의 몫 (a16 대비, 같은 admit · 같은 코호트) ──────────────────────
+#     지표                       a16(구독자 100)   a16-nosse(0)     차이
+#     queue_seatmap_ok             63.06%          100.00%       +36.94%p
+#     queue_status_unavailable     76건            0건            무효 조건이 사라진다
+#     queue_status_duration p95    2.73s           180.25ms      15.1배 개선
+#     queue_post_admit avg         1.04s           0.42s         2.5배 개선
+#     queue_drain_seconds max      471.3s          413.3s        -58.0s
+#     호스트 CPU avg/max           64.61/98.39     33.65/73.22   avg -30.96%p
+#     게이트웨이 500               1,034건         (아래 참조)
+#     예매 서버 RPS avg            9.98            9.95          차이 없음
+#   해석: 구독자 100명이 호스트 CPU 를 avg 약 31%p 먹고 있었고, 그것이 좌석맵과 폴링 응답을
+#     밀어냈다. **admit 16 자체는 이 여정을 감당한다** — SSE 축을 빼면 좌석맵이 100% 로
+#     돌아오고 무효 조건이 0 이 된다. 즉 a16 에서 관측된 포화는 admit 무릎이 아니라
+#     SSE 팬아웃 축의 무릎이다. 이슈 #555 가 세운 두 가설 중 두 번째가 맞았다.
+#   ⚠ 다만 소화 시간은 SSE 를 빼도 413.3s 로 모델 300s 의 1.378배다. SSE 만으로 전부
+#     설명되지는 않는다 — 아래 LIMIT_SYN_BACKLOG 가 남은 몫을 설명한다.
+
+# ── 회차 전체를 관통한 제약 — TCP SYN 큐 (회차 후 발견) ────────────────────
+# 네 계단 모두에서 queue_enqueue_failed 가 일정하게 났다:
+#   a12 698/3,478(20.1%) · a16 792/4,637(17.1%) · a16-nosse 921/4,638(19.9%) ·
+#   a20 2,599/5,792(44.9%)
+# k6 의 status 태그가 원인을 가른다 — a16-nosse 는 921건 **전부** status=0 이었다.
+#   status=0 은 HTTP 응답을 받지 못한 것, 즉 서버 응답이 아니라 전송 계층 실패다.
+#   (a16 은 status=0 이 784건, status=503 이 8건)
+# k6 로그의 실제 오류: "dial tcp 54.116.243.250:443: connect: connection refused" 1,650건 ·
+#   "EOF" 485건 · "dial: i/o timeout" 188건. 대상 IP 의 443 이 TCP 레벨에서 거절했다.
+# 대상 커널 카운터가 확정한다 (EC2 를 08:03 UTC 에 켰으므로 전부 이 회차들의 것이다):
+#   net.ipv4.tcp_max_syn_backlog = 512
+#   nginx :443 accept 백로그 = 511   (listen 443 ssl; 에 backlog= 가 없어 nginx 기본값)
+#   net.core.somaxconn = 4096        (커널은 여유가 있는데 nginx 가 더 낮게 잡는다)
+#   TcpExtListenOverflows = 0 / TcpExtListenDrops = 0   → accept 큐는 넘치지 않았다
+#   TcpExtTCPReqQFullDoCookies = 15,826                 → **SYN 큐가 15,826번 넘쳤다**
+# 즉 유입은 애플리케이션도 생성기도 아닌 **TCP SYN 큐**에서 잘렸다. 그래서 실효 코호트가
+#   계단마다 17~20% 줄었고 예매 서버 RPS 가 어느 계단에서나 약 10/s 에 묶였다
+#   (a12 9.23 · a16 9.98 · a16-nosse 9.95). 처리량 축으로 계단을 가르는 힘이 약해진 이유다.
+# ⚠ 사전 게이트 G1 의 구멍이다. G1 은 worker_connections(16384)와 worker_rlimit_nofile
+#   (65535)만 봤고 둘 다 정상이었다 — 벽은 그보다 아래 계층이었다. 런북 §16.4 G1 에
+#   백로그 항목을 추가했다.
+# ⚠ 이것은 부하 도구의 문제가 아니라 **배포본의 설정**이다. 실제 티켓 오픈에서도 같은 벽에
+#   닿는다. 별도 이슈 대상이다(nginx listen backlog + tcp_max_syn_backlog 상향).
+KNEE=12 초과 16 이하 — 아래 '최종 판정' 절 참조
+KNEE_AXIS=seat-service (좌석 SSE 팬아웃) — 같은 절 참조
+DRAIN_BY_RATE=같은 절의 '1만 명 환산' 표 참조
+
+# ══ 시리즈 B — 벽을 걷어내고 다시 잰다 (2026-08-14, 시리즈 A 이후) ═════════
+# 시리즈 A(a12·a16·a16-nosse·a20)가 두 가지 벽에 막혔다. 둘 다 고치고 다시 돈다.
+# ⚠ arm 접두를 a → b 로 바꾼다. 대상 설정이 달라졌으므로 **시리즈 A 와 절대값으로 잇지
+#   않는다**(§6.1 재현성 규칙). 시리즈 A 는 그대로 증적으로 남는다.
+#
+# 고친 것 (1) TCP SYN 큐 — 시리즈 A 의 유입을 17~20% 잘라 먹던 벽
+#   nginx  listen 443 ssl backlog=4096  (기본값 511 이 잡히고 있었다)
+#          deploy/nginx/api.ticketrush.store.conf. backlog 는 reload 로 안 바뀌어 restart 했다.
+#   커널   net.ipv4.tcp_max_syn_backlog  512  → 8192   ← 실제로 넘친 큐
+#          net.core.somaxconn           4096  → 8192
+#          net.core.netdev_max_backlog  1000  → 8192
+#          deploy/sysctl/99-ticketrush.conf → /etc/sysctl.d/99-ticketrush.conf
+#   적용 후 실측: ss -lnt 의 :443 Send-Q 가 511 → 4096, https health 200.
+#   ⚠ 벽이 걷히면 유입이 늘어난다 = 부하가 세진다. 따라서 시리즈 B 의 무릎은 시리즈 A 의
+#     잠정값(12~16)보다 **낮거나 같다**. A 의 값은 무릎의 상한이었다.
+#
+# 고친 것 (2) INVALID_IF(queue_status_unavailable > 0) 의 단독 적용 — 포화를 무효로 바꾸던 규칙
+#   시리즈 B 부터는 두 단계로 판정한다(런북 §16.6 에 못 박음). 회차 전에 정한다:
+#     queue_status_unavailable > 0 이면 같은 창의 Redis 상태를 먼저 본다
+#       (redis_memory_used_bytes · rejected_connections · blocked_clients · 명령 rate)
+#     → Redis 에 이상 징후가 있으면 무효 (원래 의도: Redis 장애를 잰 회차)
+#     → Redis 가 멀쩡하면 무효가 아니라 **포화 신호로 기록**한다
+#   ⚠ 이것은 결과를 보고 기준을 완화한 것이 아니다. 시리즈 A 의 a16·a20 을 이 규칙으로
+#     소급 재판정하지 않는다 — 그 둘은 INVALID 로 남는다. 새 규칙은 시리즈 B 에만 쓴다.
+#
+# 고친 것 (3) 관측 경로 — k6 remote-write 터널이 포화 회차마다 끊겼다
+#   자동 재접속 래퍼로 돌린다(while true; do ssh -N -L 9090:...; sleep 3; done).
+#   a16 부터 k6-req-failed-ratio · k6-queue-enqueue-failed 가 실제로 들어오기 시작했고,
+#   그 status 태그가 SYN 큐 진단의 결정적 근거가 됐다.
+#
+# 그대로 두는 것: 계단표 산술(a=2m · C=300m · hold 140s) · 판정창(t+150~310s) ·
+#   PRIMARY_CRITERION · SECONDARY · 나머지 INVALID_IF · SANITY · POST_CHECK ·
+#   G11(MySQL 재시작 없음) · 구독자 100명 고정.
+#
+ARM=b12 / START_UTC=2026-08-14T11:35:19Z / END_UTC=2026-08-14T11:45:29Z
+#   RESULT=VALID / 통과(미포화). queue_status_unavailable 0 / 32,474 · polls_exhausted 0 ·
+#     booking_forbidden 0 · cohort_exhausted 0 · dropped 0 · redis max 5.93MB.
+#   실측 (판정창): 예매 서버 RPS avg 8.22 / max 17.71 · 폴링 RPS 258.9 · GW RPS 310.7 ·
+#     호스트 CPU avg 34.70 / max 61.89 % · queue_drain_seconds max 407.5s
+#   여정: queue_seatmap_ok 99.49% · queue_booking_ok 99.56% · http_req_failed 4.30% ·
+#     queue_status_duration p95 2.03s · queue_post_admit avg 1.05s ·
+#     queue_polls_per_user avg 11.72 (대기가 실제로 쌓였다)
+#   POST_CHECK 오버셀 (a1) PASS — performance_id=37, 2,765 / 2,765 / 2,765.
+#   G1b 커널 카운터: 회차 전후 TCPReqQFullDoCookies 15,826 → 15,826 (증가 0),
+#     ListenOverflows 0 → 0. **백로그 벽이 실제로 걷혔다.**
+
+ARM=b20 / START_UTC=2026-08-14T11:58:25Z / END_UTC=2026-08-14T12:08:33Z
+#   RESULT=VALID / 열화. queue_status_unavailable = 9 / 24,940 이지만 시리즈 B 의 2단계
+#     규칙대로 Redis 를 먼저 봤고 멀쩡했다 — used_memory max 6.81MB (< 48MB), 명령 max
+#     1,059/s, rejected_connections 0, blocked_clients 0. 따라서 무효가 아니라 포화 신호로
+#     기록한다. 나머지 무효 조건은 전부 통과(polls_exhausted 0 · booking_forbidden 0 ·
+#     cohort_exhausted 0 · dropped 0).
+#   실측 (판정창): 예매 서버 RPS avg 13.02 / max 40.89 · 폴링 RPS 108.7 · GW RPS 232.0 ·
+#     호스트 CPU avg 61.30 / max 95.91 % · queue_drain_seconds max 322.8s
+#   여정 열화 (b12 대비): queue_seatmap_ok 99.49% → 73.26% ·
+#     queue_status_duration p95 2.03s → 40.23s · http_req_failed 4.30% → 12.01% ·
+#     queue_post_admit avg 1.05s → 2.72s · queue_polls_per_user 11.72 → 6.45
+#   POST_CHECK 오버셀 (a1) PASS — performance_id=38, 3,846 / 3,846 / 3,846.
+#   G1b: TCPReqQFullDoCookies 증가 0 · ListenOverflows 0 — admit 20 / 도착률 40 에서도
+#     백로그는 넘치지 않는다. 시리즈 A 의 a20 붕괴(HTTP 500 1,898건 · 좌석맵 38%)와의
+#     차이가 백로그 수정의 효과다.
+#
+#   ⚠ PRIMARY_CRITERION 은 이 계단에서 걸리지 않는다. 12 → 20 에서 admit 이 +8 인데
+#     예매 서버 RPS 는 8.22 → 13.02 로 +4.80, 증가분의 60.0% 라 기준(50% 미만)을 넘는다.
+#     dropped 도 0 이다. 세 신호 중 '호스트 CPU 수렴'(95.91%)만 선다.
+#     사전 규칙은 "세 신호가 갈리면 처리량 정체를 우선한다" 이므로, 규칙 그대로 읽으면
+#     b20 은 포화 계단이 아니다.
+#   ⚠ 그런데 그 판정은 사용자가 겪는 것과 어긋난다. 같은 계단에서 좌석맵 요청의 26.7% 가
+#     실패하고 폴링 p95 가 40초다. 처리량은 아직 오르는 중인데 품질이 먼저 무너지는,
+#     무릎 직후의 전형적인 모습이다. **처리량 정체를 최우선으로 둔 기준이 이 시스템에서는
+#     너무 늦게 켜진다** — 기준의 한계로 기록하고 이번 회차에서 고치지 않는다.
+ARM=b16 / START_UTC=2026-08-14T12:19:16Z / END_UTC=2026-08-14T12:29:24Z
+#   RESULT=포화(첫 포화 계단). queue_status_unavailable = 28 / 25,249 이지만 2단계 규칙대로
+#     Redis 를 먼저 봤고 멀쩡했다 → 무효가 아니라 포화 신호. 나머지 무효 조건 전부 통과
+#     (polls_exhausted 0 · booking_forbidden 0 · cohort_exhausted 0 · dropped 0).
+#   실측 (판정창): 예매 서버 RPS avg 9.84 / max 23.51 · 폴링 RPS 119.9 · GW RPS 189.9 ·
+#     호스트 CPU avg 70.89 / max 90.53 % · queue_drain_seconds max 363.2s
+#   여정 열화: queue_seatmap_ok 63.51% · queue_booking_ok 98.00% · http_req_failed 8.45% ·
+#     queue_status_duration p95 30.95s · queue_post_admit avg 7.75s (b12 의 1.05s 에서 7.4배)
+#   POST_CHECK 오버셀 (a1) PASS — performance_id=39, 3,236 / 3,236 / 3,236.
+#   G1b: TCPReqQFullDoCookies 증가 0.
+
+# ══ 최종 판정 ══════════════════════════════════════════════════════════════
+# KNEE=12 초과 16 이하. 첫 포화 계단은 16 이고 그 아래 계단 12 가 통과한다 → STOP_RULE 충족.
+#   PRIMARY_CRITERION(직전 계단 대비 admit 증가분의 50% 미만만 오르면 포화) 적용:
+#     시리즈 B  12 → 16 : admit +4, 예매 RPS 8.22 → 9.84  = +1.62 (40.5%)  → 포화
+#               16 → 20 : admit +4, 예매 RPS 9.84 → 13.02 = +3.18 (79.5%)  → 기준 위
+#     시리즈 A  12 → 16 : admit +4, 예매 RPS 9.23 → 9.98  = +0.75 (18.8%)  → 포화
+#   ⚠ 두 시리즈는 대상 설정이 달라 절대값으로 잇지 않지만, **판정은 독립적으로 같은 곳을
+#     가리킨다.** 그것이 이 결론의 근거다.
+#
+# KNEE_AXIS=seat-service. 세 갈래 증거가 같은 곳을 가리킨다.
+#   ① 좌석맵 성공률이 12 → 16 사이에서 절벽처럼 떨어진다. 두 시리즈에서 재현됐다:
+#        admit 12 : 100.00%(a12) / 99.49%(b12)
+#        admit 16 :  63.06%(a16) / 63.51%(b16)
+#        admit 20 :  38.14%(a20) / 73.26%(b20)
+#      독립 회차에서 소수점까지 가까운 값이 나온 것이 이 축이 우연이 아님을 말한다.
+#   ② 자원 축 — seat-service Hikari pending 이 풀(10)을 넘어 쌓인다(a16 max 36 · a20 max 28)
+#      Tomcat busy max 26~50, 컨테이너 메모리 상한 도달. 정작 그 서비스의 HTTP 는 2.18 RPS 다.
+#   ③ SSE 대조(a16-nosse)가 인과를 확정한다. admit 16 에서 구독자 100명만 빼자
+#      좌석맵 63.06% → 100.00%, 호스트 CPU avg 64.61% → 33.65%, 폴링 p95 2.73s → 180ms.
+#      **즉 무릎을 만드는 것은 admit 자체가 아니라 admit 에 비례해 커지는 SSE 팬아웃이다**
+#      (구독자 고정 100명일 때 팬아웃 sends/s = 100 x m).
+#      이슈 #555 가 세운 두 가설 중 "SSE 구독자 누적" 쪽이 맞았다.
+#
+# DRAIN_BY_RATE= (queue_drain_seconds max / 모델 C/m = 300s 대비 비율)
+#   시리즈 A  a12 359.0s (1.20)  a16 471.3s (1.57)  a16-nosse 413.3s (1.38)  a20 356.3s (붕괴)
+#   시리즈 B  b12 407.5s (1.36)  b16 363.2s (1.21)  b20        322.8s (1.08)
+#   ⚠ 계단마다 진입 실패로 실효 코호트가 달라 절대값을 나란히 놓지 못한다(LIMIT_GENERATOR).
+#     시리즈 A 에서 12 → 16 이 359 → 471s 로 늘어난 것이 가장 선명한 신호였다.
+#
+#   1만 명 환산 — 완료조건 "1만 명 소화 시간이 rate 별로 기록된다" 에 맞춘 값이다.
+#   코호트가 계단마다 다르므로(C = 300m) 실효 승급 인원 / 실측 소화 시간 = 처리율을 구해 늘린다.
+#     arm         m   승급    실측     처리율    1만 환산     이론 10000/m   이론 대비
+#     a12        12  2,780  359.0s   7.74/s   21분 31초    13분 53초      1.55배
+#     b12        12  2,772  407.5s   6.80/s   24분 30초    13분 53초      1.76배
+#     a16        16  3,845  471.3s   8.16/s   20분 25초    10분 25초      1.96배
+#     a16-nosse  16  3,717  413.3s   8.99/s   18분 31초    10분 25초      1.78배
+#     b16        16  3,300  363.2s   9.09/s   18분 20초    10분 25초      1.76배
+#     b20        20  3,867  322.8s  11.98/s   13분 54초     8분 20초      1.67배
+#   어느 계단에서도 이슈 본문 표의 이론값보다 1.5~2배가 걸린다. 대기열이 m 명/초로 승급시켜도
+#   그 사람이 좌석맵을 받고 예매를 마치기까지가 그만큼 늘어지고, 그 지연이 곧 KNEE_AXIS 다.
+#   ⚠ 외삽이다. 실제로 1만 명을 넣은 회차가 아니라 2,772~3,867명의 처리율을 선형으로 늘렸다.
+#     대기 인원이 3배면 ZRANK 비용과 동시 커넥션이 함께 늘어 처리율이 더 떨어진다(#549 실측:
+#     커넥션 1,600 → 16,701 에서 R 이 1,400 → 450 RPS 로 3.1배). 낙관 쪽으로 치우친 하한이다.
+#   ⚠ 코호트를 1만으로 고정하지 않은 이유는 LIMIT_COHORT 다 — 고정하면 상위 계단의 판정 표본이
+#     4개로 줄어 판정이 서지 않는다. 판정 가능성과 이슈 표와의 직접 비교 중 판정을 택했다.
+#
+# 현행 운영값 20 은 무릎보다 위다. 반영 권고는 report.md 에 적는다.
+# PREDICT_KNEE(25~30/s) 는 틀렸다. 방향도 낙관 쪽으로 틀렸고, 예측이 지목한 축(좌석맵 CPU)이
+#   아니라 SSE 팬아웃이 무릎을 만들었다. PREDICT_AXIS 의 두 후보 중 두 번째가 맞았다.
 
 # ── 이 회차가 답하지 못하는 것 (회차 전에 적는다) ──────────────────────────
+LIMIT_K6_TIMESERIES=k6 측 시계열이 a20·a12 양쪽에서 통째로 비었다. remote-write 를 로컬 k6 →
+#   SSH 터널 → EC2 Prometheus 로 보내는데, 그 터널이 두 회차 모두 부하 중에 끊겼다(a20 은 t+85s,
+#   a12 는 회차 내내 104회 오류). 원인은 터널 자체가 아니라 대상이다 — 호스트 CPU 가 97% 대로
+#   차면 sshd 가 keepalive 에 제때 응답하지 못해 세션이 끊긴다. 즉 **포화를 재려는 회차일수록
+#   관측 경로가 먼저 끊기는 구조**다. 3회차부터는 자동 재접속 래퍼로 돌린다.
+#   비어 있는 것: k6-req-failed-ratio(KNEE_WATCH 항목이라 그 감시가 두 계단에서 무력했다) ·
+#   k6-req-connecting-p95(생성기/nginx 커넥션 계층을 가르는 유일한 지표) · k6-queue-* 전부 ·
+#   k6-dropped-iterations. 집계값은 k6 요약 텍스트에 남아 있어 판정은 섰지만, 시간 분해가 없어
+#   "언제 꺾였는가" 는 서버측 시계열로만 봤다.
+LIMIT_OVERSELL_A20=a20 의 오버셀 검증을 남기지 못했다. 계단 사이 절차가 cleanup(LTQ 코호트 삭제)
+#   → 재시딩 순서라 a12 준비 시점에 a20 코호트가 지워졌다. 사후 조회는 0행이 나오지만 그것은
+#   "오버셀 없음" 이 아니라 "검증 대상이 없음" 이다. 런북 §16.7 에 오버셀 검증을 cleanup 앞
+#   순서로 못 박았다(2026-08-14). a12 는 정상적으로 남겼다(oversell-a12.txt).
 LIMIT_K6_BINARY=k6 바이너리가 xk6 빌드라 #549·#554(grafana/k6:latest)와 다르다. §6.1
 #   재현성 규칙이 한 겹 더 걸린다 — 절대값으로 직접 잇지 않는다.
 LIMIT_JOURNEY=여정이 바뀌었다(좌석맵 + SSE 체류 추가). #549 B-2 · #554 의 수치는 참고로만

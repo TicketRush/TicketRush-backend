@@ -1,0 +1,27 @@
+# 오버셀 검증 — 계단 a16 (admit 16) / 2026-08-14
+# 런북 docs/load-test-guide.md §13.4-(7)(a1) — VU 마다 좌석이 유일한 회차용 상태 무관 검사.
+# ⚠ 이번에는 계단 사이 cleanup 앞에서 돌렸다(§16.7 절차 2). a20 은 그 순서가 없어 놓쳤다.
+#
+# 실행: docker exec -i ticketrush-mysql mysql -uroot -p"$PW" ticket_rush -t -e "<아래 SQL>"
+# 대상: performance_id = 35 (LTQ 코호트, 시딩 C=4,800)
+
+-- (a1) 같은 좌석을 가리키는 예매 2건 이상 = oversell
+SELECT seat_id, COUNT(*) c FROM booking WHERE performance_id=35 GROUP BY seat_id HAVING c > 1;
+→ 0행
+
+-- (a1-2) 1회 여정 가드 확인
+SELECT user_id, COUNT(*) c FROM booking WHERE performance_id=35 GROUP BY user_id HAVING c > 1;
+→ 0행
+
+-- (a1-3) 총괄 — 셋이 같아야 한다.
+SELECT COUNT(*) bookings, COUNT(DISTINCT seat_id) distinct_seats,
+       COUNT(DISTINCT user_id) distinct_users
+  FROM booking WHERE performance_id=35;
+→ bookings=3842  distinct_seats=3842  distinct_users=3842   (일치)
+
+# 판정: PASS. 오버셀 0행.
+# k6 요약의 queue_booking_ok 는 3,841건(99.89%)으로 DB 3,842건과 1건 차이다 — 서버는 만들었는데
+# 클라이언트가 응답을 못 받은 건이고 오버셀과 무관하다.
+#
+# ⚠ 이 계단은 포화했지만(아래 metadata.txt ARM=a16 참조) 오버셀은 나지 않았다. 즉 포화가
+#   좌석 정합성을 깨뜨리지는 않는다 — 느려질 뿐 이중 배정으로 넘어가지 않았다.

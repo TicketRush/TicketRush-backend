@@ -1,0 +1,21 @@
+# 오버셀 검증 — 계단 a16-nosse (admit 16 / SSE 구독자 0) / 2026-08-14
+# 런북 docs/load-test-guide.md §13.4-(7)(a1) — VU 마다 좌석이 유일한 회차용 상태 무관 검사.
+# 계단 사이 cleanup 앞에서 실행했다(§16.7 절차 2).
+# 대상: performance_id = 36 (LTQ 코호트, 시딩 C=4,800)
+
+-- (a1) 같은 좌석을 가리키는 예매 2건 이상 = oversell
+SELECT seat_id, COUNT(*) c FROM booking WHERE performance_id=36 GROUP BY seat_id HAVING c > 1;
+→ 0행
+
+-- (a1-2) 1회 여정 가드 확인
+SELECT user_id, COUNT(*) c FROM booking WHERE performance_id=36 GROUP BY user_id HAVING c > 1;
+→ 0행
+
+-- (a1-3) 총괄 — 셋이 같아야 한다.
+SELECT COUNT(*) bookings, COUNT(DISTINCT seat_id) distinct_seats,
+       COUNT(DISTINCT user_id) distinct_users
+  FROM booking WHERE performance_id=36;
+→ bookings=3717  distinct_seats=3717  distinct_users=3717   (일치)
+
+# 판정: PASS. 오버셀 0행.
+# k6 요약의 queue_booking_ok 는 3,716건(99.97%)으로 DB 3,717건과 1건 차이다.

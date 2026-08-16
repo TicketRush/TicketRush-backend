@@ -127,4 +127,7 @@ SELECT CONCAT('QUEUE_USER_ID_MIN=', (SELECT MIN(id) - 1 FROM `user` WHERE email 
 UNION ALL
 SELECT CONCAT('QUEUE_SEAT_ID_MIN=', (SELECT MIN(seat_id) - 1 FROM seat WHERE performance_id = @perf_id))
 UNION ALL
-SELECT CONCAT('QUEUE_FLOOD_VUS=', @cohort_size);
+-- ⚠ #555 에서 QUEUE_FLOOD_VUS 는 사라졌다(ramping-vus 를 떠났다). 코호트를 시나리오에 알리는
+--   변수는 QUEUE_COHORT_SIZE 다. 없는 변수를 넣으면 k6 가 조용히 무시하고 코호트가 기본값으로
+--   남아, 계단마다 코호트가 바뀌는 이 회차에서 queue_cohort_exhausted 로 회차가 통째로 무효가 된다.
+SELECT CONCAT('QUEUE_COHORT_SIZE=', @cohort_size);
