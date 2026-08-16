@@ -210,6 +210,24 @@ curl http://localhost:8080/actuator/health
 
 ---
 
+## 📈 성능 / 부하 테스트
+
+단일 EC2(`m7i-flex.large`, 2 vCPU / 7.6 GiB) 한 대에 앱 8개와 MySQL·Redis·Kafka·관측 스택이 함께 올라간 구성에서 **회차 23번**을 측정했습니다.
+
+| 무엇을 | 전 → 후 | 회차 |
+|-----|-----|-----|
+| 좌석맵 응답 크기 (gzip) | 174,615 B → 8,405 B | #505 |
+| 좌석 집계 최대 처리량 (커버링 인덱스) | 254.84 → 396.75 rps | #529 |
+| 좌석맵 서버 응답, 80 계단 (JSON 캐싱) | 741.04 ms → 10.11 ms | #539 |
+| 예매 파이프라인 드레인율 (컨슈머 concurrency 3) | 43.0/s → 96.6/s | #598 |
+
+각 수치는 **같은 회차 안에서 변수 하나만 바꿔 얻은 전/후**이며, 서로 다른 회차의 값끼리는 잇지 않았습니다
+(#539만 before/after 이미지가 달라 다른 변경이 섞이며, 그 한계는 리포트에 적어 두었습니다).
+병목이 회선 → 컨테이너 메모리 → 호스트 CPU → 유입 제어로 옮겨간 서사와, 아직 증명하지 못한
+한계(1만 명 동시 대기 미재현·수평 확장 미검증 등)는 [performance-report.md](docs/performance-report.md)에 있습니다.
+
+---
+
 ## 📖 API 문서 (Swagger)
 
 게이트웨이가 7개 서비스의 OpenAPI 문서를 **하나의 Swagger UI로 통합**합니다.
@@ -240,4 +258,6 @@ curl http://localhost:8080/actuator/health
 | [kafka-event-guide.md](docs/kafka-event-guide.md)             | Kafka 이벤트 / Outbox / DLT 정책 |
 | [mapstruct-guide.md](docs/mapstruct-guide.md)                 | MapStruct Mapper 구조         |
 | [ai-workflow-guide.md](docs/ai-workflow-guide.md)             | Claude Code AI 개발 워크플로우     |
+| [load-test-guide.md](docs/load-test-guide.md)                 | 부하 테스트 실행 런북              |
+| [performance-report.md](docs/performance-report.md)           | 성능 측정 종합 리포트 (병목 이동·개선 전후·한계) |
 | [adr/](docs/adr/)                                             | 아키텍처 결정 기록(ADR)             |
