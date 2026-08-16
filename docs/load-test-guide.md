@@ -2135,7 +2135,7 @@ docker run --rm --network host --ulimit nofile=1048576:1048576 \
 | 오버셀 검증 | §13.4-(7) **(a1)** | 이 회차는 VU 마다 좌석이 유일하다. 상태 필터 버전은 검출력이 0 이고(#554 §9.3), (a2) 는 #344 형 전용이다(#598). **SQL 원문을 `oversell-<arm>.txt` 에 함께 남긴다** |
 | 생성기 종료 | 필수 | CD가 건드리지 않아 "떠 있는 줄 몰랐다"가 가능하다(ADR 0010) |
 
-> **⚠️ `queue_status_unavailable > 0`을 단독 무효 조건으로 쓰면 포화 회차를 잴 수 없다(2026-08-14 #555 실측).** 그 회차는 이 조건을 `INVALID_IF`로 못 박고 시작했는데 **admit 16과 20에서 연달아 걸렸고, 두 계단 모두 Redis는 멀쩡했다** — `used_memory` 5~6 MB(상한 48 MB), `rejected_connections` 0, `blocked_clients` 0, 명령 처리 max 956/s. 걸린 것은 호스트 CPU 98%뿐이었다. 바로 위 §16.4가 적어 둔 *"`RedisCommandTimeoutException`을 Redis 장애로 읽지 않는다 — 게이트웨이가 CPU를 못 잡으면 서버가 즉답해도 터진다"*가 그대로 재현된 것이다. **즉 이 지표는 포화의 결과이기도 해서, 무릎을 찾는 회차에서 무릎을 무효로 만든다.**
+> **⚠️ `queue_status_unavailable > 0`을 단독 무효 조건으로 쓰면 포화 회차를 잴 수 없다(2026-08-14 #555 실측).** 그 회차는 이 조건을 `INVALID_IF`로 못 박고 시작했는데 **admit 16과 20에서 연달아 걸렸고, 두 계단 모두 Redis는 멀쩡했다** — `used_memory` 5-6 MB(상한 48 MB), `rejected_connections` 0, `blocked_clients` 0, 명령 처리 max 956/s. 걸린 것은 호스트 CPU 98%뿐이었다. 바로 위 §16.4가 적어 둔 *"`RedisCommandTimeoutException`을 Redis 장애로 읽지 않는다 — 게이트웨이가 CPU를 못 잡으면 서버가 즉답해도 터진다"*가 그대로 재현된 것이다. **즉 이 지표는 포화의 결과이기도 해서, 무릎을 찾는 회차에서 무릎을 무효로 만든다.**
 >
 > **그래서 판정을 두 단계로 나눈다.** `queue_status_unavailable > 0`이면 먼저 **같은 창의 Redis 상태를 본다**(`redis_memory_used_bytes` · `redis_rejected_connections_total` · `redis_blocked_clients` · `redis_commands_processed_total` rate, 필요하면 `redis-cli slowlog`).
 > - Redis에 이상 징후가 **있으면** → 무효. Redis 장애를 잰 회차다(원래 의도).
