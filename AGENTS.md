@@ -28,6 +28,8 @@ TicketRush 백엔드의 **도구 중립 AI 진입점**입니다. Claude Code·Gi
 | [`docs/ai-workflow-guide.md`](docs/ai-workflow-guide.md) | AI 워크플로우(에이전트 / 커맨드 / 사이클 / 훅) |
 | [`docs/kafka-event-guide.md`](docs/kafka-event-guide.md) | Kafka 이벤트 설계 · 연동 |
 | [`docs/mapstruct-guide.md`](docs/mapstruct-guide.md) | MapStruct 매퍼 사용법 |
+| [`docs/load-test-guide.md`](docs/load-test-guide.md) | 부하 테스트 실행 절차 · 시나리오별 런북 · 회차 재현성 규약 |
+| [`docs/performance-report.md`](docs/performance-report.md) | 성능 측정 종합(병목 이동 · 개선 전후 · 한계). **수치 SSOT 는 각 회차 `metadata.txt`** |
 | [`docs/adr/`](docs/adr/) | 아키텍처 결정 기록(ADR) — 결정 근거·이력 |
 | `AGENTS.md` | 진입점 · 빌드 명령 · 문서 라우팅(이 표) |
 
