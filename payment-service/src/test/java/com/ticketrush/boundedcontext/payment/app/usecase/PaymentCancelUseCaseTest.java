@@ -193,8 +193,9 @@ class PaymentCancelUseCaseTest {
     verify(paymentCancelPersister, never()).persist(any(), any(Refund.class));
     verify(paymentEventPublisher, never())
         .publishCanceled(any(), any(), any(), any(), any(), any(), any(), any());
-    // 이미 취소된 건은 가드 앞에서 조기 반환되므로 입장권 조회를 하지 않는다 (#416).
+    // 이미 취소된 건은 가드 앞에서 조기 반환되므로 외부 왕복을 하지 않는다 (#416, #608).
     verify(ticketRestClient, never()).isTicketUsed(any());
+    verify(bookingRestClient, never()).getBooking(any());
   }
 
   @Test
