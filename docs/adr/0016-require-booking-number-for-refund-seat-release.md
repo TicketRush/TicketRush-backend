@@ -65,6 +65,8 @@ if (bookingNumber != null && !bookingNumber.isBlank()
 
 켜는 순서가 곧 절차다 — payment 배포 확인 → `payment-canceled-topic` 컨슈머 랙 0 확인 → `SEAT_REQUIRE_BOOKING_NUMBER=true` 주입.
 
+**⚠️ 되돌리기는 미래 이벤트에만 듣는다.** 스킵은 `inboxService.runIfFirst` **안에서** 정상 return하므로 inbox에 "처리 완료"로 기록되고 ack된다. 따라서 스위치를 `false`로 내려도 **그 사이 스킵된 건은 재전달·재처리로 복구되지 않는다** — 다시 발행해도 inbox 중복으로 걸러진다. 스위치의 값싼 롤백은 "앞으로 더 막지 않는다"까지이고, 이미 막힌 건의 좌석은 여전히 수동 DML 대상이다. 스킵을 예외로 바꿔 inbox 기록을 피하는 선택지도 있지만, 그러면 재시도 끝에 DLT로 적재돼 성격이 달라지므로 택하지 않았다.
+
 ### 3. 관측은 스위치와 무관하게 항상 한다
 
 스킵은 예외가 아니라 정상 return이라 리스너의 `[CRITICAL]` catch에 걸리지 않고 조용히 ack되며, `SEAT_SSE_EVENT_PUBLISHED`는 반환에 **성공**했을 때만 오른다. 기존 어느 시계열에도 나타나지 않으므로 카운터가 유일한 관측 축이다.
