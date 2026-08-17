@@ -63,6 +63,8 @@ if (bookingNumber != null && !bookingNumber.isBlank()
 
 `SeatReleaseSoldSeatUseCase`가 예매번호가 비면 반환하지 않는다. 이것이 안전한 이유는 **앱 경로에서 `SOLD ⇒ booking_number IS NOT NULL`이 불변식으로 성립**하기 때문이다 — SOLD 진입은 `SeatRepository.confirmSoldById` 하나뿐이고 그 WHERE가 `s.bookingNumber = :bookingNumber`라 NULL 행은 SQL 3값 논리상 매치되지 않으며, SET 절이 번호를 지우지 않는다. 즉 **정상 좌석에는 언제나 번호가 있으므로, 값이 빈 이벤트는 그 자체로 비정상 신호**다.
 
+이 논거는 **이벤트 쪽 빈 값**에만 해당한다. **좌석 쪽 `booking_number`가 NULL인 과거 행**은 별개 문제이고, 그쪽은 이 스위치가 감싸지 않는 mismatch 분기에 걸린다(→ 결과의 첫 항목).
+
 다만 거부는 `app.seat.refund-release.require-booking-number`로 감싸고 **기본값을 `false`로 둔다.** CD가 8개 서비스를 docker compose로 일괄 갱신해 payment와 seat의 교체 순서를 강제할 수 없고, 토픽에 아직 소비되지 않은 구버전 이벤트가 남아 있을 수도 있다. 그 구간에 가드가 켜져 있으면 **정상 취소의 좌석 반환까지 전부 막혀** 위 표의 "복구 불가" 상태를 대량으로 만든다.
 
 켜는 순서가 곧 절차다 — payment 배포 확인 → `payment-canceled-topic` 컨슈머 랙 0 확인 → `SEAT_REQUIRE_BOOKING_NUMBER=true` 주입.
