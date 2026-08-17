@@ -82,10 +82,13 @@ class SeatReleaseSoldSeatUseCaseTest {
   }
 
   @Test
-  @DisplayName("재현(#608): 다른 예매가 결제 완료한 SOLD 좌석은 예매 번호 없는 이벤트로 반환되지 않는다")
+  @DisplayName("재현(#608, 가드 ON): 다른 예매가 결제 완료한 SOLD 좌석은 예매 번호 없는 이벤트로 반환되지 않는다")
   void execute_skip_when_booking_number_missing_and_seat_owned_by_others() {
     // given: 이슈 #608 시나리오 — A의 예매가 좌석을 놓친 뒤 B가 그 좌석을 사서 SOLD가 됐고,
     // 그 상태에서 A가 결제 취소를 누르면 예매 번호 없는 반환 이벤트가 B의 좌석에 도착한다.
+    //
+    // 주의: 이 테스트는 가드를 켠 구성이다. 배포 기본값(false)에서 이 시나리오를 실제로 막는 것은
+    // payment 가 예매 번호를 채우는 쪽이고, seat 에서는 아래 mismatch 테스트가 그 방어를 고정한다.
     refundReleaseProperties.setRequireBookingNumber(true);
     Seat seat = seatSoldTo(SeatStatus.SOLD, OTHER_BOOKING_NUMBER);
     given(seatRepository.findById(SEAT_ID)).willReturn(Optional.of(seat));
@@ -136,9 +139,11 @@ class SeatReleaseSoldSeatUseCaseTest {
   }
 
   @Test
-  @DisplayName("ABA 방지: 좌석의 예매 번호가 이벤트와 다르면 반환하지 않는다")
+  @DisplayName("ABA 방지(#608 기본 방어): 좌석의 예매 번호가 이벤트와 다르면 반환하지 않는다")
   void execute_skip_when_booking_number_mismatch() {
-    // given: 좌석 id 재사용으로 다른 예매가 재선점(SOLD)한 좌석을 과거 환불 이벤트가 반환하려는 상황
+    // given: 다른 예매가 선점·결제한 좌석을 과거 환불 이벤트가 반환하려는 상황.
+    // payment 가 예매 번호를 채우게 된 뒤(#608) 결제 취소 API 경로가 실제로 도달하는 분기가 여기다.
+    // 킬 스위치 밖이라 배포 즉시 발화한다.
     Seat seat = seatWithStatus(SeatStatus.SOLD);
     given(seatRepository.findById(SEAT_ID)).willReturn(Optional.of(seat));
 
@@ -181,6 +186,7 @@ class SeatReleaseSoldSeatUseCaseTest {
     // then
     assertThat(seat.getSeatStatus()).isEqualTo(SeatStatus.HOLD);
     verifyNoInteractions(seatStatusEventPublisher);
+    assertThat(skipCount("not_sold")).isEqualTo(1);
   }
 
   @Test
@@ -194,5 +200,6 @@ class SeatReleaseSoldSeatUseCaseTest {
 
     // then
     verifyNoInteractions(seatStatusEventPublisher);
+    assertThat(skipCount("seat_not_found")).isEqualTo(1);
   }
 }
