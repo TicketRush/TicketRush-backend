@@ -5,7 +5,6 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.eq;
-import static org.mockito.ArgumentMatchers.isNull;
 import static org.mockito.BDDMockito.given;
 import static org.mockito.Mockito.inOrder;
 import static org.mockito.Mockito.never;
@@ -20,20 +19,29 @@ import com.ticketrush.boundedcontext.payment.domain.entity.Refund;
 import com.ticketrush.boundedcontext.payment.domain.types.PaymentProvider;
 import com.ticketrush.boundedcontext.payment.domain.types.PaymentStatus;
 import com.ticketrush.boundedcontext.payment.domain.types.RefundStatus;
+import com.ticketrush.boundedcontext.payment.out.apiclient.BookingRestClient;
 import com.ticketrush.boundedcontext.payment.out.apiclient.PaymentCancelClientRouter;
 import com.ticketrush.boundedcontext.payment.out.apiclient.PaymentCancelCommand;
 import com.ticketrush.boundedcontext.payment.out.apiclient.PaymentCancelResult;
 import com.ticketrush.boundedcontext.payment.out.apiclient.TicketRestClient;
+import com.ticketrush.boundedcontext.payment.out.apiclient.dto.BookingInfoResponse;
 import com.ticketrush.boundedcontext.payment.out.repository.PaymentRepository;
 import com.ticketrush.boundedcontext.payment.out.repository.RefundRepository;
+import com.ticketrush.global.constants.MetricNames;
 import com.ticketrush.global.exception.BusinessException;
 import com.ticketrush.global.status.ErrorStatus;
+import io.micrometer.core.instrument.Counter;
+import io.micrometer.core.instrument.MeterRegistry;
+import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import java.lang.reflect.Field;
 import java.time.LocalDateTime;
 import java.util.Optional;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.NullSource;
+import org.junit.jupiter.params.provider.ValueSource;
 import org.mapstruct.factory.Mappers;
 import org.mockito.ArgumentCaptor;
 import org.mockito.InOrder;
@@ -46,6 +54,8 @@ import org.springframework.dao.DataIntegrityViolationException;
 @ExtendWith(MockitoExtension.class)
 class PaymentCancelUseCaseTest {
 
+  private static final String BOOKING_NUMBER = "BK20260817000001";
+
   @Mock private PaymentRepository paymentRepository;
   @Mock private RefundRepository refundRepository;
   @Mock private PaymentCancelClientRouter paymentCancelClientRouter;
@@ -53,8 +63,10 @@ class PaymentCancelUseCaseTest {
   @Mock private FailedRefundRecorder failedRefundRecorder;
   @Mock private PaymentEventPublisher paymentEventPublisher;
   @Mock private TicketRestClient ticketRestClient;
+  @Mock private BookingRestClient bookingRestClient;
 
   @Spy private PaymentMapper paymentMapper = Mappers.getMapper(PaymentMapper.class);
+  @Spy private MeterRegistry meterRegistry = new SimpleMeterRegistry();
 
   @InjectMocks private PaymentCancelUseCase paymentCancelUseCase;
 
@@ -74,6 +86,7 @@ class PaymentCancelUseCaseTest {
     Payment payment = completedPayment(paymentId, userId, bookingId, seatId, amount);
     given(paymentRepository.findByIdAndUserId(paymentId, userId)).willReturn(Optional.of(payment));
     given(ticketRestClient.isTicketUsed(bookingId)).willReturn(false);
+    given(bookingRestClient.getBooking(bookingId)).willReturn(bookingInfo(bookingId, userId));
     given(paymentCancelClientRouter.cancel(any()))
         .willReturn(new PaymentCancelResult("PG-REFUND-1", amount, canceledAt));
 
@@ -118,19 +131,28 @@ class PaymentCancelUseCaseTest {
     assertThat(builtRefund.getReason()).isEqualTo("단순 변심");
     assertThat(builtRefund.getConfirmedAt()).isEqualTo(canceledAt);
 
+    // 좌석 소유 교차검증이 가능하도록 예매번호가 실려야 한다 (#608). null 이면 seat 의 ABA 가드가 통째로 꺼진다.
     verify(paymentEventPublisher)
         .publishCanceled(
             eq(paymentId),
             eq(bookingId),
-            isNull(),
+            eq(BOOKING_NUMBER),
             eq(seatId),
             eq(savedRefundId),
             eq(amount),
             eq("단순 변심"),
             eq(canceledAt));
 
+    // 예매번호 조회는 PG 취소보다 앞이어야 한다 (#608). 뒤면 조회 실패 시 환불만 나가고 좌석이 SOLD 로 고착된다.
     // 이벤트는 영속화(persist) 커밋 이후에 발행되어야 한다.
-    InOrder inOrder = inOrder(paymentCancelPersister, paymentEventPublisher);
+    InOrder inOrder =
+        inOrder(
+            bookingRestClient,
+            paymentCancelClientRouter,
+            paymentCancelPersister,
+            paymentEventPublisher);
+    inOrder.verify(bookingRestClient).getBooking(bookingId);
+    inOrder.verify(paymentCancelClientRouter).cancel(any());
     inOrder.verify(paymentCancelPersister).persist(eq(paymentId), any(Refund.class));
     inOrder
         .verify(paymentEventPublisher)
@@ -312,6 +334,7 @@ class PaymentCancelUseCaseTest {
     Payment payment = completedPayment(paymentId, userId, 100L, 200L, 55_000L);
     given(paymentRepository.findByIdAndUserId(paymentId, userId)).willReturn(Optional.of(payment));
     given(ticketRestClient.isTicketUsed(anyLong())).willReturn(false);
+    given(bookingRestClient.getBooking(anyLong())).willReturn(bookingInfo(100L, userId));
     given(paymentCancelClientRouter.cancel(any()))
         .willThrow(new BusinessException(ErrorStatus.PAYMENT_REFUND_FAILED));
 
@@ -338,6 +361,7 @@ class PaymentCancelUseCaseTest {
     Payment payment = completedPayment(paymentId, userId, 100L, 200L, 55_000L);
     given(paymentRepository.findByIdAndUserId(paymentId, userId)).willReturn(Optional.of(payment));
     given(ticketRestClient.isTicketUsed(anyLong())).willReturn(false);
+    given(bookingRestClient.getBooking(anyLong())).willReturn(bookingInfo(100L, userId));
     given(paymentCancelClientRouter.cancel(any()))
         .willReturn(new PaymentCancelResult("PG-REFUND-1", 55_000L, LocalDateTime.now()));
     given(paymentCancelPersister.persist(eq(paymentId), any(Refund.class)))
@@ -393,6 +417,7 @@ class PaymentCancelUseCaseTest {
     Payment payment = completedPayment(paymentId, userId, 100L, 200L, 55_000L);
     given(paymentRepository.findByIdAndUserId(paymentId, userId)).willReturn(Optional.of(payment));
     given(ticketRestClient.isTicketUsed(anyLong())).willReturn(false);
+    given(bookingRestClient.getBooking(anyLong())).willReturn(bookingInfo(100L, userId));
     BusinessException rejected = new BusinessException(ErrorStatus.PAYMENT_REFUND_FAILED);
     given(paymentCancelClientRouter.cancel(any())).willThrow(rejected);
 
@@ -424,6 +449,106 @@ class PaymentCancelUseCaseTest {
         .isInstanceOf(BusinessException.class)
         .extracting("errorStatus")
         .isEqualTo(ErrorStatus.PAYMENT_REFUND_INCONSISTENT);
+  }
+
+  @Test
+  @DisplayName("예매 조회가 통신 실패(503)면 PG 취소 이전에 차단되고 lookup_failed 로 집계한다 (#608)")
+  void execute_blocked_when_booking_lookup_fails() throws Exception {
+    // given: fail-closed — 예매번호를 얻지 못하면 PG 취소로 넘어가지 않는다. PG 가 나간 뒤에 막으면
+    // 환불만 성사되고 좌석이 SOLD 로 고착돼 관리자 강제 해제도 거부된다.
+    Long userId = 10L;
+    Long paymentId = 1L;
+    Long bookingId = 100L;
+    PaymentCancelRequest request = new PaymentCancelRequest("단순 변심");
+
+    Payment payment = completedPayment(paymentId, userId, bookingId, 200L, 55_000L);
+    given(paymentRepository.findByIdAndUserId(paymentId, userId)).willReturn(Optional.of(payment));
+    given(ticketRestClient.isTicketUsed(bookingId)).willReturn(false);
+    given(bookingRestClient.getBooking(bookingId))
+        .willThrow(new BusinessException(ErrorStatus.PAYMENT_BOOKING_COMMUNICATION_FAILED));
+
+    // when & then
+    assertThatThrownBy(() -> paymentCancelUseCase.execute(userId, paymentId, request))
+        .isInstanceOf(BusinessException.class)
+        .extracting("errorStatus")
+        .isEqualTo(ErrorStatus.PAYMENT_BOOKING_COMMUNICATION_FAILED);
+
+    verify(paymentCancelClientRouter, never()).cancel(any());
+    verify(paymentCancelPersister, never()).persist(any(), any(Refund.class));
+    verify(paymentEventPublisher, never())
+        .publishCanceled(any(), any(), any(), any(), any(), any(), any(), any());
+    assertThat(blockedCount("lookup_failed")).isEqualTo(1);
+    assertThat(blockedCount("not_found")).isZero();
+  }
+
+  @Test
+  @DisplayName("예매가 존재하지 않으면(404) PG 취소 이전에 차단되고 not_found 로 집계한다 (#608)")
+  void execute_blocked_when_booking_not_found() throws Exception {
+    // given
+    Long userId = 10L;
+    Long paymentId = 1L;
+    Long bookingId = 100L;
+    PaymentCancelRequest request = new PaymentCancelRequest("단순 변심");
+
+    Payment payment = completedPayment(paymentId, userId, bookingId, 200L, 55_000L);
+    given(paymentRepository.findByIdAndUserId(paymentId, userId)).willReturn(Optional.of(payment));
+    given(ticketRestClient.isTicketUsed(bookingId)).willReturn(false);
+    given(bookingRestClient.getBooking(bookingId))
+        .willThrow(new BusinessException(ErrorStatus.BOOKING_NOT_FOUND));
+
+    // when & then
+    assertThatThrownBy(() -> paymentCancelUseCase.execute(userId, paymentId, request))
+        .isInstanceOf(BusinessException.class)
+        .extracting("errorStatus")
+        .isEqualTo(ErrorStatus.BOOKING_NOT_FOUND);
+
+    verify(paymentCancelClientRouter, never()).cancel(any());
+    verify(paymentEventPublisher, never())
+        .publishCanceled(any(), any(), any(), any(), any(), any(), any(), any());
+    assertThat(blockedCount("not_found")).isEqualTo(1);
+    assertThat(blockedCount("lookup_failed")).isZero();
+  }
+
+  @ParameterizedTest(name = "예매번호가 [{0}] 이면 차단한다")
+  @NullSource
+  @ValueSource(strings = {"", "   "})
+  @DisplayName("200 을 받았어도 예매번호가 비면 계약 결함이므로 503 으로 차단한다 (#608)")
+  void execute_blocked_when_booking_number_blank(String blankBookingNumber) throws Exception {
+    // given: 배포 순서가 역전돼 booking 이 아직 booking_number 를 내려주지 않는 구간도 이 경로로 들어온다.
+    Long userId = 10L;
+    Long paymentId = 1L;
+    Long bookingId = 100L;
+    PaymentCancelRequest request = new PaymentCancelRequest("단순 변심");
+
+    Payment payment = completedPayment(paymentId, userId, bookingId, 200L, 55_000L);
+    given(paymentRepository.findByIdAndUserId(paymentId, userId)).willReturn(Optional.of(payment));
+    given(ticketRestClient.isTicketUsed(bookingId)).willReturn(false);
+    given(bookingRestClient.getBooking(bookingId))
+        .willReturn(new BookingInfoResponse(bookingId, userId, "CONFIRMED", blankBookingNumber));
+
+    // when & then: 도메인 오류(404)가 아니라 계약 결함(503)으로 접는다 (ADR 0011 원칙 3).
+    assertThatThrownBy(() -> paymentCancelUseCase.execute(userId, paymentId, request))
+        .isInstanceOf(BusinessException.class)
+        .extracting("errorStatus")
+        .isEqualTo(ErrorStatus.PAYMENT_BOOKING_COMMUNICATION_FAILED);
+
+    verify(paymentCancelClientRouter, never()).cancel(any());
+    verify(paymentEventPublisher, never())
+        .publishCanceled(any(), any(), any(), any(), any(), any(), any(), any());
+    assertThat(blockedCount("booking_number_unknown")).isEqualTo(1);
+  }
+
+  private BookingInfoResponse bookingInfo(Long bookingId, Long userId) {
+    return new BookingInfoResponse(bookingId, userId, "CONFIRMED", BOOKING_NUMBER);
+  }
+
+  private double blockedCount(String reason) {
+    Counter counter =
+        meterRegistry
+            .find(MetricNames.PAYMENT_CANCEL_BOOKING_GUARD_BLOCKED)
+            .tag(MetricNames.TAG_REASON, reason)
+            .counter();
+    return counter == null ? 0 : counter.count();
   }
 
   private Payment completedPayment(
