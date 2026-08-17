@@ -20,6 +20,7 @@ TicketRush의 아키텍처 결정을 번호 매긴 Markdown으로 축적하는 �
 - [12. PG 환불의 일시적 거절은 호출 지점에서 흡수하고, 소진되면 결정적 실패로 확정한다](0012-absorb-transient-pg-refund-rejections-at-caller.md)
 - [13. 배너는 performance-service 안의 별도 bounded context로 두고, 경로는 서비스명이 아니라 리소스명을 따른다](0013-banner-as-separate-context-inside-performance-service.md)
 - [14. 환불 실패 보상 신호는 발행을 보장하는 대신, 남아 있는 상태로 재발행해 복구한다](0014-recover-refund-failure-signal-by-reconciliation.md)
+- [15. 확정 신호가 유실돼 과금만 남은 만료 예매는, 예매를 되살리는 대신 대조로 찾아 자동 환불한다](0015-recover-charged-expired-booking-by-auto-refund.md)
 
 ## 사용법
 
