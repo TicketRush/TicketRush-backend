@@ -51,6 +51,8 @@ if (bookingNumber != null && !bookingNumber.isBlank()
 | 남는 상태 | 과금·예매·좌석 **전부 그대로** | **환불은 됐는데 좌석이 SOLD** |
 | 복구 | 사용자가 재시도하면 끝 | `SOLD → AVAILABLE` 전이는 `releaseBooking()` 하나뿐인데 그 경로가 방금 스킵됐고, `SeatAdminForceReleaseHoldUseCase`는 SOLD를 `SEAT_SOLD_NOT_RELEASABLE`로 거부한다. **수동 DML 외에 없다** |
 
+**"재시도하면 끝"은 `lookup_failed`(503)에만 성립한다.** `not_found`(404)는 재시도해도 같은 결과라 **영구 차단**이고, 그 상태에서 payment는 COMPLETED로 남는데 booking의 관리자 재환불도 booking row가 있어야 열리므로 앱 경로의 환불 수단이 사라진다(종전에는 취소가 됐다). 다만 payment와 booking이 같은 DB를 쓰는 이상([ADR 3](0003-shared-database-with-service-boundaries.md)) `payment.booking_id`가 가리키는 예매가 없는 상태 자체가 이미 심각한 데이터 결함이고, 그 상태로 좌석을 반환하면 **어느 예매의 좌석인지 판정하지 못한 채** 푸는 것이라 여전히 막는 편이 낫다. 발생하면 카운터의 `not_found`가 그것을 가리키며, 복구는 데이터 조사가 선행돼야 한다.
+
 뒤에 두면 [#91](https://github.com/TicketRush/TicketRush-backend/issues/91)이 닫았다고 선언한 "환불됐는데 좌석이 SOLD로 남는" 역방향 공백이 되살아나고, 이번엔 복구 수단 없이 되살아난다. 재전달로도 풀리지 않는다 — seat는 스킵을 정상 return으로 ack하고, payment는 이미 CANCELED라 재취소가 멱등 반환으로 빠지며, [#574](https://github.com/TicketRush/TicketRush-backend/issues/574)의 신호 재발행은 FAILED 환불이 대상이라 COMPLETED 건을 집지 않는다.
 
 **되돌릴 수 있는 실패를 고른다.** [ADR 11](0011-verify-booking-owner-at-caller.md) 원칙 3("판정할 수 없으면 판정 불가로 끊는다")과 같은 판단이며, #416이 티켓 조회에 대해 이미 같은 논증으로 같은 자리를 택했다("판정할 수 없는 응답은 모두 503으로 수렴시켜 좌석을 SOLD로 남기는 안전한 방향으로 전파한다").
