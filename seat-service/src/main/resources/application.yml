@@ -102,6 +102,13 @@ app:
       # 못 살린 좌석을 쓸어담는 fallback이라, 정작 일해야 하는 순간이 곧 대량 만료가 밀린 순간이다.
       chunk-size: 25
       max-chunks: 80
+    refund-release:
+      # 환불 좌석 반환에 예매번호를 요구할지 (#608). 켜면 예매번호 없는 반환 요청을 거부한다.
+      # 기본 false — CD가 일괄 배포라 payment(값을 채우는 쪽)와의 교체 순서를 강제할 수 없고,
+      # 토픽에 남은 구버전 이벤트도 이 가드에 걸린다. 그 구간에 켜져 있으면 정상 취소의 좌석 반환까지
+      # 막혀 SOLD로 고착되는데 관리자 강제 해제가 SOLD를 거부해 수동 DML 외에 풀 수 없다.
+      # payment 배포 확인 + 컨슈머 랙 0 확인 후 주입한다. 자세한 절차는 SeatRefundReleaseProperties.
+      require-booking-number: ${SEAT_REQUIRE_BOOKING_NUMBER:false}
   event-publisher:
     type: outbox
   outbox:
