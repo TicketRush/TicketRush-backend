@@ -2,6 +2,8 @@ package com.ticketrush.boundedcontext.payment.out.repository;
 
 import com.ticketrush.boundedcontext.payment.domain.entity.Payment;
 import com.ticketrush.boundedcontext.payment.domain.types.PaymentStatus;
+import java.util.Collection;
+import java.util.List;
 import java.util.Optional;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
@@ -31,4 +33,12 @@ public interface PaymentRepository extends JpaRepository<Payment, Long> {
    * 있으므로, 기록 직전 이 개수로 상한을 건다.
    */
   long countByBookingIdAndStatus(Long bookingId, PaymentStatus status);
+
+  /*
+   * 만료 예매 후보 묶음에 대해 해당 상태의 결제를 한 번에 대조한다(#607). 후보를 한 건씩 조회하면 배치 크기만큼
+   * 왕복이 늘고, 조인 한 방으로 합치면 희소 매치에서 조기 종료가 안 돼 매 주기 풀스캔이 된다 —
+   * ExpiredBookingRepository.findByIdGreaterThanOrderByIdAsc 의 javadoc 참고.
+   * idx_payment_booking_id(#412)를 타며, booking당 COMPLETED 는 unique 제약상 최대 1건이다(#296).
+   */
+  List<Payment> findByBookingIdInAndStatus(Collection<Long> bookingIds, PaymentStatus status);
 }

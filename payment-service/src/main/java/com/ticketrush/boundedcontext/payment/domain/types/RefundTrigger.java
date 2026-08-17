@@ -20,7 +20,15 @@ public enum RefundTrigger {
   /** 사용자·관리자가 예매를 취소해 요청한 환불 (#91). */
   USER_CANCEL("사용자 예매 취소"),
   /** 과금 후 좌석 확정이 실패해 시스템이 되돌리는 보상 환불 (#492). */
-  SEAT_CONFIRM_FAILED("좌석 확정 실패 자동 환불");
+  SEAT_CONFIRM_FAILED("좌석 확정 실패 자동 환불"),
+  /**
+   * 결제 확정 신호가 유실돼 예매가 만료된 뒤, 남은 과금을 시스템이 되돌리는 보상 환불 (#607).
+   *
+   * <p>{@link #SEAT_CONFIRM_FAILED}와 나눠 둔 것은 두 사고의 원인이 다르기 때문이다. 그쪽은 좌석 확정이 실패했다는 <b>신호가 도착한</b>
+   * 건이고, 이쪽은 <b>신호가 오지 않아</b> 대조로 찾아낸 건이다. 한 값에 접으면 발행 유실률(#574의 {@code
+   * ticketrush.event.publish.failed})과 겹쳐 읽어야 할 사고 축이 좌석 실패에 섞여 사라진다.
+   */
+  CONFIRM_SIGNAL_LOST("결제 확정 신호 유실 자동 환불");
 
   private final String reason;
 

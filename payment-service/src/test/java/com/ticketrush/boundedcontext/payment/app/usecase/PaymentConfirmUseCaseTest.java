@@ -94,8 +94,11 @@ class PaymentConfirmUseCaseTest {
   private void givenPreConfirmGuards(Long bookingId, Long ownerUserId, String bookingStatus) {
     given(paymentRepository.existsByBookingIdAndStatus(bookingId, PaymentStatus.COMPLETED))
         .willReturn(false);
+    // bookingNumber 를 null 로 둔다(#607). 이 필드는 환불 경로 전용이고 결제 확정 판정과 무관한데,
+    // 값을 채우면 "안 보기 때문에 통과한 것"인지 "값이 있어서 통과한 것"인지 구분되지 않는다. null 로
+    // 두면 이 테스트 묶음 전체가 곧 confirm 경로 무회귀의 증거가 된다.
     given(bookingRestClient.getBooking(bookingId))
-        .willReturn(new BookingInfoResponse(bookingId, ownerUserId, bookingStatus));
+        .willReturn(new BookingInfoResponse(bookingId, ownerUserId, bookingStatus, null));
   }
 
   private double guardBlockedCount(String reason) {
