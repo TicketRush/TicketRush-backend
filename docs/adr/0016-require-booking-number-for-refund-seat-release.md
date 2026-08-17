@@ -76,6 +76,8 @@ if (bookingNumber != null && !bookingNumber.isBlank()
 - seat `SEAT_REFUND_RELEASE_SKIPPED` — reason 4종(`seat_not_found` / `not_sold` / `booking_number_mismatch` / `booking_number_missing`)
 - payment `PAYMENT_CANCEL_BOOKING_GUARD_BLOCKED` — reason 3종(`not_found` / `lookup_failed` / `booking_number_unknown`)
 
+**이 카운터들은 건수가 아니라 발생 여부 신호로 읽는다.** seat 쪽은 `@Transactional` 안에서 증가하므로 커밋이 롤백되고 Kafka가 재시도하면 같은 건이 다시 세어진다(at-least-once). 판정 기준이 "0인가"라 안전한 방향의 오차지만, 0이 아닐 때 그 값을 사고 건수로 읽으면 어긋난다.
+
 가드가 꺼져 있는 구간에도 `booking_number_missing`을 세는 것이 중요하다. **스위치를 켜도 되는지를 그 집계가 0인지로 판단**하기 때문이다. 태그를 가르는 규율은 ADR 11 원칙 4, ADR 15 §관측과 같다 — 정상 스킵(`not_sold`)과 조사 대상을 한 덩어리로 세면 사고가 멱등 스킵의 노이즈에 묻힌다.
 
 ## 결과
