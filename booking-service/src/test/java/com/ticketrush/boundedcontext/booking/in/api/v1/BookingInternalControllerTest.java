@@ -146,12 +146,12 @@ class BookingInternalControllerTest {
   }
 
   @Test
-  @DisplayName("성공: 올바른 내부 토큰이면 예매 소유자/상태를 200으로 반환한다")
+  @DisplayName("성공: 올바른 내부 토큰이면 예매 소유자/상태/예매번호를 200으로 반환한다")
   void getBookingInternal_success() throws Exception {
     // given
     Long bookingId = 100L;
     given(bookingGetInternalUseCase.execute(bookingId))
-        .willReturn(new BookingInternalResponse(bookingId, 10L, BookingStatus.CONFIRMED));
+        .willReturn(new BookingInternalResponse(bookingId, 10L, BookingStatus.CONFIRMED, "BOOK-1"));
 
     // when & then
     mockMvc
@@ -162,7 +162,10 @@ class BookingInternalControllerTest {
         .andExpect(jsonPath("$.is_success").value(true))
         .andExpect(jsonPath("$.result.booking_id").value(100))
         .andExpect(jsonPath("$.result.user_id").value(10))
-        .andExpect(jsonPath("$.result.booking_status").value("CONFIRMED"));
+        .andExpect(jsonPath("$.result.booking_status").value("CONFIRMED"))
+        // 키 이름이 계약이다 — payment 의 BookingInfoResponse 가 @JsonProperty("booking_number") 로
+        // 이 이름에 맞춰 매핑하고, 어긋나면 ignoreUnknown 때문에 예외 없이 조용히 null 이 된다(#607).
+        .andExpect(jsonPath("$.result.booking_number").value("BOOK-1"));
   }
 
   @Test

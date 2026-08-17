@@ -80,4 +80,5 @@ booking·seat의 outbox 릴레이는 ShedLock으로 다중 실행을 막지만 �
 ### 다루지 않은 것
 
 - `PaymentConfirmedEvent` 유실. 이쪽은 `PaymentCanceledEvent`의 self-heal에 해당하는 경로가 아예 없어 booking이 PENDING으로 고착되는데, 복구 설계가 booking 확장을 부르므로 별도 이슈로 남긴다.
+  > **정정(2026-08-17, [ADR 0015](0015-recover-charged-expired-booking-by-auto-refund.md)).** "PENDING으로 고착된다"는 부정확하다. `BookingExpirationScheduler`가 5분 뒤 EXPIRED로 전이시키므로 **고착이 아니라 소멸**이며, 그래서 이 문서가 세운 "남아 있는 상태로 재발행해 복구한다"를 그대로 적용할 수 없다 — 재발행해도 `Booking#confirm`이 EXPIRED를 거절한다. ADR 0015는 예매를 되살리는 대신 **대조로 찾아 자동 환불하는** 반대 방향을 택했다.
 - payment 전면 outbox 전환. 위 (a)의 트랜잭션 재설계가 선행돼야 한다.

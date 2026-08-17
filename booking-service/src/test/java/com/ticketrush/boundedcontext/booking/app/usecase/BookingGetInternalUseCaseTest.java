@@ -27,7 +27,7 @@ class BookingGetInternalUseCaseTest {
   @Mock private BookingRepository bookingRepository;
 
   @Test
-  @DisplayName("성공: 예매 ID로 소유자와 상태를 반환한다")
+  @DisplayName("성공: 예매 ID로 소유자·상태·예매번호를 반환한다")
   void execute_returns_owner_and_status() {
     // given
     Long bookingId = 100L;
@@ -49,6 +49,9 @@ class BookingGetInternalUseCaseTest {
     assertThat(response.bookingId()).isEqualTo(bookingId);
     assertThat(response.userId()).isEqualTo(10L);
     assertThat(response.bookingStatus()).isEqualTo(BookingStatus.CONFIRMED);
+    // payment 의 좌석 소유 교차검증이 이 값에 걸려 있다(#607). 매핑이 빠지면 null 로 나가고,
+    // 그 null 은 호출자에서 "판정 불가"가 아니라 "검증 생략"으로 새기 쉬워 사고가 조용히 열린다.
+    assertThat(response.bookingNumber()).isEqualTo("BOOK-1");
   }
 
   @Test

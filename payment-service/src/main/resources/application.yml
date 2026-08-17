@@ -46,6 +46,29 @@ app:
     # PG 장애로 FAILED 가 대량으로 쌓였을 때 한 주기에 전부 발행하지 않도록 상한을 둔다. 올리면 한 바퀴가
     # 짧아지는 대신 한 주기가 스케줄러 스레드를 오래 문다.
     batch-size: ${REFUND_SIGNAL_REPLAY_BATCH_SIZE:100}
+  # 결제 확정 신호가 유실돼 과금만 남은 만료 예매를 찾아 자동 환불한다(#607).
+  charged-expired-recovery:
+    # 기본값이 false 인 것은 위 refund-signal-replay 와 다르며, 차이는 이 작업에 PG 환불이라는 되돌릴 수
+    # 없는 부작용이 있다는 것이다. 켜는 순간 첫 랩이 과거에 쌓인 사고 건을 전량 환불하므로, 잔량을 실측하고
+    # 그 규모를 알고 켠다(ADR 0015 · #441). 끄면 사고 건이 어떤 목록에도 잡히지 않는 상태로 남는다.
+    enabled: ${CHARGED_EXPIRED_RECOVERY_ENABLED:false}
+    # 만료 5 분 뒤부터 대상이 되지만 그 직후는 정상 처리가 늦게 도착하는 중일 수 있다. 이 주기 자체보다
+    # grace-minutes 가 실질 탐지 지연을 결정한다.
+    interval-ms: ${CHARGED_EXPIRED_RECOVERY_INTERVAL_MS:60000}
+    # expired_booking 은 해결돼도 행이 남아 한 바퀴 길이가 누적 만료 건수에 비례한다. 실제 복구 지연
+    # 상한은 interval 이 아니라 ceil(만료 건수 / batch-size) × interval 이다.
+    # 아래 셋 모두 0 이나 음수면 기동이 실패한다. 0 은 "제한 없음"이 아니라 고장이기 때문이다(#573).
+    batch-size: ${CHARGED_EXPIRED_RECOVERY_BATCH_SIZE:500}
+    # 만료 직후 창을 환불로 덮지 않기 위한 유예. 확정 신호가 늦게 도착해 예매가 되살아나는 일은 없지만
+    # (EXPIRED 는 종결 상태다), 취소·환불 등 다른 경로가 같은 건을 정리하는 중일 수 있다. 줄이면 복구가
+    # 빨라지는 대신 경합 구간이 넓어진다.
+    grace-minutes: ${CHARGED_EXPIRED_RECOVERY_GRACE_MINUTES:30}
+    # 한 주기에 PG 취소를 호출하는 최대 건수. batch-size 와 다른 축이다 — 그쪽은 만료 테이블을 훑는
+    # 크기이고 이쪽은 실제 결제 취소 호출 수다. Toss 는 429 대신 연속 요청 제한(403
+    # FORBIDDEN_CONSECUTIVE_REQUEST)을 내는데, 그 코드가 가장 나오기 쉬운 구간이 대량 보상 환불
+    # 버스트다. 거기 걸린 건은 FAILED 이력이 남아 자동 복구에서 영구히 빠지므로, 첫 랩에 백로그를
+    # 몰아 던지지 않도록 상한을 둔다. 상한에 걸리면 그 자리에 커서를 두고 다음 주기가 이어받는다.
+    max-refunds-per-lap: ${CHARGED_EXPIRED_RECOVERY_MAX_REFUNDS_PER_LAP:50}
 
 service:
   ticket:

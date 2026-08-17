@@ -75,6 +75,34 @@ public class MetricNames {
   // 나가므로 이 값이 곧 유실 건수는 아니다 — 유실 여부는 EVENT_PUBLISH_FAILED 쪽에서 읽는다.
   public static final String PAYMENT_REFUND_SIGNAL_REPLAYED =
       "ticketrush.payment.refund.signal.replayed";
+  // 결제 확정 신호 유실로 "과금됐는데 예매가 만료된" 건을 찾아낸 횟수(#607). 이 사고는 payment·booking 어느
+  // 쪽에도 미해결 표시가 남지 않아(refund_failed_at 은 EXPIRED 에서 구조적으로 채워지지 않는다) 이 카운터가
+  // 발생 자체의 유일한 관측 축이다. 0 이 아니면 그만큼의 사용자 돈이 환불 없이 남아 있었다는 뜻이다.
+  public static final String PAYMENT_CHARGED_EXPIRED_DETECTED =
+      "ticketrush.payment.charged_expired.detected";
+  // 그중 실제로 자동 환불에 성공한 횟수(#607). detected 와의 차이가 곧 미복구 잔량이라, Grafana 에서 두
+  // 시계열을 겹쳐 읽는다. Gauge 로 잔량을 직접 재지 않는 것은 정확히 세려면 만료 테이블을 매번 전건 훑어야
+  // 하는데 이 설계가 피하려던 것이 바로 그 풀스캔이기 때문이다(ADR 0015).
+  public static final String PAYMENT_CHARGED_EXPIRED_RECOVERED =
+      "ticketrush.payment.charged_expired.recovered";
+  // 후보였으나 환불하지 않고 건너뛴 횟수(#607). reason 태그는 판정 단계와 1:1인 유한 집합 7종이다 —
+  // already_refunded(환불이 성사·진행 중), refund_failed_history(PG 가 거절해 FAILED 이력만 남음),
+  // grace(만료 직후라 정상 처리 중일 수 있음), booking_lookup_failed(booking 조회 실패 → fail-closed),
+  // booking_alive(예매가 살아 있는 알려진 상태), booking_status_unknown(모르는 상태 문자열),
+  // booking_number_unknown(예매번호를 얻지 못함 → 좌석 오반환 방지로 중단, #608).
+  // 뒤 넷은 정상 스킵이 아니라 조사 대상이다. 태그로 갈라 두지 않으면 "환불하지 않았다"는 한 덩어리에
+  // 묻혀, 사고 건이 조용히 방치되는 것과 정상 동작이 구분되지 않는다. 특히 두 쌍의 구분이 핵심이다 —
+  // already_refunded 와 refund_failed_history 는 "돈이 돌아갔는가"가 정반대이고(후자는 미해결 사고인데
+  // 예매가 EXPIRED 라 booking 쪽 관리자 게이트도 열리지 않아 이 태그가 유일한 창구다),
+  // booking_alive 와 booking_status_unknown 은 "정상"과 "상대가 계약을 바꿔 복구가 전면 정지"의 차이다.
+  //
+  // ⚠️ already_refunded 는 오늘 코드에서 사실상 도달하지 않는다. 후보가 되려면 payment 가 COMPLETED 여야
+  // 하는데 PaymentCancelPersister 가 환불 저장과 markCanceled 를 한 트랜잭션에 묶으므로
+  // refund=COMPLETED 인 booking 은 payment 가 CANCELED 라 앞선 결제 대조에서 이미 빠진다. 그래서 이 값이
+  // 0 이 아니면 "정상적으로 이미 환불된 건을 건너뛰었다"가 아니라 "환불은 성사됐는데 payment 가 CANCELED 가
+  // 아닌" 찢어진 상태 신호로 읽어야 한다. 대시보드·알림 문구를 그렇게 잡는다.
+  public static final String PAYMENT_CHARGED_EXPIRED_SKIPPED =
+      "ticketrush.payment.charged_expired.skipped";
 
   // ticket
   public static final String TICKET_ISSUE = "ticketrush.ticket.issue";
