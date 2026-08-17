@@ -83,4 +83,6 @@ if (bookingNumber != null && !bookingNumber.isBlank()
 - **🔴 킬 스위치를 켠 뒤에는 좌석 고착이 발생할 수 있고, 앱 경로로 복구되지 않는다.** `booking_number_missing`이 0이 아니면 그 건의 좌석은 SOLD로 남으며 관리자 강제 해제도 거부된다. 복구는 `seat_status='AVAILABLE'`, `booking_number=NULL` 수동 DML뿐이다. **이 대가를 알고 켠다** — 대안인 오반환은 무고한 제3자의 좌석을 현장에서 이중 판매로 만들고, 그쪽은 되돌릴 방법조차 없다.
 - **스위치를 언제 제거할지는 정하지 않았다.** `booking_number_missing`이 충분히 오래 0을 유지하면 가드를 상시화하고 프로퍼티를 걷어내는 것이 자연스럽지만, 그 판단에는 운영 데이터가 필요하다.
 - **스키마는 바뀌지 않는다.** prod 수동 DDL 없음, 새 `ErrorStatus` 없음, 이벤트 필드 추가 없음(`bookingNumber`는 이미 있던 필드다). `bookingNumber`를 읽는 소비자가 seat 하나뿐이라 계약 변경의 파급도 없다.
-- **부하 시드는 손대지 않았다.** `load-test/seed/seed_seat_counts.sql`이 `booking_number` 없이 SOLD를 INSERT해 위 불변식을 깨지만, 그 좌석들은 값 있는 이벤트에도 이미 `booking_number_mismatch`로 스킵되므로 이번 변경 전후의 동작이 같다.
+- **🔴 mismatch 분기는 킬 스위치 밖이라 payment 배포 즉시 발화하고, 이 경로의 동작은 실제로 바뀐다.** API 취소 경로에 처음 값이 실리면서, 좌석의 `booking_number`가 이벤트와 어긋나거나 **NULL인** SOLD 행은 반환되지 않는다. 종전에는 이벤트가 `null`이라 대조를 건너뛰고 fail-open으로 반환됐다. 대부분은 의도한 방어(남의 좌석)지만, **번호가 NULL인 SOLD 행이 남아 있다면 정당한 환불에서도 좌석이 SOLD로 남는다.** 위 불변식은 앱 경로에만 성립하고 DB 제약이 아니므로, 과거 데이터까지 보장하지는 않는다 — `SeatRepository`는 #95 이전 `hold(expiredAt)`로 만들어진 번호 없는 행의 존재를 전제로 주석을 달고 있고, `load-test/seed/seed_seat_counts.sql`도 같은 형태의 행을 만든다.
+
+  따라서 **배포 전 실측이 필요하다**: `SELECT COUNT(*) FROM seat WHERE seat_status='SOLD' AND booking_number IS NULL`. 0이 아니면 그 행들은 킬 스위치로 완화할 수 없으므로(스위치는 이벤트 쪽 빈 값만 감싼다) 별도 처리 방침을 먼저 정해야 한다.
