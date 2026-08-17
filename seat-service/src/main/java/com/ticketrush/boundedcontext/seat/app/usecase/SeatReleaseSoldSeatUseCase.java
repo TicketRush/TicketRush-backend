@@ -63,20 +63,26 @@ public class SeatReleaseSoldSeatUseCase {
       return;
     }
 
-    if (bookingNumber == null || bookingNumber.isBlank()) {
+    boolean bookingNumberMissing = bookingNumber == null || bookingNumber.isBlank();
+
+    if (bookingNumberMissing) {
       // 발행 측이 값을 채우도록 고친 뒤에는(#608) 도달하지 않아야 한다. 도달했다면 좌석 소유를 판정할 수
       // 없다는 뜻이고, 그대로 반환하면 다른 예매가 결제 완료한 SOLD 좌석을 빈자리로 되돌릴 수 있다.
+      // 스위치와 무관하게 세는 이유는, 스위치를 켜도 되는지를 이 집계가 0인지로 판단하기 때문이다.
       countSkip(SKIP_BOOKING_NUMBER_MISSING);
-      if (!refundReleaseProperties.isRequireBookingNumber()) {
-        // 배포 창 대비로 가드가 꺼져 있는 구간. 종전 동작(반환)을 유지하되 사실은 남긴다.
-        log.error("[CRITICAL] 환불 좌석 반환 이벤트에 예매 번호가 없습니다! 가드가 꺼져 있어 반환을 진행합니다. seatId: {}", seatId);
-      } else {
+
+      if (refundReleaseProperties.isRequireBookingNumber()) {
         log.error(
             "[CRITICAL] 예매 번호가 없어 환불 좌석 반환을 중단했습니다! 좌석이 SOLD로 남아 수동 처리가 필요합니다. seatId: {}", seatId);
         return;
       }
-    } else if (!Objects.equals(seat.getBookingNumber(), bookingNumber)) {
-      // 좌석의 예매 번호가 다르면 그 좌석은 이미 다른 예매의 것이다(ABA 방지). 반환하면 남의 좌석을 푼다.
+      // 배포 창 대비로 가드가 꺼져 있는 구간이다. 대조할 값이 없으므로 아래 소유 검증도 건너뛰고
+      // 종전 동작(SOLD 한정 반환)을 그대로 유지한다 — 이 통과는 "소유 검증 통과"가 아니다.
+      log.error("[CRITICAL] 환불 좌석 반환 이벤트에 예매 번호가 없습니다! 가드가 꺼져 있어 반환을 진행합니다. seatId: {}", seatId);
+    }
+
+    // 좌석의 예매 번호가 다르면 그 좌석은 이미 다른 예매의 것이다(ABA 방지). 반환하면 남의 좌석을 푼다.
+    if (!bookingNumberMissing && !Objects.equals(seat.getBookingNumber(), bookingNumber)) {
       countSkip(SKIP_BOOKING_NUMBER_MISMATCH);
       log.warn(
           "환불 좌석 반환 스킵: 좌석의 예매 번호가 이벤트와 다릅니다(ABA 방지). seatId: {}, eventBookingNumber: {}",
