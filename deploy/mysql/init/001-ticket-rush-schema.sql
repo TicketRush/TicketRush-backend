@@ -140,6 +140,7 @@ CREATE TABLE `payment` (
   `completed_booking_id` bigint GENERATED ALWAYS AS ((case when (`status` = _utf8mb4'COMPLETED') then `booking_id` end)) STORED,
   `failure_code` varchar(50) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
   `failure_reason` varchar(255) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
+  `method` varchar(50) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
   `paid_at` datetime(6) DEFAULT NULL,
   `payment_key` varchar(200) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
   `pg_failure_code` varchar(50) COLLATE utf8mb4_unicode_ci DEFAULT NULL,

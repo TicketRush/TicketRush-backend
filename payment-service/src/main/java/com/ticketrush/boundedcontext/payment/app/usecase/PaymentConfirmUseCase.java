@@ -208,6 +208,7 @@ public class PaymentConfirmUseCase {
             .status(PaymentStatus.COMPLETED)
             .paymentKey(request.paymentKey())
             .approvalNumber(approval.approvalNumber())
+            .method(approval.method())
             .paidAt(approval.approvedAt())
             .build();
 
