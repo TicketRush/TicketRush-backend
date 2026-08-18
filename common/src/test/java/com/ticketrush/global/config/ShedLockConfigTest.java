@@ -76,7 +76,9 @@ class ShedLockConfigTest {
                 assertThat(context)
                     .hasFailed()
                     .getFailure()
-                    .hasRootCauseInstanceOf(IllegalStateException.class));
+                    .hasRootCauseInstanceOf(IllegalStateException.class)
+                    .rootCause()
+                    .hasMessageContaining("spring.application.name"));
   }
 
   @Test
@@ -112,7 +114,20 @@ class ShedLockConfigTest {
   @DisplayName("실패: 애플리케이션 이름이 없으면 중립값으로 넘어가지 않고 예외를 던진다")
   void rejects_missing_application_name() {
     assertThatThrownBy(() -> ShedLockConfig.resolveLockEnvironment(new MockEnvironment()))
-        .isInstanceOf(IllegalStateException.class);
+        .isInstanceOf(IllegalStateException.class)
+        .hasMessageContaining("spring.application.name");
+  }
+
+  @Test
+  @DisplayName("실패: 애플리케이션 이름이 빈 문자열이어도 예외를 던진다")
+  void rejects_blank_application_name() {
+    // 값 부재는 getRequiredProperty 만으로도 막혔다. 이 가드가 실제로 늘린 방어는 빈 문자열 쪽이다.
+    MockEnvironment env = new MockEnvironment();
+    env.setProperty("spring.application.name", "   ");
+
+    assertThatThrownBy(() -> ShedLockConfig.resolveLockEnvironment(env))
+        .isInstanceOf(IllegalStateException.class)
+        .hasMessageContaining("spring.application.name");
   }
 
   @Test

@@ -27,7 +27,8 @@ import org.springframework.util.StringUtils;
  * 주입받아야 한다. {@code LockProvider} 가 둘이 되면 락 자체가 갈린다.
  *
  * <p>{@code defaultLockAtMostFor} 는 현재 어디에도 적용되지 않는다. 사용처 아홉 곳이 모두 {@code lockAtMostFor} 를 직접 명시하기
- * 때문이다. 다만 제거하면 라이브러리 기본값(PT1M)으로 바뀌어, 나중에 명시를 빠뜨린 스케줄러의 폴백이 조용히 달라지므로 값을 유지한다.
+ * 때문이다. 그렇다고 지울 수 있는 값도 아니다. {@code @EnableSchedulerLock} 의 이 속성에는 기본값이 없어 빼면 컴파일되지 않는다. 값을 바꾸면 나중에
+ * {@code lockAtMostFor} 를 빠뜨린 스케줄러의 폴백만 달라지므로 그대로 둔다.
  */
 @EnableSchedulerLock(defaultLockAtMostFor = "50s")
 public class ShedLockConfig {
@@ -43,7 +44,7 @@ public class ShedLockConfig {
    *
    * <p>{@code spring.application.name} 이 비어 있으면 기동을 실패시킨다. 중립적인 기본값을 두면 이름이 빠진 여러 서비스가 같은 네임스페이스를
    * 공유해 서로의 락을 가져가고, 증상이 "스케줄러가 가끔 안 돈다" 로만 나타나 원인을 찾기 어렵다. 값이 아예 없는 경우뿐 아니라 빈 문자열인 경우도 같은 결과를 낳으므로
-   * 함께 막는다. 환경변수를 정의해 두고 값만 비워 두는 일이 실제로 일어난다.
+   * 함께 막는다. 지금은 세 서비스 모두 yml 에 이름을 리터럴로 적어 두어 빈 값이 될 경로가 없지만, 환경변수로 옮겨지면 정의만 해 두고 값을 비우는 사고가 가능해진다.
    */
   static String resolveLockEnvironment(Environment env) {
     String applicationName = env.getProperty("spring.application.name");
