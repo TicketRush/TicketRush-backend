@@ -245,6 +245,10 @@ outbox 모드를 켜면(`app.event-publisher.type: outbox`) 두 스케줄러가 
 
 ShedLock 이름은 서비스별로 유일해야 한다(예: `outboxRelay-seat`, `outboxRelay-booking`) — 다중 인스턴스 중복 실행 방지.
 
+> **⚠️ ShedLock 활성화는 자동이 아니다(#439).** 락 설정(`ShedLockConfig`)은 `common`에 있지만 **`@Configuration`이 아니라서 컴포넌트 스캔에 잡히지 않는다.** 각 서비스가 `global/config/SchedulingConfig`에서 `@Import(ShedLockConfig.class)`로 직접 활성화해야 한다(현재 booking·seat·performance).
+>
+> `@Import` 없이 `@SchedulerLock`만 붙이면 **어드바이저가 없어 락이 조용히 무효가 되고, 스케줄러는 그대로 돌아 다중 인스턴스에서 중복 실행된다.** 컴파일 에러도 경고도 나지 않는다(`shedlock-spring`이 `common`의 `api` 의존이라 전 서비스에서 컴파일된다). 스케줄러에 락을 새로 도입하는 서비스는 이 `@Import`를 먼저 확인할 것.
+
 **`app.outbox.*` 설정 키**
 
 | 키 | 기본값 | 의미 |

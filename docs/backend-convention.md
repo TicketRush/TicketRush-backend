@@ -282,6 +282,7 @@ Diary diary = diaryRepository.findByDiaryIdAndUserId(diaryId, userId)
 | `CursorInfo` | 커서 페이징 정보 record (`hasNext, nextCursor, size`) |
 | `AutoIdBaseEntity` | auto increment PK 기반 엔티티 상위 클래스 |
 | `BaseTimeEntity` | `createdAt`, `updatedAt` 포함 상위 클래스 |
+| `ShedLockConfig` | 스케줄러 분산 락 설정. **`@Configuration`이 아니라 스캔되지 않으므로**, 락이 필요한 서비스가 `@Import(ShedLockConfig.class)`로 직접 활성화해야 합니다(#439) — 상세 §4 Redis 키 규칙 |
 
 ## 4. 환경 및 기타 규칙
 
@@ -365,7 +366,8 @@ class SeatControllerTest {
 * **키 포맷** — `{도메인}:{엔티티}[:{식별자}]`, **전부 소문자**, 세그먼트 구분자는 콜론(`:`), 세그먼트 내 멀티워드는 케밥(`-`).
   * 예: `seat:lock:{seatId}`, `booking:number:{예매번호}`, `auth:refresh-token:{userId}`, `auth:signup:email:auth-number:{email}`
 * **prefix 상수화** — 키 prefix는 도메인별 상수(예: `SeatLockKey`) 또는 Repository 상수 한 곳에서 관리하고, 여러 클래스에 리터럴을 하드코딩하지 않습니다.
-* **예외** — ShedLock 락 네임스페이스는 `{applicationName}-{profile}`(케밥, 예: `seat-service-local`) 형태입니다. 이는 `RedisLockProvider` 라이브러리 규약이라 위 콜론 컨벤션의 예외로 둡니다.
+* **예외** — ShedLock 락 네임스페이스는 `{applicationName}-{profile}`(케밥, 예: `seat-service-local`) 형태입니다. 이는 `RedisLockProvider` 라이브러리 규약이라 위 콜론 컨벤션의 예외로 둡니다. 최종 키는 `job-lock:{applicationName}-{profile}:{lockName}`이며, **이 조합을 바꾸면 무중단 배포 중 구/신 인스턴스가 서로 다른 키를 잡아 같은 배치가 동시 실행됩니다.**
+  * **활성화** — `common`의 `ShedLockConfig`는 `RedisConfig`와 달리 `@ConditionalOnProperty`가 아니라 **`@Configuration` 부재 + `@Import`**로 게이트됩니다(#439, ADR 0017). 락을 쓰는 서비스만 `SchedulingConfig`에서 `@Import`하며, 빠뜨리면 락이 조용히 무효가 됩니다.
 * **DB 인덱스** — 현재 전 서비스가 단일 Redis 인스턴스의 **DB 0을 공유**하며, 충돌은 위 키 prefix로만 논리 분리합니다. 서비스별 `spring.data.redis.database` 분리는 실익(FLUSHDB 격리) 대비 기존 DB 0 키 마이그레이션·무중단 배포 순서 설계 비용이 커, 현재는 **보류**합니다(#425). 분리가 필요해지면 마이그레이션 절차부터 설계합니다.
 * **미사용 서비스** — Redis를 쓰지 않는 서비스(현재 user/payment/ticket)는 `spring.data.redis` 설정을 두지 않고 `org.springframework.boot.data.redis.autoconfigure.DataRedisAutoConfiguration`을 exclude합니다. `common`의 `RedisConfig`는 `@ConditionalOnProperty("spring.data.redis.host")`로 게이트되어 host가 없으면 로드되지 않습니다.
   * **FQCN 주의** — Boot 4.0에서 Redis 오토컨피그가 `boot.autoconfigure.data.redis.RedisAutoConfiguration` → `boot.data.redis.autoconfigure.DataRedisAutoConfiguration`으로 이동·개명됐습니다. **클래스패스에 없는 exclude는 예외 없이 조용히 무시되므로**(`AutoConfigurationImportSelector#checkExcludedClasses`가 `ClassUtils.isPresent` 통과분만 검사) 구 이름을 남기면 기동은 정상인 채 exclude만 통째로 죽습니다. 실제로 세 서비스가 `localhost:6379`에 붙으려다 actuator health가 상시 DOWN이었습니다(#500). **오토컨피그를 exclude할 때는 해당 Boot 버전의 `AutoConfiguration.imports`에 그 FQCN이 실제로 있는지 확인하세요.**
