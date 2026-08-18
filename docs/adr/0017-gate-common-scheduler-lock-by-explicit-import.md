@@ -10,9 +10,9 @@
 
 `ShedLockConfig`가 booking·seat·performance 세 모듈에 **동일 FQN(`com.ticketrush.global.config.ShedLockConfig`)으로 복붙**돼 있었다([#439](https://github.com/TicketRush/TicketRush-backend/issues/439)). 세 파일의 실질 차이는 `@Value("${spring.application.name:모듈명}")`의 기본값 문자열 한 줄뿐이었고, 그 기본값조차 세 모듈 모두 `application.yml`에 이름을 정의해 둬 **도달하지 않는 죽은 코드**였다.
 
-common으로 옮기는 것 자체는 단순하다. 문제는 **common의 `@Configuration`이 전 서비스에 컴포넌트 스캔된다**는 것이다. 여덟 개 서비스가 모두 `package com.ticketrush`에 `@SpringBootApplication`을 두고 있어, `com.ticketrush.global.*`은 별도 선언 없이 전부 스캔 대상이 된다(`common/.../RedisConfig.java` 주석이 이 사실을 명시한다).
+common으로 옮기는 것 자체는 단순하다. 문제는 **common의 `@Configuration`이 전 서비스에 컴포넌트 스캔된다**는 것이다. common을 의존하는 일곱 개 서비스가 모두 `package com.ticketrush`에 `@SpringBootApplication`을 두고 있어(gateway만 common을 의존하지 않는다), `com.ticketrush.global.*`은 별도 선언 없이 전부 스캔 대상이 된다(`common/.../RedisConfig.java` 주석이 이 사실을 명시한다).
 
-그대로 옮기면 ShedLock이 필요 없는 네 서비스(payment·user·ticket·auth)까지 이 설정을 로드한다. 특히 payment·user·ticket은 `DataRedisAutoConfiguration`을 **명시적으로 exclude**해 둔 서비스다. 그 결정은 [ADR 14](0014-recover-refund-failure-signal-by-reconciliation.md)·[ADR 15](0015-recover-charged-expired-booking-by-auto-refund.md)가 "payment를 Redis 장애 범위에 넣지 않는다"로 못 박은 것이라, 이번 승격이 그것을 되돌려서는 안 된다.
+그대로 옮기면 ShedLock이 필요 없는 네 서비스(payment·user·ticket·auth)까지 이 설정을 로드한다. 특히 payment·user·ticket은 `DataRedisAutoConfiguration`을 **명시적으로 exclude**해 둔 서비스다. payment의 경우 그 결정을 [ADR 14](0014-recover-refund-failure-signal-by-reconciliation.md)·[ADR 15](0015-recover-charged-expired-booking-by-auto-refund.md)가 "payment를 Redis 장애 범위에 넣지 않는다"로 못 박았고, user·ticket은 같은 계열의 별도 결정(#425·#500, `backend-convention` §4)이다. 이번 승격이 그것들을 되돌려서는 안 된다.
 
 ### 기존 선례로는 충분하지 않았다
 
@@ -20,7 +20,7 @@ common으로 옮기는 것 자체는 단순하다. 문제는 **common의 `@Confi
 
 1. **auth가 새어 나간다.** auth는 `spring.data.redis.host`를 갖고 있고(`application-local.yml`·`application-prod.yml`) `DataRedisAutoConfiguration`을 exclude하지도 않는다. 스케줄러가 하나도 없는데 `@EnableScheduling`과 `lockProvider` 빈이 의도 없이 켜진다. "Redis를 쓴다"와 "ShedLock을 쓴다"는 다른 조건인데 전자로 후자를 근사한 결과다.
 2. **테스트가 조용히 회귀한다.** `application-test.yml` 어디에도 `spring.data.redis.host`가 없다. 게이트를 붙이는 순간 performance의 실앱 컨텍스트 테스트 열한 건에서 `ShedLockConfig`가 사라지고, `@EnableScheduling`까지 함께 소실된다.
-3. **prod 환경변수 사고가 무증상이 된다.** prod는 `${REDIS_HOST}`(기본값 없음)이다. 주입에 실패하면 설정이 통째로 비활성화되어 아홉 개 스케줄러가 **에러 없이 전부 정지**한다. 지금 구조에서는 같은 사고가 Redis 커넥션 실패로 시끄럽게 드러난다.
+3. **게이트가 값을 검사하지 않는다.** `havingValue`를 지정하지 않은 `@ConditionalOnProperty`는 "`false`가 아닌 모든 값"을 매치로 본다. 실측하면 `REDIS_HOST=""`처럼 **빈 값이 주입된 경우 조건이 그대로 켜진다** — 정작 Redis에 붙을 수 없는 상태인데 배제되지 않는다. 반대로 값이 미해결 플레이스홀더로 남으면 조건 평가 중 `IllegalStateException`으로 기동이 실패한다(이쪽은 시끄럽게 드러나므로 문제는 아니다). 즉 이 게이트는 "키가 있는가"만 볼 뿐 그 값이 쓸 수 있는 것인지는 보지 않는다.
 
 이슈 본문이 제안했던 `@ConditionalOnClass`(shedlock)/`@ConditionalOnBean`(RedisConnectionFactory)도 성립하지 않는다. 이 레포는 `AutoConfiguration.imports`가 한 건도 없고 모든 common 설정이 **일반 컴포넌트 스캔**으로 올라오는데, `@ConditionalOnBean` 계열은 빈 정의 등록 순서에 의존해 자동설정 단계에서만 순서가 보장된다. 팀은 이미 이 위험을 문서화해 뒀다 — `NotifierConfig` javadoc의 *"`@ConditionalOnMissingBean`을 사용하면 스캔 순서에 따라 두 빈이 동시에 등록될 수 있어 사용하지 않는다"*. 그리고 `@ConditionalOnClass`는 애초에 판정 불가다. common이 shedlock을 의존하는 순간 jar가 **전 서비스 runtimeClasspath에 전파**되어 조건이 항상 참이 된다.
 
@@ -40,7 +40,7 @@ public class ShedLockConfig { ... }
 public class SchedulingConfig {}
 ```
 
-`@Configuration`(메타 `@Component`)이 없으면 컴포넌트 스캔 후보에서 아예 빠지고, `@Import`된 클래스는 lite configuration으로 처리되어 `@Bean`과 `@EnableSchedulerLock`이 정상 동작한다. 이 동작은 테스트로 실증했다(`ShedLockConfigTest`).
+`@Configuration`(메타 `@Component`)이 없으면 컴포넌트 스캔 후보에서 아예 빠지고, `@Import`된 클래스는 lite configuration으로 처리되어 `@Bean`과 `@EnableSchedulerLock`이 처리된다. `ShedLockConfigTest`가 이 경로에서 `LockProvider`와 어드바이저 인프라(`ExtendedLockConfigurationExtractor`) **빈이 실제로 등록되는 것까지** 확인한다(`@SchedulerLock`이 붙은 메서드의 인터셉트 동작 자체는 검증 범위 밖이다).
 
 `@EnableSchedulerLock`은 common 쪽에 둔다. 모듈로 내리면 `defaultLockAtMostFor` 값이 세 곳으로 복제되어 이 이슈가 없애려던 drift가 되살아난다. 반대로 `@EnableScheduling`은 모듈 쪽에 둔다. payment가 이미 같은 이름·같은 자리에서 스케줄링만 켜고 있어(#574) 네 서비스의 형태가 대칭이 된다.
 
@@ -48,7 +48,7 @@ public class SchedulingConfig {}
 
 `app.shedlock.enabled` 같은 신규 프로퍼티도 위 세 문제를 모두 피한다. 그럼에도 `@Import`를 택한 이유는 **활성화 지점이 설정이 아니라 코드에 있기 때문**이다.
 
-- 누가 락을 쓰는지가 `grep @Import(ShedLockConfig` 한 번으로 드러난다. 프로퍼티는 여덟 개 yml을 읽어야 알 수 있다.
+- 누가 락을 쓰는지가 `grep @Import(ShedLockConfig` 한 번으로 드러난다. 프로퍼티는 일곱 개 yml을 읽어야 알 수 있다.
 - 프로퍼티 게이트에서 값이 빠지면 `@EnableScheduling`까지 함께 죽어 **그 서비스의 스케줄러가 전부 무증상 정지**한다. 우회 스위치가 존재한다는 것 자체가 운영 중 잘못 꺼질 표면이다.
 - 배제 대상 네 서비스에 아무 설정도 추가하지 않는다. payment·user·ticket·auth는 이 변경으로 **단 한 줄도 바뀌지 않는다**.
 
