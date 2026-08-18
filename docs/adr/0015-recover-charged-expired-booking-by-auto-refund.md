@@ -82,7 +82,7 @@
 | 2 | 만료 후 grace(30분) 경과 | `grace` | 정상 처리가 늦게 도착하는 창을 환불로 덮지 않는다 |
 | 3 | booking 동기 재확인 | `booking_lookup_failed` | 로컬 근거는 이벤트로 채워진 사본이라 최신이 아닐 수 있다. 404·503은 물론 **그 밖의 예외까지** 여기로 접는다 — 새어 나가면 그 랩의 남은 후보와 발견 카운터가 통째로 죽어, 장애 구간에서 관측이 침묵한다 |
 | 4 | 상태가 EXPIRED·CANCELED | `booking_alive` / `booking_status_unknown` | 허용 목록이다. **알려진 비허용 상태와 모르는 문자열을 가른다** — 후자는 booking이 상태 이름을 바꿨다는 뜻이고, 그러면 전건이 이 갈래로 떨어져 복구가 조용히 전면 정지한다([#572](https://github.com/TicketRush/TicketRush-backend/issues/572)가 `owner_unknown`을 분리한 것과 같은 판단) |
-| 5 | `bookingNumber` 존재 | `booking_number_unknown` + CRITICAL | **위 정정 2의 사고를 원천 차단한다.** 값 없이 환불하면 이 경로가 곧 #608이 된다. 가드를 호출부가 아니라 **환불 실행 메서드 안**에 둔 것은, `bookingId`·`bookingNumber`가 `Long`·`String`이라 인자를 잘못 넘겨도 컴파일이 통과하기 때문이다(`RefundTrigger`를 열거형으로 뽑은 것과 같은 이유) |
+| 5 | `bookingNumber` 존재 | `booking_number_unknown` + CRITICAL | **위 정정 2의 사고를 원천 차단한다.** 값 없이 환불하면 이 경로가 곧 #608이 된다(사용자 취소 API 경로의 같은 구멍은 [ADR 16](0016-require-booking-number-for-refund-seat-release.md)에서 닫았다). 가드를 호출부가 아니라 **환불 실행 메서드 안**에 둔 것은, `bookingId`·`bookingNumber`가 `Long`·`String`이라 인자를 잘못 넘겨도 컴파일이 통과하기 때문이다(`RefundTrigger`를 열거형으로 뽑은 것과 같은 이유) |
 | 6 | 자동 환불 실행 | — | `RefundTrigger.CONFIRM_SIGNAL_LOST` |
 
 **판정 1의 두 태그를 가르는 것이 특히 중요하다.** 둘 다 "환불 이력이 있어 건너뛴다"이지만 뜻이 정반대다 — `refund_failed_history`는 **PG가 거절해 돈이 돌아가지 않은 미해결 사고**이고, 예매가 EXPIRED라 booking의 관리자 재환불 게이트도 열리지 않는다. 한 태그로 접으면 그 건이 정상 환불 시계열에 섞여, CRITICAL 로그 한 줄이 흘러간 뒤로는 영영 보이지 않는다. 아래 "관리자 창구가 로그와 메트릭뿐"이라는 한계를 감수하는 이상, 그 메트릭이 두 상태를 구분하지 못하면 감수의 전제가 무너진다.
