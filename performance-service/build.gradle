@@ -36,7 +36,7 @@ dependencies {
 
     implementation 'org.springframework.data:spring-data-commons'
     implementation 'org.springframework.boot:spring-boot-starter-actuator'
-    // 공연 목록 캐싱 (#177) — data-redis는 shedlock 전이 의존에 기대지 않도록 명시 선언
+    // 공연 목록 캐싱 (#177) — data-redis는 common 전이 의존에 기대지 않도록 명시 선언 (#439)
     implementation 'org.springframework.boot:spring-boot-starter-cache'
     implementation 'org.springframework.boot:spring-boot-starter-data-redis'
     runtimeOnly 'io.micrometer:micrometer-registry-prometheus'
@@ -56,10 +56,6 @@ dependencies {
 
     // MapStruct
     implementation 'org.mapstruct:mapstruct:1.5.5.Final'
-
-    // ShedLock (스케줄러 분산 락)
-    implementation 'net.javacrumbs.shedlock:shedlock-spring:5.13.0'
-    implementation 'net.javacrumbs.shedlock:shedlock-provider-redis-spring:5.13.0'
 
     // AWS S3
     implementation 'io.awspring.cloud:spring-cloud-aws-starter-s3:4.0.0'
