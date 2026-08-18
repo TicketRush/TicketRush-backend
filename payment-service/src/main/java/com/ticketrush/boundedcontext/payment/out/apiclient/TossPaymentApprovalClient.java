@@ -118,7 +118,17 @@ public class TossPaymentApprovalClient implements PaymentApprovalClient {
       LocalDateTime approvedAt =
           response.approvedAt().atZoneSameInstant(ZoneId.systemDefault()).toLocalDateTime();
 
-      return new PaymentApprovalResponse(approvalNumber, response.totalAmount(), approvedAt);
+      /* method는 Toss 명세상 nullable이라 위 세 가드와 달리 승인을 실패시키지 않는다. 결제수단은 보존 대상일 뿐
+       * 승인 성립 요건이 아니다(#593). 평상시 소음을 만들지 않도록 debug로만 남긴다. */
+      if (response.method() == null) {
+        log.debug(
+            "[PG-TOSS] 응답에 method 없음. orderId={}, bookingId={}",
+            request.orderId(),
+            request.bookingId());
+      }
+
+      return new PaymentApprovalResponse(
+          approvalNumber, response.totalAmount(), approvedAt, response.method());
 
     } catch (BusinessException e) {
       throw e;

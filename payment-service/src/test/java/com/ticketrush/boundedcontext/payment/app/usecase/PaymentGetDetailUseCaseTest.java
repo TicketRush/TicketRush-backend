@@ -57,6 +57,10 @@ class PaymentGetDetailUseCaseTest {
     assertThat(response.paymentId()).isEqualTo(paymentId);
     assertThat(response.bookingId()).isEqualTo(bookingId);
     assertThat(response.approvalNumber()).isEqualTo("APR-001");
+    /* toDetailResponse를 실제 MapStruct 구현체(@Spy Mappers.getMapper)로 태우는 유일한 테스트다.
+     * unmappedTargetPolicy가 기본 WARN이라 매퍼가 method를 빠뜨려도 빌드는 통과하므로, 이 매핑의 누락은
+     * 여기서만 잡힌다(#593). */
+    assertThat(response.method()).isEqualTo("카드");
     assertThat(response.refund()).isNotNull();
     assertThat(response.refund().refundId()).isEqualTo(7L);
     assertThat(response.refund().status()).isEqualTo(RefundStatus.COMPLETED);
@@ -132,6 +136,7 @@ class PaymentGetDetailUseCaseTest {
             .status(PaymentStatus.COMPLETED)
             .paymentKey("pgKey_xyz")
             .approvalNumber("APR-001")
+            .method("카드")
             .paidAt(LocalDateTime.of(2026, 5, 1, 10, 0))
             .build();
     setId(payment, id);

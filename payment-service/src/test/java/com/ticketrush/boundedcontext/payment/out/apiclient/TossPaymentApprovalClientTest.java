@@ -48,7 +48,8 @@ class TossPaymentApprovalClientTest {
           "transactionKey": "TX-ABC123",
           "totalAmount": 55000,
           "status": "DONE",
-          "approvedAt": "2026-05-22T10:00:00+09:00"
+          "approvedAt": "2026-05-22T10:00:00+09:00",
+          "method": "카드"
         }
         """;
 
@@ -68,6 +69,42 @@ class TossPaymentApprovalClientTest {
     assertThat(response.approvalNumber()).isEqualTo("TX-ABC123");
     assertThat(response.approvedAmount()).isEqualTo(55_000L);
     assertThat(response.approvedAt()).isNotNull();
+    assertThat(response.method()).isEqualTo("카드");
+
+    mockServer.verify();
+  }
+
+  @Test
+  @DisplayName("승인 응답에 method가 없어도 승인은 성공하고 결제수단만 null이 된다")
+  void approve_succeeds_when_method_is_missing() {
+    /* approvedAt·approvalNumber 누락은 PAYMENT_PG_COMMUNICATION_FAILED로 승인을 실패시키지만(아래
+     * approve_fails_when_approved_at_is_missing 참고), method는 Toss 명세상 nullable이라 같은 취급을 하면 안 된다.
+     * 결제수단은 보존 대상일 뿐 승인 성립 요건이 아니다(#593). 이 테스트가 그 경계를 고정한다. */
+    String responseBody =
+        """
+        {
+          "paymentKey": "pgKey_xyz",
+          "orderId": "BKG-0000100",
+          "transactionKey": "TX-ABC123",
+          "totalAmount": 55000,
+          "status": "DONE",
+          "approvedAt": "2026-05-22T10:00:00+09:00"
+        }
+        """;
+
+    mockServer
+        .expect(requestTo(CONFIRM_URL))
+        .andExpect(method(HttpMethod.POST))
+        .andRespond(withSuccess(responseBody, MediaType.APPLICATION_JSON));
+
+    PaymentApprovalResponse response =
+        client.approve(
+            new PaymentApprovalRequest(
+                PaymentProvider.TOSS, "pgKey_xyz", "BKG-0000100", 100L, 55_000L));
+
+    assertThat(response.method()).isNull();
+    assertThat(response.approvalNumber()).isEqualTo("TX-ABC123");
+    assertThat(response.approvedAmount()).isEqualTo(55_000L);
 
     mockServer.verify();
   }

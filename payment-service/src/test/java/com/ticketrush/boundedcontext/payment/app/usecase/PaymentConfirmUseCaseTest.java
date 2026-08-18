@@ -108,6 +108,40 @@ class PaymentConfirmUseCaseTest {
   }
 
   @Test
+  @DisplayName("PG가 결제수단을 내려주지 않아도 결제 확정은 성공하고 method만 null로 저장된다")
+  void execute_succeeds_when_approval_has_no_method() throws Exception {
+    /* 완료조건 3을 confirm 경로 끝까지 고정한다. 클라이언트 경계(TossPaymentApprovalClientTest)만으로는
+     * UseCase나 엔티티 쪽에 누군가 null 가드를 새로 넣는 회귀를 잡지 못한다(#593). */
+    final Long userId = 10L;
+    Long bookingId = 100L;
+    Long amount = 55_000L;
+    final PaymentConfirmRequest request =
+        new PaymentConfirmRequest(bookingId, 200L, PaymentProvider.TOSS, amount, "pgKey_xyz");
+
+    givenPreConfirmGuards(bookingId, "PENDING");
+    given(paymentApprovalClientRouter.approve(any()))
+        .willReturn(
+            new PaymentApprovalResponse(
+                "APR-123", amount, LocalDateTime.of(2025, 1, 15, 10, 0), null));
+    given(paymentRepository.saveAndFlush(any(Payment.class)))
+        .willAnswer(
+            invocation -> {
+              Payment p = invocation.getArgument(0);
+              setId(p, 999L);
+              return p;
+            });
+
+    PaymentConfirmResponse response = paymentConfirmUseCase.execute(userId, request);
+
+    assertThat(response.status()).isEqualTo("COMPLETED");
+
+    ArgumentCaptor<Payment> paymentCaptor = ArgumentCaptor.forClass(Payment.class);
+    verify(paymentRepository).saveAndFlush(paymentCaptor.capture());
+    assertThat(paymentCaptor.getValue().getMethod()).isNull();
+    assertThat(paymentCaptor.getValue().getStatus()).isEqualTo(PaymentStatus.COMPLETED);
+  }
+
+  @Test
   @DisplayName("PG 승인 성공 시 Payment를 COMPLETED 상태로 저장하고 PaymentConfirmedEvent를 발행한다")
   void execute_success() throws Exception {
     // given
@@ -124,7 +158,7 @@ class PaymentConfirmUseCaseTest {
 
     givenPreConfirmGuards(bookingId, "PENDING");
     given(paymentApprovalClientRouter.approve(any()))
-        .willReturn(new PaymentApprovalResponse(approvalNumber, amount, approvedAt));
+        .willReturn(new PaymentApprovalResponse(approvalNumber, amount, approvedAt, "카드"));
     given(paymentRepository.saveAndFlush(any(Payment.class)))
         .willAnswer(
             invocation -> {
@@ -161,6 +195,9 @@ class PaymentConfirmUseCaseTest {
     assertThat(savedPayment.getStatus()).isEqualTo(PaymentStatus.COMPLETED);
     assertThat(savedPayment.getPaymentKey()).isEqualTo(paymentKey);
     assertThat(savedPayment.getApprovalNumber()).isEqualTo(approvalNumber);
+    /* 빌더 호출(.method)이나 @Builder 생성자 대입이 빠져도 컴파일은 통과하므로, 이 단언이 결제수단 저장의 유일한
+     * 자동 방어선이다(#593). */
+    assertThat(savedPayment.getMethod()).isEqualTo("카드");
     assertThat(savedPayment.getPaidAt()).isEqualTo(approvedAt);
 
     verify(paymentEventPublisher)
@@ -209,7 +246,8 @@ class PaymentConfirmUseCaseTest {
 
     givenPreConfirmGuards(bookingId, "PENDING");
     given(paymentApprovalClientRouter.approve(any()))
-        .willReturn(new PaymentApprovalResponse("APR-123", approvedAmount, LocalDateTime.now()));
+        .willReturn(
+            new PaymentApprovalResponse("APR-123", approvedAmount, LocalDateTime.now(), "카드"));
 
     // when & then
     assertThatThrownBy(() -> paymentConfirmUseCase.execute(userId, request))

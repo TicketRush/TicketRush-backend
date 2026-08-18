@@ -485,6 +485,7 @@ class PaymentControllerTest {
             paymentId,
             100L,
             PaymentProvider.TOSS,
+            "카드",
             55_000L,
             PaymentStatus.COMPLETED,
             LocalDateTime.of(2026, 5, 1, 10, 0),
@@ -503,6 +504,7 @@ class PaymentControllerTest {
         .andExpect(jsonPath("$.is_success").value(true))
         .andExpect(jsonPath("$.result.payment_id").value(1))
         .andExpect(jsonPath("$.result.approval_number").value("APR-001"))
+        .andExpect(jsonPath("$.result.method").value("카드"))
         .andExpect(jsonPath("$.result.payment_key").doesNotExist())
         .andExpect(jsonPath("$.result.refund").doesNotExist());
   }
