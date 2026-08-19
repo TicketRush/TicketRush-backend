@@ -26,6 +26,16 @@ spring:
   cache:
     type: none
 
+# 아웃바운드 호출 대상을 빈 값으로 덮어 테스트가 실제 HTTP를 시도하지 않게 한다.
+# 기본값(http://localhost:8086 등)이 살아 있으면 ServiceUrlValidator를 통과해 버려,
+# 목록을 태우는 통합 테스트가 mock 대체를 빠뜨리는 순간 조용히 실제 호출이 나간다.
+# fail-open이라 결과는 통과하므로 그 포트에 무언가 떠 있을 때만 비결정적으로 드러난다.
+service:
+  seat:
+    url:
+  booking:
+    url:
+
 app:
   event-publisher:
     type: kafka

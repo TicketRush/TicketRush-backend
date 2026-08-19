@@ -38,7 +38,13 @@ class PerformanceGetListCursorTest {
 
   @MockitoBean private PerformanceFacade performanceFacade;
 
+  /** 좌석 수를 모르는 공연 (좌석 서비스 조회 실패 또는 좌석 미생성). */
   private PerformanceListResponse sampleResponse(Long performanceId) {
+    return sampleResponse(performanceId, null, null);
+  }
+
+  private PerformanceListResponse sampleResponse(
+      Long performanceId, Long totalSeats, Long remainingSeats) {
     return new PerformanceListResponse(
         performanceId,
         "공연명",
@@ -49,7 +55,40 @@ class PerformanceGetListCursorTest {
         "서울",
         "https://s3.example.com/main.jpg",
         PerformanceStatus.ON_SALE,
-        50000L);
+        50000L,
+        totalSeats,
+        remainingSeats);
+  }
+
+  @Test
+  @DisplayName("좌석 수를 아는 공연은 게이지바 필드가 snake_case로 함께 내려간다")
+  void getPerformances_exposesSeatFieldsInSnakeCase() throws Exception {
+    when(performanceFacade.getPerformances(
+            isNull(), isNull(), isNull(), isNull(), any(CursorPageRequest.class)))
+        .thenReturn(
+            new SliceImpl<>(
+                List.of(sampleResponse(10L, 500L, 245L)), PageRequest.of(0, 10), false));
+
+    mockMvc
+        .perform(get("/api/v1/performance"))
+        .andExpect(status().isOk())
+        .andExpect(jsonPath("$.result[0].total_seats").value(500))
+        .andExpect(jsonPath("$.result[0].remaining_seats").value(245));
+  }
+
+  @Test
+  @DisplayName("좌석 수를 모르면 200으로 응답하되 좌석 키가 응답에서 아예 빠진다")
+  void getPerformances_unknownSeatCounts_omitsSeatKeys() throws Exception {
+    when(performanceFacade.getPerformances(
+            isNull(), isNull(), isNull(), isNull(), any(CursorPageRequest.class)))
+        .thenReturn(new SliceImpl<>(List.of(sampleResponse(10L)), PageRequest.of(0, 10), false));
+
+    mockMvc
+        .perform(get("/api/v1/performance"))
+        .andExpect(status().isOk())
+        .andExpect(jsonPath("$.result[0].performance_id").value(10))
+        .andExpect(jsonPath("$.result[0].total_seats").doesNotExist())
+        .andExpect(jsonPath("$.result[0].remaining_seats").doesNotExist());
   }
 
   @Test
