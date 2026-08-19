@@ -73,6 +73,15 @@ import lombok.NoArgsConstructor;
 @AttributeOverride(name = "id", column = @Column(name = "payment_id"))
 public class Payment extends AutoIdBaseEntity {
 
+  /* approvalNumber 컬럼 폭이자 저장 전 절단 상한이다. 컬럼 선언·절단·상한 초과 관측(TossPaymentApprovalClient)이
+   * 모두 이 값을 참조해야 한다 — 절단 상한만 낮아지고 관측이 그대로면 값은 잘리는데 경보는 뜨지 않는다(#619).
+   *
+   * 다만 이 상수는 코드 안에서만 SSOT다. INSERT 성패를 실제로 정하는 것은 DB의 컬럼 폭이고, 그쪽은 스냅샷
+   * (deploy/mysql/init/001-ticket-rush-schema.sql)과 운영 DDL이 따로 들고 있어 이 값을 참조하지 못한다. 이 값을
+   * 올리면 두 곳도 함께 가야 하며, 빠뜨려도 기동은 성공한다 — Hibernate validate는 타입만 보고 길이 불일치는 검출하지
+   * 않으므로(#408 스키마 drift CI도 마찬가지) #619 버그가 조용히 되돌아온다. */
+  public static final int APPROVAL_NUMBER_MAX_LENGTH = 100;
+
   @Column(nullable = false)
   private Long bookingId;
 
@@ -98,7 +107,17 @@ public class Payment extends AutoIdBaseEntity {
   @Column(length = 200, unique = true)
   private String paymentKey; // PG사 발급 결제 키
 
-  @Column(length = 100)
+  /* PG 승인 응답의 거래 식별자다. Toss는 transactionKey를 주지만 응답에 없으면 paymentKey로 폴백하는데(#89),
+   * paymentKey는 계약상 최대 200자라(#413 PaymentKeyFormat) 컬럼 폭을 넘을 수 있다. 이 컬럼은 성공 경로에서만
+   * 채워지므로 길이 초과로 INSERT가 깨지면 PG 과금이 끝난 뒤 500이 나고 payment row는 남지 않는다(#593 method와
+   * 같은 계열) — 그래서 생성자에서 truncate 한다(#619).
+   *
+   * 컬럼을 200으로 넓히는 대신 자르는 이유는 어느 경로에서도 잃는 정보가 사실상 없기 때문이다. 폴백이 아닌
+   * transactionKey는 Toss 스펙상 64자라 애초에 이 폭을 넘지 않고(후속 lastTransactionKey도 64자다), 폴백으로
+   * 들어온 값은 같은 row의 paymentKey(200자)에 온전본이 병존한다. 다만 후자는 Toss가 승인 응답에 요청과 같은
+   * paymentKey를 되돌려준다는 외부 계약에 기대는 것이지 구조적으로 보장되는 항등은 아니다 — 저장되는 paymentKey는
+   * 요청 값이고(PaymentConfirmUseCase) 폴백원은 응답 값이다. */
+  @Column(length = APPROVAL_NUMBER_MAX_LENGTH)
   private String approvalNumber; // PG사 응답 승인 번호 / 거래 식별자
 
   /* PG 승인 응답의 결제수단을 한글 원문 그대로 보존한다(#593). Toss가 주는 값은 카드/가상계좌/간편결제/휴대폰/계좌이체/
@@ -182,7 +201,7 @@ public class Payment extends AutoIdBaseEntity {
     this.amount = amount;
     this.status = status;
     this.paymentKey = paymentKey;
-    this.approvalNumber = approvalNumber;
+    this.approvalNumber = truncate(approvalNumber, APPROVAL_NUMBER_MAX_LENGTH);
     this.method = truncate(method, 50);
     this.paidAt = paidAt;
   }

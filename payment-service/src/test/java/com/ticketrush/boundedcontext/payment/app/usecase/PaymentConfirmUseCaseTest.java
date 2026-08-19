@@ -142,6 +142,47 @@ class PaymentConfirmUseCaseTest {
   }
 
   @Test
+  @DisplayName("승인번호가 컬럼 길이를 넘어도 결제 확정은 실패하지 않고 잘려서 저장된다")
+  void execute_succeeds_when_approval_number_exceeds_column_length() throws Exception {
+    /* 완료조건 2를 confirm 경로 끝까지 고정한다(#619). transactionKey가 없으면 승인번호로 paymentKey(계약상 200자,
+     * #413)가 폴백되는데, 잘리지 않으면 saveAndFlush가 DataIntegrityViolationException으로 깨지고 PaymentFacade는
+     * 멱등 조회에도 실패해 원 예외를 재던진다 — PG 과금이 끝난 뒤 500이 나고 payment row는 남지 않는다.
+     *
+     * 다만 paymentRepository가 mock이라 이 테스트가 증명하는 것은 "저장에 넘기는 값이 컬럼 폭 이하"까지다. 실제 INSERT가
+     * 깨지지 않는다는 것은 거기서 따라온다. 함께 단언하는 paymentKey 온전성은 자른 값이 정보를 잃지 않는 근거다 — 폴백
+     * 값은 같은 row의 paymentKey와 동일한 값이라 원본이 옆 컬럼에 200자로 남는다. */
+    final Long userId = 10L;
+    Long bookingId = 100L;
+    Long amount = 55_000L;
+    String head = "H".repeat(Payment.APPROVAL_NUMBER_MAX_LENGTH);
+    String longPaymentKey = head + "T".repeat(100);
+    final PaymentConfirmRequest request =
+        new PaymentConfirmRequest(bookingId, 200L, PaymentProvider.TOSS, amount, longPaymentKey);
+
+    givenPreConfirmGuards(bookingId, "PENDING");
+    given(paymentApprovalClientRouter.approve(any()))
+        .willReturn(
+            new PaymentApprovalResponse(
+                longPaymentKey, amount, LocalDateTime.of(2025, 1, 15, 10, 0), "카드"));
+    given(paymentRepository.saveAndFlush(any(Payment.class)))
+        .willAnswer(
+            invocation -> {
+              Payment p = invocation.getArgument(0);
+              setId(p, 999L);
+              return p;
+            });
+
+    PaymentConfirmResponse response = paymentConfirmUseCase.execute(userId, request);
+
+    assertThat(response.status()).isEqualTo("COMPLETED");
+
+    ArgumentCaptor<Payment> paymentCaptor = ArgumentCaptor.forClass(Payment.class);
+    verify(paymentRepository).saveAndFlush(paymentCaptor.capture());
+    assertThat(paymentCaptor.getValue().getApprovalNumber()).isEqualTo(head);
+    assertThat(paymentCaptor.getValue().getPaymentKey()).isEqualTo(longPaymentKey);
+  }
+
+  @Test
   @DisplayName("PG 승인 성공 시 Payment를 COMPLETED 상태로 저장하고 PaymentConfirmedEvent를 발행한다")
   void execute_success() throws Exception {
     // given
