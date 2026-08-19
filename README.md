@@ -121,7 +121,7 @@
 | 워크플로              | 파일                     | 트리거                                       | 하는 일                    |
 |-------------------|------------------------|-------------------------------------------|-------------------------|
 | **CI**            | `ci.yml`               | PR → `develop` (opened·synchronize·reopened) | 정적 검사 → 테스트 → 빌드 → 설정 대조 |
-| **Schema Validate** | `schema-validate.yml`  | PR → `develop` (동일)                        | 엔티티↔스키마 스냅샷 drift 감지    |
+| **Schema Validate** | `schema-validate.yml`  | PR → `develop` (opened·synchronize·reopened) | 엔티티↔스키마 스냅샷 drift 감지    |
 | **PR Title Check**  | `pr-title.yml`         | 모든 PR (opened·edited·reopened)             | PR 제목 형식 검사             |
 
 앞의 두 워크플로는 `concurrency` 그룹을 두어, 같은 PR에 연속으로 push하면 진행 중이던 이전 run을 취소합니다.
