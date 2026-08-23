@@ -35,7 +35,7 @@ class PaymentApprovalClientRouterTest {
     given(tossClient.isFallback()).willReturn(false);
     given(tossClient.provider()).willReturn(PaymentProvider.TOSS);
     PaymentApprovalResponse response =
-        new PaymentApprovalResponse("APR-1", 1_000L, LocalDateTime.now());
+        new PaymentApprovalResponse("APR-1", 1_000L, LocalDateTime.now(), "카드");
     given(tossClient.approve(any())).willReturn(response);
 
     PaymentApprovalClientRouter router = new PaymentApprovalClientRouter(List.of(tossClient));
@@ -52,7 +52,7 @@ class PaymentApprovalClientRouterTest {
     given(tossClient.provider()).willReturn(PaymentProvider.TOSS);
     given(stubClient.isFallback()).willReturn(true);
     PaymentApprovalResponse response =
-        new PaymentApprovalResponse("APR-1", 1_000L, LocalDateTime.now());
+        new PaymentApprovalResponse("APR-1", 1_000L, LocalDateTime.now(), "카드");
     given(tossClient.approve(any())).willReturn(response);
 
     PaymentApprovalClientRouter router =
@@ -71,7 +71,7 @@ class PaymentApprovalClientRouterTest {
     given(tossClient.provider()).willReturn(PaymentProvider.TOSS);
     given(stubClient.isFallback()).willReturn(true);
     PaymentApprovalResponse response =
-        new PaymentApprovalResponse("APR-1", 1_000L, LocalDateTime.now());
+        new PaymentApprovalResponse("APR-1", 1_000L, LocalDateTime.now(), "카드");
     given(stubClient.approve(any())).willReturn(response);
 
     PaymentApprovalClientRouter router =

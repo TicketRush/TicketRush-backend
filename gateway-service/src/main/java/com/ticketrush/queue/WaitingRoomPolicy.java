@@ -18,8 +18,11 @@ public final class WaitingRoomPolicy {
   /**
    * 지금까지 입장이 허용된 누적 인원.
    *
-   * <p>{@code (경과 시간) × (초당 입장 허용량)}. 허용량은 #344 실측(booking 단독 258 RPS에서 호스트 CPU 99.87%)의 아래로 잡는다 —
-   * 예매 경로 부하를 유입 규모와 무관하게 이 값으로 고정하는 것이 ADR 0009의 전부다.
+   * <p>{@code (경과 시간) × (초당 입장 허용량)}. 예매 경로 부하를 유입 규모와 무관하게 이 값으로 고정하는 것이 ADR 0009의 전부다.
+   *
+   * <p><b>허용량의 근거는 #555 계단 실측이다(ADR 0009 §3.5).</b> 이 문장은 원래 "#344 실측(booking 단독 258 RPS)의 아래로
+   * 잡는다"였는데 <b>그 258 RPS는 예매 처리량이 아니다</b> — 98.61%가 좌석 점유 반려 409였고 실제 예매 생성은 약 3.3 RPS였다. 그 오독을 근거로
+   * 인용하지 않는다. 현재 기본값 12는 완주(좌석맵 통과 + 예매 성공) 기준으로 16이 12보다 느리다는 실측에서 왔다.
    */
   public static long admittedThreshold(long nowMs, long openedAtMs, int admitRatePerSecond) {
     long elapsedMs = nowMs - openedAtMs;

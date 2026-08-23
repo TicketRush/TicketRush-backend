@@ -1,5 +1,9 @@
 # TicketRush - 대규모 트래픽을 처리하는 MSA 기반 공연 티켓 예매 플랫폼
 
+<!-- 배지에 ?branch= 를 붙이지 마세요. 두 워크플로 모두 pull_request 트리거뿐이라 브랜치 지정 시 "no status" 가 됩니다. -->
+[![CI](https://github.com/TicketRush/TicketRush-backend/actions/workflows/ci.yml/badge.svg)](https://github.com/TicketRush/TicketRush-backend/actions/workflows/ci.yml)
+[![Schema Validate](https://github.com/TicketRush/TicketRush-backend/actions/workflows/schema-validate.yml/badge.svg)](https://github.com/TicketRush/TicketRush-backend/actions/workflows/schema-validate.yml)
+
 ## 🔥 프로젝트 소개
 
 ### 🗓️ 프로젝트 기간
@@ -104,11 +108,69 @@
 | `ticket-service`      | 티켓 도메인 (QR 토큰)                                                  |
 | `common`              | 전 모듈 공통 코드 (ApiResponse, ErrorStatus, PageInfo, Kafka, Redis 등) |
 
-<!--
-### 3️⃣ 아키텍처 다이어그램
+<!-- ### 3️⃣ 아키텍처 다이어그램 — 별도 이슈(#352)에서 작성 -->
 
 ### 4️⃣ CI/CD 파이프라인
--->
+
+#### CI (지속적 통합)
+
+`develop`으로 향하는 PR에서는 아래 워크플로 셋이 돕니다(이 밖에 `cd.yml`·`weekly-scrum.yml`이 있습니다).
+
+> 머지 조건과 branch protection 설정은 [`docs/backend-convention.md`](docs/backend-convention.md) §1 "검증 파이프라인"이 SSOT입니다. 여기서는 각 워크플로가 **무엇을 검사하는지**만 다룹니다.
+
+| 워크플로              | 파일                     | 트리거                                       | 하는 일                    |
+|-------------------|------------------------|-------------------------------------------|-------------------------|
+| **CI**            | `ci.yml`               | PR → `develop` (opened·synchronize·reopened) | 정적 검사 → 테스트 → 빌드 → 설정 대조 |
+| **Schema Validate** | `schema-validate.yml`  | PR → `develop` (opened·synchronize·reopened) | 엔티티↔스키마 스냅샷 drift 감지    |
+| **PR Title Check**  | `pr-title.yml`         | 모든 PR (opened·edited·reopened)             | PR 제목 형식 검사             |
+
+앞의 두 워크플로는 `concurrency` 그룹을 두어, 같은 PR에 연속으로 push하면 진행 중이던 이전 run을 취소합니다.
+
+**빌드 흐름** (`ci.yml`)
+
+JDK 21(temurin) 설치와 Gradle 캐시 복원 후 아래 순서로 진행합니다.
+
+```bash
+./gradlew spotlessCheck                    # google-java-format 포맷 검사
+./gradlew checkstyleMain checkstyleTest    # 정적 검사 (테스트 코드 포함)
+./gradlew test                             # 전 모듈 테스트
+./gradlew build -x test                    # 빌드
+```
+
+- **`checkstyleTest`도 함께 돌기 때문에 테스트 코드의 위반도 CI에서 걸립니다.** 로컬에서 `checkstyleMain`만 확인하고 올리면 여기서 떨어집니다.
+- 마지막으로 **Prometheus scrape 타깃을 정적 대조**합니다(#380). `monitoring/prometheus.aws.yml`과 `deploy/docker-compose.prod.yml`을 맞춰 보고, 배포되는데 스크랩하지 않거나 스크랩하는데 배포되지 않는 타깃이 있으면 실패합니다. CD는 `main`에서만 돌아 타깃이 틀렸다는 사실이 실배포 전에는 드러나지 않으므로 PR 단계에서 잡습니다.
+- 실패 시 `checkstyle-report`가, 결과와 무관하게 `test-report`가 아티팩트로 업로드됩니다.
+
+**스키마 drift 감지** (`schema-validate.yml`, #408)
+
+local 프로파일은 `ddl-auto=update`이고 `./gradlew test`는 H2를 쓰기 때문에, 엔티티와 스키마 스냅샷이 어긋나도 로컬에서는 증상이 없습니다. prod(`validate`)에서 **부팅 실패**로만 드러나므로, 같은 조건을 CI에서 미리 재현합니다.
+
+1. 빈 MySQL 8.0에 `deploy/mysql/init/001-ticket-rush-schema.sql` 적재
+2. 릴레이 조회 스모크 — nativeQuery라 저장소 어디에서도 실행되지 않는 SQL과 그 인덱스 존재 여부를 실제 MySQL로 확인
+3. 엔티티를 가진 6개 서비스(`user`·`performance`·`seat`·`booking`·`payment`·`ticket`)를 `ddl-auto=validate`로 부팅
+
+gateway(DB 미사용)와 auth(`@Entity` 0개, 테이블은 user-service 소유)는 검증 대상이 아닙니다.
+
+> ⚠️ `validate`는 컬럼 존재·타입은 잡지만 **컬럼 길이·인덱스·유니크/FK·nullable 차이는 검출하지 않습니다.** 인덱스를 추가·변경할 때는 스냅샷 반영을 별도로 확인해야 합니다.
+
+**PR 제목 규칙** (`pr-title.yml`)
+
+`[Type] #이슈번호 설명` 형식이어야 하며, 허용 Type은 `Feat` `Fix` `Refactor` `Docs` `Test` `Chore` `Infra`입니다.
+
+```
+[Feat] #23 로그인 API 구현          # 단일 이슈
+[Chore] #1, 2, 4 설정 파일 업데이트   # 다중 이슈
+```
+
+**로컬에서 미리 통과시키기**
+
+```bash
+./gradlew spotlessApply                    # 포맷 자동 교정
+./gradlew checkstyleMain checkstyleTest
+./gradlew test
+```
+
+<!-- CD(지속적 배포) 파트는 별도 이슈(#352)에서 작성 -->
 
 ## 🚀 시작하기 (Getting Started)
 
@@ -210,6 +272,27 @@ curl http://localhost:8080/actuator/health
 
 ---
 
+## 📈 성능 / 부하 테스트
+
+단일 EC2(`m7i-flex.large`, 2 vCPU / 7.6 GiB) 한 대에 앱 8개와 MySQL·Redis·Kafka·관측 스택이 함께 올라간 구성에서 **회차 23개**를 측정했습니다.
+
+| 무엇을 | 전 → 후 | 회차 |
+|-----|-----|-----|
+| 좌석맵 응답 크기 (gzip) | 174,615 B → 8,405 B | #505 |
+| 좌석 집계 최대 처리량 (커버링 인덱스) | 254.84 → 396.75 rps | #529 |
+| 좌석맵 서버 응답, 80 계단 (JSON 캐싱) | 741.04 ms → 10.11 ms | #539 |
+| 예매 파이프라인 드레인율 (컨슈머 concurrency 3) | 43.0/s → 96.6/s | #598 |
+
+각 수치는 **같은 회차 안에서 얻은 전/후**이며, 서로 다른 회차의 값끼리는 잇지 않았습니다.
+회차마다 무엇이 통제됐고 무엇이 섞였는지는 리포트의 `대조 범위` 열에 적어 두었습니다.
+병목이 회선 → 컨테이너 메모리 → 호스트 CPU → 유입 제어로 옮겨간 서사와, 아직 증명하지 못한
+한계(1만 명 동시 대기 미재현·수평 확장 미검증 등)는 [performance-report.md](docs/performance-report.md)에 있습니다.
+
+이 수치들에서 거꾸로 계산한 **예상 트래픽·인프라 설계 기준**(일평균 사용자 수·피크 TPS·서버 스펙)은
+[capacity-planning.md](docs/capacity-planning.md)에 있습니다.
+
+---
+
 ## 📖 API 문서 (Swagger)
 
 게이트웨이가 7개 서비스의 OpenAPI 문서를 **하나의 Swagger UI로 통합**합니다.
@@ -240,4 +323,7 @@ curl http://localhost:8080/actuator/health
 | [kafka-event-guide.md](docs/kafka-event-guide.md)             | Kafka 이벤트 / Outbox / DLT 정책 |
 | [mapstruct-guide.md](docs/mapstruct-guide.md)                 | MapStruct Mapper 구조         |
 | [ai-workflow-guide.md](docs/ai-workflow-guide.md)             | Claude Code AI 개발 워크플로우     |
+| [load-test-guide.md](docs/load-test-guide.md)                 | 부하 테스트 실행 런북              |
+| [performance-report.md](docs/performance-report.md)           | 성능 측정 종합 리포트 (병목 이동·개선 전후·한계) |
+| [capacity-planning.md](docs/capacity-planning.md)             | 예상 트래픽·인프라 설계 기준 (실측 역산) |
 | [adr/](docs/adr/)                                             | 아키텍처 결정 기록(ADR)             |

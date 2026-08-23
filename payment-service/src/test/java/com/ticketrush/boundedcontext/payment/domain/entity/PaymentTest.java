@@ -21,8 +21,81 @@ class PaymentTest {
         .status(status)
         .paymentKey("pgKey_xyz")
         .approvalNumber("approval-1")
+        .method("카드")
         .paidAt(LocalDateTime.of(2026, 5, 22, 10, 0))
         .build();
+  }
+
+  @Test
+  @DisplayName("결제수단은 PG 원본 문자열 그대로 저장한다")
+  void method_is_stored_as_raw_pg_string() {
+    assertThat(payment(PaymentStatus.COMPLETED).getMethod()).isEqualTo("카드");
+  }
+
+  @Test
+  @DisplayName("결제수단이 컬럼 길이를 넘으면 앞에서부터 50자만 남기고 자른다")
+  void method_is_truncated_when_too_long() {
+    /* 이 컬럼은 성공 경로에서만 채워지므로, 길이 초과로 INSERT가 깨지면 PG 과금이 끝난 뒤 500이 나고 payment row는
+     * 남지 않는다(PaymentFacade.confirm이 멱등 조회에 실패해 원 예외를 재던진다). Toss가 값을 늘려도 그 사고가
+     * 나지 않도록 방어적으로 자른다(#593).
+     *
+     * 입력의 앞뒤를 서로 다른 마커로 구분해, 길이뿐 아니라 "앞에서부터" 자른다는 것까지 고정한다. */
+    String head = "A".repeat(50);
+    String tooLong = head + "Z".repeat(10);
+
+    Payment payment =
+        Payment.builder()
+            .bookingId(100L)
+            .provider(PaymentProvider.TOSS)
+            .amount(55_000L)
+            .status(PaymentStatus.COMPLETED)
+            .method(tooLong)
+            .build();
+
+    assertThat(payment.getMethod()).isEqualTo(head);
+  }
+
+  @Test
+  @DisplayName("승인번호가 컬럼 길이를 넘으면 앞에서부터 100자만 남기고 자른다")
+  void approvalNumber_is_truncated_when_too_long() {
+    /* 승인번호에는 transactionKey가 없을 때 paymentKey가 폴백으로 들어오는데(#89), paymentKey는 계약상 최대
+     * 200자라(#413) 컬럼 폭 100을 넘을 수 있다. method와 마찬가지로 성공 경로에서만 채워지는 컬럼이라, 길이 초과로
+     * INSERT가 깨지면 PG 과금이 끝난 뒤 500이 나고 payment row는 남지 않는다(#619).
+     *
+     * 입력을 계약 상한인 200자로 잡아 최악 케이스를 그대로 재현하고, 앞뒤를 다른 마커로 구분해 절단 방향까지 고정한다. */
+    String head = "A".repeat(Payment.APPROVAL_NUMBER_MAX_LENGTH);
+    String tooLong = head + "Z".repeat(100);
+
+    Payment payment =
+        Payment.builder()
+            .bookingId(100L)
+            .provider(PaymentProvider.TOSS)
+            .amount(55_000L)
+            .status(PaymentStatus.COMPLETED)
+            .approvalNumber(tooLong)
+            .build();
+
+    assertThat(payment.getApprovalNumber()).isEqualTo(head);
+  }
+
+  @Test
+  @DisplayName("승인번호가 컬럼 길이와 정확히 같으면 자르지 않는다")
+  void approvalNumber_is_kept_when_exactly_at_column_length() {
+    /* 상한과 같은 길이는 손대지 않는다는 계약을 명시한다. 탐지력은 제한적이다 — 조건이 <= 에서 < 로 바뀌어도
+     * substring(0, maxLength)가 같은 값을 돌려주므로 이 테스트로는 드러나지 않는다(실측 확인). 상한을 관측하는
+     * TossPaymentApprovalClient가 같은 경계를 쓰므로, 경계가 어느 쪽인지를 코드로 남겨두는 것이 이 테스트의 몫이다. */
+    String exact = "A".repeat(Payment.APPROVAL_NUMBER_MAX_LENGTH);
+
+    Payment payment =
+        Payment.builder()
+            .bookingId(100L)
+            .provider(PaymentProvider.TOSS)
+            .amount(55_000L)
+            .status(PaymentStatus.COMPLETED)
+            .approvalNumber(exact)
+            .build();
+
+    assertThat(payment.getApprovalNumber()).isEqualTo(exact);
   }
 
   @Test

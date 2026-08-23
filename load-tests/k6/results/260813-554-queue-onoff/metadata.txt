@@ -1,0 +1,562 @@
+SERIES_ID=260813-554-queue-onoff
+ISSUE=#554 (후속: #555 admit-rate 계단 회차의 입력값)
+DATE=2026-08-13 (KST) / 2026-08-13 (UTC)
+
+# ── 이 회차가 답해야 하는 것 ────────────────────────────────────────────────
+QUESTION=대기열이 없으면 어떻게 되는가. #549 B-2 가 ON 에서 얻은 수치(예매 RPS 19.60-21.00)의
+#   비교 대상이 저장소에 없다. 같은 배포본에서 QUEUE_ENABLED 하나만 바꿔 대조군을 만든다.
+CONCLUSION_SCOPE=이 회차의 결론은 절대값이 아니라 회차 내부의 ON/OFF 차이다.
+#   #549 B-2 는 배포본이 달라(21d2da2d → b0f3da84, 프로덕션 코드 134파일 +5,765줄) 참고
+#   수치로만 병기한다. 이번 ON arm 은 B-2 의 재현이 아니라 새 기준선이다.
+
+# ── 토폴로지 ────────────────────────────────────────────────────────────────
+TARGET_HOST=EC2 54.116.243.250 — https://api.ticketrush.store
+TOPOLOGY=k6 local (docker, ADR 0004) --SSH tunnel(9090)--> EC2 deploy stack (ADR 0007)
+INSTANCE_TYPE=m7i-flex.large / INSTANCE_VCPU=2 / life-cycle=on-demand
+GENERATOR=로컬 Docker — 호스트 31.6 GiB / Docker 할당 24 GiB(.wslconfig) / 12 vCPU / swap 4 GiB
+#   ADR 0010(생성기 AWS EC2)은 #549 가 실측으로 기각했다. 생성기 EC2 를 만들지 않는다.
+K6_VERSION=v2.2.0 (commit/00a9a1b7f5, go1.26.5, linux/amd64) — grafana/k6:latest, 두 arm 동일.
+#   ⚠ #549 회차와는 k6 버전이 다를 수 있다(latest 태그를 쓴다). arm 사이에는 같으므로 이 회차의
+#   ON/OFF 대조에는 영향이 없고, #549 와의 절대값 비교를 피하는 이유가 하나 더 늘어난 것이다.
+RUNBOOK=docs/load-test-guide.md §16.4 (아래 RUNBOOK_DEVIATION 참조)
+SCENARIO=load-test/scenarios/waiting-room.js (QUEUE_PROFILE=flood)
+IMAGE_TAG=<회차 시점 실행 중 태그 — G0 에서 기록>
+PROM_SCRAPE_INTERVAL=15s
+
+# ── 선행 조건: develop → main 배포 (이슈 완료 조건 1) ───────────────────────
+DEPLOY_PRECONDITION=충족. PR #605(develop → main)가 2026-08-13 머지되고 CD 가 09:17 UTC 성공했다.
+#   회차 전 별도 배포가 필요하지 않다.
+DEPLOY_CD_SHA=b0f3da8464498eaf1e595ac2e478167fb3afee27
+INCLUDES_PR589=포함 (eb0a319d, 2026-08-07, #563 관리자 대시보드 집계)
+INCLUDES_PR591=포함 (ef53ad1b, 2026-08-10, #590 관리자 목록 IN 필터)
+#   판정 근거: git merge-base --is-ancestor <sha> b0f3da84 → 양쪽 참.
+#   ⚠ 이 사실이 아래 INVALID_IF_DASHBOARD 를 실재하게 만든다 — 전건 집계 코드가 서버에 있다.
+
+# ── 대조 조건: arm 사이에서 바꾸는 것은 하나뿐 ─────────────────────────────
+CONTROL_IMAGE_TAG=두 arm 동일 (회차 시점 배포본)
+CONTROL_NGINX=worker_connections 16384 / worker_rlimit_nofile 65535 (회차 전 실측 확인 완료)
+CONTROL_SEED=seed_queue_flood.sql (user 1만 행 · seat 1만 석). arm 사이에 재시딩한다
+CONTROL_GENERATOR=로컬 Docker, 두 arm 동일
+CONTROL_INFLOW=1만 VU · 램프 5m + 유지 15m, 두 arm 동일
+VARIABLE=QUEUE_ENABLED (ON → OFF). 이것 하나만 바꾼다
+CONTROL_ADMIT_RATE=QUEUE_ADMIT_RATE 는 OFF arm 에서도 20 을 유지한다.
+#   ⚠ OFF 에서 승급 판정에는 안 쓰이지만 threshold → waiting → pollSeconds(T) 로 이어져
+#     OFF arm 의 첫 폴링 지연을 정한다. 바꾸면 두 arm 의 T 곡선이 달라져 단일 변수 대조가 깨진다.
+#     QUEUE_STATUS_RPS_CAPACITY=400 도 같은 이유로 고정한다.
+BETWEEN_ARM_RESET=queue:* 리셋이 arm 사이에 필수다.
+#   ⚠ 안 하면 OFF arm 의 queue:opened-at 이 ON arm 것이라 threshold 가 이미 약 25,000 이고,
+#     waiting=0 → T=min-poll 3초로 고정된다. 두 arm 의 T 곡선이 달라진다.
+#   조건을 하나라도 흘리면 대조표 전체가 무효다.
+
+# ── OFF arm 이 같은 스크립트로 도는 근거 ───────────────────────────────────
+OFF_ARM_MECHANISM=코드가 킬 스위치를 '대기열이 존재하지 않는 것' 으로 다룬다.
+#   WaitingRoomService.java:243  boolean admitted = !properties.enabled() || WaitingRoomPolicy.admitted(...)
+#     → OFF 면 첫 폴링에서 전원 즉시 승급.
+#   EntryTokenGatewayFilter.java:91  if (!properties.enabled() || !isBookingRequest(...))
+#     → OFF 면 예매가 입장 토큰 검사 없이 통과.
+#   따라서 waiting-room.js 를 두 arm 에 그대로 쓴다. 시나리오 분기를 만들지 않는다.
+
+# ── 부하 모델 ───────────────────────────────────────────────────────────────
+PROFILE=flood / executor=ramping-vus
+STAGES=0→10,000 (5m 램프) → 10,000 유지 15m → 0 (30s)
+QUEUE_MAX_POLLS=300
+QUEUE_ADMIT_RATE=20
+QUEUE_STATUS_RPS_CAPACITY=400
+#   #549 B-1 이 1400 으로 무너졌고 400 으로 되돌린 B-2 가 유효 회차가 됐다. 배포본 기본값도 400 이다.
+
+# ── 부하 모델 산술 (모든 판정의 전제 — 회차 전에 못 박는다) ────────────────
+ARRIVAL_RATE=33.33 여정/s = QUEUE_FLOOD_VUS(10,000) / QUEUE_FLOOD_RAMP(300s)
+#   waiting-room.js 의 journeyDone 가드(56, 246-253행)로 VU 1개는 여정을 1회만 탄다.
+#   따라서 이 회차의 유입은 '1만 동시' 가 아니라 '초당 33.3 도착' 이고, 유지 15분의 도착률은 0 이다.
+MODEL_ON =enqueue 33.3 + status 400 + booking 20   = 총 약 453 RPS
+#   status 400 의 근거: 폴링 수요 = waiting / T 인데 T = ceil(waiting / 400) 이므로
+#   waiting >= 1,200(t≈90s)부터 수요가 R=400 에 산식으로 고정된다. 그 아래에서는 T 하한 3초에
+#   걸려 waiting/3 이다.
+MODEL_OFF=enqueue 33.3 + status 33.3 + booking 33.3 = 총 약 100 RPS
+#   OFF 는 첫 폴링에서 승급하므로 status 가 사용자당 정확히 1회다.
+MODEL_VALIDATION=위 ON 모델의 총 요청 예측 약 167,000 vs #549 B-2 실측 167,083
+#   (10,000 enqueue + 147,807 status + 9,276 booking). 오차 8% 안 — 이 모델은 실측으로 검증됐다.
+MODEL_CONSEQUENCE=OFF arm 은 ON arm 보다 서버 부하가 약 4.5배 가볍다.
+#   대기열을 끄면 전체 요청의 88% 를 차지하는 폴링이 통째로 사라지기 때문이다.
+#   예매 33.3 RPS 는 #344 붕괴점(booking 단독 258 RPS 에서 호스트 CPU 99.87%)의 12.9% 다.
+#   ⚠ 즉 이 회차는 '대기열이 붕괴를 막는다' 를 증명할 수 없다. 증명할 수 있는 것은 이연뿐이다.
+DESIGN_CHOICE=그래도 유입 동일 조건을 지킨다.
+#   램프를 줄이면 스파이크는 커지지만 '두 arm 유입 동일' 이 깨져 대조표가 성립하지 않고,
+#   ON arm 을 짧은 램프로 돌리면 #549 B-1(램프 2m, CPU 굶주림)의 재현이 된다.
+#   이슈 본문의 방침을 그대로 따른다 — "무너지지 않으면 그것이 더 큰 발견이다.
+#   admit-rate 20 이 과하게 보수적이라는 직접 근거가 되고 #555 의 계단 상한을 올려 잡을 수 있다."
+
+# ── 예측 (회차 전에 적는다 — 회차 후 대조가 목적이다) ──────────────────────
+PREDICT_ON_FIRST=호스트 CPU. max 70-85% / avg 30-40%, 최대는 t+240~320s
+#   (폴링 수요가 400 에 고정되고 대기 인원이 최대인 구간).
+#   경쟁 후보는 전부 자릿수 밖이다 — nginx 커넥션 3.4배 여유(B-2 최대 4,752),
+#   Redis 5.4배(13.86% = 8.87 MB vs 48 MB), HikariCP pending 11.6배
+#   (booking 20 RPS × p95 42.9ms = 리틀의 법칙으로 동시 0.86건 vs 풀 10),
+#   Tomcat busy 58배 이상. 같은 자릿수는 CPU 하나뿐이다(79.53% vs 100%, 1.26배).
+PREDICT_OFF_FIRST=포화 없음. 호스트 CPU max 35-55% 로, ON arm 보다 낮다.
+#   요청당 CPU 역산: 예매 약 0.39 %CPU/RPS(#344) · 폴링 약 0.04 %CPU/RPS(B-1) →
+#   ON 부하분 400×0.04 + 20×0.39 = 23.8% vs OFF 33×0.04 + 33×0.39 = 14.2%.
+PREDICT_OVERSELL=양쪽 0행. seatFor() 가 VU 마다 유일한 좌석을 노려 경합이 구조적으로 없다.
+PREDICT_DEFERRAL=ON 43% vs OFF 3.3% (아래 PRIMARY_CRITERION(OFF) 참조). 약 13배 분리.
+
+PREDICT_WRONG_IF_1=폴링 요청당 비용이 예매의 1/10 이 아니라 1/3 이면 CPU 부등호가 뒤집힌다.
+#   계수 0.39·0.04 는 조건이 다른 두 회차에서 각각 역산한 값이다 — #344 는 대기열이 없던 시절
+#   booking 단독 회차이고, 0.04 는 B-1 의 되먹임 구간에서 뽑아 과대추정일 수 있다.
+PREDICT_WRONG_IF_2=배포본 드리프트 134파일 +5,765줄이 유휴 CPU 기저를 올렸으면 ON max 가 85% 를
+#   넘는다. → G8(무부하 기저 CPU)이 없으면 회차 후에 드리프트와 부하를 가르지 못한다.
+PREDICT_WRONG_IF_3=SPRING_KAFKA_LISTENER_CONCURRENCY(#596)가 3 이면 seat 컨슈머 스레드가 3배라
+#   ticketrush_seat_lock_contention_total > 0 이 정상이 된다(런북 §13.5). 값을 모르면 잔류 락으로
+#   오독한다. → G9 에서 실제 값을 기록한다.
+PREDICT_WRONG_IF_4=ON→OFF 순서라 JIT 워밍업·페이지 캐시·MySQL 버퍼풀이 OFF 에 유리하다.
+#   'OFF 가 CPU 가 낮았다' 의 일부가 순서 효과일 수 있고, 순서를 뒤집은 대조는 이 회차에 없다.
+PREDICT_WRONG_IF_5=OFF arm 의 부하 창은 t∈[0, 310s] 뿐이라 15초 스크랩 표본이 20개다.
+#   max 추정의 분산이 ON 보다 크다.
+PREDICT_WRONG_IF_6=seat-service RSS 는 OFF 가 더 높을 수 있다. 같은 총량(좌석 1만)을 5분에
+#   처리하므로 워킹셋 고원이 더 빨리 높이 선다. 부하 후 RSS 가 안 돌아오는 성질(88% /
+#   mem_limit 640 MiB)과 겹치면 OFF arm 이 OOM 여유 없이 끝난다.
+
+# ── 최초 포화 지표 — 목록과 임계를 회차 전에 못 박는다 (두 arm 공통) ───────
+# 포화가 나면 '무엇이 먼저였나' 는 회차 후 서사가 아니라 임계 교차 시각이 가장 이른 지표로 정한다.
+KNEE_WATCH_1=node-cpu >= 90% (3연속 스크랩 = 45s)
+KNEE_WATCH_2=gateway-5xx-rps >= 1/s (2연속)
+KNEE_WATCH_3=server-p95-by-instance{booking-service:8090} >= 150ms (2연속. B-2 42.9ms 의 3.5배)
+KNEE_WATCH_4=k6-req-connecting-p95 >= 100ms (2연속)
+KNEE_WATCH_5=hikari-pending >= 1 (any instance, 2연속)
+KNEE_WATCH_6=tomcat-busy >= 0.8 × tomcat_threads_config_max (2연속)
+#   G10 실측으로 확정: booking·나머지 160 / seat-service 40 (max-threads 200 / 50).
+AGGREGATION_TOOL=load-test/bench/arm-stats.py (#554 에서 신설).
+#   arm 마다 판정 창이 다르고(ON t+300~500s / OFF t+30~300s) DEFERRAL_RATIO 는 시각 기준이
+#   하나만 어긋나도 결론이 뒤집혀서, 손집계를 하지 않는다. 15초 샘플러의 중앙값을 '최대' 로 쓰는
+#   사고(§16.6, 묶음 C 에서 두 번)도 이 스크립트가 막는다.
+AGGREGATION_TOOL_VALIDATION=#549 B-2 덤프로 검증했다 — KNEE=N/A · 호스트 CPU max 79.53%
+#   (#549 기록과 일치) · 게이트웨이 RPS max 434.36(위 MODEL_ON 예측 453 과 4% 오차).
+#   ⚠ 단 예매 RPS 판정창 avg 는 19.74 로 #549 기록 20.17 과 다르다(표본 14 · max 21.00 은 일치).
+#     #549 가 어떤 집계로 20.17 을 냈는지 증적에 없다 — 이번 회차 수치는 전부 이 스크립트로
+#     내고, #549 값과 소수점을 직접 비교하지 않는다.
+KNEE_WATCH_7=container-oom-kills > 0 (any, 1회)
+#   ⚠ 회차 전에 'container-mem-limit-pct >= 90%' 로 적었다가 OFF arm 시작 전에 교체했다.
+#   사유: 그 임계가 이 프로젝트에서 상시 참이다 — #549 B-2(유효 회차)의 공통 창에서도
+#   booking-service 가 96.28-98.34% 였다. ADR 0006 의 mem_limit 설계상 정상 운영값이라,
+#   그대로 두면 어떤 arm 이든 시작하자마자 '포화' 로 오판된다.
+#   ⚠ 이 교체의 근거는 이번 회차 결과가 아니라 #549 B-2 덤프다(ON arm 결과를 보기 전에
+#     arm-stats.py 를 그 회차로 검증하다 발견했다). §6.1 의 '결과를 보고 기준을 고치지 않는다'
+#     에 걸리지 않는다 — 고친 것은 결과가 아니라 측정 불가능한 임계다.
+#   mem-limit-pct 는 KNEE 판정에서 빠지고 기록 축으로만 남는다.
+KNEE_WATCH_8=redis-mem-used >= 48 MB (1회)
+KNEE_WATCH_9=k6_queue_status_unavailable_rate > 0 (1회)
+KNEE=가장 먼저 교차한 지표의 시각 t* 에서 (k6_vus, booking-server-rps, gateway-rps) 3튜플.
+KNEE_IF_NONE=교차가 없으면 KNEE=N/A(미도달)로 적고 도달한 최대 동작점을 함께 적는다. 그리고
+#   '유입 상한이 램프 기울기 33.3/s 였고 #344 붕괴점의 12.9% 다 — 시스템이 튼튼한 것이 아니라
+#   부하가 작았다' 를 그대로 적는다.
+#   ⚠ 이 분기를 회차 전에 적어 두는 것이 이 설계의 핵심이다. 없으면 회차 후에
+#     '안 무너졌으니 안전하다' 는 잘못된 결론이 나온다. 미도달을 무릎으로 바꿔 쓰지 않는다.
+
+# ── 판정 기준: ON arm (회차 전에 정한다 — §6.1) ────────────────────────────
+ON_PRIMARY_CRITERION=예매 서버 RPS 1분 이동평균이 판정 창 t+300s~t+500s(램프 종료~승급 완료)에서
+#   20 ± 50% (10-30 RPS) 밴드 안.
+#   #549 밴드를 그대로 쓴다 — 밴드의 출처는 B-2 실측이 아니라 설정값 admit-rate-per-second=20 이고,
+#   승급 산식(WaitingRoomPolicy.admittedThreshold)과 그 값은 21d2da2d → b0f3da84 에서 무변경이다
+#   (게이트웨이 diff = application.yml 주석 + /api/v1/banner/** 라우트 1줄).
+#   밴드를 B-2 실측(19.60-21.00)에 맞춰 좁히는 것은 결과를 보고 기준을 고치는 것이다(§6.1).
+#   배포본이 달라졌다는 사실은 좁힐 이유가 아니라 넓게 유지할 이유다.
+ON_DRIFT_FLAG=판정 창 평균이 19.0-21.5 밖이면 밴드 안이라도 리포트에 '배포본 드리프트' 로 적는다.
+#   같은 설정값에서 이 밖으로 나가면 승급 산식이 아니라 그 주변(예매 경로 홉 수 · GC · CPU 경합)이
+#   달라진 것이다. 통과/실패가 아니라 기록 의무다.
+ON_SECONDARY=ticketrush_queue_waiting 단조 감소 / queue_wait_to_admit_seconds p95 /
+#   poll_interval 이 3초 하한에서 시작해 10초까지 오르는지 / polls_per_user avg·max /
+#   k6_http_req_connecting_p95 · tls p95
+ON_INVALID_IF=queue_status_unavailable > 0 (fail-closed 발동 = Redis 장애를 잰 것)
+ON_INVALID_IF=ticketrush_queue_entry_token{result="unavailable"} > 0 (같은 이유)
+ON_INVALID_IF=redis_memory_used_bytes >= 48MB (noeviction 상한 근접 — 좌석 락 SET 거절 위험)
+ON_INVALID_IF=queue_polls_exhausted > 0 (입장 허용량이 유입을 소화하지 못함)
+ON_INVALID_IF=queue_booking_forbidden > 0 (폴링→예매 지연이 입장 토큰 TTL 5분을 넘김)
+ON_INVALID_IF=생성기 swap 사용량 증가 (대상이 아니라 생성기를 잰 것이 된다)
+ON_SANITY=queue_admitted 가 정확히 1.000 이면 지표가 아니라 스크립트를 의심한다(#544 선례).
+#   #549 는 이 검사가 발동했고 조사 후 기각됐다 — polls_per_user max 39 << 상한 300,
+#   polls_exhausted 0, 회차 길이 > 승급 완료 시각. 같은 근거 3개를 이번에도 확인한다.
+
+# ── 판정 기준: OFF arm ─────────────────────────────────────────────────────
+OFF_NOT_APPLICABLE=런북 §13.5 포화 판정 3요건을 준용하지 않는다.
+#   ① '도착률을 올려도 RPS 가 안 오른다' — 다이얼 자체가 없다. ramping-vus 의 실효 도착률은
+#      dVU/dt = 33.3/s 상수이고 계단이 0개다. 원리상 스윕이 아니라 단일 동작점 회차다.
+#   ② dropped_iterations — k6 가 arrival-rate 계열 executor 에서만 내는 지표다. ramping-vus 에는
+#      발생하지 않는다. 대응 증상인 iteration 길이 증가도 이 시나리오는 대부분을 sleep 으로
+#      보내므로 묻힌다.
+#   ③ 호스트 CPU 수렴 — 유일하게 그대로 쓸 수 있다(위 KNEE_WATCH_1).
+OFF_FLATNESS_IS_USELESS=램프가 선형이라 OFF arm 의 예매 RPS 도 평평하다. '평탄성' 은 이 회차에서
+#   판별력이 0 이다. 수준 차이(20 vs 33.3)도 1.67배뿐이라 ON 밴드 상한 30 과 겹칠 위험이 있다.
+OFF_PRIMARY_CRITERION=두 arm 을 실제로 가르는 것은 '유입이 끝난 뒤에 무슨 일이 일어나는가' 다.
+#   (i) DEFERRAL_RATIO = (t+300s 이후 booking-service 요청 수) / (전체) <= 10%
+#       대응 ON 기준 >= 30%. 예측: ON 43%(램프 종료 후 admit-rate 20/s 로 200초 더 = 약 4,000건)
+#       vs OFF 3.3%(마지막 VU 가 t+300+T 에 끝난다 = 약 333건). 약 13배 분리.
+#       이것이 '대기열이 유입을 이연시킨다' 의 유일한 직접 증거다.
+#       두 값이 분리되지 않으면 대조 자체가 실패다.
+#   (ii) 예매 RPS 1분 이동평균(t+30s~t+300s)이 도착률 33.3 ± 20% (26.7-40.0) 안.
+#       판정 내용은 '입장 허용량 20' 이 아니라 '램프 기울기를 따라간다' 이다.
+#   ⚠ 이것은 OFF arm 의 pass/fail 이 아니다. OFF arm 은 대조군 값을 확정하는 것이 목적이다.
+#     밴드를 벗어나면 'OFF 가 나빴다' 가 아니라 '부하 모델에 대한 우리 이해가 틀렸다' 이고,
+#     그때는 대조표 전체를 다시 읽어야 한다. 그래서 회차 전에 밴드를 못 박는다.
+
+# ── 무효 기준: OFF arm (계측 신뢰성 · 통제변수 검증 축만) ──────────────────
+OFF_INVALID_IF=queue_booking_forbidden > 0 또는 ticketrush_queue_entry_token_total 이 증가
+#   [통제변수 검증 · 양성 대조] EntryTokenGatewayFilter:91 이 OFF 면 계측 전에 리턴하므로
+#   구조적으로 0 이어야 한다. 0 이 아니면 QUEUE_ENABLED=false 가 컨테이너에 안 먹은 것이다.
+#   ⚠ ON arm 과 정반대 방향으로 쓴다.
+OFF_INVALID_IF=k6_queue_admitted_rate < 1.000
+#   [통제변수 검증] WaitingRoomService:243 상 OFF 면 첫 폴링 전원 승급이 정답이다.
+OFF_INVALID_IF=queue_booking_ok < 95% 이면서 원인이 4xx
+#   [재고] ON arm 이 좌석 약 9,300석을 비가역 소모한 직후다. 재시딩 없이 돌리면 잰 것은
+#   예매 경로가 아니라 재고 고갈이다.
+OFF_INVALID_IF=redis_memory_used_bytes >= 48MB
+#   [계측 신뢰성] noeviction 상한은 좌석 락 SET 까지 거절한다 — 붕괴가 결과라도 Redis 예산
+#   붕괴는 이 회차가 재려던 붕괴가 아니다.
+OFF_INVALID_IF=ticketrush_container_sampler_containers == 0 (컨테이너 메모리 수집이 멎은 것)
+OFF_INVALID_IF=k6 → Prometheus remote-write 터널 끊김 (클라이언트 퍼센타일 SSOT 소실)
+OFF_INVALID_IF=Prometheus targets 11개 중 down 발생 / 스크랩 공백
+OFF_INVALID_IF=생성기 swap 사용량 증가
+OFF_INVALID_IF=|OFF 실효코호트 − ON 실효코호트| / ON > 10%
+#   [대조 성립성] B-2 는 724명(7.24%)이 enqueue 에서 조용히 실패했다. 두 arm 의 코호트가 10% 넘게
+#   어긋나면 '같은 유입에 대한 대조' 가 아니다. 신설한 queue_enqueue_failed 로 직접 잰다.
+OFF_INVALID_IF=회차 도중 인스턴스 중지
+OFF_INVALID_IF=시딩 연속성 GAP (구멍에 걸린 VU 의 예매가 404 로 튕겨 RPS 가 과소 집계된다)
+OFF_INVALID_IF=IMAGE_TAG 가 ON arm 과 다름
+
+OFF_NOT_INVALID=queue_status_unavailable > 0
+#   ON 에서 무효인 이유는 '대기열 성능이 아니라 Redis 장애를 쟀다' 이다. OFF 에는 지킬 대기열
+#   성능이 없다 — 보호 없는 경로의 503 은 오염이 아니라 관측 대상 그 자체다. 결과 축으로 옮긴다.
+#   (원인이 Redis 메모리 상한이면 위 redis >= 48MB 조항에 걸린다)
+OFF_NOT_INVALID=ticketrush_queue_entry_token{result="unavailable"} > 0
+#   구조적으로 0 이다(필터가 계측 전에 리턴). 이 0 을 'OFF 가 통과했다' 로 읽으면 계측 부재를
+#   건전성으로 오독한다. 대신 '> 0 = 플래그 미적용' 으로 방향을 뒤집어 위 INVALID 에 넣었다.
+OFF_NOT_INVALID=queue_polls_exhausted > 0
+#   OFF 에서는 status 가 300회 연속 실패해야 발생한다. 오염이 아니라 '보호 없는 경로가 상태조차
+#   못 답한다' 는 결과다.
+OFF_NOT_INVALID=호스트 CPU 99% / 게이트웨이 CPU 포화 — 붕괴는 결과다. 무효 사유가 아니다.
+OFF_NOT_INVALID=queue_status_admitted_leak — 회차 A(status 프로파일) 전용이라 flood 에서는 미집계.
+OFF_SANITY_SUSPENDED=queue_admitted == 1.000 검사(ON_SANITY)를 OFF arm 에서 유예한다.
+#   OFF 에서는 1.000 이 정답이라 그대로 두면 반드시 오발동한다. 역방향(< 1.000 = 무효)으로 대체했다.
+
+# ── 두 arm 공통 무효 조건 ──────────────────────────────────────────────────
+INVALID_IF_DASHBOARD=회차 중 GET /api/v1/performance/admin/dashboard 를 열지 않는다.
+#   PR #589(#563)가 booking·seat 에 WHERE 없는 전건 GROUP BY 집계를 추가해, 이 엔드포인트 호출
+#   1회가 booking 전건 스캔 2개 + seat 전건 GROUP BY 1개를 유발한다. 위 INCLUDES_PR589 대로
+#   회차 배포본에 실제로 들어 있다. 두 arm 모두에서 지킨다.
+#   ⚠ 관리자 목록(GET /api/v1/performance/admin)은 이 제약에서 빠진다 — PR #591 이 현재 페이지의
+#     공연 ID 로 좁힌 IN 필터를 쓴다. 대시보드는 전량 집계가 정당하다고 판단돼 필터를 넘기지
+#     않으므로 위 제약이 그대로 유효하다.
+POST_CHECK=오버셀 0행 — LTQ 코호트 기준 3쿼리(아래 OVERSELL_SQL). arm 별로 각각, 종료 직후
+#   cleanup 전에 돌린다. arm 사이 재시딩이 증거를 지운다.
+#   ⚠ 위 기준은 전부 회차 전에 확정했다. 결과를 보고 고치지 않는다.
+
+# ── 대조표의 판정 창 (arm 마다 다르다 — 안 적으면 대조표가 통째로 틀린다) ──
+WINDOW_ON=t+300s ~ t+500s (램프 종료 ~ 승급 완료. #549 와 동일)
+WINDOW_OFF=t+30s ~ t+300s (첫 예매가 t≈+4s 에 나오고 마지막 VU 가 t+310s 에 끝난다.
+#   t+300s 이후는 사실상 무부하다)
+WINDOW_COMMON=t+30s ~ t+300s — 두 arm 이 동일 유입을 받는 유일한 구간.
+#   자원 축(CPU · 메모리 · 커넥션)은 반드시 이 창으로 비교한다.
+UNIT_RULE=RPS 는 전부 rate(...[1m]) 1분 이동평균(15초 스크랩). 퍼센타일 SSOT 는 클라이언트(k6)이고
+#   서버 p95 는 별도 행으로 둔다. 비율형 지표는 전부 실효 코호트를 분모로 쓴다.
+
+# ── 대조표에 넣으면 안 되는 축 (유령값 — 나란히 두면 100% 오독한다) ────────
+GHOST_METRIC=ticketrush_queue_waiting
+#   toSnapshot() 이 enabled 와 무관하게 remainingWaiting(enqueued, threshold) 를 계산하고
+#   recordAdmitted() 가 게이지에 그대로 쓴다(WaitingRoomService.java:202, 235).
+#   OFF arm 에서도 ON 과 거의 같은 대기 인원 곡선이 그려지는데 실제로 기다린 사람은 0명이다.
+GHOST_METRIC=ticketrush_queue_poll_interval_seconds — 같은 이유. OFF 에서도 3→10초 곡선이
+#   그려지지만 아무도 그 주기로 폴링하지 않는다.
+GHOST_METRIC=ticketrush_queue_entry_token_* — OFF 는 전부 0 인데 통과해서가 아니라 필터가
+#   계측 전에 빠져나가서다.
+GHOST_COMPARISON=#549 B-2 절대값과의 직접 대조 — §6.1. 배포본이 134파일 다르다.
+
+# ── 실행 절차의 런북 이탈 (회차 전에 적는다) ───────────────────────────────
+RUNBOOK_DEVIATION_1=§16.4 B-4 의 `--network host` + localhost:9090 을 쓰지 않는다.
+#   그 명령은 생성기 EC2(Linux)용이다. Windows Docker Desktop 에서 --network host 는 동작하지
+#   않는다. #549 도 실제로는 host.docker.internal:9090 을 썼다(k6-summary-b2.txt 의 output: 줄).
+RUNBOOK_DEVIATION_2=§16.4 B-4 명령줄에 QUEUE_FLOOD_RAMP 가 없다. 기본값이 2m 이고 램프 2m 이
+#   #549 B-1 을 무효로 만든 조건이므로 -e QUEUE_FLOOD_RAMP=5m 을 명시한다(두 arm 모두).
+RUNBOOK_DEVIATION_3=§16.4 G2 표기는 `docker compose restart gateway-service` 지만 restart 는
+#   env_file 을 다시 읽지 않는다. #549 실측대로 --force-recreate 를 쓴다.
+GIT_BASH_NOTE=Git Bash 에서 docker -v 경로가 자동 변환된다. MSYS_NO_PATHCONV=1 을 붙인다.
+
+# ── 오버셀 검증 SQL (#344 계열을 LTQ 코호트로 옮긴 것) ─────────────────────
+# #549 는 'POST_CHECK=오버셀 0행 (#344 검증 SQL)' 이라고만 적고 원문을 남기지 않았다.
+# 런북 §13.4-(7)의 필터는 p.title LIKE 'LOADTEST-%' 라 LTQ 코호트에 그대로 맞지 않는다.
+# booking_number NOT LIKE 'LT-%' 필터는 뺀다 — LTQ 공연에는 시드 예매가 없다(좌석만 만든다).
+OVERSELL_SQL_A=SELECT b.seat_id, COUNT(*) c FROM booking b JOIN performance p ON p.performance_id=b.performance_id AND p.title LIKE 'LTQ-%' WHERE b.booking_status IN ('PENDING','CONFIRMED') GROUP BY b.seat_id HAVING c > 1;
+OVERSELL_SQL_B=SELECT s.seat_id, s.booking_number, b.booking_status FROM seat s JOIN performance p ON p.performance_id=s.performance_id AND p.title LIKE 'LTQ-%' LEFT JOIN booking b ON b.booking_number = s.booking_number WHERE s.seat_status='HOLD' AND (b.booking_id IS NULL OR b.booking_status <> 'PENDING');
+OVERSELL_SQL_C=SELECT COUNT(*) AS app_bookings FROM booking b JOIN performance p ON p.performance_id=b.performance_id AND p.title LIKE 'LTQ-%';
+# (a) 0행 = 오버셀 없음 / (b) 0행 = 유령 HOLD 없음 / (c) k6 queue_booking_ok 성공 건수와 일치
+
+# ── 계측 보강 (회차 전) ────────────────────────────────────────────────────
+INSTRUMENTATION=waiting-room.js 에 queue_enqueue_failed Counter 를 추가했다(status 태그 포함).
+#   #549 는 이 계측이 없어 실효 코호트 9,276명(724명 유실, 7.24%)을 http_req_failed 로 역산해서야
+#   알았고 metadata.txt 에 '다음 회차 전에 넣는다' 고 적었다. 이 회차가 그 다음 회차다.
+#   status 태그로 진입 실패가 게이트웨이 거절(4xx)인지 포화(5xx·0)인지를 가른다.
+#   dump-timeseries.py QUERIES 에 k6-queue-enqueue-failed 를 함께 넣었다 — 덤프에 없으면
+#   위 코호트 무효 기준을 회차 후에 잴 수 없다.
+#   k6 는 로컬 클라이언트라 재배포가 필요 없다. 서버측 enqueue 카운터는 이번 범위 밖이다.
+
+# ── 사전 게이트 — 회차 시점에 채운다 ───────────────────────────────────────
+# G0~G7 은 런북 §16.4, G8~G14 는 이 회차에서 추가한 것이다.
+G0_EC2=기동(2026-08-13 10:37 UTC 부팅). 실행 중 태그 b0f3da8464498eaf1e595ac2e478167fb3afee27
+#   — 정지 전 확인값과 동일하고 CD 성공 SHA 와도 일치한다.
+#   ⚠ #549 가 만난 '유령 IMAGE_TAG' 의 정체를 이번에 확인했다. EC2 에 .env 가 두 개 있다:
+#     ~/ticketrush/.env        → IMAGE_TAG=6b7301a0…  (쓰이지 않는 잔재. #549 가 본 그 값이다)
+#     ~/ticketrush/deploy/.env → IMAGE_TAG=b0f3da84…  (CD 가 실제로 쓰는 파일. cd.yml 의
+#                                 `docker compose --env-file deploy/.env` 가 근거)
+#     즉 '.env 가 존재하지 않는 태그를 가리킨다' 가 아니라 '엉뚱한 파일을 본 것' 이었다.
+#     이번 회차는 deploy/.env 만 만졌고 잔재 파일은 손대지 않았다.
+G1_NGINX=worker_connections 16384 / worker_rlimit_nofile 65535 / worker_processes auto
+#   (2 vCPU → 2). systemctl active. #522 조치가 재부팅 후에도 유지된다.
+G2_QUEUE_ENABLED=true (deploy/.env → gateway --force-recreate → 컨테이너 env 로 주입 확인)
+#   QUEUE_ADMIT_RATE=20 / QUEUE_STATUS_RPS_CAPACITY=400 도 같은 파일에 이미 있었다.
+#   재생성 후 이미지가 b0f3da84… 로 동일함을 확인했다(태그가 어긋나면 게이트웨이가 내려간다).
+G3_METRICS=ticketrush_queue_* 9개 시계열 전부 사전 등록으로 노출 확인
+#   admission{admitted,unavailable,waiting} · entry_token{invalid,missing,unavailable,valid}
+#   · poll_interval_seconds · waiting
+G4_REDIS=used_memory 1.36M / maxmemory 64.00M / policy noeviction (무효 기준 48MB 대비 여유)
+G5_PROM_TARGETS=11개 전부 up (gateway 1 · ticketrush-services 7 · node · redis · prometheus)
+G6_GENERATOR=로컬 Docker (ADR 0010 은 #549 실측으로 기각됨 — 생성기 EC2 를 만들지 않는다)
+G7_QUEUE_RESET=queue:* 0건 확인 후 시작
+G8_IDLE_CPU_BASELINE=약 7.0% — min 6.63 / avg 7.03 / max 7.57 (창 10:50:30~10:52:15Z, 표본 8).
+#   교차 확인: 창 10:47:00~10:50:00Z 표본 13 에서 min 6.72 / avg 7.57 / max 9.86.
+#   → 배포본 드리프트(134파일 +5,765줄)가 유휴 CPU 기저를 밀어올리지 않았다.
+#     PREDICT_WRONG_IF_2 의 전제가 회차 전에 해소된 셈이다.
+#   ⚠ 이 값은 '5분 연속 무명령 창' 이 아니다. 처음 5분 창(10:47~10:52)을 그대로 재니
+#     max 57.55% 가 나왔는데, 원인은 대상이 아니라 측정자였다 — 그 구간에 내가 SSH 점검 명령을
+#     던졌다. 같은 순간 docker stats 의 컨테이너 CPU 합계는 13%, load average 는 0.10 이었다.
+MEASUREMENT_HAZARD=2 vCPU 호스트라 관측 행위 자체가 관측값에 잡힌다.
+#   SSH 세션 + docker CLI(16개 컨테이너 샘플링) + Prometheus range query 가 각각 CPU 를 쓴다.
+#   기저 측정에서 30~57% 스파이크가 전부 여기서 나왔다.
+#   → 회차 중에는 원격 명령을 던지지 않는다. 관측은 k6 stdout 과 회차 후 덤프로만 한다.
+#     런북 §16 에 이 경고가 없다 — 회차 후 반영 대상이다.
+G9_KAFKA_CONCURRENCY=미설정. deploy/.env 에 SPRING_KAFKA_LISTENER_CONCURRENCY 키가 없다.
+#   #596 이 .env.prod.example 에 넣었지만 실제 .env 에는 반영되지 않아 코드 기본값으로 돈다.
+#   → PREDICT_WRONG_IF_3 이 발동하지 않는다. seat_lock_contention > 0 은 정상이 아니라
+#     그대로 해석 대상이다.
+# ⚠⚠ 정정 (#598, 2026-08-13) — 위 두 줄의 결론이 틀렸다. 앞의 사실(키 부재)은 맞다.
+#   KafkaConfig.java:105 의 코드 기본값이 3 이므로 '코드 기본값으로 돈다' = concurrency 3 이다.
+#   즉 이 회차 두 arm 은 이미 병렬 소비(3 스레드) 조건에서 돌았고 PREDICT_WRONG_IF_3 은 발동했다.
+#   seat_lock_contention 이 32 에서 평평했던 이유는 concurrency 가 아니라, waiting-room.js 의
+#   seatFor() 가 VU 마다 유일한 좌석을 노려 같은 좌석 경합이 구조적으로 없었기 때문이다.
+#   ⇒ 이 회차의 수치는 전부 그대로 유효하다. 고치지 않는다.
+#   #598 이 진짜 concurrency 1 을 만들어 대조했다 — 1 에서 시리즈 미생성(0),
+#   3 에서 3,621(같은 좌석에 100 VU). 두 값 모두 위 32 와 무관하다.
+#   근거: load-tests/k6/results/260813-598-consumer-concurrency/report.md §1.1 · §9.3
+G10_TOMCAT_MAX_THREADS=booking-service 200 / seat-service 50 / 나머지(auth·user·payment·
+#   performance·ticket) 200. tomcat_threads_config_max_threads 실측.
+#   → KNEE_WATCH_6 임계(0.8 ×): booking 160 · seat 40 · 나머지 160.
+G11_SMOKE_HOP_COUNT=예매 1건 = booking-service 요청 1건. 내부 REST 홉이 늘지 않았다.
+#   스모크(VU 50) 후 http_server_requests_seconds_count: booking-service 50(÷50 = 1.00),
+#   gateway-service 196. seat·user·performance-service 는 카운터가 아예 없다(요청 0건 —
+#   Micrometer 는 첫 요청 후에 시계열을 만든다).
+#   → booking-server-rps 축의 의미가 #549 와 같다. SeatRestClient(97줄) 신설이 예매 생성 경로에
+#     영향을 주지 않았다(BookingValidateReferencesUseCase 가 공유 DB 를 직접 본다).
+#   스모크에서 예매 1건당 서버 요청 홉 수. 새 빌드가 BookingFacade 179줄 변경이고
+#   booking-service 에 SeatRestClient(97줄)가 신설됐다. 예매 경로가 내부 REST 홉을 새로 타면
+#   booking-server-rps 축의 의미가 달라진다
+#   (BookingCreateUseCase·BookingValidateReferencesUseCase 자체는 무변경 — diff 에 안 나온다).
+G12_BETWEEN_ARM_RESET=완료. ① LTQ 코호트 전량 삭제 후 0건 확인 → 재시딩
+#   ② queue:* 0건 ③ outbox backlog 두 서비스 모두 이미 0(ON arm 종료 후 자연 소진)
+#   ④ seat-service --force-recreate → RSS 353.7MiB/640MiB(55%). ON arm 종료 시점 81% 에서 복구됐다
+#   ⑤ QUEUE_ENABLED=false → gateway --force-recreate → 컨테이너 env 로 주입 확인
+#   ⑥ Prometheus targets 11개 전부 up 재확인 후 시작
+#   ⚠ gateway·seat-service 를 재시작했으므로 OFF arm 은 콜드 스타트로 시작한다.
+#     PREDICT_WRONG_IF_4('ON→OFF 순서라 워밍업이 OFF 에 유리하다')와 반대 방향이다 —
+#     JVM/JIT 은 OFF 가 불리하고, MySQL 버퍼풀·페이지 캐시는 여전히 OFF 가 유리하다.
+#     ON arm 의 KNEE 판정이 워밍업이었으므로 OFF arm 에서도 램프 초반 지연을 같은 눈으로 본다.
+G13_FLOOD_RAMP=-e QUEUE_FLOOD_RAMP=5m 명시 주입. k6 inspect 로 stages 확인:
+#   [{5m0s → 10000}, {15m0s → 10000}, {30s → 0}]. 두 arm 모두 같은 값으로 돈다.
+G14_DUMP_QUERIES=k6-queue-enqueue-failed(k6_queue_enqueue_failed_total) 를 dump-timeseries.py
+#   QUERIES 에 추가했다(커밋 150c8822). 없으면 코호트 대조 무효 기준을 회차 후에 못 잰다.
+
+# ── 시딩 — 회차 시점에 채운다 ──────────────────────────────────────────────
+SEED=load-test/seed/seed_queue_flood.sql
+SEED_PRESTATE=LTQ 잔재 0건 확인 후 시딩(#549 회차의 cleanup 이 완결돼 있었다). 시딩 전 seat 총 66,520행.
+SEED_RESULT_ON=user 10,000행(id 91921-101920, 연속 OK) / seat 10,000석(id 230375-240374, 연속 OK)
+QUEUE_PERF_ID=30 / QUEUE_USER_ID_MIN=91920 / QUEUE_SEAT_ID_MIN=230374 / QUEUE_FLOOD_VUS=10000
+SEED_RESULT_OFF=user 10,000행(id 108304-118303, 연속 OK) / seat 10,000석(id 246758-256757, 연속 OK)
+#   QUEUE_PERF_ID=31 / QUEUE_USER_ID_MIN=108303 / QUEUE_SEAT_ID_MIN=246757 / QUEUE_FLOOD_VUS=10000
+#   ⚠ ON arm 값(30 / 91920 / 230374)과 전부 다르다. AUTO_INCREMENT 는 삭제해도 되감기지 않는다 —
+#     그대로 재사용했다면 회차 전체가 404 였다.
+# arm 사이 재시딩하면 AUTO_INCREMENT 가 되감기지 않아 seat_id·user_id 범위가 바뀐다.
+# OFF arm 의 -e 인자를 새 시딩 출력으로 갱신한다 — ON arm 값을 재사용하면 회차 전체가 404 다.
+
+# ── 회차 전 처치 ───────────────────────────────────────────────────────────
+SMOKE=VU 50 / 램프 20s / 유지 1m (ON 조건, Prometheus remote-write 없이).
+#   queue_admitted 100.00%(50/50) · queue_booking_ok 100.00%(50/50) · booking_forbidden 0%
+#   · status_unavailable 0% · polls_per_user 정확히 1 · wait_to_admit avg 3.03s
+#   · http_req_duration p95 94.73ms · http_req_failed 0.00%(0/151)
+#   http_reqs 151 = open 1 + (enqueue+status+booking) × 50 인데 iterations 는 215 회다 →
+#   1회 여정 가드가 실제 시나리오에서 동작함을 이 숫자가 고정한다(가드가 없었다면 215회분의
+#   예매가 나갔다). 수치 자체는 폐기한다(§6.1 규칙 4).
+#   ⚠ polls_per_user=1 · admitted 100% 는 대기열이 안 켜졌다는 뜻이 아니다. threshold = 경과 × 20
+#     이라 50명은 2.5초면 전원 허용선 안에 든다. 본 회차(1만 명)에서는 성립하지 않는다.
+SMOKE_ENQUEUE_FAILED=요약에 출력되지 않았다. k6 는 값이 0인 Counter 를 출력하지 않는다 —
+#   진입 실패 0건이라는 뜻이지 계측 부재가 아니다. 본 회차에서 > 0 이면 그때 값이 찍힌다.
+SMOKE_CLEANUP=예매 삭제 + 좌석 AVAILABLE 복구 → LTQ 좌석 10,000 전부 AVAILABLE · 예매 0건 확인.
+#   queue:* 0건 · seat 락 키 0건 · Redis used_memory 1.70M.
+
+# ── 실측 — 회차 후에 채운다 ────────────────────────────────────────────────
+# 수치는 전부 arm-stats.py 출력으로 채운다(손집계 금지 — AGGREGATION_TOOL 참조).
+
+ON_START_UTC=2026-08-13T10:57:48Z
+ON_END_UTC=2026-08-13T11:19:19Z (20m53.5s 정상 종료, exit 0)
+ON_CONFIG=QUEUE_ENABLED=true / ADMIT_RATE=20 / STATUS_RPS_CAPACITY=400 / 램프 5m / 유지 15m
+ON_RESULT=유효. 무효 기준 6개 전부 통과 — queue_status_unavailable 0.00%(0/158,691),
+#   entry_token unavailable/invalid/missing 전부 0(valid 9,831 = 본회차 9,781 + 스모크 50),
+#   redis 최대 8.27MB(기준 48MB), queue_polls_exhausted 0, queue_booking_forbidden 0.00%,
+#   생성기는 interrupted iteration 0 으로 정상 완료.
+ON_PRIMARY=예매 서버 RPS — 판정 창 t+300s~t+500s 표본 13
+#   min 19.47 / avg 20.31 / max 20.80 → 선언 밴드(10-30) 이탈 0건. 허용량 20 대비 +1.6%.
+ON_DRIFT=해당 없음. 판정창 평균 20.31 이 DRIFT_FLAG 범위(19.0-21.5) 안이다.
+ON_SECONDARY=queue_status_duration avg 15.14ms p95 28.5ms max 2.11s
+#   / wait_to_admit avg 98.9s med 99.9s p95 182.6s max 191.1s
+#   / polls_per_user avg 16.22 med 15 max 42 (상한 300 에 한참 못 미친다)
+ON_ADMISSION=admitted 100.00%(9,781/9,781) / booking_ok 100.00%(9,781/9,781) / forbidden 0%
+ON_LATENCY=http_req_duration avg 17.76ms med 7.63ms p95 42.34ms max 3.08s
+ON_WAIT=queue_wait_to_admit_seconds avg 98.9s / med 99.9s / p95 182.6s / max 191.1s
+ON_POLLS=polls_per_user avg 16.22 / med 15 / max 42 · 상태 확인 요청 총 158,691건
+ON_HOST=CPU 회차 전체 min 5.99 / avg 36.37 / max 88.59 (최대 시점 t+72s)
+#   ⚠ 회차 전 예측은 70-85% 였다 — max 가 예측을 3.59%p 넘었다(PREDICTION_VS_ACTUAL 참조).
+#   무부하 기저는 약 7% 였다(G8).
+ON_GATEWAY_RPS=공통 창(t+30~300s) 기준은 회차 후 대조표에서 OFF 와 함께 적는다
+ON_CONTAINER=공통 창 max — booking-service 99.55% / performance-service 89.75% /
+#   seat-service 81.37% / gateway-service 58.63% / mysql 83.67%.
+#   ⚠ booking 94-99.55% 는 이 프로젝트의 정상 운영값이다(ADR 0006 mem_limit). OOM kill 0건.
+ON_HIKARI_TOMCAT=Hikari active max — booking 2 / seat 3, pending 0(시계열 미생성 = 0).
+#   Tomcat busy max — booking 7 (config max 200 의 3.5%). 둘 다 자릿수 밖이다.
+ON_NETWORK=data_sent 55 MB (43 kB/s) — 대역은 이 회차에서도 무관했다
+ON_COHORT=9,781명 (1만이 아니다). 219명이 진입(enqueue)에서 실패했다.
+#   ✅ #549 의 숙제가 닫혔다 — 신설한 queue_enqueue_failed 가 219 를 직접 셌고
+#     http_req_failed 219(0.12%, 219/178,473)와 정확히 일치한다. 역산이 필요 없었다.
+ON_ENQUEUE_FAILED=219 (queue_enqueue_failed, status 태그 포함)
+ON_DEFERRAL_RATIO=47.01% — t+300s 이후 4,579건 / 전체 9,741건.
+#   회차 전 예측 43%. OFF arm 기준(<=10%)과 대조하는 주 판정축이다.
+ON_KNEE=임계 교차는 있었으나 포화가 아니다 — JIT 워밍업이다.
+#   KNEE_WATCH_3(booking p95 >= 150ms, 2연속)이 t+42s~t+87s 에 걸렸다(219 → 200 → 183 → 167ms).
+#   ⚠ 포화로 읽지 않는 근거: 101개 표본 중 4개만 임계를 넘었고 전부 램프 초반 연속 구간이며,
+#     VU 가 917 → 10,000 으로 10배 느는 동안 p95 는 오히려 단조 감소했다(149 → 132ms).
+#     부하가 늘수록 내려가는 것은 포화의 반대다.
+#   → 실질 KNEE=N/A. 나머지 8개 임계는 교차 없음.
+#   ⚠ 이 판정은 기준을 고친 것이 아니다. 기준(KNEE_WATCH_3)은 그대로 두고 해석에 근거를 달았으며,
+#     같은 기준이 OFF arm 에도 그대로 적용된다.
+ON_OVERSELL=0행. 예매 9,781 = 좌석 9,781 = 사용자 9,781 (1:1:1).
+#   ⚠ 검증 방법을 바꿔야 했다. 런북 §13.4-(7) 의 (a) 는 booking_status IN ('PENDING','CONFIRMED')
+#     로 거르는데, 검증 시점에 LTQ 예매가 전부 EXPIRED(9,749) / CANCELED(32) 였다 — 예매는 5-6분
+#     뒤 만료되고 이 회차는 20분짜리라 종료 시점에 PENDING 이 0 이다. 그 쿼리는 아무 행도 보지
+#     않았다(검출력 0).
+#   → 상태 무관 좌석 중복 검사로 다시 쟀다: seat_id 중복 0행 · user_id 중복 0행 ·
+#     bookings 9,781 = distinct_seats 9,781 = distinct_users 9,781. 증적 oversell-on.txt.
+ON_OUTBOX=회복 확인. booking peak 760(t+432s) → 0 도달 t+867s (peak 이후 435s)
+#   / seat peak 703(t+792s) → 0 도달 t+867s (peak 이후 75s). 덤프 창이 소진 시점을 덮는다.
+
+OFF_START_UTC=2026-08-13T11:24:24Z
+OFF_END_UTC=2026-08-13T11:45:40Z (20m53.4s 정상 종료, exit 0)
+OFF_CONFIG=QUEUE_ENABLED=false / 나머지 ON 과 동일
+OFF_RESULT=유효(계측 신뢰성 축). 무효 기준 전부 통과 — redis 최대 9.17MB(기준 48MB),
+#   컨테이너 샘플러 정상, Prometheus targets 11개 유지, remote-write 유지, 생성기 정상 완료,
+#   시딩 연속성 OK, IMAGE_TAG 동일(b0f3da84…), 실효 코호트 편차 2.41%(기준 10%).
+OFF_PRIMARY=(i) DEFERRAL_RATIO 18.73% — 선언 기준 <=10% 를 **넘겼다**(아래 상세).
+#   (ii) 예매 서버 RPS 판정창(t+30~300s) min 6.60 / avg 28.73 / max 33.73
+#        → 선언 밴드 33.3 ± 20%(26.7-40.0) 안. '램프 기울기를 따라간다' 가 확인됐다.
+OFF_CONTROL_CHECK=통과. queue_polls_per_user 가 정확히 1 (min 1 / med 1 / max 1) —
+#   첫 폴링에서 전원 승급이 코드대로 일어났다. queue_admitted 100.00%(9,545/9,545),
+#   queue_booking_forbidden 0%, entry_token 카운터 증가 없음(필터가 계측 전에 리턴).
+#   → 킬 스위치가 실제로 컨테이너에 먹었다.
+#   양성 대조 — entry_token 카운터 증가 여부 · admitted_rate 가 1.000 인지.
+#   둘 중 하나라도 어긋나면 킬 스위치가 컨테이너에 안 먹은 것이다.
+OFF_ADMISSION=admitted 100.00%(9,545/9,545) / booking_ok 100.00%(9,545/9,545) / forbidden 0%
+OFF_LATENCY=http_req_duration avg 18.93ms med 9.81ms p95 41.04ms max 690.22ms
+OFF_POLLS=polls_per_user avg 1 / min 1 / max 1 · 상태 확인 요청 총 9,545건 (ON 은 158,691건)
+OFF_HOST=CPU 공통창(t+30~300s) min 26.34 / avg 56.87 / max 84.02 (ON 41.72 / 66.31 / 88.59)
+OFF_GATEWAY_RPS=max 100.5 — 회차 전 모델 예측 100 과 오차 0.5%.
+#   ON 444.6(예측 453, 오차 1.9%)과 함께 부하 모델이 두 arm 모두에서 검증됐다.
+OFF_CONTAINER=공통창 max — performance 90.76% / booking 97.91% /
+#   ticket 81.37% / seat-service 67.77%(ON 81.37% — arm 사이 재시작 효과) / gateway 57.24%.
+#   OOM kill 0건.
+#   ⚠ MySQL 은 대조 축에서 뺐다. 회차 후 인프라 컨테이너 패널을 찍어 보니 ON arm 중에
+#     72% → 100%(t+500s)로 차오른 뒤 내려오지 않았고, OFF 는 100% 에서 시작했다.
+#     덤프의 'ON 83.67%' 는 공통 창이 아직 차오르는 중인 구간이라 그렇게 잡힌 것이다.
+#     ON/OFF 차이가 아니라 arm 순서 효과다(report.md §2.3). seat-service RSS 와 같은 성질.
+OFF_HIKARI_TOMCAT=Hikari active max booking 3 / seat 2, pending 0. Tomcat busy max booking 3.
+OFF_NETWORK=data_sent 25 MB (20 kB/s) — ON 55 MB 의 45%
+OFF_COHORT=9,545명. 455명이 진입에서 실패했다(ON 219명).
+#   ON 대비 편차 |9,545-9,781|/9,781 = 2.41% < 10% → 대조 성립 기준 통과.
+OFF_ENQUEUE_FAILED=455 (http_req_failed 455 와 일치, 1.56%).
+#   ⚠ k6 기본 threshold(http_req_failed rate<0.01)를 넘겨 k6 가 'thresholds crossed' 로 종료했다.
+#     회차 무효 기준이 아니다 — 455건은 전부 enqueue 실패이고 서버 포화가 아니다.
+OFF_DEFERRAL_RATIO=18.73% — t+300s 이후 1,788건 / 전체 9,545건.
+#   ⚠ 선언 기준 <=10% 를 넘겼다. 회차 전 예측은 3.3% 였다.
+#   원인: 예측이 '마지막 VU 가 t+300+T(약 10초)에 끝난다' 를 전제했는데, 램프 종료 시점에 아직
+#   진입·폴링 단계인 VU 가 많아 실제로는 66초에 걸쳐 마무리됐다(예매가 t+366s 에 0 이 된다).
+#   ⚠ 그래도 분리는 성립한다 — ON 47.01% vs OFF 18.73%(2.5배), 램프 종료 후 지속 시간은
+#     ON 237초 vs OFF 66초(3.6배). 예측한 13배는 아니지만 방향과 분리는 확인됐다.
+OFF_KNEE=KNEE=N/A — 임계 9개 중 교차 없음. 도달한 최대 동작점:
+#   VU 10,000 / 예매 RPS 33.73 / 게이트웨이 RPS 100.5 / 호스트 CPU 84.02%.
+#   → 회차 전에 적어 둔 KNEE_IF_NONE 분기 그대로다: 유입 상한이 램프 기울기 33.3/s 였고
+#     #344 붕괴점(258 RPS)의 12.9% 다. 시스템이 튼튼한 것이 아니라 부하가 작았다.
+#   ⚠ k6 http_req_failed 1.56% 는 KNEE_WATCH_4 의 임계(1%)를 넘지만, 그 시계열(k6-req-failed)이
+#     덤프에 없어 자동 판정에 잡히지 않았다. 수동 확인 결과 455건 전부 enqueue 실패이고
+#     서버 5xx 가 아니다(gateway-5xx-rps 시계열도 데이터 부재 = 0). 포화 신호가 아니다.
+OFF_OVERSELL=0행. 예매 9,545 = 좌석 9,545 = 사용자 9,545 (1:1:1).
+#   좌석 중복 0행 · 사용자 중복 0행(상태 무관 검사). 예매 상태는 전부 EXPIRED 9,545 —
+#   ON arm 과 같은 이유로 상태 필터 쿼리는 검출력이 없다. 증적 oversell-off.txt.
+#   ⇒ 대기열 없이 @Version + Redis 락만으로 오버셀이 막혔다.
+OFF_OUTBOX=booking peak 1,338(t+411s) → 0 도달 t+441s (peak 이후 30s)
+#   / seat peak 1,119(t+426s) → 0 도달 t+681s (peak 이후 255s).
+#   ⚠ ON(booking peak 760 → 435s)보다 peak 이 1.76배 높지만 소진은 14배 빨랐다 —
+#     OFF 는 유입이 t+366s 에 끝나 릴레이가 따라잡을 시간이 있었다.
+
+COMPARISON=대조표는 report.md §2 참조. 핵심 세 줄:
+#   ① 게이트웨이 총 RPS — ON 444.6 vs OFF 100.5 (4.4배). 대기열의 자기 비용이다.
+#   ② 사용자당 폴링 — ON avg 16.22 / max 42 vs OFF 정확히 1. 가장 깨끗한 한 숫자다.
+#   ③ 이연 — ON 47.01% / 램프 후 237초 vs OFF 18.73% / 66초.
+#   그리고 호스트 CPU 는 OFF 가 낮다(max 84.02 vs 88.59, avg 56.87 vs 66.31) —
+#   대기열이 유입을 제어하는 대가로 서버 부하를 더 만든다는 뜻이다.
+PREDICTION_VS_ACTUAL=ON arm 부분(OFF 는 회차 후 추가).
+#   [맞음] PREDICT_ON_FIRST 의 '최초 포화 미도달' — 9개 임계 중 booking p95 하나만 걸렸고
+#          그것은 워밍업이었다(ON_KNEE 참조). 실질 KNEE=N/A.
+#   [빗나감] PREDICT_ON_FIRST 의 'CPU max 70-85%' — 실측 max 88.59% 로 3.59%p 초과했다.
+#          단 최대 시점이 t+72s 로 워밍업 구간이고, 예측이 지목한 t+240~320s 가 아니다.
+#          avg 36.37% 는 예측 30-40% 안이다.
+#   [맞음] PREDICT_OVERSELL — 0행.
+#   [근접] PREDICT_DEFERRAL 의 ON 43% — 실측 47.01%.
+#   [해소] PREDICT_WRONG_IF_2(드리프트가 유휴 CPU 를 올렸을 가능성) — G8 무부하 기저가 약 7% 로
+#          낮아 이 요인은 배제된다. ON max 88.59% 를 드리프트 탓으로 돌릴 수 없다.
+#   [해소] PREDICT_WRONG_IF_3(Kafka concurrency=3) — G9 에서 미설정 확인.
+#   [반전] PREDICT_WRONG_IF_4(순서 효과가 OFF 에 유리) — arm 사이에 gateway·seat-service 를
+#          재시작해 OFF 가 오히려 콜드 스타트로 시작한다. JVM/JIT 은 OFF 가 불리하고
+#          MySQL 버퍼풀·페이지 캐시는 여전히 OFF 가 유리하다. 방향이 섞였다.
+#   [검증] 부하 모델 — 게이트웨이 RPS max 예측 453 vs 실측 444.6 (오차 1.9%).
+#          #549 B-2 에서 4.1% 였던 것보다 더 가깝다. 모델이 두 회차에서 검증됐다.
+#   회차 전 예측 6개(PREDICT_*)와 실측을 하나씩 대조한다. 틀린 예측은 틀렸다고 적는다.
+
+# ── 이 회차가 답하지 못하는 것 (회차 전에 적는다) ──────────────────────────
+LIMIT_NO_KNEE=무릎(포화점)의 위치. ramping-vus 는 다이얼이 없어 실효 도착률이 33.3/s 상수인
+#   단일 동작점 회차다 — 원리상 스윕이 아니다. 무릎을 원하면 전 여정을 ramping-arrival-rate
+#   계단으로 돌리는 별도 회차가 필요하다.
+LIMIT_CANNOT_PROVE_PROTECTION='대기열이 붕괴를 막는다' 는 명제. OFF arm 이 도달하는 예매
+#   33.3 RPS 는 #344 붕괴점 258 RPS 의 12.9% 다. 이 회차가 답하는 것은 이연의 유무뿐이다.
+LIMIT_CONCURRENT_WAITING='1만 명이 동시에 줄 서 있는' 조건은 이번에도 재현되지 않는다.
+#   대기 인원 최대는 약 4,000명(13.3 × 300)이다. B-2(3,254명)와 같은 이유이고 #546·#549 가 남긴
+#   숙제가 그대로 남는다. 램프를 배수보다 빠르게 하면 B-1 이 되고 B-1 은 CPU 에서 무너졌다 —
+#   이 하드웨어에서 둘은 동시에 만족되지 않는다.
+LIMIT_ARM_ORDER=arm 순서 효과. ON→OFF 연속 실행이라 JIT 워밍업·페이지 캐시·MySQL 버퍼풀이
+#   두 번째 arm(OFF)에 유리하다. 순서를 뒤집은 대조가 이 회차에 없다.
+LIMIT_DRIFT_SHARE=배포본 드리프트의 몫. ON arm 이 B-2 와 다르게 나와도 그 차이가 코드 134파일
+#   때문인지 다른 조건 때문인지 이 회차 단독으로는 못 가른다.
+LIMIT_OFF_IS_NOT_NO_QUEUE=OFF arm 도 enqueue 1회 + status 폴링 1회를 친다. 잰 것은
+#   '대기열 미도입' 이 아니라 '대기열이 유입을 제어하지 않을 때' 다.
+LIMIT_R_MEANINGLESS_IN_OFF=OFF arm 에서 R=400 은 폴링 제어와 무관하다. 두 arm 의 T 가 같은 것은
+#   enqueue 응답이 같은 산식을 쓰기 때문이지 OFF 에 폴링 제어가 있다는 뜻이 아니다.
+LIMIT_SERIES=#549 B-2(21d2da2d)와 배포본이 다르고 그 사이 39커밋 · 프로덕션 코드 134파일이
+#   들어왔다(PR #589 관리자 대시보드 집계 · #599 메인 배너 조회 API · #592 결제 내역 정렬 등).
+#   절대값으로 직접 잇지 않는다. nginx worker_connections 768 시절 회차(#348 · #403 · #529)와도
+#   마찬가지다.
+LIMIT_TOPOLOGY=단일 EC2(2 vCPU)에 앱 8개 + Kafka · MySQL · Redis · 관측 스택이 동거하는 구성이다
+#   (ADR 0006 · ADR 0007). '대기열 경로의 한계' 가 아니라 '이 구성에서 도달한 지점' 이다.
+LIMIT_NO_PAYMENT=결제 · 티켓 발급은 여정에 없다. StubPaymentApprovalClient 는 @Profile("!prod")
+#   와 @ConditionalOnProperty(payment.pg.stub.enabled=true) 의 AND 조건으로 등록되므로 prod 에서
+#   실행되지 않는다(@Profile 단독으로 적지 않는다 — #594 와 같은 서술). 예매가 5-6분 뒤 만료되며
+#   outbox 부하가 사실상 2배가 되는 점은 #348 과 동일하다.

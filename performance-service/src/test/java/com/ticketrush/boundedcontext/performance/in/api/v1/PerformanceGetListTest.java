@@ -2,12 +2,15 @@ package com.ticketrush.boundedcontext.performance.in.api.v1;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.mockito.ArgumentMatchers.anyList;
+import static org.mockito.BDDMockito.given;
 
 import com.ticketrush.boundedcontext.performance.app.dto.response.PerformanceListResponse;
 import com.ticketrush.boundedcontext.performance.app.usecase.PerformanceGetListUseCase;
 import com.ticketrush.boundedcontext.performance.domain.entity.Performance;
 import com.ticketrush.boundedcontext.performance.domain.types.Genre;
 import com.ticketrush.boundedcontext.performance.domain.types.PerformanceStatus;
+import com.ticketrush.boundedcontext.performance.out.apiclient.SeatRestClient;
 import com.ticketrush.boundedcontext.performance.out.repository.PerformanceRepository;
 import com.ticketrush.global.dto.request.CursorPageRequest;
 import com.ticketrush.global.eventpublisher.EventPublisher;
@@ -18,6 +21,7 @@ import java.time.LocalDate;
 import java.time.LocalTime;
 import java.util.Comparator;
 import java.util.List;
+import java.util.Map;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -42,11 +46,19 @@ class PerformanceGetListTest {
   @MockitoBean private S3UploadUtils s3UploadUtils;
   @MockitoBean private EventPublisher eventPublisher;
 
+  /**
+   * 좌석 클라이언트를 반드시 대체한다 (#176). test 프로파일에 {@code service.seat.url} 재정의가 없어 기본값 {@code
+   * http://localhost:8086}이 그대로 살아 있고, 그대로 두면 이 테스트가 실제 HTTP 호출을 시도한다. fail-open이라 결과는 통과하겠지만 그 포트를
+   * 쓰는 무언가가 떠 있으면 값이 새어 들어와 비결정적이 된다.
+   */
+  @MockitoBean private SeatRestClient seatRestClient;
+
   @Autowired private PerformanceGetListUseCase performanceGetListUseCase;
   @Autowired private PerformanceRepository performanceRepository;
 
   @BeforeEach
   void setUp() {
+    given(seatRestClient.getSeatCounts(anyList())).willReturn(Map.of());
     performanceRepository.saveAll(
         List.of(
             buildPerformance(Genre.CONCERT, 30000L, null),

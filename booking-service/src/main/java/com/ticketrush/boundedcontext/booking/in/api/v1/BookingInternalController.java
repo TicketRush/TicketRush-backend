@@ -76,7 +76,18 @@ public class BookingInternalController {
         SuccessStatus.OK, bookingGetInternalStatsUseCase.execute(from, to, performanceIds));
   }
 
-  @Operation(summary = "예매 소유자/상태 내부 조회", description = "예매의 소유자와 상태를 반환합니다.")
+  @Operation(
+      summary = "예매 소유자/상태/번호 내부 조회",
+      description =
+          """
+          예매의 소유자·상태·예매번호를 반환합니다.
+
+          **소유자 검증을 하지 않습니다.** bookingId 만으로 조회하므로 요청자와의 대조는 호출자 몫입니다(#572, ADR 0011).
+
+          **`booking_number` 는 결제 취소 시 좌석 소유 교차검증에 쓰입니다 (#607).**
+          payment 는 예매번호를 자신의 테이블에 갖고 있지 않아 이 필드로만 얻으며,
+          값 없이 환불 이벤트가 나가면 seat 의 ABA 방지 대조가 꺼집니다.
+          """)
   @GetMapping("/{bookingId}")
   public ResponseEntity<ApiResponse<BookingInternalResponse>> getBookingInternal(
       @PathVariable Long bookingId) {

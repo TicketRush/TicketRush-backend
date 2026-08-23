@@ -44,6 +44,12 @@ QUERIES = [
     # 호스트 자원
     ("node-cpu", '100 * (1 - avg(rate(node_cpu_seconds_total{job="node", mode="idle"}[1m])))'),
     ("node-iowait", '100 * avg(rate(node_cpu_seconds_total{job="node", mode="iowait"}[1m]))'),
+    # node-cpu(= 100 - idle)만 보면 I/O 대기 중인 시스템의 여유를 체계적으로 과소평가한다.
+    # #504 는 그 값으로 컨슈머 concurrency 의 상한을 1.4배로 추정했는데 #598 실측은 2.25배였다.
+    # 차이의 정체가 iowait 20.94%p 였다 — 작업이 아니라 비어 있는 CPU 라 여유 쪽에 넣었어야 했다.
+    # 스레드를 늘려 얻을 수 있는 것의 상한을 보려면 user+system 을 따로 봐야 한다.
+    ("node-cpu-user", '100 * avg(rate(node_cpu_seconds_total{job="node", mode="user"}[1m]))'),
+    ("node-cpu-system", '100 * avg(rate(node_cpu_seconds_total{job="node", mode="system"}[1m]))'),
     ("node-mem-used-bytes", 'node_memory_MemTotal_bytes{job="node"} - node_memory_MemAvailable_bytes{job="node"}'),
     # 회선 축. device 를 ens5 로 고정한다 — #508 이전에는 이 지표가 컨테이너 veth 를 재서
     # 실제의 1/6500 이 나왔다. 그래서 #348 회차는 회선 포화를 k6 수치로 역추정해야 했다.
@@ -61,6 +67,18 @@ QUERIES = [
     ("k6-rps", 'sum(rate(k6_http_reqs_total[1m]))'),
     ("k6-rps-by-name", 'sum by (name) (rate(k6_http_reqs_total[1m]))'),
     ("k6-req-failed", 'k6_http_req_failed_rate'),
+    # ⚠ 위 k6-req-failed 는 method/name/status/error 라벨로 쪼개져 있어 '전체 실패율' 을 주지 않는다.
+    #   #554 는 그래서 http_req_failed 가 임계(1%)를 넘고도 자동 판정에 잡히지 않았다(report §5.4).
+    #   원인 분해에는 그것을 쓰고, KNEE 판정에는 아래 집계본을 쓴다.
+    #   두 벌을 두는 것은 expected_response 라벨이 k6_http_reqs_total 에 붙는지 확인할 수단이
+    #   회차 전에는 없기 때문이다 — 한쪽이 비면 다른 쪽으로 판정한다(빈 시계열은 파일을 남기지 않고
+    #   마지막에 '시계열 없음' 으로 보고된다). 실패 비용이 쿼리 하나라 둘 다 둔다.
+    ("k6-req-failed-ratio", 'sum(rate(k6_http_reqs_total{expected_response="false"}[1m]))'
+                            ' / sum(rate(k6_http_reqs_total[1m]))'),
+    # 폴백. expected_response 가 없을 때 쓴다. 4xx 를 실패로 세지 않아 위 값보다 작게 나오지만,
+    # #554 의 진입 실패 455건은 전부 status="0"(dial 실패)이라 이 형태로도 잡힌다.
+    ("k6-req-failed-ratio-status", 'sum(rate(k6_http_reqs_total{status=~"0|5.."}[1m]))'
+                                   ' / sum(rate(k6_http_reqs_total[1m]))'),
     ("k6-req-duration-p95", 'k6_http_req_duration_p95'),
     # 지연을 단계별로 쪼갠다 — waiting(TTFB, 서버가 첫 바이트를 줄 때까지) 대비
     # receiving(본문 수신)이 크면 병목은 처리가 아니라 전송이다(= 응답 크기·압축 부재).
@@ -105,6 +123,20 @@ QUERIES = [
     ("k6-queue-wait-to-admit-p95", 'k6_queue_wait_to_admit_seconds_p95'),
     ("k6-queue-admitted-rate", 'k6_queue_admitted_rate'),
     ("k6-queue-status-unavailable-rate", 'k6_queue_status_unavailable_rate'),
+    # 진입 실패. 실효 코호트 = 유입 - 이 값이고, 회차의 모든 비율이 그 코호트를 분모로 쓴다.
+    # #549 는 이 축이 없어 724명(7.24%)을 http_req_failed 로 역산했다(#554 에서 신설).
+    ("k6-queue-enqueue-failed", 'k6_queue_enqueue_failed_total'),
+    # #555 계단 회차. 주 지표는 소화 시간이고 그 SSOT 는 k6 요약의 max 다(전원 소화 시간) —
+    # 여기 시계열은 곡선을 그리기 위한 p95 다. post-admit 은 dropped_iterations 를 '생성기 VU
+    # 부족' 과 '대상 포화' 로 가르는 보조축이고, cohort-exhausted 는 > 0 이면 회차 무효다.
+    ("k6-queue-drain-p95", 'k6_queue_drain_seconds_p95'),
+    ("k6-queue-post-admit-p95", 'k6_queue_post_admit_seconds_p95'),
+    ("k6-queue-seatmap-p95", 'k6_queue_seatmap_duration_p95'),
+    ("k6-queue-sse-connect-p95", 'k6_queue_sse_connect_duration_p95'),
+    ("k6-queue-sse-events-received", 'rate(k6_queue_sse_events_received_total[1m])'),
+    ("k6-queue-sse-connection-closed", 'k6_queue_sse_connection_closed_total'),
+    ("k6-queue-cohort-exhausted", 'k6_queue_cohort_exhausted_total'),
+    ("k6-queue-sse-subscribe-failed", 'k6_queue_sse_subscribe_failed_total'),
     # 병목 후보
     ("hikari-pending", 'hikaricp_connections_pending{job="ticketrush-services"}'),
     ("hikari-active", 'hikaricp_connections_active{job="ticketrush-services"}'),
@@ -140,6 +172,15 @@ QUERIES = [
     #   압도적이라 근사로 쓰지만, 다른 경로가 함께 도는 회차에서는 그대로 믿지 않는다.
     ("seat-counts-hikari-acquire-avg-ms", '1000 * sum(rate(hikaricp_connections_acquire_seconds_sum{instance="seat-service:8090"}[1m])) / sum(rate(hikaricp_connections_acquire_seconds_count{instance="seat-service:8090"}[1m]))'),
     ("seat-counts-hikari-usage-avg-ms", '1000 * sum(rate(hikaricp_connections_usage_seconds_sum{instance="seat-service:8090"}[1m])) / sum(rate(hikaricp_connections_usage_seconds_count{instance="seat-service:8090"}[1m]))'),
+    # 위 두 개는 #403(좌석 집계) 회차 전용이라 seat-service 로 고정돼 있다. 그래서 #598 에서
+    # 압박이 실제로 걸린 booking-service 를 덤프만으로는 볼 수 없었다 — pending 이 71 까지
+    # 갔는데 그게 아픈 값인지(획득 대기가 긴지) 판정하려고 EC2 를 다시 켜야 했다.
+    # 아래는 인스턴스별로 나눠 담는다. pending 은 '줄이 섰다' 만 말하고, 그 줄이 문제인지는
+    # 획득 대기 시간과 timeout 카운터가 정한다.
+    ("hikari-acquire-avg-ms", '1000 * sum by (instance) (rate(hikaricp_connections_acquire_seconds_sum{job="ticketrush-services"}[1m])) / sum by (instance) (rate(hikaricp_connections_acquire_seconds_count{job="ticketrush-services"}[1m]))'),
+    ("hikari-usage-avg-ms", '1000 * sum by (instance) (rate(hikaricp_connections_usage_seconds_sum{job="ticketrush-services"}[1m])) / sum by (instance) (rate(hikaricp_connections_usage_seconds_count{job="ticketrush-services"}[1m]))'),
+    ("hikari-acquire-rate", 'sum by (instance) (rate(hikaricp_connections_acquire_seconds_count{job="ticketrush-services"}[1m]))'),
+    ("hikari-timeout", 'hikaricp_connections_timeout_total{job="ticketrush-services"}'),
     ("k6-seat-counts-p95", 'k6_seat_counts_duration_p95'),
     ("k6-seat-counts-p99", 'k6_seat_counts_duration_p99'),
     ("k6-seat-counts-scale-mismatch", 'k6_seat_counts_scale_mismatch_rate'),

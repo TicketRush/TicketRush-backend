@@ -1,0 +1,71 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1100" height="420" viewBox="0 0 1100 420" font-family="ui-monospace,Menlo,Consolas,monospace">
+<rect width="1100" height="420" fill="#181b1f"/>
+<text x="70" y="24" fill="#ccccdc" font-size="15">HikariCP 커넥션 획득 대기 / 점유 (ms) — 인스턴스별</text>
+<text x="70" y="40" fill="#8e8e9e" font-size="11">2026-08-13T15:56:00Z ~ 2026-08-13T16:05:00Z  step 15s  arm=s2c3</text>
+<line x1="70" y1="nan" x2="1076" y2="nan" stroke="#2c3235"/>
+<text x="62" y="nan" fill="#8e8e9e" font-size="10" text-anchor="end">nan</text>
+<line x1="70" y1="nan" x2="1076" y2="nan" stroke="#2c3235"/>
+<text x="62" y="nan" fill="#8e8e9e" font-size="10" text-anchor="end">nan</text>
+<line x1="70" y1="nan" x2="1076" y2="nan" stroke="#2c3235"/>
+<text x="62" y="nan" fill="#8e8e9e" font-size="10" text-anchor="end">nan</text>
+<line x1="70" y1="nan" x2="1076" y2="nan" stroke="#2c3235"/>
+<text x="62" y="nan" fill="#8e8e9e" font-size="10" text-anchor="end">nan</text>
+<line x1="70" y1="nan" x2="1076" y2="nan" stroke="#2c3235"/>
+<text x="62" y="nan" fill="#8e8e9e" font-size="10" text-anchor="end">nan</text>
+<line x1="70" y1="nan" x2="1076" y2="nan" stroke="#2c3235"/>
+<text x="62" y="nan" fill="#8e8e9e" font-size="10" text-anchor="end">nan</text>
+<line x1="70.0" y1="44" x2="70.0" y2="324" stroke="#2c3235"/>
+<text x="70.0" y="340" fill="#8e8e9e" font-size="10" text-anchor="middle">15:56:00Z</text>
+<line x1="271.2" y1="44" x2="271.2" y2="324" stroke="#2c3235"/>
+<text x="271.2" y="340" fill="#8e8e9e" font-size="10" text-anchor="middle">15:57:48Z</text>
+<line x1="472.4" y1="44" x2="472.4" y2="324" stroke="#2c3235"/>
+<text x="472.4" y="340" fill="#8e8e9e" font-size="10" text-anchor="middle">15:59:36Z</text>
+<line x1="673.6" y1="44" x2="673.6" y2="324" stroke="#2c3235"/>
+<text x="673.6" y="340" fill="#8e8e9e" font-size="10" text-anchor="middle">16:01:24Z</text>
+<line x1="874.8" y1="44" x2="874.8" y2="324" stroke="#2c3235"/>
+<text x="874.8" y="340" fill="#8e8e9e" font-size="10" text-anchor="middle">16:03:12Z</text>
+<line x1="1076.0" y1="44" x2="1076.0" y2="324" stroke="#2c3235"/>
+<text x="1076.0" y="340" fill="#8e8e9e" font-size="10" text-anchor="middle">16:05:00Z</text>
+<path d="M70.0,nan L97.9,nan L125.9,nan L153.8,nan L181.8,nan L209.7,nan L237.7,nan L265.6,nan L293.6,nan L321.5,nan L349.4,nan L377.4,nan L405.3,nan L433.3,nan L461.2,nan L489.2,nan L517.1,nan L545.1,nan L573.0,nan L600.9,nan L628.9,nan L656.8,nan L684.8,nan L712.7,nan L740.7,nan L768.6,nan L796.6,nan L824.5,nan L852.4,nan L880.4,nan L908.3,nan L936.3,nan L964.2,nan L992.2,nan L1020.1,nan L1048.1,nan L1076.0,nan" fill="none" stroke="#73bf69" stroke-width="1.6"/>
+<rect x="70" y="352" width="10" height="3" fill="#73bf69"/>
+<text x="86" y="360" fill="#ccccdc" font-size="10">hikari-acquire-avg-ms auth-service:8090  min nan / avg nan / max nan</text>
+<path d="M70.0,nan L97.9,nan L125.9,nan L153.8,nan L181.8,nan L209.7,nan L237.7,nan L265.6,nan L293.6,nan L321.5,nan L349.4,nan L377.4,nan L405.3,nan L433.3,nan L461.2,nan L489.2,nan L517.1,nan L545.1,nan L573.0,nan L600.9,nan L628.9,nan L656.8,nan L684.8,nan L712.7,nan L740.7,nan L768.6,nan L796.6,nan L824.5,nan L852.4,nan L880.4,nan L908.3,nan L936.3,nan L964.2,nan L992.2,nan L1020.1,nan L1048.1,nan L1076.0,nan" fill="none" stroke="#f2cc0c" stroke-width="1.6"/>
+<rect x="70" y="366" width="10" height="3" fill="#f2cc0c"/>
+<text x="86" y="374" fill="#ccccdc" font-size="10">hikari-acquire-avg-ms booking-service:8090  min 0.006789 / avg 20.06 / max 67.41</text>
+<path d="M70.0,nan L97.9,nan L125.9,nan L153.8,nan L181.8,nan L209.7,nan L237.7,nan L265.6,nan L293.6,nan L321.5,nan L349.4,nan L377.4,nan L405.3,nan L433.3,nan L461.2,nan L489.2,nan L517.1,nan L545.1,nan L573.0,nan L600.9,nan L628.9,nan L656.8,nan L684.8,nan L712.7,nan L740.7,nan L768.6,nan L796.6,nan L824.5,nan L852.4,nan L880.4,nan L908.3,nan L936.3,nan L964.2,nan L992.2,nan L1020.1,nan L1048.1,nan L1076.0,nan" fill="none" stroke="#5794f2" stroke-width="1.6"/>
+<rect x="70" y="380" width="10" height="3" fill="#5794f2"/>
+<text x="86" y="388" fill="#ccccdc" font-size="10">hikari-acquire-avg-ms payment-service:8090  min nan / avg nan / max nan</text>
+<path d="M70.0,nan L97.9,nan L125.9,nan L153.8,nan L181.8,nan L209.7,nan L237.7,nan L265.6,nan L293.6,nan L321.5,nan L349.4,nan L377.4,nan L405.3,nan L433.3,nan L461.2,nan L489.2,nan L517.1,nan L545.1,nan L573.0,nan L600.9,nan L628.9,nan L656.8,nan L684.8,nan L712.7,nan L740.7,nan L768.6,nan L796.6,nan L824.5,nan L852.4,nan L880.4,nan L908.3,nan L936.3,nan L964.2,nan L992.2,nan L1020.1,nan L1048.1,nan L1076.0,nan" fill="none" stroke="#ff9830" stroke-width="1.6"/>
+<rect x="70" y="394" width="10" height="3" fill="#ff9830"/>
+<text x="86" y="402" fill="#ccccdc" font-size="10">hikari-acquire-avg-ms performance-service:8090  min 0.209 / avg 0.8709 / max 3.611</text>
+<path d="M70.0,nan L97.9,nan L125.9,nan L153.8,nan L181.8,nan L209.7,nan L237.7,nan L265.6,nan L293.6,nan L321.5,nan L349.4,nan L377.4,nan L405.3,nan L433.3,nan L461.2,nan L489.2,nan L517.1,nan L545.1,nan L573.0,nan L600.9,nan L628.9,nan L656.8,nan L684.8,nan L712.7,nan L740.7,nan L768.6,nan L796.6,nan L824.5,nan L852.4,nan L880.4,nan L908.3,nan L936.3,nan L964.2,nan L992.2,nan L1020.1,nan L1048.1,nan L1076.0,nan" fill="none" stroke="#b877d9" stroke-width="1.6"/>
+<rect x="590" y="352" width="10" height="3" fill="#b877d9"/>
+<text x="606" y="360" fill="#ccccdc" font-size="10">hikari-acquire-avg-ms seat-service:8090  min 0.01048 / avg 0.06397 / max 0.211</text>
+<path d="M70.0,nan L97.9,nan L125.9,nan L153.8,nan L181.8,nan L209.7,nan L237.7,nan L265.6,nan L293.6,nan L321.5,nan L349.4,nan L377.4,nan L405.3,nan L433.3,nan L461.2,nan L489.2,nan L517.1,nan L545.1,nan L573.0,nan L600.9,nan L628.9,nan L656.8,nan L684.8,nan L712.7,nan L740.7,nan L768.6,nan L796.6,nan L824.5,nan L852.4,nan L880.4,nan L908.3,nan L936.3,nan L964.2,nan L992.2,nan L1020.1,nan L1048.1,nan L1076.0,nan" fill="none" stroke="#ff7383" stroke-width="1.6"/>
+<rect x="590" y="366" width="10" height="3" fill="#ff7383"/>
+<text x="606" y="374" fill="#ccccdc" font-size="10">hikari-acquire-avg-ms ticket-service:8090  min nan / avg nan / max nan</text>
+<path d="M70.0,nan L97.9,nan L125.9,nan L153.8,nan L181.8,nan L209.7,nan L237.7,nan L265.6,nan L293.6,nan L321.5,nan L349.4,nan L377.4,nan L405.3,nan L433.3,nan L461.2,nan L489.2,nan L517.1,nan L545.1,nan L573.0,nan L600.9,nan L628.9,nan L656.8,nan L684.8,nan L712.7,nan L740.7,nan L768.6,nan L796.6,nan L824.5,nan L852.4,nan L880.4,nan L908.3,nan L936.3,nan L964.2,nan L992.2,nan L1020.1,nan L1048.1,nan L1076.0,nan" fill="none" stroke="#8ab8ff" stroke-width="1.6"/>
+<rect x="590" y="380" width="10" height="3" fill="#8ab8ff"/>
+<text x="606" y="388" fill="#ccccdc" font-size="10">hikari-acquire-avg-ms user-service:8090  min nan / avg nan / max nan</text>
+<path d="M70.0,nan L97.9,nan L125.9,nan L153.8,nan L181.8,nan L209.7,nan L237.7,nan L265.6,nan L293.6,nan L321.5,nan L349.4,nan L377.4,nan L405.3,nan L433.3,nan L461.2,nan L489.2,nan L517.1,nan L545.1,nan L573.0,nan L600.9,nan L628.9,nan L656.8,nan L684.8,nan L712.7,nan L740.7,nan L768.6,nan L796.6,nan L824.5,nan L852.4,nan L880.4,nan L908.3,nan L936.3,nan L964.2,nan L992.2,nan L1020.1,nan L1048.1,nan L1076.0,nan" fill="none" stroke="#c0d8ff" stroke-width="1.6"/>
+<rect x="590" y="394" width="10" height="3" fill="#c0d8ff"/>
+<text x="606" y="402" fill="#ccccdc" font-size="10">hikari-usage-avg-ms auth-service:8090  min nan / avg nan / max nan</text>
+<path d="M70.0,nan L97.9,nan L125.9,nan L153.8,nan L181.8,nan L209.7,nan L237.7,nan L265.6,nan L293.6,nan L321.5,nan L349.4,nan L377.4,nan L405.3,nan L433.3,nan L461.2,nan L489.2,nan L517.1,nan L545.1,nan L573.0,nan L600.9,nan L628.9,nan L656.8,nan L684.8,nan L712.7,nan L740.7,nan L768.6,nan L796.6,nan L824.5,nan L852.4,nan L880.4,nan L908.3,nan L936.3,nan L964.2,nan L992.2,nan L1020.1,nan L1048.1,nan L1076.0,nan" fill="none" stroke="#e0b400" stroke-width="1.6"/>
+<rect x="1110" y="352" width="10" height="3" fill="#e0b400"/>
+<text x="1126" y="360" fill="#ccccdc" font-size="10">hikari-usage-avg-ms booking-service:8090  min 0 / avg 7.476 / max 20.37</text>
+<path d="M70.0,nan L97.9,nan L125.9,nan L153.8,nan L181.8,nan L209.7,nan L237.7,nan L265.6,nan L293.6,nan L321.5,nan L349.4,nan L377.4,nan L405.3,nan L433.3,nan L461.2,nan L489.2,nan L517.1,nan L545.1,nan L573.0,nan L600.9,nan L628.9,nan L656.8,nan L684.8,nan L712.7,nan L740.7,nan L768.6,nan L796.6,nan L824.5,nan L852.4,nan L880.4,nan L908.3,nan L936.3,nan L964.2,nan L992.2,nan L1020.1,nan L1048.1,nan L1076.0,nan" fill="none" stroke="#37872d" stroke-width="1.6"/>
+<rect x="1110" y="366" width="10" height="3" fill="#37872d"/>
+<text x="1126" y="374" fill="#ccccdc" font-size="10">hikari-usage-avg-ms payment-service:8090  min nan / avg nan / max nan</text>
+<path d="M70.0,nan L97.9,nan L125.9,nan L153.8,nan L181.8,nan L209.7,nan L237.7,nan L265.6,nan L293.6,nan L321.5,nan L349.4,nan L377.4,nan L405.3,nan L433.3,nan L461.2,nan L489.2,nan L517.1,nan L545.1,nan L573.0,nan L600.9,nan L628.9,nan L656.8,nan L684.8,nan L712.7,nan L740.7,nan L768.6,nan L796.6,nan L824.5,nan L852.4,nan L880.4,nan L908.3,nan L936.3,nan L964.2,nan L992.2,nan L1020.1,nan L1048.1,nan L1076.0,nan" fill="none" stroke="#73bf69" stroke-width="1.6"/>
+<rect x="1110" y="380" width="10" height="3" fill="#73bf69"/>
+<text x="1126" y="388" fill="#ccccdc" font-size="10">hikari-usage-avg-ms performance-service:8090  min 2 / avg 5.076 / max 12.4</text>
+<path d="M70.0,nan L97.9,nan L125.9,nan L153.8,nan L181.8,nan L209.7,nan L237.7,nan L265.6,nan L293.6,nan L321.5,nan L349.4,nan L377.4,nan L405.3,nan L433.3,nan L461.2,nan L489.2,nan L517.1,nan L545.1,nan L573.0,nan L600.9,nan L628.9,nan L656.8,nan L684.8,nan L712.7,nan L740.7,nan L768.6,nan L796.6,nan L824.5,nan L852.4,nan L880.4,nan L908.3,nan L936.3,nan L964.2,nan L992.2,nan L1020.1,nan L1048.1,nan L1076.0,nan" fill="none" stroke="#f2cc0c" stroke-width="1.6"/>
+<rect x="1110" y="394" width="10" height="3" fill="#f2cc0c"/>
+<text x="1126" y="402" fill="#ccccdc" font-size="10">hikari-usage-avg-ms seat-service:8090  min 0 / avg 14.09 / max 48.79</text>
+<path d="M70.0,nan L97.9,nan L125.9,nan L153.8,nan L181.8,nan L209.7,nan L237.7,nan L265.6,nan L293.6,nan L321.5,nan L349.4,nan L377.4,nan L405.3,nan L433.3,nan L461.2,nan L489.2,nan L517.1,nan L545.1,nan L573.0,nan L600.9,nan L628.9,nan L656.8,nan L684.8,nan L712.7,nan L740.7,nan L768.6,nan L796.6,nan L824.5,nan L852.4,nan L880.4,nan L908.3,nan L936.3,nan L964.2,nan L992.2,nan L1020.1,nan L1048.1,nan L1076.0,nan" fill="none" stroke="#5794f2" stroke-width="1.6"/>
+<rect x="1630" y="352" width="10" height="3" fill="#5794f2"/>
+<text x="1646" y="360" fill="#ccccdc" font-size="10">hikari-usage-avg-ms ticket-service:8090  min nan / avg nan / max nan</text>
+<path d="M70.0,nan L97.9,nan L125.9,nan L153.8,nan L181.8,nan L209.7,nan L237.7,nan L265.6,nan L293.6,nan L321.5,nan L349.4,nan L377.4,nan L405.3,nan L433.3,nan L461.2,nan L489.2,nan L517.1,nan L545.1,nan L573.0,nan L600.9,nan L628.9,nan L656.8,nan L684.8,nan L712.7,nan L740.7,nan L768.6,nan L796.6,nan L824.5,nan L852.4,nan L880.4,nan L908.3,nan L936.3,nan L964.2,nan L992.2,nan L1020.1,nan L1048.1,nan L1076.0,nan" fill="none" stroke="#ff9830" stroke-width="1.6"/>
+<rect x="1630" y="366" width="10" height="3" fill="#ff9830"/>
+<text x="1646" y="374" fill="#ccccdc" font-size="10">hikari-usage-avg-ms user-service:8090  min nan / avg nan / max nan</text>
+</svg>

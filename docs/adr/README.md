@@ -19,6 +19,10 @@ TicketRush의 아키텍처 결정을 번호 매긴 Markdown으로 축적하는 �
 - [11. 내부 API 응답의 소유자 대조는 호출자가 하고, 불일치는 존재를 숨기는 코드로 접는다](0011-verify-booking-owner-at-caller.md)
 - [12. PG 환불의 일시적 거절은 호출 지점에서 흡수하고, 소진되면 결정적 실패로 확정한다](0012-absorb-transient-pg-refund-rejections-at-caller.md)
 - [13. 배너는 performance-service 안의 별도 bounded context로 두고, 경로는 서비스명이 아니라 리소스명을 따른다](0013-banner-as-separate-context-inside-performance-service.md)
+- [14. 환불 실패 보상 신호는 발행을 보장하는 대신, 남아 있는 상태로 재발행해 복구한다](0014-recover-refund-failure-signal-by-reconciliation.md)
+- [15. 확정 신호가 유실돼 과금만 남은 만료 예매는, 예매를 되살리는 대신 대조로 찾아 자동 환불한다](0015-recover-charged-expired-booking-by-auto-refund.md)
+- [16. 환불 좌석 반환은 예매번호를 요구하고, 얻지 못하면 PG 취소 앞에서 취소를 끊는다](0016-require-booking-number-for-refund-seat-release.md)
+- [17. common의 스케줄러 락 설정은 조건 프로퍼티가 아니라 `@Import`로 게이트한다](0017-gate-common-scheduler-lock-by-explicit-import.md)
 
 ## 사용법
 

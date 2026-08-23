@@ -7,6 +7,7 @@ import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.EnumType;
 import jakarta.persistence.Enumerated;
+import jakarta.persistence.Index;
 import jakarta.persistence.Table;
 import java.time.LocalDateTime;
 import lombok.AccessLevel;
@@ -15,7 +16,15 @@ import lombok.Getter;
 import lombok.NoArgsConstructor;
 
 @Entity
-@Table(name = "refund")
+// 미해결 보상 신호 재발행이 5분마다 status='FAILED'만 훑는다(#574). FAILED는 사고 시에만 생겨
+// 매우 희소한데, 인덱스가 없으면 LIMIT이 조기 종료를 못 해 매 주기 사실상 풀스캔이 된다.
+// 실제 쿼리는 `status = ? AND refund_id > ? ORDER BY refund_id`(커서 조회)인데, 단일 컬럼
+// 인덱스가 이 셋을 모두 커버하는 것은 InnoDB 세컨더리 인덱스 리프에 PK가 후행하고 MySQL의
+// index extensions(optimizer_switch=use_index_extensions, 기본 ON)가 그 PK를 인덱스의
+// 일부로 쓰기 때문이다. 그 스위치를 끄면 커서 조건과 정렬이 인덱스를 벗어난다.
+@Table(
+    name = "refund",
+    indexes = {@Index(name = "idx_refund_status", columnList = "status")})
 @Getter
 @NoArgsConstructor(access = AccessLevel.PROTECTED)
 @AttributeOverride(name = "id", column = @Column(name = "refund_id"))
@@ -41,7 +50,10 @@ public class Refund extends AutoIdBaseEntity {
   @Column(length = 255)
   private String reason; // 환불 사유
 
-  private LocalDateTime requestedAt; // 환불 요청 시점
+  // 환불 요청 시점. 단 FAILED 이력에서는 Refund.failed() 호출 시각 = 사실상 실패 확정 시각이고,
+  // #574 보상 신호 재발행이 이 값을 RefundFailedEvent.failedAt 으로 싣는다. 수신 측이 진행 중인
+  // 재환불과의 선후를 이 시각으로 판정하므로, 의미를 "요청 시각"으로 되돌리면 재발행 안전성이 깨진다.
+  private LocalDateTime requestedAt;
 
   private LocalDateTime confirmedAt; // 환불 확정 시점
 

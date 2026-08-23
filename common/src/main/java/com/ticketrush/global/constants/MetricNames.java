@@ -36,6 +36,17 @@ public class MetricNames {
   // 좌석맵 조회 캐시 히트/미스(#469). "히트 시 DB를 거치지 않는다"는 완료 조건의 운영 관측 축이고,
   // 티켓팅 러시(선점마다 evict)에서 히트율이 실제로 얼마나 남는지 측정 회차가 이 카운터로 읽는다.
   public static final String SEAT_MAP_CACHE = "ticketrush.seat.seatmap.cache";
+  // 환불 좌석 반환을 실행하지 않고 건너뛴 횟수(#608). 스킵은 예외가 아니라 정상 return이라 리스너의
+  // [CRITICAL] catch에 걸리지 않고 조용히 ack되고, SEAT_SSE_EVENT_PUBLISHED는 반환에 성공했을 때만
+  // 오른다 — 스킵은 기존 어느 시계열에도 나타나지 않으므로 이 카운터가 유일한 관측 축이다.
+  // reason 태그는 코드 분기와 1:1인 유한 집합 4종이다 — seat_not_found(좌석 부재), not_sold(SOLD가
+  // 아님 = 멱등 정상 스킵), booking_number_mismatch(좌석이 이미 다른 예매의 것 = ABA 방어 발화),
+  // booking_number_missing(이벤트에 예매번호가 없음).
+  // 마지막 값만 성격이 다르다. payment가 값을 채우도록 고친 뒤에는(#608) 도달할 수 없어야 하므로,
+  // 0이 아니면 발행 측이 계약을 어겼다는 신호다. 그리고 그 건의 좌석은 SOLD로 남는데 관리자 강제
+  // 해제가 SOLD를 거부하므로(SEAT_SOLD_NOT_RELEASABLE) 수동 DML 외에 푸는 수단이 없다 — 정상 스킵과
+  // 한 덩어리로 세면 그 사고가 멱등 스킵의 노이즈에 묻힌다.
+  public static final String SEAT_REFUND_RELEASE_SKIPPED = "ticketrush.seat.refund_release.skipped";
 
   // payment
   public static final String PAYMENT_CONFIRM = "ticketrush.payment.confirm";
@@ -66,6 +77,55 @@ public class MetricNames {
   // 이 태그가 소유자 차단을 구분하는 유일한 축이다.
   public static final String PAYMENT_CONFIRM_BOOKING_GUARD_BLOCKED =
       "ticketrush.payment.confirm.booking_guard.blocked";
+  // 아직 해결되지 않은 환불 실패(FAILED 환불 이력) 건수(#574). Gauge.
+  // 0이 아니면 "과금이 남았는데 환불이 성사되지 않은" 건이 그만큼 있다는 뜻이라, 수치 자체가 곧
+  // 미해결 사고 건수다. PAYMENT_REFUND_FAILED(발생 카운터)와 달리 이쪽은 잔량이라 해결되면 내려간다.
+  public static final String PAYMENT_REFUND_UNRESOLVED =
+      "ticketrush.payment.refund.unresolved"; // Gauge
+  // 미해결 환불 실패의 보상 신호를 재발행한 횟수(#574). 재발행은 수신 측이 이미 처리했더라도
+  // 나가므로 이 값이 곧 유실 건수는 아니다 — 유실 여부는 EVENT_PUBLISH_FAILED 쪽에서 읽는다.
+  public static final String PAYMENT_REFUND_SIGNAL_REPLAYED =
+      "ticketrush.payment.refund.signal.replayed";
+  // 결제 확정 신호 유실로 "과금됐는데 예매가 만료된" 건을 찾아낸 횟수(#607). 이 사고는 payment·booking 어느
+  // 쪽에도 미해결 표시가 남지 않아(refund_failed_at 은 EXPIRED 에서 구조적으로 채워지지 않는다) 이 카운터가
+  // 발생 자체의 유일한 관측 축이다. 0 이 아니면 그만큼의 사용자 돈이 환불 없이 남아 있었다는 뜻이다.
+  public static final String PAYMENT_CHARGED_EXPIRED_DETECTED =
+      "ticketrush.payment.charged_expired.detected";
+  // 그중 실제로 자동 환불에 성공한 횟수(#607). detected 와의 차이가 곧 미복구 잔량이라, Grafana 에서 두
+  // 시계열을 겹쳐 읽는다. Gauge 로 잔량을 직접 재지 않는 것은 정확히 세려면 만료 테이블을 매번 전건 훑어야
+  // 하는데 이 설계가 피하려던 것이 바로 그 풀스캔이기 때문이다(ADR 0015).
+  public static final String PAYMENT_CHARGED_EXPIRED_RECOVERED =
+      "ticketrush.payment.charged_expired.recovered";
+  // 후보였으나 환불하지 않고 건너뛴 횟수(#607). reason 태그는 판정 단계와 1:1인 유한 집합 7종이다 —
+  // already_refunded(환불이 성사·진행 중), refund_failed_history(PG 가 거절해 FAILED 이력만 남음),
+  // grace(만료 직후라 정상 처리 중일 수 있음), booking_lookup_failed(booking 조회 실패 → fail-closed),
+  // booking_alive(예매가 살아 있는 알려진 상태), booking_status_unknown(모르는 상태 문자열),
+  // booking_number_unknown(예매번호를 얻지 못함 → 좌석 오반환 방지로 중단, #608).
+  // 뒤 넷은 정상 스킵이 아니라 조사 대상이다. 태그로 갈라 두지 않으면 "환불하지 않았다"는 한 덩어리에
+  // 묻혀, 사고 건이 조용히 방치되는 것과 정상 동작이 구분되지 않는다. 특히 두 쌍의 구분이 핵심이다 —
+  // already_refunded 와 refund_failed_history 는 "돈이 돌아갔는가"가 정반대이고(후자는 미해결 사고인데
+  // 예매가 EXPIRED 라 booking 쪽 관리자 게이트도 열리지 않아 이 태그가 유일한 창구다),
+  // booking_alive 와 booking_status_unknown 은 "정상"과 "상대가 계약을 바꿔 복구가 전면 정지"의 차이다.
+  //
+  // ⚠️ already_refunded 는 오늘 코드에서 사실상 도달하지 않는다. 후보가 되려면 payment 가 COMPLETED 여야
+  // 하는데 PaymentCancelPersister 가 환불 저장과 markCanceled 를 한 트랜잭션에 묶으므로
+  // refund=COMPLETED 인 booking 은 payment 가 CANCELED 라 앞선 결제 대조에서 이미 빠진다. 그래서 이 값이
+  // 0 이 아니면 "정상적으로 이미 환불된 건을 건너뛰었다"가 아니라 "환불은 성사됐는데 payment 가 CANCELED 가
+  // 아닌" 찢어진 상태 신호로 읽어야 한다. 대시보드·알림 문구를 그렇게 잡는다.
+  public static final String PAYMENT_CHARGED_EXPIRED_SKIPPED =
+      "ticketrush.payment.charged_expired.skipped";
+  // 결제 취소 API가 예매번호를 확보하지 못해 취소 자체를 차단한 횟수(#608). 이 가드가 막는 건은 원래
+  // "다른 예매가 결제 완료한 SOLD 좌석을 AVAILABLE로 되돌리는" 사고로 끝나던 것이라, 차단 건수가 곧
+  // 방지한 사고 건수다. 차단이 PG 취소 앞에서 일어나므로 과금·좌석·예매가 모두 그대로 남고 사용자는
+  // 재시도로 회복된다 — 이 카운터가 올라가도 데이터는 깨지지 않는다는 점이 #607의 skipped와 다르다.
+  // reason 태그는 조회 결과와 1:1인 유한 집합 3종이다 — not_found(booking이 의도적으로 낸 404),
+  // lookup_failed(통신 실패·타임아웃·계약 붕괴 → 503), booking_number_unknown(200을 받았으나 예매번호가
+  // 비어 있음. #607이 쓴 이름과 통일한다).
+  // 셋을 갈라야 하는 이유는 사용자 응답이 전부 "취소 실패"로 동일화되기 때문이다. lookup_failed는
+  // booking 장애지만, booking_number_unknown은 booking이 필드를 내려주지 않는다는 뜻이라 배포 사고이고
+  // 그 구간에는 취소가 전건 막힌다 — 합쳐 세면 둘을 구분할 축이 사라진다.
+  public static final String PAYMENT_CANCEL_BOOKING_GUARD_BLOCKED =
+      "ticketrush.payment.cancel.booking_guard.blocked";
 
   // ticket
   public static final String TICKET_ISSUE = "ticketrush.ticket.issue";
@@ -80,6 +140,10 @@ public class MetricNames {
   // 발행을 띄우고 콜백을 기다리는 중인 건수(#483). backlog가 in-flight 행도 세므로 둘을 겹쳐 봐야
   // "콜백 대기(정상)"와 "릴레이 정지(장애)"가 갈린다.
   public static final String OUTBOX_IN_FLIGHT = "ticketrush.outbox.in_flight"; // Gauge
+  // Kafka 발행이 브로커 응답 콜백에서 실패한 횟수(#574). 발행은 fire-and-forget이라 실패가 호출자에게
+  // 전파되지 않으므로, 이 카운터가 "발행 유실이 실제로 일어나는가"를 보는 유일한 축이다. outbox 모드는
+  // 릴레이가 상태로 남겨 재발행하지만 kafka 모드는 그대로 사라진다.
+  public static final String EVENT_PUBLISH_FAILED = "ticketrush.event.publish.failed";
 
   // ===== Tag keys =====
   public static final String TAG_RESULT = "result";
@@ -94,6 +158,8 @@ public class MetricNames {
   // 사고 보상은 발생 자체의 의미가 달라(후자는 곧 사고 건수다) 알림 임계도 따로 잡아야 하는데,
   // 이 태그가 없으면 두 건이 PAYMENT_REFUND 한 시계열에 섞여 보상 발생률을 볼 수 없다.
   public static final String TAG_TRIGGER = "trigger";
+  // 발행 대상 Kafka 토픽(#574). 토픽은 코드에 상수로 고정된 유한 집합이라 태그로 안전하다.
+  public static final String TAG_TOPIC = "topic";
 
   // ===== Tag values =====
   public static final String RESULT_SUCCESS = "success";

@@ -1,0 +1,73 @@
+=== arm=a16  t0=2026-08-14T10:41:05Z  판정창 t+150s~t+310s  램프종료 t+150s ===
+
+[주 판정축]
+  예매 서버 RPS (판정창)                        표본  11  min       0.00  avg       9.98  max      23.51
+  예매 서버 RPS (회차 전체)                      표본  81  min       0.00  avg       3.16  max      23.51
+  DEFERRAL_RATIO (t+150s 이후 비율)           62.35%   (이후 2396건 / 전체 3842건)
+
+[자원 축 — 공통 비교 창 t+30s~t+300s]
+  호스트 CPU %                              표본  19  min      11.23  avg      60.75  max      98.39
+  Redis bytes redis-exporter:9121        표본  19  min 3023296.00  avg 4282564.63  max 5392312.00
+  outbox backlog booking-service:8090    표본  19  min       0.00  avg      69.32  max     354.00
+  outbox backlog seat-service:8090       표본  15  min       0.00  avg       0.00  max       0.00
+
+[인스턴스별 — 공통 창]
+  Hikari active booking-service:8090     표본  19  min       0.00  avg       0.16  max       1.00
+  Hikari active seat-service:8090        표본  15  min       0.00  avg       0.87  max      10.00
+  Hikari pending seat-service:8090       표본  15  min       0.00  avg       2.40  max      36.00
+  Tomcat busy booking-service:8090       표본  19  min       0.00  avg       0.11  max       1.00
+  Tomcat busy seat-service:8090          표본  14  min       0.00  avg       3.43  max      26.00
+  컨테이너 mem % auth-service                표본  19  min      78.05  avg      78.10  max      78.17
+  컨테이너 mem % booking-service             표본  19  min      96.85  avg      97.81  max      98.31
+  컨테이너 mem % gateway-service             표본  19  min      44.46  avg      69.32  max      78.74
+  컨테이너 mem % grafana                     표본  19  min      65.87  avg      65.88  max      65.89
+  컨테이너 mem % payment-service             표본  19  min      86.29  avg      86.34  max      86.46
+  컨테이너 mem % performance-service         표본  19  min      90.86  avg      90.89  max      90.94
+  컨테이너 mem % prometheus                  표본  19  min      50.07  avg      50.32  max      50.50
+  컨테이너 mem % seat-service                표본  19  min      16.59  avg      82.07  max      99.99
+  컨테이너 mem % ticket-service              표본  19  min      82.42  avg      82.46  max      82.54
+  컨테이너 mem % ticketrush-container-mem-sampler 표본  19  min       8.78  avg      10.82  max      13.92
+  컨테이너 mem % ticketrush-kafka            표본  19  min      70.76  avg      70.93  max      71.07
+  컨테이너 mem % ticketrush-mysql            표본  19  min      99.58  avg      99.85  max      99.99
+  컨테이너 mem % ticketrush-node-exporter    표본  19  min      69.84  avg      70.13  max      70.46
+  컨테이너 mem % ticketrush-redis            표본  19  min      10.31  avg      12.63  max      18.30
+  컨테이너 mem % ticketrush-redis-exporter   표본  19  min      51.25  avg      54.21  max      56.77
+  컨테이너 mem % user-service                표본  19  min      72.03  avg      72.07  max      72.12
+
+[무너진 뒤 회복 — outbox backlog]
+  booking-service:8090       peak   1053 (t+510s)  → 0 도달 t+540s  (peak 이후 30s)
+  seat-service:8090          peak    891 (t+540s)  → 0 도달 t+585s  (peak 이후 45s)
+
+[k6 요약 — 클라이언트 측정]
+  queue_admitted.................: 100.00% 3845 out of 3845
+  queue_booking_forbidden........: 0.00%   0 out of 3845
+  queue_booking_ok...............: 99.89%  3841 out of 3845
+  queue_drain_seconds............: avg=143.457837 min=3.862  med=131.713 max=471.328 p(90)=308.912  p(95)=311.566
+  queue_enqueue_failed...........: 792     1.319386/s
+  queue_polls_per_user...........: avg=10.879064  min=1      med=10      max=23      p(90)=19       p(95)=20
+  queue_post_admit_seconds.......: avg=1.040283   min=0.03   med=0.096   max=56.083  p(90)=3.1034   p(95)=4.6818
+  queue_seatmap_duration.........: avg=793.66ms   min=6.72ms med=50.04ms max=56.03s  p(90)=1.63s    p(95)=2.88s
+  queue_seatmap_ok...............: 63.06%  2425 out of 3845
+  queue_sse_connect_duration.....: avg=616.33ms   min=363ms  med=656ms   max=783ms   p(90)=743ms    p(95)=767ms
+  queue_sse_connection_error.....: 100     0.166589/s
+  queue_sse_events_received......: 148091  246.703463/s
+  queue_status_duration..........: avg=1.87s      min=0s     med=14.83ms max=53.3s   p(90)=716.45ms p(95)=2.73s
+  queue_status_unavailable.......: 0.18%   76 out of 41830
+  queue_wait_to_admit_seconds....: avg=69.244728  min=2.426  med=62.574  max=328.115 p(90)=168.7276 p(95)=174.3262
+  http_req_duration..............: avg=1.67s      min=0s     med=17.26ms max=56.03s  p(90)=1.11s    p(95)=3.74s
+  http_req_failed................: 7.04%   3817 out of 54158
+  http_reqs......................: 54158   90.221325/s
+  iterations.....................: 4637    7.724737/s
+  vus_max........................: 2980    min=2898          max=2980
+  data_sent......................: 21 MB   35 kB/s
+  queue_polls_exhausted          요약에 없음 = 0건 (k6 는 값이 0인 Counter 를 출력하지 않는다)
+  queue_cohort_exhausted         요약에 없음 = 0건 (k6 는 값이 0인 Counter 를 출력하지 않는다)
+  queue_sse_subscribe_failed     요약에 없음 = 0건 (k6 는 값이 0인 Counter 를 출력하지 않는다)
+  queue_sse_connection_closed    요약에 없음 = 0건 (k6 는 값이 0인 Counter 를 출력하지 않는다)
+  dropped_iterations             요약에 없음 = 0건 (k6 는 값이 0인 Counter 를 출력하지 않는다)
+
+[꺾이는 지점 — 램프 종료(t+150s) 이후만 본다]
+  최초 포화: status 503 발생 () 값 0.00 — t+150s (10:43:35Z)
+    VU: 1540.0
+    예매 RPS: 7.5
+    게이트웨이 RPS: 154.1

@@ -94,14 +94,92 @@ class PaymentConfirmUseCaseTest {
   private void givenPreConfirmGuards(Long bookingId, Long ownerUserId, String bookingStatus) {
     given(paymentRepository.existsByBookingIdAndStatus(bookingId, PaymentStatus.COMPLETED))
         .willReturn(false);
+    // bookingNumber 를 null 로 둔다(#607). 이 필드는 환불 경로 전용이고 결제 확정 판정과 무관한데,
+    // 값을 채우면 "안 보기 때문에 통과한 것"인지 "값이 있어서 통과한 것"인지 구분되지 않는다. null 로
+    // 두면 이 테스트 묶음 전체가 곧 confirm 경로 무회귀의 증거가 된다.
     given(bookingRestClient.getBooking(bookingId))
-        .willReturn(new BookingInfoResponse(bookingId, ownerUserId, bookingStatus));
+        .willReturn(new BookingInfoResponse(bookingId, ownerUserId, bookingStatus, null));
   }
 
   private double guardBlockedCount(String reason) {
     return meterRegistry
         .counter(MetricNames.PAYMENT_CONFIRM_BOOKING_GUARD_BLOCKED, MetricNames.TAG_REASON, reason)
         .count();
+  }
+
+  @Test
+  @DisplayName("PG가 결제수단을 내려주지 않아도 결제 확정은 성공하고 method만 null로 저장된다")
+  void execute_succeeds_when_approval_has_no_method() throws Exception {
+    /* 완료조건 3을 confirm 경로 끝까지 고정한다. 클라이언트 경계(TossPaymentApprovalClientTest)만으로는
+     * UseCase나 엔티티 쪽에 누군가 null 가드를 새로 넣는 회귀를 잡지 못한다(#593). */
+    final Long userId = 10L;
+    Long bookingId = 100L;
+    Long amount = 55_000L;
+    final PaymentConfirmRequest request =
+        new PaymentConfirmRequest(bookingId, 200L, PaymentProvider.TOSS, amount, "pgKey_xyz");
+
+    givenPreConfirmGuards(bookingId, "PENDING");
+    given(paymentApprovalClientRouter.approve(any()))
+        .willReturn(
+            new PaymentApprovalResponse(
+                "APR-123", amount, LocalDateTime.of(2025, 1, 15, 10, 0), null));
+    given(paymentRepository.saveAndFlush(any(Payment.class)))
+        .willAnswer(
+            invocation -> {
+              Payment p = invocation.getArgument(0);
+              setId(p, 999L);
+              return p;
+            });
+
+    PaymentConfirmResponse response = paymentConfirmUseCase.execute(userId, request);
+
+    assertThat(response.status()).isEqualTo("COMPLETED");
+
+    ArgumentCaptor<Payment> paymentCaptor = ArgumentCaptor.forClass(Payment.class);
+    verify(paymentRepository).saveAndFlush(paymentCaptor.capture());
+    assertThat(paymentCaptor.getValue().getMethod()).isNull();
+    assertThat(paymentCaptor.getValue().getStatus()).isEqualTo(PaymentStatus.COMPLETED);
+  }
+
+  @Test
+  @DisplayName("승인번호가 컬럼 길이를 넘어도 결제 확정은 실패하지 않고 잘려서 저장된다")
+  void execute_succeeds_when_approval_number_exceeds_column_length() throws Exception {
+    /* 완료조건 2를 confirm 경로 끝까지 고정한다(#619). transactionKey가 없으면 승인번호로 paymentKey(계약상 200자,
+     * #413)가 폴백되는데, 잘리지 않으면 saveAndFlush가 DataIntegrityViolationException으로 깨지고 PaymentFacade는
+     * 멱등 조회에도 실패해 원 예외를 재던진다 — PG 과금이 끝난 뒤 500이 나고 payment row는 남지 않는다.
+     *
+     * 다만 paymentRepository가 mock이라 이 테스트가 증명하는 것은 "저장에 넘기는 값이 컬럼 폭 이하"까지다. 실제 INSERT가
+     * 깨지지 않는다는 것은 거기서 따라온다. 함께 단언하는 paymentKey 온전성은 자른 값이 정보를 잃지 않는 근거다 — 폴백
+     * 값은 같은 row의 paymentKey와 동일한 값이라 원본이 옆 컬럼에 200자로 남는다. */
+    final Long userId = 10L;
+    Long bookingId = 100L;
+    Long amount = 55_000L;
+    String head = "H".repeat(Payment.APPROVAL_NUMBER_MAX_LENGTH);
+    String longPaymentKey = head + "T".repeat(100);
+    final PaymentConfirmRequest request =
+        new PaymentConfirmRequest(bookingId, 200L, PaymentProvider.TOSS, amount, longPaymentKey);
+
+    givenPreConfirmGuards(bookingId, "PENDING");
+    given(paymentApprovalClientRouter.approve(any()))
+        .willReturn(
+            new PaymentApprovalResponse(
+                longPaymentKey, amount, LocalDateTime.of(2025, 1, 15, 10, 0), "카드"));
+    given(paymentRepository.saveAndFlush(any(Payment.class)))
+        .willAnswer(
+            invocation -> {
+              Payment p = invocation.getArgument(0);
+              setId(p, 999L);
+              return p;
+            });
+
+    PaymentConfirmResponse response = paymentConfirmUseCase.execute(userId, request);
+
+    assertThat(response.status()).isEqualTo("COMPLETED");
+
+    ArgumentCaptor<Payment> paymentCaptor = ArgumentCaptor.forClass(Payment.class);
+    verify(paymentRepository).saveAndFlush(paymentCaptor.capture());
+    assertThat(paymentCaptor.getValue().getApprovalNumber()).isEqualTo(head);
+    assertThat(paymentCaptor.getValue().getPaymentKey()).isEqualTo(longPaymentKey);
   }
 
   @Test
@@ -121,7 +199,7 @@ class PaymentConfirmUseCaseTest {
 
     givenPreConfirmGuards(bookingId, "PENDING");
     given(paymentApprovalClientRouter.approve(any()))
-        .willReturn(new PaymentApprovalResponse(approvalNumber, amount, approvedAt));
+        .willReturn(new PaymentApprovalResponse(approvalNumber, amount, approvedAt, "카드"));
     given(paymentRepository.saveAndFlush(any(Payment.class)))
         .willAnswer(
             invocation -> {
@@ -158,6 +236,9 @@ class PaymentConfirmUseCaseTest {
     assertThat(savedPayment.getStatus()).isEqualTo(PaymentStatus.COMPLETED);
     assertThat(savedPayment.getPaymentKey()).isEqualTo(paymentKey);
     assertThat(savedPayment.getApprovalNumber()).isEqualTo(approvalNumber);
+    /* 빌더 호출(.method)이나 @Builder 생성자 대입이 빠져도 컴파일은 통과하므로, 이 단언이 결제수단 저장의 유일한
+     * 자동 방어선이다(#593). */
+    assertThat(savedPayment.getMethod()).isEqualTo("카드");
     assertThat(savedPayment.getPaidAt()).isEqualTo(approvedAt);
 
     verify(paymentEventPublisher)
@@ -206,7 +287,8 @@ class PaymentConfirmUseCaseTest {
 
     givenPreConfirmGuards(bookingId, "PENDING");
     given(paymentApprovalClientRouter.approve(any()))
-        .willReturn(new PaymentApprovalResponse("APR-123", approvedAmount, LocalDateTime.now()));
+        .willReturn(
+            new PaymentApprovalResponse("APR-123", approvedAmount, LocalDateTime.now(), "카드"));
 
     // when & then
     assertThatThrownBy(() -> paymentConfirmUseCase.execute(userId, request))

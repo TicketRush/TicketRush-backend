@@ -13,7 +13,7 @@
 ```
 경로 A · 결제 취소 API (#22)
   POST /api/v1/payment/{paymentId}/cancel
-    → PaymentCancelUseCase → PG 취소 → PaymentCanceledEvent(bookingNumber=null)
+    → PaymentCancelUseCase → booking 조회(예매번호) → PG 취소 → PaymentCanceledEvent(bookingNumber=값)
 
 경로 B · 예매 취소 Saga (#91)
   DELETE /api/v1/booking/{bookingNumber}
@@ -23,6 +23,8 @@
          ├ 성공 ────────────→ PaymentCanceledEvent(bookingNumber=값)
          └ PG 결정적 거절 ──→ RefundFailedEvent
 ```
+
+경로 A가 booking을 조회하는 것은 예매번호를 얻기 위해서다. 그 값 없이 발행하면 seat의 좌석 소유 교차검증이 통째로 꺼져 다른 예매의 SOLD 좌석을 반환하므로, 얻지 못하면 PG 취소 앞에서 취소를 끊는다([ADR 16](0016-require-booking-number-for-refund-seat-release.md)).
 
 `PaymentCanceledEvent`는 booking·seat·ticket이 각각 다른 consumer group으로 구독해 팬아웃된다. booking은 `REFUNDED`로 종결하고, seat는 `SOLD → AVAILABLE`로 반환하고, ticket은 입장권을 취소한다.
 

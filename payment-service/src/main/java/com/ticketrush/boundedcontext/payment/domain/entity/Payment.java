@@ -43,6 +43,23 @@ import lombok.NoArgsConstructor;
  *   ALTER TABLE payment
  *     ADD INDEX idx_payment_user_id_status (user_id, status), ALGORITHM=INPLACE, LOCK=NONE;
  * </pre>
+ *
+ * <p><b>method 마이그레이션 (#593).</b> 결제수단 컬럼을 추가한다. 기존 가동 DB에는 아래를 실행해야 하며, prod는 {@code ddl-auto:
+ * validate}라 <b>배포 전에 실행하지 않으면 payment-service 기동이 실패한다</b>(결제 전면 중단). 인덱스와 달리 이 컬럼은 validate가 부재를
+ * 검출하므로, 반대로 말하면 DDL만 먼저 쳐두면 구버전 앱도 정상 기동한다 — 그래서 DDL을 앱 배포보다 먼저 친다.
+ *
+ * <pre>
+ *   -- 이미 있으면 아래 ALTER를 생략한다:
+ *   SHOW COLUMNS FROM payment LIKE 'method';
+ *
+ *   ALTER TABLE payment ADD COLUMN method varchar(50) DEFAULT NULL, ALGORITHM=INSTANT;
+ *   -- ALGORITHM을 명시하면 미지원 시 MySQL은 조용히 폴백하지 않고 에러로 거부한다. 거부되면 아래로 대체한다:
+ *   ALTER TABLE payment ADD COLUMN method varchar(50) DEFAULT NULL, ALGORITHM=INPLACE, LOCK=NONE;
+ * </pre>
+ *
+ * <p>기존 결제 건은 백필하지 않으므로 값이 NULL로 남는다. 롤백 시 컬럼은 남겨둔다 — validate는 엔티티에 없는 여분 컬럼을 문제 삼지 않고, DROP하면
+ * 그때까지 수집한 결제수단을 다시 모으는 데 Toss 재조회(보존 기간 내의 건에 한해, paymentKey 단위 대량 호출)가 필요하기 때문이다. 영구 소실은 아니지만 비용과
+ * 시한이 붙는 복구라, 되돌릴 값이 없는 상황이 아니면 남겨두는 편이 싸다.
  */
 @Entity
 @Table(
@@ -55,6 +72,15 @@ import lombok.NoArgsConstructor;
 @NoArgsConstructor(access = AccessLevel.PROTECTED)
 @AttributeOverride(name = "id", column = @Column(name = "payment_id"))
 public class Payment extends AutoIdBaseEntity {
+
+  /* approvalNumber 컬럼 폭이자 저장 전 절단 상한이다. 컬럼 선언·절단·상한 초과 관측(TossPaymentApprovalClient)이
+   * 모두 이 값을 참조해야 한다 — 절단 상한만 낮아지고 관측이 그대로면 값은 잘리는데 경보는 뜨지 않는다(#619).
+   *
+   * 다만 이 상수는 코드 안에서만 SSOT다. INSERT 성패를 실제로 정하는 것은 DB의 컬럼 폭이고, 그쪽은 스냅샷
+   * (deploy/mysql/init/001-ticket-rush-schema.sql)과 운영 DDL이 따로 들고 있어 이 값을 참조하지 못한다. 이 값을
+   * 올리면 두 곳도 함께 가야 하며, 빠뜨려도 기동은 성공한다 — Hibernate validate는 타입만 보고 길이 불일치는 검출하지
+   * 않으므로(#408 스키마 drift CI도 마찬가지) #619 버그가 조용히 되돌아온다. */
+  public static final int APPROVAL_NUMBER_MAX_LENGTH = 100;
 
   @Column(nullable = false)
   private Long bookingId;
@@ -81,8 +107,28 @@ public class Payment extends AutoIdBaseEntity {
   @Column(length = 200, unique = true)
   private String paymentKey; // PG사 발급 결제 키
 
-  @Column(length = 100)
+  /* PG 승인 응답의 거래 식별자다. Toss는 transactionKey를 주지만 응답에 없으면 paymentKey로 폴백하는데(#89),
+   * paymentKey는 계약상 최대 200자라(#413 PaymentKeyFormat) 컬럼 폭을 넘을 수 있다. 이 컬럼은 성공 경로에서만
+   * 채워지므로 길이 초과로 INSERT가 깨지면 PG 과금이 끝난 뒤 500이 나고 payment row는 남지 않는다(#593 method와
+   * 같은 계열) — 그래서 생성자에서 truncate 한다(#619).
+   *
+   * 컬럼을 200으로 넓히는 대신 자르는 이유는 어느 경로에서도 잃는 정보가 사실상 없기 때문이다. 폴백이 아닌
+   * transactionKey는 Toss 스펙상 64자라 애초에 이 폭을 넘지 않고(후속 lastTransactionKey도 64자다), 폴백으로
+   * 들어온 값은 같은 row의 paymentKey(200자)에 온전본이 병존한다. 다만 후자는 Toss가 승인 응답에 요청과 같은
+   * paymentKey를 되돌려준다는 외부 계약에 기대는 것이지 구조적으로 보장되는 항등은 아니다 — 저장되는 paymentKey는
+   * 요청 값이고(PaymentConfirmUseCase) 폴백원은 응답 값이다. */
+  @Column(length = APPROVAL_NUMBER_MAX_LENGTH)
   private String approvalNumber; // PG사 응답 승인 번호 / 거래 식별자
+
+  /* PG 승인 응답의 결제수단을 한글 원문 그대로 보존한다(#593). Toss가 주는 값은 카드/가상계좌/간편결제/휴대폰/계좌이체/
+   * 문화상품권/도서문화상품권/게임문화상품권이며, enum으로 정규화하지 않는 이유는 Toss가 값을 늘렸을 때 매핑 실패로 승인
+   * 경로가 영향받지 않게 하기 위해서다(#332의 pgFailureCode 원본 보존과 같은 계열). 값의 최대 길이는 현재 7자지만 컬럼은
+   * 코드류 관례인 50으로 두고 생성자에서 truncate 한다 — 이 컬럼은 성공 경로에서만 채워지므로, 길이 초과로 INSERT가 깨지면
+   * PG 과금이 끝난 뒤 500이 나고 payment row는 남지 않는다.
+   *
+   * provider(어느 PG사를 태웠는지)와는 다른 축이다. 승인 응답에 없으면 null이며, 그 경우에도 결제 확정은 성공한다. */
+  @Column(length = 50)
+  private String method; // 결제수단 (PG 원본 한글 문자열)
 
   private LocalDateTime paidAt; // 결제 완료 시점
 
@@ -146,6 +192,7 @@ public class Payment extends AutoIdBaseEntity {
       PaymentStatus status,
       String paymentKey,
       String approvalNumber,
+      String method,
       LocalDateTime paidAt) {
     this.bookingId = bookingId;
     this.userId = userId;
@@ -154,7 +201,8 @@ public class Payment extends AutoIdBaseEntity {
     this.amount = amount;
     this.status = status;
     this.paymentKey = paymentKey;
-    this.approvalNumber = approvalNumber;
+    this.approvalNumber = truncate(approvalNumber, APPROVAL_NUMBER_MAX_LENGTH);
+    this.method = truncate(method, 50);
     this.paidAt = paidAt;
   }
 

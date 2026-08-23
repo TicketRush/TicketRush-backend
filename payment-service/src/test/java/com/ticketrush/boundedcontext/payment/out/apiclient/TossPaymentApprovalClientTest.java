@@ -48,7 +48,8 @@ class TossPaymentApprovalClientTest {
           "transactionKey": "TX-ABC123",
           "totalAmount": 55000,
           "status": "DONE",
-          "approvedAt": "2026-05-22T10:00:00+09:00"
+          "approvedAt": "2026-05-22T10:00:00+09:00",
+          "method": "카드"
         }
         """;
 
@@ -68,6 +69,42 @@ class TossPaymentApprovalClientTest {
     assertThat(response.approvalNumber()).isEqualTo("TX-ABC123");
     assertThat(response.approvedAmount()).isEqualTo(55_000L);
     assertThat(response.approvedAt()).isNotNull();
+    assertThat(response.method()).isEqualTo("카드");
+
+    mockServer.verify();
+  }
+
+  @Test
+  @DisplayName("승인 응답에 method가 없어도 승인은 성공하고 결제수단만 null이 된다")
+  void approve_succeeds_when_method_is_missing() {
+    /* approvedAt·approvalNumber 누락은 PAYMENT_PG_COMMUNICATION_FAILED로 승인을 실패시키지만(아래
+     * approve_fails_when_approved_at_is_missing 참고), method는 Toss 명세상 nullable이라 같은 취급을 하면 안 된다.
+     * 결제수단은 보존 대상일 뿐 승인 성립 요건이 아니다(#593). 이 테스트가 그 경계를 고정한다. */
+    String responseBody =
+        """
+        {
+          "paymentKey": "pgKey_xyz",
+          "orderId": "BKG-0000100",
+          "transactionKey": "TX-ABC123",
+          "totalAmount": 55000,
+          "status": "DONE",
+          "approvedAt": "2026-05-22T10:00:00+09:00"
+        }
+        """;
+
+    mockServer
+        .expect(requestTo(CONFIRM_URL))
+        .andExpect(method(HttpMethod.POST))
+        .andRespond(withSuccess(responseBody, MediaType.APPLICATION_JSON));
+
+    PaymentApprovalResponse response =
+        client.approve(
+            new PaymentApprovalRequest(
+                PaymentProvider.TOSS, "pgKey_xyz", "BKG-0000100", 100L, 55_000L));
+
+    assertThat(response.method()).isNull();
+    assertThat(response.approvalNumber()).isEqualTo("TX-ABC123");
+    assertThat(response.approvedAmount()).isEqualTo(55_000L);
 
     mockServer.verify();
   }
@@ -278,6 +315,137 @@ class TossPaymentApprovalClientTest {
         .isInstanceOf(BusinessException.class)
         .extracting("errorStatus")
         .isEqualTo(ErrorStatus.PAYMENT_PG_COMMUNICATION_FAILED);
+
+    mockServer.verify();
+  }
+
+  @Test
+  @DisplayName("transactionKey가 없으면 paymentKey로 폴백하고 클라이언트는 길이를 자르지 않는다")
+  void approve_falls_back_to_payment_key_without_truncating() {
+    /* 폴백 값은 계약 상한인 200자까지 올 수 있다(#413). 자르는 책임은 엔티티(Payment 생성자)에 있고 클라이언트는 PG
+     * 원본을 그대로 전달한다 — #619가 그 경계를 이 테스트로 고정한다. 길이 초과는 관측용 warn 로그로만 남는다. */
+    String longPaymentKey = "P".repeat(200);
+    String responseBody =
+        """
+        {
+          "paymentKey": "%s",
+          "orderId": "BKG-0000100",
+          "totalAmount": 55000,
+          "status": "DONE",
+          "approvedAt": "2026-05-22T10:00:00+09:00"
+        }
+        """
+            .formatted(longPaymentKey);
+
+    mockServer
+        .expect(requestTo(CONFIRM_URL))
+        .andExpect(method(HttpMethod.POST))
+        .andRespond(withSuccess(responseBody, MediaType.APPLICATION_JSON));
+
+    PaymentApprovalResponse response =
+        client.approve(
+            new PaymentApprovalRequest(
+                PaymentProvider.TOSS, longPaymentKey, "BKG-0000100", 100L, 55_000L));
+
+    assertThat(response.approvalNumber()).isEqualTo(longPaymentKey);
+    assertThat(response.approvalNumber()).hasSize(200);
+
+    mockServer.verify();
+  }
+
+  @Test
+  @DisplayName("transactionKey가 빈 문자열이면 누락과 동일하게 paymentKey로 폴백한다")
+  void approve_falls_back_when_transaction_key_is_blank() {
+    /* 폴백 판정이 != null이면 빈 문자열이 그대로 승인번호가 되어 빈 값이 조용히 저장된다. 취소 경로
+     * (TossPaymentCancelClient)가 이미 hasText로 판정하고 있어 같은 기준으로 맞췄다(#619). */
+    String responseBody =
+        """
+        {
+          "paymentKey": "pgKey_xyz",
+          "orderId": "BKG-0000100",
+          "transactionKey": "",
+          "totalAmount": 55000,
+          "status": "DONE",
+          "approvedAt": "2026-05-22T10:00:00+09:00"
+        }
+        """;
+
+    mockServer
+        .expect(requestTo(CONFIRM_URL))
+        .andExpect(method(HttpMethod.POST))
+        .andRespond(withSuccess(responseBody, MediaType.APPLICATION_JSON));
+
+    PaymentApprovalResponse response =
+        client.approve(
+            new PaymentApprovalRequest(
+                PaymentProvider.TOSS, "pgKey_xyz", "BKG-0000100", 100L, 55_000L));
+
+    assertThat(response.approvalNumber()).isEqualTo("pgKey_xyz");
+
+    mockServer.verify();
+  }
+
+  @Test
+  @DisplayName("transactionKey와 paymentKey가 모두 빈 문자열이어도 승인을 실패시키지는 않는다")
+  void approve_does_not_fail_when_both_identifiers_are_blank() {
+    /* blank 판정은 폴백을 고를 때만 쓰고, 최종 가드는 null만 막는다. 이 가드가 서 있는 지점은 PG 승인(과금)이 이미 끝난
+     * 뒤라서, 조회에도 정합성에도 쓰이지 않는 표시용 필드가 비었다는 이유로 여기서 실패시키면 과금은 됐는데 payment row는
+     * 없는 상태가 된다. #607 자동 환불은 payment(COMPLETED) 존재를 전제하므로 그 상태에는 복구 경로도 없다 — 이번
+     * 이슈가 막으려는 실패와 정확히 같은 등급이라, 빈 값으로라도 저장되는 편이 낫다(#619). */
+    String responseBody =
+        """
+        {
+          "paymentKey": "",
+          "orderId": "BKG-0000100",
+          "transactionKey": "",
+          "totalAmount": 55000,
+          "status": "DONE",
+          "approvedAt": "2026-05-22T10:00:00+09:00"
+        }
+        """;
+
+    mockServer
+        .expect(requestTo(CONFIRM_URL))
+        .andRespond(withSuccess(responseBody, MediaType.APPLICATION_JSON));
+
+    PaymentApprovalResponse response =
+        client.approve(
+            new PaymentApprovalRequest(
+                PaymentProvider.TOSS, "pgKey_xyz", "BKG-0000100", 100L, 55_000L));
+
+    assertThat(response.approvalNumber()).isEmpty();
+    assertThat(response.approvedAmount()).isEqualTo(55_000L);
+
+    mockServer.verify();
+  }
+
+  @Test
+  @DisplayName("transactionKey가 빈 문자열이고 paymentKey가 없어도 승인을 실패시키지는 않는다")
+  void approve_does_not_fail_when_transaction_key_is_blank_and_payment_key_is_missing() {
+    /* 폴백 판정을 hasText로 바꾸면서 한때 이 조합만 throw로 넘어갔었다(#619 리뷰). blank는 "쓸 만하지 않다"는 뜻이지
+     * "아무것도 없다"는 뜻이 아니므로, 저장할 값이 하나라도 있으면 과금 이후에 실패시키지 않는다. throw는 두 값이 모두
+     * null일 때로만 좁혀 둔다 — 그 계약을 이 테스트가 고정한다. */
+    String responseBody =
+        """
+        {
+          "orderId": "BKG-0000100",
+          "transactionKey": "",
+          "totalAmount": 55000,
+          "status": "DONE",
+          "approvedAt": "2026-05-22T10:00:00+09:00"
+        }
+        """;
+
+    mockServer
+        .expect(requestTo(CONFIRM_URL))
+        .andRespond(withSuccess(responseBody, MediaType.APPLICATION_JSON));
+
+    PaymentApprovalResponse response =
+        client.approve(
+            new PaymentApprovalRequest(
+                PaymentProvider.TOSS, "pgKey_xyz", "BKG-0000100", 100L, 55_000L));
+
+    assertThat(response.approvalNumber()).isEmpty();
 
     mockServer.verify();
   }

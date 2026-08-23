@@ -1,0 +1,31 @@
+# 오버셀 검증 — 계단 a12 (admit 12) / 2026-08-14
+# 런북 docs/load-test-guide.md §13.4-(7)(a1) — VU 마다 좌석이 유일한 회차용 상태 무관 검사.
+# (a2)(#344 형)를 쓰지 않는다 — #598 이 그 혼동으로 4,674행을 오검출했다.
+#
+# 실행: docker exec -i ticketrush-mysql mysql -uroot -p"$PW" ticket_rush -t \
+#         --init-command="SET @i_confirm_loadtest_db=1" -e "<아래 SQL>"
+# 대상: performance_id = 34 (LTQ 코호트, 시딩 C=3,600)
+
+-- (a1) 같은 좌석을 가리키는 예매 2건 이상 = oversell
+SELECT seat_id, COUNT(*) c FROM booking WHERE performance_id=34 GROUP BY seat_id HAVING c > 1;
+→ 0행
+
+-- (a1-2) 1회 여정 가드 확인. 같은 사람이 두 번 예매했으면 시나리오가 깨진 것이다.
+SELECT user_id, COUNT(*) c FROM booking WHERE performance_id=34 GROUP BY user_id HAVING c > 1;
+→ 0행
+
+-- (a1-3) 총괄 — 셋이 같아야 한다.
+SELECT COUNT(*) bookings, COUNT(DISTINCT seat_id) distinct_seats,
+       COUNT(DISTINCT user_id) distinct_users
+  FROM booking WHERE performance_id=34;
+→ bookings=2780  distinct_seats=2780  distinct_users=2780   (일치)
+
+# 판정: PASS. 오버셀 0행.
+# k6 요약의 queue_booking_ok 는 2,779건(99.96%)으로 DB 2,780건과 1건 차이다 — 서버는 예매를
+# 만들었는데 클라이언트가 응답을 받지 못한 1건이고, 오버셀과는 무관하다.
+
+# ── a20 은 이 검증을 남기지 못했다 ─────────────────────────────────────────
+# 계단 사이 절차가 cleanup_load.sql(LTQ 코호트 삭제) → 재시딩 순서라, a12 준비 시점에
+# a20 의 코호트(performance_id=33)가 통째로 지워졌다. 회차 후 조회하면 0행이 나오는데
+# 이것은 "오버셀 없음" 이 아니라 "검증 대상이 없음" 이다 — 검출력 0 이다.
+# 런북 §16.7 "계단 사이에 하는 일" 에 오버셀 검증을 cleanup 앞 순서로 못 박았다.
