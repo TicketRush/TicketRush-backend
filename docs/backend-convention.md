@@ -113,7 +113,9 @@ git config core.hooksPath .githooks
 * **concurrency:** 같은 PR에 연속 push하면 진행 중이던 이전 run을 자동 취소해 러너를 절약합니다.
 * 머지 전 **CI 그린**이 조건입니다(Approve는 필수 아님 — 위 머지 규칙 참고).
 
-> `develop` 브랜치에는 **branch protection이 이미 적용**되어 `build`(`ci.yml`)·`validate-title`(`pr-title.yml`)가 필수 상태 체크로 요구됩니다(Approve는 강제하지 않음). 적용 변경은 admin 권한이 필요합니다.
+> `develop` 브랜치에는 **branch protection이 적용**되어 `build`(`ci.yml`)·`validate-title`(`pr-title.yml`)·`schema-validate`(`schema-validate.yml`, #408)가 필수 상태 체크로 요구됩니다(Approve는 강제하지 않음). 머지 전 브랜치가 develop 최신 상태일 필요는 없습니다(strict 미적용). 적용 변경은 admin 권한이 필요합니다.
+>
+> **긴급 우회:** 장애 대응 등으로 CI를 기다릴 수 없을 때는 admin이 required status checks를 **일시 해제**해 머지하고, **머지 직후 원복**합니다.
 
 ### ✍️ GitHub 마크다운 표기
 
