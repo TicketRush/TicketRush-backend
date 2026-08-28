@@ -108,7 +108,102 @@
 | `ticket-service`      | 티켓 도메인 (QR 토큰)                                                  |
 | `common`              | 전 모듈 공통 코드 (ApiResponse, ErrorStatus, PageInfo, Kafka, Redis 등) |
 
-<!-- ### 3️⃣ 아키텍처 다이어그램 — 별도 이슈(#352)에서 작성 -->
+### 3️⃣ 아키텍처 다이어그램
+
+TicketRush는 API Gateway를 단일 진입점으로 두고, 인증·회원·공연·예매·결제·좌석·티켓 도메인을 독립 서비스로 분리한 **MSA 구조**입니다.
+
+운영 환경에서는 Nginx가 외부 HTTPS 요청을 받아 `gateway-service`로 전달하고, Gateway가 요청 경로에 따라 각 도메인 서비스로 라우팅합니다.
+서비스 간 상태 변경은 Kafka 이벤트를 중심으로 처리하며, 좌석 선점·대기열처럼 빠른 상태 접근과 동시성 제어가 필요한 영역에는 Redis를 사용합니다.
+
+```mermaid
+flowchart TB
+    CLIENT["Web Client"]
+
+    subgraph EC2["AWS EC2 · Production"]
+        NGINX["Nginx<br/>HTTPS :443"]
+        GATEWAY["gateway-service<br/>API Gateway :8080"]
+
+        subgraph SERVICES["Domain Services"]
+            USER["user-service<br/>:8081"]
+            AUTH["auth-service<br/>:8082"]
+            PERFORMANCE["performance-service<br/>:8083"]
+            BOOKING["booking-service<br/>:8084"]
+            PAYMENT["payment-service<br/>:8085"]
+            SEAT["seat-service<br/>:8086"]
+            TICKET["ticket-service<br/>:8087"]
+        end
+
+        MYSQL[("MySQL 8.0")]
+        REDIS[("Redis 7")]
+        KAFKA[["Apache Kafka 3.7<br/>KRaft"]]
+
+        PROMETHEUS["Prometheus"]
+        GRAFANA["Grafana"]
+    end
+
+    OAUTH["Kakao · Google · Naver"]
+    TOSS["Toss Payments"]
+    S3["Amazon S3"]
+
+    CLIENT -->|"HTTPS"| NGINX
+    NGINX --> GATEWAY
+
+    GATEWAY --> USER
+    GATEWAY --> AUTH
+    GATEWAY --> PERFORMANCE
+    GATEWAY --> BOOKING
+    GATEWAY --> PAYMENT
+    GATEWAY --> SEAT
+    GATEWAY --> TICKET
+
+    USER --> MYSQL
+    AUTH --> MYSQL
+    PERFORMANCE --> MYSQL
+    BOOKING --> MYSQL
+    PAYMENT --> MYSQL
+    SEAT --> MYSQL
+    TICKET --> MYSQL
+
+    GATEWAY -->|"대기열"| REDIS
+    SEAT -->|"좌석 선점 · 분산 락"| REDIS
+
+    PERFORMANCE -->|"PerformanceCreated"| KAFKA
+    BOOKING -->|"BookingCreated · BookingExpired"| KAFKA
+    PAYMENT -->|"PaymentConfirmed · PaymentCanceled"| KAFKA
+    SEAT -->|"SeatHoldFailed"| KAFKA
+
+    KAFKA --> SEAT
+    KAFKA --> BOOKING
+    KAFKA --> PAYMENT
+    KAFKA --> TICKET
+
+    AUTH -->|"OAuth2"| OAUTH
+    PAYMENT -->|"결제 승인 · 취소"| TOSS
+    PERFORMANCE -->|"이미지 · 3D 모델"| S3
+
+    PROMETHEUS -. "metrics scrape" .-> GATEWAY
+    PROMETHEUS -. "metrics scrape" .-> USER
+    PROMETHEUS -. "metrics scrape" .-> AUTH
+    PROMETHEUS -. "metrics scrape" .-> PERFORMANCE
+    PROMETHEUS -. "metrics scrape" .-> BOOKING
+    PROMETHEUS -. "metrics scrape" .-> PAYMENT
+    PROMETHEUS -. "metrics scrape" .-> SEAT
+    PROMETHEUS -. "metrics scrape" .-> TICKET
+
+    GRAFANA --> PROMETHEUS
+```
+
+**주요 흐름**
+
+* **외부 요청** — Client → Nginx → Gateway → 각 도메인 서비스
+* **예매 처리** — 좌석 선점 → 예매 생성 → 결제 → 예매 확정·티켓 발급을 Kafka 이벤트로 연결
+* **동시성 제어** — Redis를 이용해 좌석 선점과 대기열 상태를 관리
+* **이벤트 정합성** — Kafka 기반 비동기 이벤트와 Outbox/Inbox 패턴으로 이벤트 유실·중복 처리에 대응
+* **관측** — Prometheus가 애플리케이션·인프라 지표를 수집하고 Grafana에서 시각화
+
+> 현재 운영 환경은 **단일 EC2**의 Docker Compose에 애플리케이션 8개와 MySQL·Redis·Kafka·Prometheus·Grafana 등의 인프라를 함께 실행합니다.
+> DB·Redis·Kafka의 접속 정보는 환경변수로 외부화되어 있어 추후 RDS·ElastiCache·MSK 등 관리형 인프라로 이전할 수 있도록 구성되어 있습니다.
+
 
 ### 4️⃣ CI/CD 파이프라인
 
@@ -170,7 +265,121 @@ gateway(DB 미사용)와 auth(`@Entity` 0개, 테이블은 user-service 소유)�
 ./gradlew test
 ```
 
-<!-- CD(지속적 배포) 파트는 별도 이슈(#352)에서 작성 -->
+#### CD (지속적 배포)
+
+운영 배포는 [`.github/workflows/cd.yml`](.github/workflows/cd.yml)에서 관리합니다.
+
+`main` 브랜치에 변경 사항이 push되거나 GitHub Actions에서 `workflow_dispatch`로 수동 실행하면 CD 파이프라인이 시작됩니다.
+동일 운영 환경에 여러 배포가 동시에 실행되지 않도록 `concurrency` 그룹을 사용하며, 진행 중인 배포를 취소하지 않고 순차적으로 실행합니다.
+
+```mermaid
+flowchart LR
+    MAIN["main push<br/>or workflow_dispatch"]
+    ACTIONS["GitHub Actions"]
+    VALIDATE["배포 파일 검증<br/>+ Gradle Test"]
+    OIDC["AWS OIDC<br/>IAM Role Assume"]
+    BUILD["Docker Image Build<br/>8 Services"]
+    ECR["Amazon ECR"]
+    PACKAGE["배포 파일 패키징"]
+    EC2["AWS EC2"]
+    COMPOSE["Docker Compose<br/>pull & up"]
+    VERIFY["배포 상태 검증"]
+    EXTERNAL["Public HTTPS<br/>Health Check"]
+
+    MAIN --> ACTIONS
+    ACTIONS --> VALIDATE
+    VALIDATE --> OIDC
+    OIDC --> BUILD
+    BUILD --> ECR
+    BUILD --> PACKAGE
+    PACKAGE -->|"SSH / SCP"| EC2
+    ECR -->|"Image Pull"| EC2
+    EC2 --> COMPOSE
+    COMPOSE --> VERIFY
+    VERIFY --> EXTERNAL
+```
+
+**배포 흐름**
+
+1. **배포 파일 검증 및 테스트**
+
+    * `Dockerfile`, `deploy/docker-compose.prod.yml`, `deploy/.env.prod.example` 및 배포 스크립트의 존재 여부를 확인합니다.
+    * `docker compose config`로 운영 Compose 설정을 검증합니다.
+    * `./gradlew test`로 전체 모듈 테스트를 수행합니다.
+    * 실제 운영 Secret이 담긴 `deploy/.env`가 저장소에 포함되어 있으면 배포를 중단합니다.
+
+2. **AWS 인증**
+
+    * GitHub Actions의 OIDC를 통해 배포용 IAM Role을 Assume합니다.
+    * 고정 AWS Access Key를 저장하지 않고 임시 자격 증명으로 Amazon ECR에 접근합니다.
+
+3. **Docker 이미지 Build & Push**
+
+    * `gateway-service`와 7개 도메인 서비스까지 총 8개의 이미지를 빌드합니다.
+    * 이미지 태그에는 배포 대상 Git commit SHA(`github.sha`)를 사용합니다.
+    * 각 이미지를 서비스별 Amazon ECR Repository에 Push합니다.
+
+4. **배포 파일 전달**
+
+    * `deploy/`와 `monitoring/` 설정을 배포 번들로 패키징합니다.
+    * `.env`, `.env.local` 등 실제 환경변수 파일은 배포 번들에서 제외합니다.
+    * SSH/SCP를 통해 배포 번들을 EC2에 전달합니다.
+
+5. **EC2 배포**
+
+    * EC2에서 Amazon ECR에 로그인합니다.
+    * 현재 실행 중인 애플리케이션과 `CURRENT_RELEASE`, `.env`의 `IMAGE_TAG`가 일치하는지 먼저 검증합니다.
+    * 사용하지 않는 이전 Docker 이미지를 정리한 뒤 새 이미지를 Pull합니다.
+    * `docker compose up -d --remove-orphans`로 서비스를 갱신합니다.
+    * Prometheus·Grafana는 최신 모니터링 설정을 반영하도록 다시 생성합니다.
+
+6. **배포 상태 검증**
+
+    * 모든 컨테이너의 실행·Health 상태를 확인합니다.
+    * 배포 중 OOM Kill 또는 비정상 Restart가 발생하지 않았는지 검사합니다.
+    * 각 Spring Boot 애플리케이션이 정상 기동되었는지 로그를 통해 확인합니다.
+    * Gateway의 내부 Actuator(`127.0.0.1:8090`)가 `UP`인지 확인합니다.
+    * Prometheus의 기대 scrape target이 모두 `UP`인지 확인합니다.
+    * 컨테이너 메모리 시계열이 정상적으로 수집되는지 검사합니다.
+    * Nginx를 통한 로컬 HTTPS 경로가 정상인지 확인합니다.
+    * 실행 중인 8개 애플리케이션 이미지가 이번 배포의 Git commit SHA와 일치하는지 최종 검증합니다.
+
+7. **릴리스 확정 및 외부 Health Check**
+
+    * 모든 내부 검증이 성공한 경우에만 이번 Git commit SHA를 `CURRENT_RELEASE`와 `.env`의 `IMAGE_TAG`에 기록합니다.
+    * 기존 릴리스는 `PREVIOUS_RELEASE`에 기록하여 이전 이미지 버전을 추적할 수 있도록 합니다.
+    * 마지막으로 별도 Job에서 `https://api.ticketrush.store/actuator/health`를 호출하여 HTTP 200과 `"status":"UP"`을 확인합니다.
+
+> 현재 CD는 배포 실패 시 **자동 롤백을 수행하지 않습니다.** 직전 릴리스 정보를 `PREVIOUS_RELEASE`에 보존하고 ECR의 기존 이미지를 이용해 이전 버전으로 복구할 수 있는 구조입니다.
+
+#### 운영 배포 환경
+
+운영 애플리케이션은 Spring의 `prod` 프로파일로 실행합니다.
+
+```text
+SPRING_PROFILES_ACTIVE=prod
+```
+
+운영 환경변수 템플릿은 [`deploy/.env.prod.example`](deploy/.env.prod.example)에서 관리하고, 실제 운영 값은 EC2의 `deploy/.env`에 저장합니다.
+`deploy/.env`에는 Secret과 인프라 접속 정보가 포함되므로 Git에 커밋하지 않습니다.
+
+| 구분        | 주요 설정                                                               |
+| --------- | ------------------------------------------------------------------- |
+| Spring    | `SPRING_PROFILES_ACTIVE`, `SPRING_JPA_HIBERNATE_DDL_AUTO`           |
+| DB        | `DB_HOST`, `DB_PORT`, `DB_NAME`, `MYSQL_USERNAME`, `MYSQL_PASSWORD` |
+| Redis     | `REDIS_HOST`, `REDIS_PORT`, `REDIS_PASSWORD`                        |
+| Kafka     | `KAFKA_BOOTSTRAP_SERVERS`, `SPRING_KAFKA_LISTENER_CONCURRENCY`      |
+| AWS / ECR | `AWS_REGION`, `ECR_REGISTRY`, `IMAGE_TAG`                           |
+| Gateway   | `JWT_SECRET`, `CORS_ALLOWED_ORIGIN`, 각 서비스 Host                     |
+| 인증        | OAuth Client 정보, Mail 정보, 내부 API Token                              |
+| 외부 서비스    | S3, Toss Payments, Slack Webhook                                    |
+| 관측        | Grafana 관리자 계정                                                      |
+
+운영 접속 정보는 코드나 `application-prod.yml`에 고정하지 않고 환경변수로 주입합니다.
+DB·Redis·Kafka 또한 각각 `DB_HOST`, `REDIS_HOST`, `KAFKA_BOOTSTRAP_SERVERS`로 접속 대상을 분리하여 인프라 변경이 애플리케이션 코드 변경으로 이어지지 않도록 구성했습니다.
+
+현재 `docker-compose.prod.yml`에서는 **MySQL·Redis·Kafka를 애플리케이션과 동일한 EC2에서 컨테이너로 실행**합니다. 접속 정보가 외부화되어 있으므로 향후 RDS·ElastiCache·MSK 등 관리형 인프라로 이전할 수 있습니다.
+
 
 ## 🚀 시작하기 (Getting Started)
 
@@ -256,9 +465,13 @@ set -a && . ./.env.local && set +a
 | `seat-service` | 8086 | ✅ |
 | `ticket-service` | 8087 | ✅ |
 
-API 호출은 게이트웨이 **8080** 하나로 보냅니다. 나머지 포트는 게이트웨이가 내부 라우팅에 쓰는 것으로,
+API 호출은 게이트웨이 **8080** 하나로 보냅니다. 나머지 서비스 포트는 게이트웨이가 내부 라우팅에 사용하는 것으로,
 직접 호출하면 게이트웨이가 주입하는 인증 헤더가 없어 동작이 달라집니다.
-운영에서는 인터넷에 8080만 열려 있습니다.
+
+운영 환경에서는 **Nginx의 HTTPS 443 포트만 외부 요청의 진입점으로 사용**하며, `gateway-service`의 8080과
+Actuator 관리 포트 8090은 EC2의 `127.0.0.1`에만 바인딩됩니다. 나머지 7개 도메인 서비스는 포트를 외부에 publish하지 않고
+Docker Compose 내부 네트워크에서만 통신합니다.
+
 
 `local` 프로파일에서는 더미 데이터가 자동 시딩됩니다 — 공연·배너(`performance-service`), 좌석(`seat-service`).
 데이터가 이미 있으면 건너뜁니다.
