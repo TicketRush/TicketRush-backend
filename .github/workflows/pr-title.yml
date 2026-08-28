@@ -2,7 +2,8 @@ name: PR Title Check
 
 on:
   pull_request:
-    types: [opened, edited, reopened]
+    # synchronize 필수: 필수 상태 체크는 head 커밋 기준이라, 빠지면 push 후 validate-title 체크런이 없어 머지가 영구 블록된다 (#625)
+    types: [opened, edited, reopened, synchronize]
 
 jobs:
   validate-title:
