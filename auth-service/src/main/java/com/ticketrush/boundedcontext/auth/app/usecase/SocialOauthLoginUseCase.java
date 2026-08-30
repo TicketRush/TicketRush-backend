@@ -2,7 +2,6 @@ package com.ticketrush.boundedcontext.auth.app.usecase;
 
 import com.ticketrush.boundedcontext.auth.app.dto.request.SocialOauthLoginRequest;
 import com.ticketrush.boundedcontext.auth.app.dto.request.UserServiceSocialLoginRequest;
-import com.ticketrush.boundedcontext.auth.app.dto.response.login.UserServiceAuthInfoResponse;
 import com.ticketrush.boundedcontext.auth.app.dto.response.social.OauthLoginResponse;
 import com.ticketrush.boundedcontext.auth.app.dto.response.social.UserServiceSocialLoginResponse;
 import com.ticketrush.boundedcontext.auth.domain.types.SocialUserInfo;
@@ -51,9 +50,7 @@ public class SocialOauthLoginUseCase {
     Long userId = userResponse.userId();
 
     // 3. 사용자 실제 권한 조회
-    UserServiceAuthInfoResponse userAuthInfo = userServiceClient.getUserAuthInfoByUserId(userId);
-
-    String role = validateRole(userAuthInfo.role());
+    String role = validateRole(userResponse.role());
 
     // 4. JWT 생성
     String accessToken = jwtTokenProvider.createAccessToken(userId, role);
