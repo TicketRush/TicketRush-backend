@@ -43,7 +43,8 @@ public class SocialLoginUseCase {
     // 2. 기존 유저 → 로그인
     if (account.isPresent()) {
       User user = account.get().getUser();
-      return new SocialLoginResponse(user.getId(), user.getName(), false);
+      return new SocialLoginResponse(
+          user.getId(), user.getName(), false, user.getUserRole().name());
     }
 
     // 3. 신규 유저 생성
@@ -55,7 +56,8 @@ public class SocialLoginUseCase {
     socialAccount.setUser(newUser);
     socialAccountRepository.save(socialAccount);
 
-    return new SocialLoginResponse(newUser.getId(), newUser.getName(), true);
+    return new SocialLoginResponse(
+        newUser.getId(), newUser.getName(), true, newUser.getUserRole().name());
   }
 
   // 입력값 검증
