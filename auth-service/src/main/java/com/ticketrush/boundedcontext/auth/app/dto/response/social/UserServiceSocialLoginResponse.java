@@ -6,7 +6,8 @@ import com.fasterxml.jackson.annotation.JsonProperty;
 public record UserServiceSocialLoginResponse(
     @JsonProperty(value = "user_id") Long userId,
     String name,
-    @JsonProperty(value = "is_new_user") boolean isNewUser) {
+    @JsonProperty(value = "is_new_user") boolean isNewUser,
+    String role) {
 
   private String maskValue(String value) {
     if (value == null || value.isEmpty()) {

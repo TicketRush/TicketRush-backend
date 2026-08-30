@@ -2,7 +2,8 @@ name: PR Title Check
 
 on:
   pull_request:
-    types: [opened, edited, reopened]
+    # synchronize 필수: 필수 상태 체크는 head 커밋 기준이라, 빠지면 push 후 validate-title 체크런이 없어 머지가 영구 블록된다 (#625)
+    types: [opened, edited, reopened, synchronize]
 
 jobs:
   validate-title:
@@ -11,8 +12,10 @@ jobs:
     steps:
       - name: Validate PR title format
         shell: bash
+        # 제목은 env 로만 주입한다 — run 에 ${{ }} 직접 보간하면 fork PR 제목으로 셸 명령이 실행될 수 있다 (#628)
+        env:
+          TITLE: ${{ github.event.pull_request.title }}
         run: |
-          TITLE="${{ github.event.pull_request.title }}"
           echo "PR Title: $TITLE"
 
           # 다중 이슈 번호를 허용하는 정규표현식 (예: #1, 2, 4 또는 #1, #2, #3)
