@@ -2241,3 +2241,250 @@ python load-test/bench/arm-stats.py <OUTDIR> --table a20=<UTC> a40=<UTC> a30=<UT
 > **⚠️ 예매 RPS만 보고 계단을 비교하지 않는다.** 이슈 #555 본문은 *"계단을 올리면 폴링 수요도 `T = ceil(waiting/R)`로 함께 오른다"*고 적었는데 **방향이 반대다.** `pollSeconds`에 `min 3 / max 60`이 씌워져 있어(`application.yml`) `waiting ≥ 1,200`인 동안 폴링 RPS는 `waiting/T ≈ R = 400`에 **고정**되고, admit을 올리면 대기가 빨리 빠져 **폴링 총량은 오히려 줄어든다.** 결론은 그대로 유효하고 이유가 다르다 — **계단마다 CPU 예산의 분모가 달라진다.** 대조표의 폴링 RPS·게이트웨이 RPS 컬럼이 그래서 필수다.
 
 **주 지표는 RPS가 아니라 소화 시간이다.** SSOT는 `queue_drain_seconds`의 **max**(k6 요약) — 대기열 개시부터 그 사람이 예매를 마치기까지이고, 승급 임계치가 개시 시각의 함수라 기준점이 정확하다. Trend의 max는 시계열로 나가지 않으므로 요약이 유일한 출처다.
+
+---
+
+## 17. payment→booking 동기 조회 왕복 측정 (#633)
+
+`BookingRestClient.getBooking` 왕복의 지연 분포를 실측해 **#571 서킷브레이커 임계값 5종의 근거**를 만든다.
+회차 결과는 `load-tests/k6/results/{yymmdd}-633-payment-booking-roundtrip/`.
+
+### 17.1 이슈 서사와 실측의 차이 — 먼저 읽을 것
+
+**(a) 이슈가 제시한 후보 A·B는 둘 다 현재 토폴로지에서 실행할 수 없다.**
+
+- **후보 A(booking internal 엔드포인트 직접 타격)** — 게이트웨이 booking 라우트 predicate는 `Path=/api/v1/booking/**`뿐이라 `/api/v1/internal/booking/**`이 매칭되지 않는다(`gateway-service/src/main/resources/application.yml`). payment의 `RestClientConfig`도 "게이트웨이는 내부 API를 라우팅하지 않습니다"를 기동 실패 메시지에 박아 두었다. 로컬 k6에서 치려면 booking 포트를 인터넷에 열어야 하는데, 이는 [ADR 0004](adr/0004-load-test-execution-topology.md)가 대안 ③을 기각한 사유(노출면 악화)이자 [ADR 0007](adr/0007-observability-stack-colocation.md)과 정면 충돌이다.
+- **후보 B(결제 확정 경로 전체 부하)** — PG stub은 `@Profile("!prod")`라 **prod 배포본에서는 환경변수와 무관하게 활성화되지 않는다**. 게다가 Toss confirm은 결제위젯이 발급한 실 `paymentKey`를 요구해 k6로 대량 생성 자체가 불가능하다.
+
+**(b) 그래서 "PG에 도달하지 않는 confirm"으로 실경로 왕복만 반복시킨다.** `PaymentConfirmUseCase.execute`의 순서가 이 설계의 근거다.
+
+| 단계 | 내용 | 코호트를 CONFIRMED로 심었을 때 |
+|---|---|---|
+| ① | `existsByBookingIdAndStatus(COMPLETED)` | 통과(payment 행 없음) |
+| ② | `expiredBookingRepository.existsByBookingId` | 통과(expired_booking에 없음) |
+| ③ | `assertBookingIsPayable` → **booking 왕복 1회** | `BOOKING_409_002`로 차단 |
+| ④ | PG 승인 | **도달하지 않는다** |
+
+③의 차단은 `recordFailedPayment`의 try 블록 **밖**에서 나므로 FAILED 이력이 남지 않고, `saveAndFlush`는 그보다 뒤라 **DB 쓰기가 0**이다. 코호트가 소모되지 않으므로 회차를 몇 번이든 반복할 수 있다 — 시드에 `reset` 모드가 없는 이유다.
+
+**(c) 왕복의 SSOT는 차분이 아니라 Timer다.** #402는 통제군 대비 서버측 **평균** 차분으로 3.20ms를 얻었는데, 이 이슈는 p50/p95/p99/max를 요구한다. **퍼센타일은 뺄셈이 성립하지 않는다** — `p95(측정군) − p95(통제군)`은 왕복의 p95가 아니다. 그래서 #633은 payment `BookingRestClient`에 `ticketrush.payment.booking.lookup` Timer를 신설하고 그 히스토그램을 SSOT로 쓴다. 통제군 세그먼트는 두지 않는다.
+
+**(d) 이 구간에는 원래 관측 축이 없었다.** payment의 booking `RestClient`는 오토컨피그된 빌더가 아니라 생 `RestClient.builder()`로 만들어져 `ObservationRegistry`가 붙지 않는다 — `http_client_requests_seconds`가 아예 없다(#402가 ticket-service에서 겪은 것과 같은 제약). 기존 축인 `booking_guard.blocked`는 "막힌 건수"만 세므로 "얼마나 느렸나"에 답하지 못한다.
+
+**(e) 도착률을 크게 잡지 않는다.** [`capacity-planning.md`](capacity-planning.md) §3의 예매 서버 수신 RPS **8.22**(#555 `b12`)와 입장 허용 상한 **`admit-rate` 12/s**가 현실값이다. 결제 확정은 예매를 통과한 사용자만 하므로 그보다 크게 잡으면 #571의 "최소 호출 수"·"슬라이딩 윈도우 크기" 근거가 현실에 없는 호출량 위에 서게 된다.
+
+### 17.2 부하 모델
+
+**회차 2종 × run 3개.** 워밍업은 재기동 직후 부하가 시작돼야 하므로 별도 run으로 나눈다(`RT_PROFILE`).
+
+| run | 프로파일 | 내용 | 목적 |
+|---|---|---|---|
+| W1 | `warmup` | 재시작 직후 즉시 8/s × 3분 | 완료조건 3 |
+| B | `main` | 8/s × 5분 → 램프 20s → 12/s × 5분 | 완료조건 2·4 |
+| W2 | `warmup` | 재시작 직후 즉시 8/s × 3분 | 워밍업 **재현성** |
+
+**W를 두 번 도는 이유**는 워밍업 지연이 비결정적이기 때문이다. #496의 300ms는 근거 없이 잡은 값이 **아니었다** — #402 실측 왕복 3.20ms를 기준선으로 잡은 값이었는데도 재기동 구간에서 실패 0건에 차단 1,472건이 났다. 그 실측이 **워밍업이 끝난 상태의 값**이었기 때문이다. 즉 교훈은 "실측하라"가 아니라 **"정상 구간 실측만으로는 워밍업을 덮지 못한다"**이고, W1·W2가 그 구간을 정면으로 겨냥한다. **W1과 W2의 앞 120초 분포가 같은 자릿수여야** 임계 근거로 쓴다.
+
+> ⚠ **W1과 W2의 차이는 JIT만의 함수가 아니다.** `docker compose restart`는 앱만 재시작하므로 **MySQL 버퍼 풀은 초기화되지 않고**, W2는 W1·B가 이미 데운 페이지를 읽는다. 게다가 `exec.scenario.iterationInTest`는 run마다 0부터 시작하므로 오프셋을 주지 않으면 세 run이 코호트의 **같은 머리 부분**만 반복해 그 편향이 정확히 겹친다. §17.5가 run마다 `RT_INDEX_OFFSET`을 다르게 주는 이유이고, 그래도 남는 몫(버퍼 풀 워밍)은 리포트 한계 절에 적는다.
+
+**회차 1은 confirm 단독, 회차 2는 `RT_BACKGROUND_RATE`로 배경 부하를 켠다.** booking이 한가한 상태에서 잰 왕복은 하한이고, 실제로 서킷이 열려야 하는 상황은 booking이 예매 트래픽을 받고 있을 때다. 두 회차의 차이가 곧 혼잡도 기여분이며 느린호출 임계에 얼마를 더할지의 근거가 된다.
+
+> ⚠ 배경 부하 요청은 대부분 409(좌석 선점 반려)로 끝난다(#344 실측 98.61%). 성공 경로보다 가벼우므로 **혼잡도를 과소평가한다** — 리포트 한계 절에 명시할 것.
+
+### 17.3 사전 게이트 — 하나라도 어긋나면 회차를 시작하지 않는다
+
+1. **시드 verify의 `pending = 0`.** 0이 아니면 그 행들은 ④까지 내려가 실제 Toss 승인을 시도한다.
+2. **`payments_on_cohort = 0` · `expired_on_cohort = 0`.** 0이 아니면 그 요청은 ①②에서 끊겨 왕복이 일어나지 않는다.
+3. **`owner_ok = bookings`.** 소유자가 다르면 `assertBookingOwnedBy`(#572)가 404로 끊는다. 이때 왕복은 이미 200으로 끝난 뒤라 **Timer에는 `outcome=success`로 기록되고**, 그 요청은 ③의 상태 판정까지 가지 않는다 — 즉 정상 분포에 성격이 다른 표본이 섞이고 `rt_guard_blocked`가 떨어져 킬 스위치가 abort한다.
+4. **수동 curl 1건**으로 응답이 `409 BOOKING_409_002`인지 눈으로 확인한다.
+   ```bash
+   # BASE_URL·BOOKING_ID_MIN·SEAT_ID_MIN 은 §17.4 시드 출력값, TOKEN 은 loadtest 계정 로그인 응답의
+   # result.access_token. 이름을 §17.5 의 RT_* 인자와 같은 값으로 맞춰 쓴다.
+   BASE_URL=https://api.ticketrush.store
+   BOOKING_ID_MIN=<시드출력 booking_id_min>
+   SEAT_ID_MIN=<시드출력 seat_id_min>
+   TOKEN=<access token>
+
+   curl -s -o /dev/null -w '%{http_code}\n' -X POST "$BASE_URL/api/v1/payment/confirm" \
+     -H "Content-Type: application/json" -H "Authorization: Bearer $TOKEN" \
+     -d "{\"booking_id\":$BOOKING_ID_MIN,\"seat_id\":$SEAT_ID_MIN,\"provider\":\"KAKAO\",\"amount\":50000,\"payment_key\":\"LTR-smoke\"}"
+   ```
+5. **Timer 버킷이 배포본에 존재하는지.** 이미지가 #633 이전이면 시계열이 아예 없고 `histogram_quantile()`은 조용히 빈 결과를 낸다.
+   ```promql
+   count(ticketrush_payment_booking_lookup_seconds_bucket)
+   ```
+   값은 `outcome` 조합 수 × 12(`slo` 11 + `+Inf`)이다. **위 4번 curl을 먼저 흘려야 조합이 생긴다.**
+
+> 🛡 **예방 2겹 + 탐지 3겹.** 둘을 구분해 두는 것이 중요하다 — 킬 스위치는 예방이 아니다.
+>
+> **예방**(④에 도달하는 것 자체를 막는다)
+> 1. 시드 verify의 `pending = 0` 단언
+> 2. `provider=KAKAO` — prod 실 승인 구현체는 Toss뿐이라 라우터가 `PAYMENT_PROVIDER_NOT_SUPPORTED`로 선차단하고, 그 `ErrorStatus`는 `RECORDABLE_FAILURES` 화이트리스트에 없어 FAILED 이력조차 남지 않는다. **prod 한정이다** — local/test에서 PG 스텁이 켜져 있으면 라우터가 KAKAO를 그 fallback 스텁으로 보내 승인이 성공하고 `COMPLETED` payment 행과 `PaymentConfirmedEvent`까지 나간다.
+>
+> **탐지**(일어난 뒤에 잡는다)
+> 3. 회차 전 수동 curl 1건
+> 4. 시나리오 킬 스위치 — 기대 code가 아니면 `test.abort()`. **첫 이상 응답을 보고 중단하기까지 이미 여러 요청이 in-flight이므로 "④ 도달 0건"을 보장하지 못한다.**
+> 5. 회차 후 `ticketrush_payment_pg_approve_seconds_count` 증분 확인
+
+### 17.4 시딩
+
+**선행 조건: `seed_load.sql`이 먼저 돌아 있어야 한다.** 이 시드는 로그인 계정을 새로 만들지 않고 `loadtest@ticketrush.local`을 재사용하며(인터넷에 노출된 배포본에 계정을 하나라도 덜 만든다), 계정이 없으면 `ABORT__run_seed_load_sql_first_loadtest_user_missing`으로 중단된다. 회차 2의 배경 부하가 쓰는 `LOADTEST-*` 공연·좌석도 그 시드가 만든다.
+
+```bash
+GUARD="SET @i_confirm_loadtest_db=1, @mode='seed', @count=10000"
+mysql --init-command="$GUARD" ticket_rush < load-test/seed/seed_payment_booking_roundtrip.sql
+```
+
+> ⚠ **`ERROR 1267 Illegal mix of collations`가 나면 시드의 결함이 아니라 접속 collation 문제다.** 스키마는 `utf8mb4_unicode_ci`인데 클라이언트 연결이 `utf8mb4_0900_ai_ci`로 붙으면, 시드가 `SET @load_email = '...'`로 만든 변수와 `user.email` 컬럼 비교에서 충돌한다. **기존 시드(`seed_payment_pipeline.sql` 등)도 같은 패턴이라 똑같이 걸린다.** 접속 collation을 맞춰 붙는다.
+>
+> ```bash
+> GUARD="SET NAMES utf8mb4 COLLATE utf8mb4_unicode_ci; SET @i_confirm_loadtest_db=1, @mode='seed', @count=10000"
+> ```
+
+시드가 끝나면 검증 SELECT의 `pending` · `payments_on_cohort` · `expired_on_cohort`가 **전부 0**이고 `owner_ok = bookings`인지 확인한다(§17.3).
+
+출력의 `booking_id_min` · `seat_id_min` · `cohort_size`를 그대로 k6 env로 넘긴다. `seat_id`는 `AUTO_INCREMENT`라 **반드시 주입해야 한다**(기본값 1은 다른 코호트를 가리킨다).
+
+### 17.5 절차
+
+회차마다 아래를 순서대로 밟는다. **재시작에는 서비스명을 반드시 명시한다** — 서비스명 없는 `compose up`은 다음 CD를 영구 실패시킨다.
+
+공통 인자를 먼저 셸 변수로 잡는다. 값은 §17.4 시드 출력에서 그대로 옮긴다.
+
+```bash
+COMMON="-e BASE_URL=https://api.ticketrush.store   -e RT_BOOKING_ID_MIN=<시드출력 booking_id_min>   -e RT_SEAT_ID_MIN=<시드출력 seat_id_min>   -e RT_COHORT_SIZE=<시드출력 cohort_size>   -e LOAD_USER_PASSWORD='<pw>'"
+# ⚠ -e 의 위치가 서비스명 앞뒤로 다르다(§7.2). 앞의 -e 는 컨테이너 환경변수(K6_*), 뒤의 -e 는
+#   스크립트 __ENV 다. --no-deps 로 로컬 prometheus 를 띄우지 않으므로 remote-write 대상을
+#   반드시 덮는다 — 안 덮으면 k6 시계열이 아무 데도 들어가지 않는다.
+K6="docker compose --profile loadtest run --rm --no-deps \
+  -e K6_PROMETHEUS_RW_SERVER_URL=http://localhost:9090/api/v1/write \
+  k6 run /scripts/scenarios/payment-booking-roundtrip.js"
+```
+
+> `RT_COHORT_SIZE`를 빠뜨리면 기본값 10,000이 쓰인다. 시드를 다른 `@count`로 돌린 회차는 코호트 밖 `booking_id`를 찍어 404 → `test.abort()`로 끝난다.
+
+**`RT_INDEX_OFFSET`을 run마다 다르게 준다.** 이 값이 없으면 세 run이 코호트의 같은 머리 부분만 반복해 읽고, W2가 W1이 데운 InnoDB 버퍼 풀의 이득을 그대로 받는다. 값은 **구간이 겹치지 않게** 잡는다 — 기본값 기준 iteration 수는 W1 ≈ 1,440(8/s × 180s), B ≈ 6,200(8/s × 300s + 램프 + 12/s × 300s), W2 ≈ 1,440이므로 `0` / `1500` / `7800`이면 셋이 코호트 10,000 안에서 서로 겹치지 않는다.
+
+> ⚠ **오프셋으로 이 confound를 없앨 수는 없다.** 코호트 1만 행은 수 MB라 W1과 B가 지나면 사실상 전체가 버퍼 풀에 상주하고, W2는 어느 구간을 읽든 콜드 페이지를 만나지 않는다. 오프셋은 "같은 행을 세 번 읽는" 극단을 피할 뿐이다. **W1과 W2의 차이를 JIT만의 함수로 해석하지 말고, 이 한계를 리포트에 그대로 적는다.**
+
+```bash
+# (1) W1 — 재시작 직후
+docker compose restart payment-service booking-service    # EC2에서
+# 헬스가 올라오는 즉시 (로컬에서)
+$K6 $COMMON -e RT_PROFILE=warmup -e RT_INDEX_OFFSET=0 2>&1 | tee w1-k6.txt
+
+# (2) B — 정상→피크 (W1이 끝나고 최소 10분 여유를 두고 시작한다)
+$K6 $COMMON -e RT_PROFILE=main -e RT_INDEX_OFFSET=1500 2>&1 | tee main-k6.txt
+
+# (3) W2 — 다시 재시작 직후 (재현성 확인)
+docker compose restart payment-service booking-service
+$K6 $COMMON -e RT_PROFILE=warmup -e RT_INDEX_OFFSET=7800 2>&1 | tee w2-k6.txt
+```
+
+**회차 2(배경 부하)는 위 세 run에 아래를 더한다.**
+
+```bash
+BG="-e RT_BACKGROUND_RATE=20 -e PERF_ID=1 -e SEAT_ID_MIN=1 -e SEAT_ID_MAX=6000"
+# 예: $K6 $COMMON $BG -e RT_PROFILE=main -e RT_INDEX_OFFSET=1500 2>&1 | tee main-bg-k6.txt
+```
+
+> ⚠ `PERF_ID`·`SEAT_ID_MIN`·`SEAT_ID_MAX`를 **반드시 명시한다.** 배경 부하는 실제 좌석에 예매 생성 요청을 흘리는데, 빠뜨리면 `env.js` 기본값(`PERF_ID=1` / `1~100`)으로 떨어져 어떤 공연·어떤 좌석을 치는지 근거가 없어진다. 위 값은 §13.3(`seed_load.sql` 코호트)과 같은 대역이며, 회차 전에 그 공연이 실제로 존재하는지 확인한다.
+>
+> ⚠ **`QUEUE_ENABLED`가 `true`이면 배경 부하는 게이트웨이에서 전건 403이 되어 booking-service에 도달하지 못한다**(입장 토큰이 없는 `POST /api/v1/booking`은 대기열이 막는다). 그러면 혼잡도가 0인데 회차는 정상으로 보인다. 회차 전에 값을 확인하고 `metadata.txt`에 적는다.
+
+각 run의 시작·종료 UTC를 `{run}-timeline.txt`에 남긴다(§7 규약). 종료 후 `bench/dump-timeseries.py`로 시계열을 뜬다.
+
+> ⚠ **회차 1과 회차 2 사이에는 아무것도 지우지 않는다.** 이 경로는 DB 쓰기가 0이라 코호트가 소모되지 않으므로 회차 2가 같은 코호트를 그대로 쓴다. 특히 `cleanup_load.sql`을 회차 사이에 돌리면 안 된다 — 그 파일은 LTR 코호트뿐 아니라 **`loadtest@ticketrush.local` 계정과 `LOADTEST-*`·`LTQ-*` 코호트까지 지운다.** 계정이 사라지면 회차 2의 `setup()` 로그인이 `lib/auth.js`의 `fail()`로 즉시 죽고, 시드도 다시 돌릴 수 없다(`ABORT__run_seed_load_sql_first_...`). 배경 부하가 치는 `LOADTEST-*` 공연·좌석과 남의 이슈(#549) 코호트까지 함께 날아간다.
+
+**두 회차가 모두 끝난 뒤에만** 정리한다. 시드가 만드는 `LTR-A`는 `ON_SALE` · 1만 석이라 공개 공연 목록에 노출되고, #176 이후 목록 조회는 공연마다 좌석 서비스로 실측 잔여 좌석을 부르므로 그 응답 비용에도 얹힌다.
+
+```bash
+# 모든 회차 종료 후 1회. 이 시점에는 loadtest 계정이 사라져도 무방하다.
+mysql --init-command="SET NAMES utf8mb4 COLLATE utf8mb4_unicode_ci; SET @i_confirm_loadtest_db=1" \
+  ticket_rush < load-test/seed/cleanup_load.sql
+```
+
+### 17.6 PromQL
+
+`job` 라벨은 MVC 앱이 전부 `ticketrush-services`로 묶여 있다 — **서비스 구분은 `instance`다.** `le` 표기는 `0.001 / 0.002 / 0.005 / 0.01 / 0.025 / 0.05 / 0.1 / 0.25 / 0.5 / 1.0 / 2.0 / +Inf`로 §12.4와 같다. 상한이 read-timeout(1s)이 아니라 **2s**인 것은 이 Timer가 재는 구간이 HTTP 왕복이 아니라 `getBooking` 메서드 전체여서, connect-timeout(1s)과 read-timeout(1s)이 순차로 들어가면 1s를 넘을 수 있기 때문이다.
+
+```promql
+# ★ 왕복 분포 (SSOT). 구간 전체를 통째로 낼 때는 rate 대신 increase 를 쓴다 —
+#   워밍업처럼 짧은 구간은 스크랩 15초 해상도로 잘라 볼 수 없고, 표본 수는 스크랩이 아니라
+#   그 구간에 들어온 요청 수가 정한다(8/s x 120s = 960건).
+histogram_quantile(0.50, sum by (le) (increase(ticketrush_payment_booking_lookup_seconds_bucket{
+  outcome="success"}[2m])))
+histogram_quantile(0.95, sum by (le) (increase(ticketrush_payment_booking_lookup_seconds_bucket{
+  outcome="success"}[2m])))
+histogram_quantile(0.99, sum by (le) (increase(ticketrush_payment_booking_lookup_seconds_bucket{
+  outcome="success"}[2m])))
+
+# 왕복 최댓값 — 퍼센타일이 상한에 붙어 보일 때 실제 꼬리를 가르는 유일한 단서.
+# ⚠ instant query 로 max() 를 쓰면 안 된다. Micrometer 의 _max 는 롤링 윈도우(기본 2분) 값이라
+#   "쿼리 시점 기준 최근 2분의 최댓값" 만 나온다. 회차 전체를 대표하려면 구간을 명시해야 한다.
+max_over_time(ticketrush_payment_booking_lookup_seconds_max[10m])
+
+# 왕복 평균 — #402 의 3.20ms 와 직접 비교할 수 있는 유일한 축(그쪽은 평균 차분이었다)
+sum(rate(ticketrush_payment_booking_lookup_seconds_sum{outcome="success"}[1m]))
+/
+sum(rate(ticketrush_payment_booking_lookup_seconds_count{outcome="success"}[1m]))
+
+# outcome 별 호출량 — #571 의 실패율 임계 근거. not_found 는 서킷 실패로 세지 않을 갈래다.
+sum by (outcome) (rate(ticketrush_payment_booking_lookup_seconds_count[1m]))
+
+# 왕복 하한 (booking 자체 처리시간). SSOT 와의 차이가 네트워크+클라이언트 오버헤드다.
+histogram_quantile(0.99, sum by (le) (increase(http_server_requests_seconds_bucket{
+  instance="booking-service:8090", uri="/api/v1/internal/booking/{bookingId}"}[2m])))
+
+# ★ 설계 검증 — 이 둘이 1:1 이어야 측정군이 전건 ③까지 내려간 것이다
+sum(rate(ticketrush_payment_booking_lookup_seconds_count[1m]))
+sum(rate(http_server_requests_seconds_count{
+  instance="booking-service:8090", uri="/api/v1/internal/booking/{bookingId}"}[1m]))
+
+# ★ 안전 확인 — 회차 내내 0 이어야 한다.
+# ⚠ 이 값은 "PG 호출이 성사됐다" 가 아니라 "④ PG 단계에 진입했다" 신호다. 해당 Timer 는
+#   try/finally 로 approve 를 감싸므로, 라우터가 PAYMENT_PROVIDER_NOT_SUPPORTED 로 즉시 던져도
+#   finally 의 sample.stop 이 실행되어 count 가 오른다. 과검출 쪽이라 게이트로는 안전하지만,
+#   0 이 아닐 때 "과금됐다" 로 곧장 읽으면 오진단이다 — 먼저 payment 테이블 신규 행을 확인한다.
+increase(ticketrush_payment_pg_approve_seconds_count[1h])
+
+# 가드 차단 사유 분포 — 전건 CONFIRMED 여야 한다(다른 reason 이 섞이면 시딩 오염)
+sum by (reason) (rate(ticketrush_payment_confirm_booking_guard_blocked_total[1m]))
+
+# 배경 부하가 booking 을 실제로 바쁘게 만들었는가 (회차 2)
+sum(rate(http_server_requests_seconds_count{instance="booking-service:8090"}[1m]))
+```
+
+### 17.7 주의 / 무효 판정
+
+- **`histogram_quantile()`은 경계 사이 선형보간이다.** 왕복이 ms 단위라 하단(1~25ms)이 촘촘한 것이 그 때문이지만, 값이 버킷 경계에 몰리면 보간 오차가 그대로 임계 근거에 실린다. **p99와 `_max`를 함께 읽고 둘 다 리포트에 적는다.**
+- **`NaN`은 데이터 부족이지 결함이 아니다.** increase 창에 요청이 없으면 분모가 0이 된다.
+- **`uri` 라벨이 `/api/v1/internal/booking/{bookingId}` 템플릿으로 정규화되는지 스모크에서 확인하고 `metadata.txt`에 고정한다**(§12.4와 같은 규율).
+- **왕복은 같은 호스트의 컨테이너 간 통신이라 싸게 나온다.** #402가 남긴 한계가 그대로 적용된다 — 서비스가 다른 노드로 분리되면 이 값은 커지고, 그때 #571 임계는 재검토 대상이다.
+- **배경 부하는 혼잡도를 과소평가한다**(17.2 경고).
+
+**무효 판정 — 하나라도 걸리면 그 회차 수치를 폐기한다.**
+
+| 조건 | 왜 |
+|---|---|
+| `dropped_iterations > 0` | 도착률을 못 채웠다. 대상이 느려서인지 생성기가 모자라서인지 가를 수 없다 |
+| 시나리오가 `test.abort()`로 끝남 | 기대하지 않은 응답이 왔다 = 시딩 오염 |
+| `rt_guard_blocked < 1.0` | 측정군 일부가 기대 code로 끝나지 않았다. **503은 이 값도 함께 떨어뜨리므로 `rt_booking_unavailable`을 뺀 나머지로 읽는다** — 503은 ③까지 내려가서 실패한 건이라 원인이 다르다 |
+| `rt_booking_unavailable > 0` | 왕복 분포에 `outcome=failed`가 섞였다. 분리해 해석하거나 폐기한다 |
+| **회차 2에서** `rt_background_ok < 1.0` | 배경 부하가 booking에 닿지 않았다(401·403·404·5xx). "혼잡한 상태에서 잰 값"이라는 전제가 깨지므로 회차 1과 비교할 수 없다 |
+| Timer count ≠ booking internal 요청 수 | 1:1이 깨졌다 = 통제되지 않은 트래픽이 섞였다 |
+| `ticketrush_payment_pg_approve_seconds_count` 증분 > 0 | **PG 승인이 실행됐다. 회차 무효를 넘어 사고다** |
+| W1과 W2의 앞 120초 p99가 자릿수 차이 | 워밍업이 재현되지 않았다. 임계 근거로 쓸 수 없다 |
+| 회차 중 CD 배포 발생 | `IMAGE_TAG`가 바뀌면 회차 재현성이 깨진다 |
+
+### 17.8 #571 임계값 5종 매핑
+
+리포트는 실측값을 아래 규칙으로 설정값에 매핑하고, 각각 "이 실측 → 이 값" 근거를 적는다.
+
+| #571 임계값 | 근거 축 | 규칙 |
+|---|---|---|
+| `slowCallDurationThreshold` | **워밍업 p99**(W1·W2) + 정상 p99 | `max(워밍업 p99 × 여유, 정상 p99 × 배수)`. 검증: `< read-timeout(1s)`이면서 `> W1·W2 양쪽 p99` |
+| `slowCallRateThreshold` | 정상/피크 구간의 임계 초과 비율 | 정상 구간에서 초과가 0에 수렴해야 50%가 안전하다 |
+| `failureRateThreshold` | `outcome` 별 호출량 | `not_found`를 뺀 실패 비율. 정상 구간에서 0이어야 한다 |
+| `slidingWindowSize` · `minimumNumberOfCalls` | **호출량 RPS** | 정상 8/s 기준으로 윈도우가 몇 초 분량인지 환산해 정한다. 표본이 몇 초 만에 차는지가 곧 검출 지연이다 |
+| `waitDurationInOpenState` | 회차에서 관측된 회복 시간 | 워밍업이 가라앉는 데 걸린 시간보다 길어야 재차 오탐하지 않는다 |
