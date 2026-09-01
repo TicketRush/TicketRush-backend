@@ -292,3 +292,68 @@ export const QUEUE_JITTER = Number(__ENV.QUEUE_JITTER || 0.2);
 // 300/3 = 100회다. 300 을 유지한다 — admit 이 바뀌어도 상한이 흔들리지 않는 것이 이 코호트
 // 설계의 부수 효과다.
 export const QUEUE_MAX_POLLS = Number(__ENV.QUEUE_MAX_POLLS || 300);
+
+// ---- #633 payment→booking 왕복 실측 (payment-booking-roundtrip.js) ----------
+// 회차 종류. 'warmup' = 재기동 직후 구간만 짧게, 'main' = 정상→피크 계단.
+// 두 구간을 한 run 으로 묶을 수 없다. W 구간은 payment·booking 을 재시작한 **직후** 부하가
+// 시작돼야 하는데, 한 run 안에 재시작을 끼워 넣으면 그 사이 요청이 전부 통신 실패로 잡혀
+// 워밍업 지연 분포가 아니라 재기동 공백을 재게 된다. 그래서 run 을 나누고 프로파일로 가른다
+// (openrun-e2e.js 의 E2E_PROFILE 과 같은 규약).
+// 오타가 나면 조용히 한쪽으로 폴백해 '정상으로 보이는 엉뚱한 회차' 가 되므로 여기서 끊는다.
+export const RT_PROFILE = __ENV.RT_PROFILE || 'main';
+if (RT_PROFILE !== 'warmup' && RT_PROFILE !== 'main') {
+  throw new Error(`RT_PROFILE 은 'warmup' 또는 'main' 만 가능하다 (받은 값: '${RT_PROFILE}')`);
+}
+
+// seed_payment_booking_roundtrip.sql 의 검증 SELECT 가 출력하는 값을 그대로 넣는다.
+// booking_id 는 @bk_base + i 로 직접 지정되므로 회차마다 대역이 바뀌지 않는다.
+export const RT_BOOKING_ID_MIN = Number(__ENV.RT_BOOKING_ID_MIN || 3000001);
+// seat_id 는 AUTO_INCREMENT 라 예측할 수 없다 — 시드 출력의 seat_id_min 을 반드시 주입한다.
+// 이 값은 confirm 요청 본문의 seat_id 를 채우는 데만 쓰이고 왕복 판정에는 관여하지 않지만,
+// @Positive 검증을 통과해야 요청이 UseCase 까지 내려간다.
+export const RT_SEAT_ID_MIN = Number(__ENV.RT_SEAT_ID_MIN || 1);
+// 라운드로빈 주기. 같은 booking_id 만 계속 조회하면 InnoDB buffer pool 상주분만 재게 되어
+// 왕복이 낙관적으로 편향된다. 코호트가 소모되지 않으므로(이 경로는 DB 쓰기가 0이다) 규모는
+// 회차 총 요청 수보다 크기만 하면 충분하다.
+export const RT_COHORT_SIZE = Number(__ENV.RT_COHORT_SIZE || 10000);
+
+// 코호트 시작 오프셋. run 마다 다른 값을 줘 **run 간 버퍼 풀 편향을 깬다.**
+// exec.scenario.iterationInTest 는 run 마다 0 부터 시작하므로, 오프셋이 없으면 W1·B·W2 세 run 이
+// 코호트의 같은 머리 부분만 반복해서 읽는다. 그러면 W2 는 W1 이 이미 데운 페이지를 읽게 되어
+// "W1 과 W2 의 차이 = JIT 재현성" 이라는 판정이 성립하지 않는다(앱만 재시작하므로 MySQL 버퍼 풀은
+// 초기화되지 않는다). 런북 §17.5 가 run 마다 다른 값을 지시한다.
+export const RT_INDEX_OFFSET = Number(__ENV.RT_INDEX_OFFSET || 0);
+
+// 도착률. 근거는 docs/capacity-planning.md §3 이다 — 예매 서버 수신 RPS 8.22(#555 b12)와
+// 입장 허용 상한 admit-rate 12/s. 결제 확정은 예매를 통과한 사용자만 하므로 이 둘이 현실적인
+// 정상·피크값이고, 그보다 크게 잡으면 #571 의 '최소 호출 수'·'슬라이딩 윈도우' 근거가
+// 현실에 없는 호출량 위에 서게 된다.
+// ⚠ admit-rate 는 지금 강제되는 값이 아니다. gateway 의 queue.enabled 기본값이 false 이고
+//   "프런트 연동 전까지는 꺼 둔다" 로 명시돼 있다(gateway application.yml §queue). 즉 이 12/s 는
+//   '대기열을 켰을 때의 설계 상한' 이지 현재 프로덕션이 강제하는 상한이 아니다. 대기열을 켠 뒤에는
+//   이 값을 다시 확인한다.
+export const RT_BASELINE_RATE = Number(__ENV.RT_BASELINE_RATE || 8);
+export const RT_PEAK_RATE = Number(__ENV.RT_PEAK_RATE || 12);
+export const RT_BASELINE_DURATION = __ENV.RT_BASELINE_DURATION || '5m';
+export const RT_PEAK_DURATION = __ENV.RT_PEAK_DURATION || '5m';
+export const RT_RAMP = __ENV.RT_RAMP || '20s';
+
+// 워밍업 회차 길이. Prometheus 스크랩이 15초라 3분이면 12표본이고, 분포 자체는 히스토그램
+// 버킷의 increase() 로 구간 전체를 통째로 내므로 표본 수는 스크랩이 아니라 요청 수가 정한다
+// (8/s x 180s = 1,440건). 오탐이 일어나는 구간은 재기동 직후 수십 초라 앞 120초를 따로 자른다.
+export const RT_WARMUP_DURATION = __ENV.RT_WARMUP_DURATION || '3m';
+
+// 배경 부하(POST /api/v1/booking) 도착률. 0 이면 confirm 단독 회차다.
+// 회차 2에서만 켠다 — booking-service 가 한가한 상태에서 잰 왕복은 하한이고, 실제로 서킷이
+// 열려야 하는 상황은 booking 이 예매 트래픽을 받고 있을 때다. 두 회차의 차이가 곧 혼잡도
+// 기여분이며, #571 느린호출 임계에 얼마를 더할지의 근거가 된다.
+// ⚠ 이 요청 대부분은 409(좌석 선점 반려)로 끝난다(#344 실측 98.61%). 성공 경로보다 가벼우므로
+//   혼잡도를 과소평가한다 — 리포트 한계 절에 명시한다.
+export const RT_BACKGROUND_RATE = Number(__ENV.RT_BACKGROUND_RATE || 0);
+
+// arrival-rate 는 VU 를 미리 할당해야 한다. 부족하면 도착률을 못 채우고 dropped_iterations 가
+// 오르는데, 그러면 '대상이 느려서' 인지 '생성기가 모자라서' 인지 가를 수 없어 회차가 무효다.
+// iteration 이 요청 1개(수십 ms)라 피크 12/s 기준으로는 한 자릿수면 충분하지만, 왕복이 느려지는
+// 구간을 재는 회차라 지연이 늘어도 도착률을 유지하도록 넉넉히 잡는다.
+export const RT_PRE_ALLOCATED_VUS = Number(__ENV.RT_PRE_ALLOCATED_VUS || 20);
+export const RT_MAX_VUS = Number(__ENV.RT_MAX_VUS || 200);

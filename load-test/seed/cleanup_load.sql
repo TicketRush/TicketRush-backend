@@ -55,6 +55,43 @@ DELETE FROM inbox
  WHERE event_type = 'PaymentConfirmed'
    AND consumer_group IN ('booking-group', 'ticket-group');
 
+-- ---- #633 payment→booking 왕복 코호트 (LTR-* / LT-R*) -----------------------
+-- title 'LTR-%' 라 아래 @marker('LOADTEST-%') JOIN 에 걸리지 않으므로 따로 지운다.
+-- ticket 은 지우지 않는다 — 이 코호트는 확정 이벤트를 흘리지 않아(회차가 PG 앞에서 끊긴다)
+-- 티켓이 생길 일이 없다. 정상 회차라면 payment 행도 생기지 않는다(DB 쓰기가 0인 경로다).
+--
+-- ⚠ payment 를 booking_id 범위(BETWEEN 3000001 AND 3999999)로 지우면 안 된다. 시드가
+--   booking_id 를 @bk_base+i 로 **명시 INSERT** 하는 순간 InnoDB AUTO_INCREMENT 카운터가
+--   그 위로 올라가므로, 그 뒤 생성되는 **실사용 예매의 booking_id 가 그 범위 안으로 들어온다.**
+--   그러면 cleanup 이 코호트와 무관한 실결제 행을 함께 지운다. #402·#504 블록이 전부
+--   booking_number 마커 기준인 것이 그래서다 — 여기도 booking 을 조인해 마커로 특정한다.
+--   (payment 에는 마커 컬럼이 없어 booking 을 통해서만 범위를 특정할 수 있다. 그래서
+--    booking 삭제보다 **먼저** 지운다.)
+--
+-- 정상 회차라면 이 DELETE 는 0행이다. 시딩 사고로 코호트에 PENDING 이 섞여 PG 단계까지
+-- 내려간 경우를 위한 안전망이다. 다만 그 경우에도 남는 것이 없을 가능성이 높다 —
+-- **prod 프로파일 한정으로** provider=KAKAO 가 PAYMENT_PROVIDER_NOT_SUPPORTED 로 끊기고
+-- 그 ErrorStatus 는 RECORDABLE_FAILURES 화이트리스트에 없어 FAILED 이력도 남지 않는다.
+-- ⚠ local/test 에서는 다르다. StubPaymentApprovalClient 가 @Profile("!prod") + stub.enabled=true
+--   조건의 fallback 빈이라, 스텁이 켜져 있으면 라우터가 KAKAO 를 그 스텁으로 보내 **승인이
+--   성공하고 COMPLETED payment 행 + PaymentConfirmedEvent 까지 나간다.** 로컬 스모크를 돌렸다면
+--   이 DELETE 가 실제로 지울 것이 있다.
+DELETE p FROM payment p
+JOIN booking b ON b.booking_id = p.booking_id
+WHERE b.booking_number LIKE 'LT-R%';
+
+DELETE FROM booking WHERE booking_number LIKE 'LT-R%';
+
+DELETE s FROM seat s
+JOIN performance p ON p.performance_id = s.performance_id
+WHERE p.title LIKE 'LTR-%';
+
+DELETE sl FROM seat_layout sl
+JOIN performance p ON p.performance_id = sl.performance_id
+WHERE p.title LIKE 'LTR-%';
+
+DELETE FROM performance WHERE title LIKE 'LTR-%';
+
 -- ---- #549 대기열 1만 VU 코호트 (LTQ-*) --------------------------------------
 -- seed_queue_flood.sql 이 만든 공연 1건 + 좌석 1만 석 + user 1만 행. 이 코호트도 title 'LTQ-%' 라
 -- 아래 @marker('LOADTEST-%') JOIN 에 안 걸리므로 따로 지운다.
