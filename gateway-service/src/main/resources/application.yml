@@ -20,6 +20,208 @@ spring:
       server:
         webflux:
           routes:
+            # ============================================================
+            # Rate Limit (#423)
+            #
+            # 제한 대상 엔드포인트만 별도 route로 먼저 매칭한다.
+            # 기존 서비스 단위 route는 order 기본값(0)을 사용하므로
+            # 아래 음수 order route가 우선 선택된다.
+            #
+            # RedisRateLimiter는 Token Bucket 방식이다.
+            #
+            # 분 단위 제한:
+            #   requestedTokens=60
+            #   replenishRate=N
+            #   -> 장기 평균 N회/분
+            #
+            # 초 단위 제한:
+            #   requestedTokens=1
+            #   replenishRate=N
+            #   -> 장기 평균 N회/초
+            # ============================================================
+
+            # ------------------------------------------------------------
+            # 1. 결제 승인
+            #
+            # 사용자/IP당 평균 3회/분.
+            # 최대 2회까지 즉시 burst 허용.
+            #
+            # PG 승인이라는 외부 비용 경로이므로 가장 보수적으로 제한한다.
+            #
+            # payment/webhook은 이 route와 일치하지 않으므로 Rate Limit 대상이 아니다.
+            # webhook 보호는 Nginx에서 Toss Payments 공식 IP allowlist로 처리한다.
+            # ------------------------------------------------------------
+            - id: payment-confirm-rate-limit
+              order: -100
+              uri: http://${services.payment.host}:8085
+              predicates:
+                - Path=/api/v1/payment/confirm
+                - Method=POST
+              filters:
+                - name: RequestRateLimiter
+                  args:
+                    key-resolver: "#{@userOrIpKeyResolver}"
+                    redis-rate-limiter.replenishRate: ${RATE_LIMIT_PAYMENT_CONFIRM_REPLENISH_RATE:3}
+                    redis-rate-limiter.burstCapacity: ${RATE_LIMIT_PAYMENT_CONFIRM_BURST_CAPACITY:120}
+                    redis-rate-limiter.requestedTokens: 60
+
+            # ------------------------------------------------------------
+            # 2. 로그인 / 소셜 로그인 / 토큰 재발급
+            #
+            # 사용자/IP당 평균 10회/분.
+            # 최대 5회까지 즉시 burst 허용.
+            #
+            # 인증 전 요청은 KeyResolver에서 IP 기준으로 제한된다.
+            # ------------------------------------------------------------
+            - id: auth-sensitive-rate-limit
+              order: -99
+              uri: http://${services.auth.host}:8082
+              predicates:
+                - Path=/api/v1/auth/login,/api/v1/auth/social/login,/api/v1/auth/reissue
+                - Method=POST
+              filters:
+                - name: RequestRateLimiter
+                  args:
+                    key-resolver: "#{@userOrIpKeyResolver}"
+                    redis-rate-limiter.replenishRate: ${RATE_LIMIT_AUTH_REPLENISH_RATE:10}
+                    redis-rate-limiter.burstCapacity: ${RATE_LIMIT_AUTH_BURST_CAPACITY:300}
+                    redis-rate-limiter.requestedTokens: 60
+
+            # ------------------------------------------------------------
+            # 3. 예매 생성
+            #
+            # 사용자/IP당 평균 5회/분.
+            # 최대 2회까지 즉시 burst 허용.
+            #
+            # Queue와 목적이 다르다.
+            # Queue       = 시스템 전체 유입량 제어
+            # Rate Limit  = 특정 사용자/봇의 반복 호출 제어
+            # ------------------------------------------------------------
+            - id: booking-create-rate-limit
+              order: -98
+              uri: http://${services.booking.host}:8084
+              predicates:
+                - Path=/api/v1/booking
+                - Method=POST
+              filters:
+                - name: RequestRateLimiter
+                  args:
+                    key-resolver: "#{@userOrIpKeyResolver}"
+                    redis-rate-limiter.replenishRate: ${RATE_LIMIT_BOOKING_REPLENISH_RATE:5}
+                    redis-rate-limiter.burstCapacity: ${RATE_LIMIT_BOOKING_BURST_CAPACITY:120}
+                    redis-rate-limiter.requestedTokens: 60
+
+            # ------------------------------------------------------------
+            # 4. 이메일 인증번호 발송
+            #
+            # 사용자/IP당 평균 10회/분.
+            # 최대 3회까지 즉시 burst 허용.
+            #
+            # auth-service 내부의 이메일별 60초 cooldown과 별도로,
+            # Gateway에서는 사용자/IP 기준 반복 발송을 제한한다.
+            # ------------------------------------------------------------
+            - id: email-verification-send-rate-limit
+              order: -97
+              uri: http://${services.auth.host}:8082
+              predicates:
+                - Path=/api/v1/auth/signup/email-verification/send
+                - Method=POST
+              filters:
+                - name: RequestRateLimiter
+                  args:
+                    key-resolver: "#{@userOrIpKeyResolver}"
+                    redis-rate-limiter.replenishRate: ${RATE_LIMIT_EMAIL_VERIFICATION_REPLENISH_RATE:10}
+                    redis-rate-limiter.burstCapacity: ${RATE_LIMIT_EMAIL_VERIFICATION_BURST_CAPACITY:180}
+                    redis-rate-limiter.requestedTokens: 60
+
+            # ------------------------------------------------------------
+            # 5. 이메일 존재 여부 조회
+            #
+            # 사용자/IP당 평균 30회/분.
+            # 최대 10회까지 즉시 burst 허용.
+            #
+            # 정상 회원가입 흐름은 방해하지 않으면서
+            # 이메일 enumeration 공격을 완화한다.
+            # ------------------------------------------------------------
+            - id: email-exists-rate-limit
+              order: -96
+              uri: http://${services.user.host}:8081
+              predicates:
+                - Path=/api/v1/user/exists/email
+                - Method=GET
+              filters:
+                - name: RequestRateLimiter
+                  args:
+                    key-resolver: "#{@userOrIpKeyResolver}"
+                    redis-rate-limiter.replenishRate: ${RATE_LIMIT_EMAIL_EXISTS_REPLENISH_RATE:30}
+                    redis-rate-limiter.burstCapacity: ${RATE_LIMIT_EMAIL_EXISTS_BURST_CAPACITY:600}
+                    redis-rate-limiter.requestedTokens: 60
+
+            # ------------------------------------------------------------
+            # 6. 입장 검표 QR 검증
+            #
+            # #423 작성 당시에는 Gateway route가 없어 외부 미노출이었지만
+            # 현재 /api/v1/entries/**가 ticket-service route에 포함되어 있다.
+            #
+            # #402에서 180 req/s까지 검표 부하 측정을 통과했으므로
+            # 그 처리량을 기본 지속 허용량으로 사용한다.
+            #
+            # 사용자/IP당 평균 180회/초.
+            # 최대 360회 burst 허용.
+            #
+            # 정상 검표 스파이크에는 영향을 최소화하면서
+            # 무제한 QR token brute-force/flood는 차단한다.
+            # ------------------------------------------------------------
+            - id: entry-verify-rate-limit
+              order: -95
+              uri: http://${services.ticket.host}:8087
+              predicates:
+                - Path=/api/v1/entries/verify
+                - Method=POST
+              filters:
+                - name: RequestRateLimiter
+                  args:
+                    key-resolver: "#{@userOrIpKeyResolver}"
+                    redis-rate-limiter.replenishRate: ${RATE_LIMIT_ENTRY_VERIFY_REPLENISH_RATE:180}
+                    redis-rate-limiter.burstCapacity: ${RATE_LIMIT_ENTRY_VERIFY_BURST_CAPACITY:360}
+                    redis-rate-limiter.requestedTokens: 1
+
+            # ------------------------------------------------------------
+            # 7. 좌석 SSE 연결 시도
+            #
+            # 사용자/IP당 평균 30회/분.
+            # 최대 5회까지 즉시 reconnect 허용.
+            #
+            # 이 설정은 비정상적인 연결/재연결 폭주를 막는 용도다.
+            #
+            # 중요:
+            # RequestRateLimiter는 "살아 있는 SSE 연결 수"를 세지 못한다.
+            # 실제 동시 연결 개수 제한은 Nginx limit_conn으로 별도 적용한다.
+            #
+            # 이 전용 route가 기존 seat-sse-service보다 먼저 선택되므로
+            # 기존 SSE의 무제한 response timeout 설정도 반드시 동일하게 유지한다.
+            # ------------------------------------------------------------
+            - id: seat-sse-rate-limit
+              order: -94
+              uri: http://${services.seat.host}:8086
+              predicates:
+                - Path=/api/v1/seat/*/seat-status/stream
+                - Method=GET
+              filters:
+                - name: RequestRateLimiter
+                  args:
+                    key-resolver: "#{@userOrIpKeyResolver}"
+                    redis-rate-limiter.replenishRate: ${RATE_LIMIT_SSE_REPLENISH_RATE:30}
+                    redis-rate-limiter.burstCapacity: ${RATE_LIMIT_SSE_BURST_CAPACITY:300}
+                    redis-rate-limiter.requestedTokens: 60
+              metadata:
+                response-timeout: -1
+                connect-timeout: 5000
+
+            # ============================================================
+            # 기존 서비스 라우트
+            # ============================================================
+
             - id: user-service
               uri: http://${services.user.host}:8081
               predicates:
