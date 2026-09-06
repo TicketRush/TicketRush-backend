@@ -210,7 +210,7 @@ class RateLimitRouteConfigTest {
 
     PredicateDefinition predicate = findPredicate(route, "Method");
 
-    assertThat(predicate.getArgs().values()).contains(expectedMethod);
+    assertThat(predicate.getArgs().values()).containsOnly(expectedMethod);
   }
 
   private static void assertRequestRateLimiter(RouteDefinition route) {
