@@ -41,7 +41,7 @@ public class RateLimitConfig {
         return Mono.just("ip:" + direct.getAddress().getHostAddress());
       }
 
-      return Mono.empty();
+      return Mono.just("ip:unknown");
     };
   }
 }
