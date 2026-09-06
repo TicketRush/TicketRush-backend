@@ -190,9 +190,20 @@ class RateLimitRouteConfigTest {
 
     PredicateDefinition predicate = findPredicate(route, "Path");
 
-    String actual = predicate.getArgs().values().stream().collect(Collectors.joining(","));
+    List<String> actual =
+        predicate.getArgs().values().stream()
+            .flatMap(value -> java.util.Arrays.stream(value.split(",")))
+            .map(String::trim)
+            .filter(s -> !s.isBlank())
+            .toList();
 
-    assertThat(actual).contains(expectedPath);
+    List<String> expected =
+        java.util.Arrays.stream(expectedPath.split(","))
+            .map(String::trim)
+            .filter(s -> !s.isBlank())
+            .toList();
+
+    assertThat(actual).containsExactlyInAnyOrderElementsOf(expected);
   }
 
   private static void assertMethodPredicate(RouteDefinition route, String expectedMethod) {
