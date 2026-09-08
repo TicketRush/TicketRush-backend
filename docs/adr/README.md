@@ -23,6 +23,7 @@ TicketRush의 아키텍처 결정을 번호 매긴 Markdown으로 축적하는 �
 - [15. 확정 신호가 유실돼 과금만 남은 만료 예매는, 예매를 되살리는 대신 대조로 찾아 자동 환불한다](0015-recover-charged-expired-booking-by-auto-refund.md)
 - [16. 환불 좌석 반환은 예매번호를 요구하고, 얻지 못하면 PG 취소 앞에서 취소를 끊는다](0016-require-booking-number-for-refund-seat-release.md)
 - [17. common의 스케줄러 락 설정은 조건 프로퍼티가 아니라 `@Import`로 게이트한다](0017-gate-common-scheduler-lock-by-explicit-import.md)
+- [18. 공연 파일은 퍼블릭 읽기 버킷에 올리고, DB에는 완성된 공개 URL을 저장한다](0018-store-public-object-urls-in-a-public-read-bucket.md)
 
 ## 사용법
 
