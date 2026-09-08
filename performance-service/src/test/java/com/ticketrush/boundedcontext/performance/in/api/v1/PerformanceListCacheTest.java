@@ -151,7 +151,7 @@ class PerformanceListCacheTest {
     savePerformance(Genre.CONCERT, null);
     warmCache();
 
-    given(s3UploadUtils.uploadFile(any())).willReturn("https://example.com/file");
+    given(s3UploadUtils.uploadFile(any(), any())).willReturn("https://example.com/file");
     performanceFacade.createPerformance(
         buildCreateRequest("신규 공연"), mockFile("mainImage"), mockFile("model3d"), null);
 
@@ -359,7 +359,15 @@ class PerformanceListCacheTest {
         .build();
   }
 
+  /**
+   * 파트에 맞는 확장자를 준다.
+   *
+   * <p>#636 이후 확장자 화이트리스트가 파트별로 갈려(FileKind) {@code .bin}은 어느 파트에서도 통과하지 않는다. 이 테스트의 관심사는 캐시 무효화라
+   * 업로드 자체는 mock 이지만, 검증은 업로드보다 앞이라 실제 규칙을 만족해야 등록이 진행된다.
+   */
   private MockMultipartFile mockFile(String name) {
-    return new MockMultipartFile(name, name + ".bin", "application/octet-stream", new byte[] {1});
+    String extension = "model3d".equals(name) ? "glb" : "png";
+
+    return new MockMultipartFile(name, name + "." + extension, null, new byte[] {1});
   }
 }

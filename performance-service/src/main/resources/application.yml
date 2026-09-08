@@ -32,8 +32,6 @@ spring:
     aws:
       region:
         static: ap-northeast-2
-      stack:
-        auto: false
 
 # 관리자 대시보드 집계(#563)가 쓰는 아웃바운드 호출. 내부 API는 게이트웨이가 라우팅하지 않으므로
 # 대상 서비스의 '직접' 주소여야 한다(ADR 0002).
@@ -50,6 +48,11 @@ service:
     read-timeout-ms: 3000
 
 app:
+  s3:
+    # 공개 URL 조립에 쓴다. aws 리전과 갈리면 존재하지 않는 호스트를 저장하게 되므로 한 곳에서 파생시킨다.
+    region: ${spring.cloud.aws.region.static}
+    # 경고 판정 전용. endpoint 를 덮었는데 public-base-url 을 빠뜨린 조합을 기동 시 알린다(S3Properties).
+    endpoint-override: ${spring.cloud.aws.s3.endpoint:}
   event-publisher:
     type: kafka
   kafka:
