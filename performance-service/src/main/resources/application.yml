@@ -51,6 +51,8 @@ app:
   s3:
     # 공개 URL 조립에 쓴다. aws 리전과 갈리면 존재하지 않는 호스트를 저장하게 되므로 한 곳에서 파생시킨다.
     region: ${spring.cloud.aws.region.static}
+    # 경고 판정 전용. endpoint 를 덮었는데 public-base-url 을 빠뜨린 조합을 기동 시 알린다(S3Properties).
+    endpoint-override: ${spring.cloud.aws.s3.endpoint:}
   event-publisher:
     type: kafka
   kafka:

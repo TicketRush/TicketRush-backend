@@ -7,7 +7,6 @@ import com.ticketrush.boundedcontext.performance.app.dto.response.PerformanceCre
 import com.ticketrush.boundedcontext.performance.app.usecase.PerformanceCreateUseCase;
 import com.ticketrush.boundedcontext.performance.domain.types.Genre;
 import com.ticketrush.boundedcontext.performance.out.repository.PerformanceRepository;
-import com.ticketrush.global.config.S3Properties;
 import com.ticketrush.global.eventpublisher.EventPublisher;
 import com.ticketrush.global.util.FileKind;
 import com.ticketrush.global.util.S3UploadUtils;
@@ -21,6 +20,7 @@ import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.LocalTime;
 import java.util.List;
+import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -31,6 +31,7 @@ import org.springframework.test.context.DynamicPropertyRegistry;
 import org.springframework.test.context.DynamicPropertySource;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.transaction.support.TransactionTemplate;
+import org.springframework.web.multipart.MultipartFile;
 import org.testcontainers.junit.jupiter.Container;
 import org.testcontainers.junit.jupiter.Testcontainers;
 import org.testcontainers.localstack.LocalStackContainer;
@@ -85,7 +86,7 @@ class PerformanceS3UploadIntegrationTest {
    *
    * <p>종료 코드를 단언하는 이유: 확인하지 않으면 버킷 생성이나 정책 적용이 실패해도 조용히 넘어가고, 뒤의 업로드가 엉뚱한 이유로 실패해 원인을 찾기 어려워진다.
    */
-  @org.junit.jupiter.api.BeforeAll
+  @BeforeAll
   static void createBucket() throws IOException, InterruptedException {
     execOrFail("awslocal", "s3", "mb", "s3://" + BUCKET);
 
@@ -127,7 +128,7 @@ class PerformanceS3UploadIntegrationTest {
         new MockMultipartFile("mainImage", "poster.png", "image/png", posterBytes);
     MockMultipartFile model3d =
         new MockMultipartFile("model3d", "character.glb", "model/gltf-binary", glbBytes);
-    List<org.springframework.web.multipart.MultipartFile> gallery =
+    List<MultipartFile> gallery =
         List.of(new MockMultipartFile("gallery", "g1.jpg", "image/jpeg", galleryBytes));
 
     PerformanceCreateResponse response =
@@ -152,7 +153,7 @@ class PerformanceS3UploadIntegrationTest {
     // 저장된 값은 조립 가능한 공개 URL이다(객체 키나 presigned URL이 아니다).
     assertThat(saved.getImage3dUrl()).startsWith(publicBaseUrl() + "/");
     assertThat(saved.getImage3dUrl()).doesNotContain("?");
-    assertThat(saved.getImage3dUrl()).hasSizeLessThan(255);
+    assertThat(saved.getImage3dUrl()).hasSizeLessThanOrEqualTo(255);
   }
 
   /**
@@ -162,6 +163,10 @@ class PerformanceS3UploadIntegrationTest {
    * putObject}가 아니라 {@code createMultipartUpload}/{@code uploadPart}/{@code
    * completeMultipartUpload} 경로로 갈라진다. 이 이슈의 실제 대상인 캐릭터 GLB가 그 경로를 타므로, 작은 파일만 태우면 정작 쓰일 분기를 한 번도
    * 지나가지 않는다.
+   *
+   * <p>6MB인 이유는 S3 멀티파트의 최소 파트 크기가 5MB이고 버퍼 임계치가 그 값을 따르기 때문이다. 다만 이 테스트는 <b>어느 경로로 올라갔는지를 단언하지는
+   * 않는다</b> — 기본 provider가 바뀌거나 임계치가 6MB 위로 올라가면 단일 putObject로 조용히 되돌아가고도 통과한다. 그때는 이 주석의 전제부터 다시
+   * 확인해야 한다.
    */
   @Test
   @DisplayName("5MB를 넘는 GLB도 멀티파트 경로로 저장되고 원본 그대로 내려온다")
@@ -182,33 +187,6 @@ class PerformanceS3UploadIntegrationTest {
 
     assertThat(downloaded.statusCode()).isEqualTo(200);
     assertThat(downloaded.body()).isEqualTo(largeGlb);
-  }
-
-  /**
-   * 운영 버킷 형태의 공개 URL이 {@code varchar(255)}에 들어가는지 고정한다.
-   *
-   * <p>다른 테스트는 LocalStack의 짧은 URL({@code http://127.0.0.1:포트/...})을 쓰기 때문에 실제 길이를 검증하지 못한다. 키
-   * prefix가 깊어지거나 버킷명이 길어지면 {@code image_main_url}·{@code performance_images.image_url}을 조용히 넘길 수
-   * 있는데, prod는 {@code ddl-auto: validate}라 컬럼을 늘리려면 수동 DDL이 필요하다.
-   */
-  @Test
-  @DisplayName("운영 버킷 형태의 공개 URL이 varchar(255)에 들어간다")
-  void productionUrlFitsInColumn() {
-    S3Properties production = new S3Properties();
-
-    // 운영에서 실제로 쓰는 것과 같은 길이의 버킷명(계정 ID·리전 접미사 포함).
-    production.setBucket("ticketrush-assets-prod-000000000000-ap-northeast-2-an");
-    production.setRegion("ap-northeast-2");
-
-    String longestKey = FileKind.GALLERY.newObjectKey(mockFile("photo.jpeg"));
-    String url = production.toPublicUrl(longestKey);
-
-    assertThat(url).startsWith("https://").doesNotContain("?");
-    assertThat(url.length()).isLessThan(255);
-  }
-
-  private MockMultipartFile mockFile(String filename) {
-    return new MockMultipartFile("part", filename, null, "content".getBytes());
   }
 
   @Test

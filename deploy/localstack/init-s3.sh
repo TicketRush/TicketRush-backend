@@ -8,7 +8,9 @@ set -e
 
 BUCKET=ticket-rush-local-bucket
 
-awslocal s3 mb "s3://${BUCKET}"
+# 이미 있으면 mb 가 실패한다. set -e 아래에서 그대로 두면 스크립트가 여기서 끝나 아래 정책이 적용되지 않는데,
+# 그 상태로도 head-bucket 헬스체크는 통과해 "업로드는 되는데 익명 GET 만 403" 을 초록불로 덮는다.
+awslocal s3 mb "s3://${BUCKET}" || true
 
 awslocal s3api put-bucket-policy --bucket "${BUCKET}" --policy "{
   \"Version\": \"2012-10-17\",

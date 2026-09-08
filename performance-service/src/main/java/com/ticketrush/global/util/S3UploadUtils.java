@@ -8,15 +8,14 @@ import io.awspring.cloud.s3.S3Operations;
 import io.awspring.cloud.s3.UploadFailedException;
 import java.io.IOException;
 import java.io.InputStream;
+import java.util.Set;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.support.TransactionSynchronization;
 import org.springframework.transaction.support.TransactionSynchronizationManager;
 import org.springframework.web.multipart.MultipartFile;
 import software.amazon.awssdk.core.exception.SdkException;
-import software.amazon.awssdk.services.s3.model.NoSuchBucketException;
 import software.amazon.awssdk.services.s3.model.S3Exception;
 
 /**
@@ -37,13 +36,29 @@ import software.amazon.awssdk.services.s3.model.S3Exception;
 @RequiredArgsConstructor
 public class S3UploadUtils {
 
+  /**
+   * 재시도로 회복되지 않는 S3 오류 코드.
+   *
+   * <p>{@code NoSuchBucket}은 버킷명 오타·미생성, {@code AccessDenied}·{@code AllAccessDisabled}는 권한, {@code
+   * InvalidAccessKeyId}·{@code SignatureDoesNotMatch}는 자격증명, {@code PermanentRedirect}는 버킷이 설정된 리전과
+   * 다른 곳에 있는 경우다. 전부 배포 설정을 고쳐야 풀린다.
+   */
+  private static final Set<String> PERMANENT_ERROR_CODES =
+      Set.of(
+          "NoSuchBucket",
+          "AccessDenied",
+          "AllAccessDisabled",
+          "InvalidAccessKeyId",
+          "SignatureDoesNotMatch",
+          "PermanentRedirect");
+
   private final S3Operations s3Operations;
   private final S3Properties s3Properties;
 
   /**
    * 파일을 S3에 올리고 인증 없이 GET 할 수 있는 공개 URL을 반환한다.
    *
-   * <p>업로드에 성공한 객체는 <b>트랜잭션이 커밋되지 않으면 자동으로 삭제</b>되도록 등록한다(아래 {@code registerCleanupOnFailure} 참고).
+   * <p>업로드에 성공한 객체는 <b>트랜잭션이 롤백되면 자동으로 삭제</b>되도록 등록한다(아래 {@code registerCleanupOnFailure} 참고).
    */
   public String uploadFile(MultipartFile file, FileKind kind) {
     kind.validate(file);
@@ -77,16 +92,20 @@ public class S3UploadUtils {
   }
 
   /**
-   * 트랜잭션이 커밋되지 않으면 이 객체를 지우도록 등록한다.
+   * 트랜잭션이 롤백되면 이 객체를 지우도록 등록한다.
    *
    * <p>호출부의 try-catch가 아니라 트랜잭션 동기화를 쓰는 이유: 업로드가 모두 성공한 뒤 <b>커밋 단계</b>에서 실패하는 경로가 있다. 커밋은 호출부 메서드가
    * 리턴한 다음에 일어나므로 메서드 안의 catch로는 잡히지 않고, 그 경우 DB row는 없는데 객체만 남는다.
    *
-   * <p><b>{@code STATUS_ROLLED_BACK}이 아니라 "커밋되지 않았을 때"로 판정하는 이유</b>: 그 커밋 단계 실패가 롤백으로 통지되지 않는다.
-   * {@code AbstractPlatformTransactionManager.processCommit}은 {@code doCommit()}이 던진 예외를 {@code
-   * rollbackOnCommitFailure}(기본 false)일 때 {@code STATUS_UNKNOWN}으로 통지한다. 예를 들어 flush-on-commit 단계의
-   * 제약 위반은 {@code TransactionSystemException}으로 올라와 이 경로를 탄다. 롤백만 보고 정리하면 정작 이 콜백을 만든 이유였던 경로에서 객체가
-   * 남는다.
+   * <p><b>{@code STATUS_UNKNOWN}은 삭제하지 않는다.</b> 커밋 단계 실패는 롤백으로 통지되지 않는다 — {@code
+   * AbstractPlatformTransactionManager.processCommit}은 {@code doCommit()}이 던진 예외를 {@code
+   * rollbackOnCommitFailure}(기본 false)일 때 {@code STATUS_UNKNOWN}으로 통지한다. 그런데 UNKNOWN은 "롤백됐다"가 아니라
+   * <b>"커밋인지 롤백인지 모른다"</b>이다. flush-on-commit 단계의 제약 위반처럼 실제로는 롤백된 경우도 있지만, DB에 COMMIT을 보낸 뒤 응답 수신
+   * 전에 커넥션이 끊긴 경우도 같은 값으로 온다.
+   *
+   * <p>구분이 불가능하므로 <b>사용자에게 보이지 않는 쪽으로 실패시킨다.</b> 여기서 지우면 커밋된 공연의 이미지 URL이 404를 가리켜 목록·상세에 깨진 이미지가
+   * 남고, 관리자는 등록 실패로 알고 재등록해 중복 공연까지 만든다. 지우지 않으면 고아 객체가 남을 뿐 사용자 영향이 없다. 대신 키를 경고로 남겨 운영자가 판단할 수 있게
+   * 한다.
    *
    * <p>정리 실패는 삼키고 로그만 남긴다. 여기서 예외를 올리면 원래의 실패 원인을 가려버린다 — 팀은 #333에서 같은 종류의 예외 마스킹으로 한 번 데었다.
    *
@@ -104,8 +123,17 @@ public class S3UploadUtils {
         new TransactionSynchronization() {
           @Override
           public void afterCompletion(int status) {
-            if (status != STATUS_COMMITTED) {
+            if (status == STATUS_ROLLED_BACK) {
               deleteQuietly(objectKey);
+
+              return;
+            }
+
+            if (status == STATUS_UNKNOWN) {
+              log.warn(
+                  "트랜잭션 결과를 알 수 없어 업로드 객체를 남겨 둡니다. 커밋되지 않았다면 고아 객체입니다. bucket={}, key={}",
+                  s3Properties.getBucket(),
+                  objectKey);
             }
           }
         });
@@ -115,19 +143,21 @@ public class S3UploadUtils {
    * 재시도해도 낫지 않는 설정 오류인지 판정한다.
    *
    * <p>버킷이 없거나(오타·미생성) IAM에 {@code s3:PutObject}가 없으면 몇 번을 다시 눌러도 같은 실패가 난다. 이걸 일시 장애와 같이 503으로 뭉개면
-   * "잠시 후 다시 시도해 주세요"만 무한히 나가고, 설정이 틀렸다는 사실이 드러나지 않는다. 팀은 #573에서 PG 4xx를 원본 code로 재분류해 같은 문제를 풀었다.
+   * "잠시 후 다시 시도해 주세요"만 무한히 나가고, 설정이 틀렸다는 사실이 드러나지 않는다. 팀은 #573에서 PG 거절을 HTTP 상태가 아니라 원본 code로 재분류해
+   * 같은 문제를 풀었다 — 여기서도 같은 이유로 {@code statusCode()}가 아니라 {@code errorCode()}로 판정한다.
+   *
+   * <p>403을 통째로 영구 오류로 접으면 안 된다. 인스턴스 롤의 임시 자격증명 갱신 창에 걸린 {@code ExpiredToken}이나 EC2 시계 오차로 인한
+   * {@code RequestTimeTooSkewed}도 403인데 둘 다 재시도로 회복된다. 반대로 버킷이 다른 리전에 있는 경우({@code
+   * PermanentRedirect})는 403도 404도 아니지만 명백한 설정 오류다.
    *
    * <p>원인을 거슬러 올라가며 보는 이유: awspring은 업로드 실패를 {@code UploadFailedException}으로 감싸 던지므로, 최상위 예외 타입만
    * 봐서는 SDK 예외를 놓친다.
    */
   private boolean isMisconfiguration(Throwable e) {
     for (Throwable cause = e; cause != null; cause = cause.getCause()) {
-      if (cause instanceof NoSuchBucketException) {
-        return true;
-      }
-
       if (cause instanceof S3Exception s3Exception
-          && s3Exception.statusCode() == HttpStatus.FORBIDDEN.value()) {
+          && s3Exception.awsErrorDetails() != null
+          && PERMANENT_ERROR_CODES.contains(s3Exception.awsErrorDetails().errorCode())) {
         return true;
       }
     }
@@ -139,7 +169,7 @@ public class S3UploadUtils {
     try {
       s3Operations.deleteObject(s3Properties.getBucket(), objectKey);
 
-      log.info("커밋되지 않아 업로드 객체를 삭제했습니다. key={}", objectKey);
+      log.info("트랜잭션이 롤백되어 업로드 객체를 삭제했습니다. key={}", objectKey);
     } catch (RuntimeException e) {
       log.error("업로드 객체 삭제에 실패했습니다. 고아 객체가 남습니다. key={}", objectKey, e);
     }

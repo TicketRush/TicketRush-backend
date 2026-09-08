@@ -156,9 +156,9 @@ public enum ErrorStatus {
   // File 400
   FILE_EMPTY(HttpStatus.BAD_REQUEST, "FILE_400_001", "업로드할 파일이 비어있습니다."),
   FILE_INVALID_EXTENSION(HttpStatus.BAD_REQUEST, "FILE_400_002", "파일 확장자가 올바르지 않습니다."),
-  FILE_EXTENSION_NOT_ALLOWED(HttpStatus.BAD_REQUEST, "FILE_400_003", "허용되지 않은 파일 형식입니다."),
   // FILE_400_003은 #636에서 파트별 코드(004·005)로 세분화되어 현재 참조가 없다. 클라이언트가 이미 아는 코드라
   // 상수는 남기되, 새 검증에는 쓰지 않는다(PERFORMANCE_400_006 결번 처리와 같은 취급).
+  FILE_EXTENSION_NOT_ALLOWED(HttpStatus.BAD_REQUEST, "FILE_400_003", "허용되지 않은 파일 형식입니다."),
   FILE_IMAGE_EXTENSION_NOT_ALLOWED(
       HttpStatus.BAD_REQUEST, "FILE_400_004", "이미지는 jpg, jpeg, png 파일만 업로드할 수 있습니다."),
   FILE_MODEL_3D_EXTENSION_NOT_ALLOWED(
@@ -173,15 +173,6 @@ public enum ErrorStatus {
   FILE_SIZE_EXCEEDED(HttpStatus.CONTENT_TOO_LARGE, "FILE_413_001", "업로드 가능한 파일 크기를 초과했습니다."),
 
   /*
-   * File 503
-   *
-   * S3 장애는 재시도하면 되는 일시 장애이므로 500("관리자에게 문의")이 아니라 503 + 재시도 안내로 내보낸다(ADR 0008과 같은 결).
-   * 내부 구현어(S3)는 노출하지 않는다.
-   */
-  FILE_STORAGE_UNAVAILABLE(
-      HttpStatus.SERVICE_UNAVAILABLE, "FILE_503_001", "파일 저장소를 일시적으로 사용할 수 없습니다. 잠시 후 다시 시도해 주세요."),
-
-  /*
    * File 500
    *
    * 버킷이 없거나 권한이 없는 경우다. 재시도로는 낫지 않으므로 503("잠시 후 다시 시도해 주세요")으로 안내하면 안 된다 —
@@ -189,6 +180,15 @@ public enum ErrorStatus {
    */
   FILE_STORAGE_MISCONFIGURED(
       HttpStatus.INTERNAL_SERVER_ERROR, "FILE_500_001", "파일 저장소 설정에 문제가 있습니다. 관리자에게 문의 바랍니다."),
+
+  /*
+   * File 503
+   *
+   * S3 장애는 재시도하면 되는 일시 장애이므로 500("관리자에게 문의")이 아니라 503 + 재시도 안내로 내보낸다(ADR 0008과 같은 결).
+   * 내부 구현어(S3)는 노출하지 않는다.
+   */
+  FILE_STORAGE_UNAVAILABLE(
+      HttpStatus.SERVICE_UNAVAILABLE, "FILE_503_001", "파일 저장소를 일시적으로 사용할 수 없습니다. 잠시 후 다시 시도해 주세요."),
 
   // User 400
   USER_SOCIAL_PROVIDER_REQUIRED(HttpStatus.BAD_REQUEST, "USER_400_001", "socialProvider는 필수입니다."),

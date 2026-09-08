@@ -1,8 +1,10 @@
 package com.ticketrush.global.config;
 
+import jakarta.annotation.PostConstruct;
 import jakarta.validation.constraints.NotBlank;
 import lombok.Getter;
 import lombok.Setter;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.boot.context.properties.ConfigurationProperties;
 import org.springframework.stereotype.Component;
 import org.springframework.validation.annotation.Validated;
@@ -28,6 +30,7 @@ import org.springframework.validation.annotation.Validated;
  * 걸면 "선택 항목이라 비워 뒀을 뿐"인 운영자에게 <b>기동 실패</b>가 돌아간다. 팀은 #490에서 같은 계열의 함정(prod 환경변수 미정의를 못 잡아 전건 503)을
  * 겪었다.
  */
+@Slf4j
 @Getter
 @Setter
 @Component
@@ -49,6 +52,15 @@ public class S3Properties {
    */
   private String publicBaseUrl;
 
+  /**
+   * {@code spring.cloud.aws.s3.endpoint}를 그대로 받은 값. 경고 판정에만 쓴다.
+   *
+   * <p>LocalStack이나 MinIO처럼 endpoint를 AWS가 아닌 곳으로 덮은 상태에서 {@link #publicBaseUrl}을 빠뜨리면, 조립 결과가 실제
+   * 저장 위치와 무관한 AWS 주소가 된다. 업로드 자체는 성공해 등록 API가 201을 반환하므로, URL이 존재하지 않는 호스트를 가리킨다는 사실이 프론트에서 이미지가 안
+   * 뜰 때까지 드러나지 않는다 — #636이 고치려던 증상과 같은 모양이다.
+   */
+  private String endpointOverride;
+
   /** base URL과 객체 키를 이어 붙여 외부 공개 URL을 만든다. */
   public String toPublicUrl(String objectKey) {
     String base = resolveBaseUrl();
@@ -56,8 +68,23 @@ public class S3Properties {
     return (base.endsWith("/") ? base : base + "/") + objectKey;
   }
 
+  @PostConstruct
+  void warnIfBaseUrlLooksWrong() {
+    if (endpointOverride != null && !endpointOverride.isBlank() && isPublicBaseUrlBlank()) {
+      log.warn(
+          "S3 endpoint 를 {} 로 덮었는데 app.s3.public-base-url 이 비어 있습니다. "
+              + "저장되는 URL 은 {} 형태가 되어 실제 저장 위치를 가리키지 않습니다.",
+          endpointOverride,
+          resolveBaseUrl());
+    }
+  }
+
+  private boolean isPublicBaseUrlBlank() {
+    return publicBaseUrl == null || publicBaseUrl.isBlank();
+  }
+
   private String resolveBaseUrl() {
-    if (publicBaseUrl == null || publicBaseUrl.isBlank()) {
+    if (isPublicBaseUrlBlank()) {
       return "https://" + bucket + ".s3." + region + ".amazonaws.com";
     }
 
