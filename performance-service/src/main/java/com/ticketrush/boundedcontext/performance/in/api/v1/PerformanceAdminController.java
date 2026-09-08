@@ -81,9 +81,16 @@ public class PerformanceAdminController {
 
           **요청 형식:** `multipart/form-data`
           - `request` 파트: 공연 정보 JSON (Content-Type: application/json)
-          - `mainImage` 파트: 메인 이미지 파일
-          - `model3d` 파트: 3D 모델 파일
-          - `gallery` 파트: 갤러리 이미지 파일 (선택, 최대 3개)
+          - `mainImage` 파트: 메인 이미지 파일 — `jpg`, `jpeg`, `png` / 최대 5MB
+          - `model3d` 파트: 3D 모델 파일 — `glb`, `obj` / 최대 10MB
+          - `gallery` 파트: 갤러리 이미지 파일 (선택, 최대 3개) — `jpg`, `jpeg`, `png` / 각 최대 5MB
+
+          업로드한 파일은 S3에 저장되며, 응답의 `imageMainUrl`·`image3dUrl`·`imageGalleryUrls`는
+          인증 없이 바로 GET 할 수 있는 공개 URL입니다.
+
+          **형식 판정은 파일명 확장자로만 합니다.** 브라우저가 보내는 `Content-Type`은 검증하지 않습니다
+          (클라이언트가 임의로 지정할 수 있어 신뢰할 수 없습니다). 확장자가 파트와 맞지 않으면 400,
+          크기 상한을 넘으면 413으로 거절합니다.
 
           **장르 코드:**
           | 코드 | 설명 |

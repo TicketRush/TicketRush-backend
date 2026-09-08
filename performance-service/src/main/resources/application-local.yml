@@ -26,4 +26,12 @@ spring:
         access-key: local-dummy-key
         secret-key: local-dummy-secret
       s3:
-        bucket: ticket-rush-local-bucket
+        # 로컬은 docker-compose의 LocalStack에 붙는다. 가상 호스트 방식(bucket.s3.amazonaws.com)은
+        # 로컬 DNS로 풀리지 않으므로 path-style을 켠다.
+        endpoint: http://localhost:4566
+        path-style-access-enabled: true
+
+app:
+  s3:
+    bucket: ticket-rush-local-bucket
+    public-base-url: http://localhost:4566/ticket-rush-local-bucket
