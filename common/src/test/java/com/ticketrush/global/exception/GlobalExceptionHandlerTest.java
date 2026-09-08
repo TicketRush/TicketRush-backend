@@ -13,6 +13,7 @@ import org.springframework.data.redis.RedisConnectionFailureException;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.ExceptionHandler;
+import org.springframework.web.multipart.MaxUploadSizeExceededException;
 
 /**
  * Redis 장애가 500 "관리자에게 문의"로 뭉개지지 않고 503 + 재시도 안내로 나가는지 검증한다(ADR 0008).
@@ -68,5 +69,33 @@ class GlobalExceptionHandlerTest {
 
     assertThat(response.getStatusCode()).isEqualTo(HttpStatus.INTERNAL_SERVER_ERROR);
     assertThat(response.getBody().getCode()).isEqualTo(ErrorStatus.INTERNAL_SERVER_ERROR.getCode());
+  }
+
+  /*
+   * #636 — 업로드 크기 초과가 500으로 나가던 것을 413으로 바로잡는다.
+   *
+   * 핸들러가 없으면 catch-all(Exception)로 떨어져 INTERNAL_SERVER_ERROR가 나갔다. 클라이언트 입장에서는
+   * 자기가 고칠 수 있는 실수인데 서버 장애로 보이고, 용량 문제라는 것을 코드로 구분할 수 없었다.
+   */
+  @Test
+  @DisplayName("업로드 크기 초과는 413 FILE_413_001로 나간다")
+  void maxUploadSizeExceededReturns413() {
+    ResponseEntity<ApiResponse<?>> response =
+        handler.handleMaxUploadSizeExceededException(new MaxUploadSizeExceededException(10485760L));
+
+    assertThat(response.getStatusCode()).isEqualTo(HttpStatus.CONTENT_TOO_LARGE);
+    assertThat(response.getBody().getCode()).isEqualTo(ErrorStatus.FILE_SIZE_EXCEEDED.getCode());
+  }
+
+  @Test
+  @DisplayName("크기 초과 예외가 전용 핸들러로 라우팅된다 — catch-all의 500으로 새지 않는다")
+  void maxUploadSizeExceededIsRoutedToDedicatedHandler() throws NoSuchMethodException {
+    ExceptionHandler annotation =
+        GlobalExceptionHandler.class
+            .getMethod("handleMaxUploadSizeExceededException", MaxUploadSizeExceededException.class)
+            .getAnnotation(ExceptionHandler.class);
+
+    assertThat(Arrays.asList(annotation.value()))
+        .containsExactly(MaxUploadSizeExceededException.class);
   }
 }

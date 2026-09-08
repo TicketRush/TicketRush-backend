@@ -19,6 +19,7 @@ import org.springframework.web.bind.annotation.RestControllerAdvice;
 import org.springframework.web.context.request.RequestContextHolder;
 import org.springframework.web.context.request.ServletRequestAttributes;
 import org.springframework.web.method.annotation.MethodArgumentTypeMismatchException;
+import org.springframework.web.multipart.MaxUploadSizeExceededException;
 import org.springframework.web.servlet.resource.NoResourceFoundException;
 
 @Slf4j
@@ -103,6 +104,25 @@ public class GlobalExceptionHandler {
     log.error("인프라 일시 장애로 요청을 거절했습니다.", e);
 
     return ApiResponse.onFailure(ErrorStatus.INFRA_TRANSIENT_UNAVAILABLE);
+  }
+
+  /*
+   * 업로드 파일이 spring.servlet.multipart 상한을 넘은 경우다.
+   *
+   * 이 핸들러가 없으면 catch-all(Exception)로 떨어져 500 "관리자에게 문의"가 나간다 — 클라이언트가 고칠 수 있는
+   * 실수인데 서버 장애로 보이고, 용량 문제라는 것을 코드로 구분할 수 없다(#636).
+   *
+   * 예외는 컨트롤러 진입 전 DispatcherServlet의 multipart 파싱 단계에서 던져지지만,
+   * HandlerExceptionResolver를 거치므로 이 어드바이스가 잡는다. resolve-lazily를 켜면 파싱 시점이
+   * 파라미터 바인딩으로 밀려 도달 경로가 달라지므로, 그 설정을 켤 때 이 핸들러의 동작을 다시 확인해야 한다.
+   */
+  @ExceptionHandler(MaxUploadSizeExceededException.class)
+  public ResponseEntity<ApiResponse<?>> handleMaxUploadSizeExceededException(
+      MaxUploadSizeExceededException e) {
+    storeException(e);
+    log.warn("업로드 파일이 허용 크기를 초과했습니다: {}", e.getMessage());
+
+    return ApiResponse.onFailure(ErrorStatus.FILE_SIZE_EXCEEDED);
   }
 
   @ExceptionHandler(Exception.class)
