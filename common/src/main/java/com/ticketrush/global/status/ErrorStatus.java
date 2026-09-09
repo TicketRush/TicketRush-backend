@@ -145,6 +145,9 @@ public enum ErrorStatus {
       HttpStatus.BAD_REQUEST, "PERFORMANCE_400_008", "조회 시작일은 종료일보다 늦을 수 없습니다."),
   PERFORMANCE_DASHBOARD_PERIOD_TOO_LONG(
       HttpStatus.BAD_REQUEST, "PERFORMANCE_400_009", "조회 기간은 최대 92일까지 지정할 수 있습니다."),
+  // 파일 교체 요청에 파트가 하나도 없는 경우다(#637). 거절 근거는 PerformanceReplaceFilesUseCase.validateFiles 참고
+  PERFORMANCE_NO_FILE_TO_REPLACE(
+      HttpStatus.BAD_REQUEST, "PERFORMANCE_400_010", "교체할 파일을 하나 이상 보내야 합니다."),
 
   // Performance 409
   PERFORMANCE_HAS_SOLD_SEATS(

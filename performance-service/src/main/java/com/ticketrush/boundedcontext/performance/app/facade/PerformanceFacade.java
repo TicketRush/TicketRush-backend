@@ -7,6 +7,7 @@ import com.ticketrush.boundedcontext.performance.app.dto.response.PerformanceAdm
 import com.ticketrush.boundedcontext.performance.app.dto.response.PerformanceAdminSummaryResponse;
 import com.ticketrush.boundedcontext.performance.app.dto.response.PerformanceCreateResponse;
 import com.ticketrush.boundedcontext.performance.app.dto.response.PerformanceDetailResponse;
+import com.ticketrush.boundedcontext.performance.app.dto.response.PerformanceFileReplaceResponse;
 import com.ticketrush.boundedcontext.performance.app.dto.response.PerformanceListResponse;
 import com.ticketrush.boundedcontext.performance.app.usecase.PerformanceChangeStatusUseCase;
 import com.ticketrush.boundedcontext.performance.app.usecase.PerformanceClearBookingOpenAtUseCase;
@@ -17,6 +18,7 @@ import com.ticketrush.boundedcontext.performance.app.usecase.PerformanceGetAdmin
 import com.ticketrush.boundedcontext.performance.app.usecase.PerformanceGetDetailUseCase;
 import com.ticketrush.boundedcontext.performance.app.usecase.PerformanceGetListUseCase;
 import com.ticketrush.boundedcontext.performance.app.usecase.PerformancePatchUseCase;
+import com.ticketrush.boundedcontext.performance.app.usecase.PerformanceReplaceFilesUseCase;
 import com.ticketrush.boundedcontext.performance.app.usecase.PerformanceValidateUseCase;
 import com.ticketrush.boundedcontext.performance.domain.types.Genre;
 import com.ticketrush.boundedcontext.performance.domain.types.PerformanceStatus;
@@ -40,6 +42,7 @@ public class PerformanceFacade {
   private final PerformanceChangeStatusUseCase performanceChangeStatusUseCase;
   private final PerformancePatchUseCase performancePatchUseCase;
   private final PerformanceDeleteUseCase performanceDeleteUseCase;
+  private final PerformanceReplaceFilesUseCase performanceReplaceFilesUseCase;
   private final PerformanceValidateUseCase performanceValidateUseCase;
   private final PerformanceClearBookingOpenAtUseCase performanceClearBookingOpenAtUseCase;
   private final PerformanceGetAdminDashboardUseCase performanceGetAdminDashboardUseCase;
@@ -52,6 +55,16 @@ public class PerformanceFacade {
       List<MultipartFile> gallery) {
 
     return performanceCreateUseCase.execute(request, mainImage, model3d, gallery);
+  }
+
+  /** 등록된 공연의 파일을 교체한다 (#637). 전달된 파트만 바뀌고 나머지는 유지된다. */
+  public PerformanceFileReplaceResponse replacePerformanceFiles(
+      Long performanceId,
+      MultipartFile mainImage,
+      MultipartFile model3d,
+      List<MultipartFile> gallery) {
+
+    return performanceReplaceFilesUseCase.execute(performanceId, mainImage, model3d, gallery);
   }
 
   public Slice<PerformanceListResponse> getPerformances(
