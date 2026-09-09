@@ -77,7 +77,7 @@ public class PerformanceCreateUseCase {
       throw new BusinessException(ErrorStatus.PERFORMANCE_MODEL_3D_MISSING);
     }
 
-    if (gallery != null && gallery.size() > 3) {
+    if (gallery != null && gallery.size() > FileKind.GALLERY_MAX_COUNT) {
       throw new BusinessException(ErrorStatus.PERFORMANCE_GALLERY_LIMIT_EXCEEDED);
     }
 
