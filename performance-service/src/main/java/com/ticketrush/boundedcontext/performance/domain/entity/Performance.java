@@ -53,14 +53,23 @@ import org.hibernate.annotations.SQLRestriction;
  *   <li>두 경로가 같은 컬럼을 다투게 되는 경우.
  *   <li>stale read에 의존하는 가드나 계산이 추가되는 경우. 변경 컬럼만 써도 lost update가 난다.
  *   <li>{@code @ElementCollection}(imageGalleryUrls·facilities)을 <b>로드된</b> 엔티티에서 바꾸는 경우.
- *       updateUrls()가 컬렉션 인스턴스를 통째로 교체하므로 Hibernate는 컬렉션 테이블을 전량 DELETE 후 재INSERT하는데, 동적 UPDATE는
- *       basic 컬럼의 SET 절만 좁힐 뿐 컬렉션 DML에는 관여하지 않는다. 지금은 생성 직후에만 호출돼 문제가 없지만 이미지 수정 기능이 붙으면 달라진다.
+ *       Hibernate는 컬렉션 테이블을 전량 DELETE 후 재INSERT하는데, 동적 UPDATE는 basic 컬럼의 SET 절만 좁힐 뿐 컬렉션 DML에는 관여하지
+ *       않는다. <b>파일 교체(#637)의 replaceFiles()가 그 경로다</b> — 로드된 엔티티에서 갤러리를 치환한다. 등록 경로의 updateUrls()는
+ *       여전히 생성 직후 전용이라 이 문제와 무관하다.
  * </ol>
  *
  * <p><b>(1)에 해당하는 경로는 이미 있다.</b> 어드민 둘이 같은 필드를 PATCH하거나 동시에 상태를 바꾸면 같은 컬럼을 다투므로 동적 UPDATE로 갈리지 않고
  * 나중 커밋이 이긴다. 그중 changeStatus()는 canTransitionTo()가 로드된(=stale일 수 있는) 상태를 읽어 전이를 검증하는 (2) 유형이기도 해서,
  * 어드민 둘이 각각 CANCELED와 CLOSED를 커밋하면 종단 상태가 덮인다. 소프트 삭제와 겹칠 때도 PATCH 내용이 이미 보이지 않는 행에 적용되고 사라진다. 이런
  * 경합을 조용히 넘기지 않고 사용자에게 드러내야 한다면, 그때 낙관적 락({@code @Version} + 벌크의 {@code UPDATE VERSIONED})을 검토한다.
+ *
+ * <p><b>갤러리 교체(#637)는 (3)이면서 (1)이지만 수용한다.</b> 갤러리는 전체 치환이 계약이므로 어드민 둘이 동시에 교체하면 나중 커밋의 목록이 통째로 이긴다.
+ * 이건 서로 무관한 수정이 조용히 덮이는 것이 아니라 같은 대상을 의도적으로 다투는 쓰기라, 아래 bookingOpenAt 명시 PATCH를 last-write-wins로
+ * 수용한 것과 같은 판단이다. 파일 URL 두 컬럼(image_main_url·image3d_url)은 어느 경로와도 겹치지 않아 동적 UPDATE로 그대로 갈린다.
+ *
+ * <p>다만 갤러리를 <b>부분 교체</b>(개별 인덱스 교체·삭제)로 바꾸는 순간 이 수용 논리가 깨진다. {@code @OrderColumn} 기반 전량 재작성이라 어드민
+ * 둘이 "각자 다른 한 장씩" 교체하면 서로의 변경을 지운다. 그때는 낙관적 락({@code @Version} + 벌크의 {@code UPDATE VERSIONED})이나
+ * 컬렉션 전용 잠금을 검토해야 한다.
  *
  * <p>남는 한계로, PATCH가 bookingOpenAt을 명시로 실어 보내면 해제와 같은 컬럼을 다투므로 커밋 순서대로 last-write-wins다. 이건 어드민의 의도적
  * 쓰기라 stale 부활과 구분되며 이번 범위에서 제외했다.
@@ -178,6 +187,33 @@ public class Performance extends AutoIdBaseEntity {
     this.imageMainUrl = mainImageUrl;
     this.image3dUrl = model3dUrl;
     this.imageGalleryUrls = galleryUrls != null ? galleryUrls : new ArrayList<>();
+  }
+
+  /**
+   * 전달된 파일 URL만 갈아끼운다. null인 파트는 기존 값을 그대로 둔다(#637).
+   *
+   * <p>{@link #updateUrls}와 갈라 둔 이유는 계약이 반대이기 때문이다 — 등록은 세 값을 전부 세팅하는 것이 계약이고, 교체는 보내지 않은 파트를 건드리지
+   * 않는 것이 계약이다. 한 메서드로 합치면 등록 경로가 null을 조용히 허용하게 된다.
+   *
+   * <p><b>갤러리는 컬렉션 인스턴스를 갈아끼우지 않고 clear() + addAll()로 채운다.</b> 이 메서드는 {@code updateUrls()}와 달리 이미
+   * 영속 상태인 엔티티에서 호출되므로, 새 List로 필드를 덮으면 Hibernate가 관리하던 {@code PersistentCollection} 래퍼가 떨어져 나간다.
+   * 결과 행은 같아 보여도 더티 체킹이 컬렉션 변경을 추적하지 못한다.
+   *
+   * <p><b>빈 목록은 무시한다.</b> 갤러리를 비우는 것은 이 API의 계약이 아니므로(보내면 전체 치환, 안 보내면 유지) 빈 목록이 여기까지 오면 호출부의 실수다.
+   * null만 걸러내면 빈 스트림이 만든 빈 List가 "치환하라"로 읽혀 갤러리가 통째로 지워진다 — 호출부 조건 한 줄에 데이터 삭제가 걸리지 않도록 도메인에서도 막는다.
+   * 비우기를 지원하게 되면 이 가드를 명시적으로 걷어내야 한다.
+   */
+  public void replaceFiles(String mainImageUrl, String model3dUrl, List<String> galleryUrls) {
+    if (mainImageUrl != null) {
+      this.imageMainUrl = mainImageUrl;
+    }
+    if (model3dUrl != null) {
+      this.image3dUrl = model3dUrl;
+    }
+    if (galleryUrls != null && !galleryUrls.isEmpty()) {
+      this.imageGalleryUrls.clear();
+      this.imageGalleryUrls.addAll(galleryUrls);
+    }
   }
 
   /**

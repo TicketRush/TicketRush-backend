@@ -5,6 +5,7 @@ import com.ticketrush.boundedcontext.performance.app.dto.request.PerformanceCrea
 import com.ticketrush.boundedcontext.performance.app.dto.request.PerformancePatchRequest;
 import com.ticketrush.boundedcontext.performance.app.dto.response.PerformanceAdminSummaryResponse;
 import com.ticketrush.boundedcontext.performance.app.dto.response.PerformanceCreateResponse;
+import com.ticketrush.boundedcontext.performance.app.dto.response.PerformanceFileReplaceResponse;
 import com.ticketrush.boundedcontext.performance.app.facade.PerformanceFacade;
 import com.ticketrush.global.dto.request.OffsetPageRequest;
 import com.ticketrush.global.dto.response.ApiResponse;
@@ -144,6 +145,52 @@ public class PerformanceAdminController {
     performanceFacade.patchPerformance(id, request);
 
     return ApiResponse.onSuccess(SuccessStatus.OK);
+  }
+
+  @Operation(
+      summary = "공연 파일 교체",
+      description =
+          """
+          등록된 공연의 파일을 교체합니다. **보낸 파트만 교체되고 보내지 않은 파트는 기존 파일이 그대로 유지됩니다.**
+
+          **요청 형식:** `multipart/form-data` — 세 파트 모두 선택이지만 **실제 파일이 하나 이상 있어야 합니다.**
+          - `mainImage` 파트: 새 메인 이미지 파일 — `jpg`, `jpeg`, `png` / 최대 5MB
+          - `model3d` 파트: 새 3D 모델 파일 — `glb`, `obj` / 최대 10MB
+          - `gallery` 파트: 새 갤러리 이미지 파일 (최대 3개) — `jpg`, `jpeg`, `png` / 각 최대 5MB
+
+          **비어 있는 파트는 보내지 않은 것으로 처리합니다.** 파일을 고르지 않은 `<input type="file">`도
+          0바이트 파트로 전송되기 때문에, 이를 거절하면 "입력 여러 개 중 하나만 골랐다"는 흔한 폼이 전부 실패합니다.
+          그래서 0바이트 파트는 조용히 무시되며, 그 파트의 기존 파일은 유지됩니다.
+          내용이 빈 파일을 실수로 올리면 오류 없이 200이 오고 해당 URL이 그대로이므로,
+          **응답의 URL로 실제 교체 여부를 확인하세요.** 세 파트가 모두 비어 있으면 400으로 거절합니다.
+
+          **갤러리는 전체 치환입니다.** `gallery`를 보내면 기존 갤러리 전체가 보낸 목록으로 대체됩니다.
+          일부만 바꾸거나 개별 삭제하는 방법은 없으며, 갤러리를 비우는 것도 지원하지 않습니다.
+
+          응답은 교체 후의 현재 URL 세 종입니다. 저장 키에 UUID를 쓰므로 교체하면 URL이 반드시 바뀌며,
+          이 응답의 URL을 그대로 쓰면 상세를 다시 조회할 필요가 없습니다.
+
+          교체 전 파일은 스토리지에 그대로 남습니다 — 이전 URL을 캐싱하고 있던 클라이언트가 즉시 깨지지 않도록 한 선택입니다.
+
+          **형식 판정은 파일명 확장자로만 합니다.** 확장자가 파트와 맞지 않으면 400, 크기 상한을 넘으면 413으로 거절하며,
+          이 경우 어떤 파일도 교체되지 않고 기존 URL이 그대로 남습니다.
+          """)
+  @RequestBody(
+      content =
+          @Content(
+              mediaType = MediaType.MULTIPART_FORM_DATA_VALUE,
+              schema = @Schema(implementation = PerformanceFileReplaceSwaggerBody.class)))
+  @PatchMapping(value = "/{id}/files", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
+  public ResponseEntity<ApiResponse<PerformanceFileReplaceResponse>> replacePerformanceFiles(
+      @Parameter(description = "공연 ID") @Positive @PathVariable Long id,
+      @RequestPart(value = "mainImage", required = false) MultipartFile mainImage,
+      @RequestPart(value = "model3d", required = false) MultipartFile model3d,
+      @RequestPart(value = "gallery", required = false) List<MultipartFile> gallery) {
+
+    PerformanceFileReplaceResponse response =
+        performanceFacade.replacePerformanceFiles(id, mainImage, model3d, gallery);
+
+    return ApiResponse.onSuccess(SuccessStatus.OK, response);
   }
 
   @Operation(
