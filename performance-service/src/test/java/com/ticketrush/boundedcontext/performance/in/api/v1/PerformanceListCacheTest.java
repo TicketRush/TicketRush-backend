@@ -27,6 +27,7 @@ import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.LocalTime;
 import java.util.Map;
+import java.util.concurrent.atomic.AtomicBoolean;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
@@ -43,6 +44,7 @@ import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.context.DynamicPropertyRegistry;
 import org.springframework.test.context.DynamicPropertySource;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
+import org.springframework.transaction.support.TransactionSynchronizationManager;
 import org.testcontainers.containers.GenericContainer;
 import org.testcontainers.junit.jupiter.Container;
 import org.testcontainers.junit.jupiter.Testcontainers;
@@ -200,6 +202,49 @@ class PerformanceListCacheTest {
 
     assertThat(redisTemplate.hasKey(FIRST_PAGE_KEY)).isFalse();
     assertThat(getUnfilteredFirstPage().getContent()).isEmpty();
+  }
+
+  @Test
+  @DisplayName("메인 이미지를 교체하면 캐시가 무효화되어 목록 응답에 새 URL이 즉시 반영된다")
+  void replaceFiles_evictsCache() {
+    Performance saved = savePerformance(Genre.CONCERT, null);
+    warmCache();
+
+    String newMainUrl = "https://example.com/replaced-main.png";
+    given(s3UploadUtils.uploadFile(any(), any())).willReturn(newMainUrl);
+
+    performanceFacade.replacePerformanceFiles(saved.getId(), mockFile("mainImage"), null, null);
+
+    assertThat(redisTemplate.hasKey(FIRST_PAGE_KEY)).isFalse();
+    assertThat(getUnfilteredFirstPage().getContent().getFirst().imageMainUrl())
+        .isEqualTo(newMainUrl);
+  }
+
+  /**
+   * 파일 교체가 트랜잭션 안에서 업로드함을 고정한다.
+   *
+   * <p>{@code S3UploadUtils}는 업로드 객체를 트랜잭션 동기화에 걸어 롤백 시 지우는데, 트랜잭션 밖 호출에 대해서는 예외가 아니라 {@code
+   * log.warn}만 남기고 통과한다. 즉 유스케이스에서 {@code @Transactional}이 사라져도 어떤 테스트도 실패하지 않고 실패한 요청마다 S3에 고아 객체가
+   * 쌓인다. 이 클래스는 {@code @Transactional}이 아니라 테스트 트랜잭션이 그 부재를 가려주지 않으므로, 여기서만 관찰할 수 있다.
+   */
+  @Test
+  @DisplayName("파일 교체는 트랜잭션 안에서 업로드한다")
+  void replaceFiles_uploadsInsideTransaction() {
+    Performance saved = savePerformance(Genre.CONCERT, null);
+    AtomicBoolean uploadedInsideTransaction = new AtomicBoolean(false);
+
+    given(s3UploadUtils.uploadFile(any(), any()))
+        .willAnswer(
+            invocation -> {
+              uploadedInsideTransaction.set(
+                  TransactionSynchronizationManager.isSynchronizationActive());
+
+              return "https://example.com/replaced-main.png";
+            });
+
+    performanceFacade.replacePerformanceFiles(saved.getId(), mockFile("mainImage"), null, null);
+
+    assertThat(uploadedInsideTransaction).as("트랜잭션 밖에서 업로드하면 롤백돼도 S3 객체가 정리되지 않는다").isTrue();
   }
 
   @Test
