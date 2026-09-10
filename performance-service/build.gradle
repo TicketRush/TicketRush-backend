@@ -74,6 +74,8 @@ dependencies {
     testImplementation 'com.h2database:h2'
     // Testcontainers — 공연 목록 캐싱 실 Redis 검증 (#177). 버전은 Boot BOM(testcontainers-bom 2.x) 관리 (payment #422 선례)
     testImplementation 'org.testcontainers:testcontainers-junit-jupiter'
+    // LocalStack — 공연 파일 업로드 실 S3 왕복 검증 (#636). 레포 최초 도입.
+    testImplementation 'org.testcontainers:testcontainers-localstack'
     testImplementation 'org.springframework.boot:spring-boot-starter-actuator-test'
     testImplementation 'org.springframework.boot:spring-boot-starter-data-jpa-test'
     testImplementation 'org.springframework.boot:spring-boot-starter-security-test'

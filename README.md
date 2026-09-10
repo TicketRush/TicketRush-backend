@@ -423,8 +423,8 @@ cp .env.example .env.local
 ### 4️⃣ 인프라 기동
 
 ```bash
-# 최소 구성 (Redis + Kafka)
-docker compose up -d redis kafka
+# 최소 구성 (Redis + Kafka + LocalStack)
+docker compose up -d redis kafka localstack
 
 # 관측 스택까지 포함 (Prometheus + Grafana)
 docker compose up -d
@@ -434,8 +434,12 @@ docker compose up -d
 |--------|-----|-----|
 | Redis | `127.0.0.1:6379` | 좌석 선점 락 · 대기열. keyspace 만료 이벤트(`Ex`) 활성화 |
 | Kafka | `127.0.0.1:29092` | KRaft 모드. 기본 파티션 3 |
+| LocalStack | `127.0.0.1:4566` | 공연 등록 파일 업로드용 S3 대체(#636). 기동 시 버킷 생성·퍼블릭 정책 자동 적용 |
 | Prometheus | `127.0.0.1:9090` | |
 | Grafana | `127.0.0.1:3000` | 기본 계정 `admin` / `admin` |
+
+> **LocalStack을 띄우지 않으면 공연 등록 API만 실패합니다.** 목록·상세 조회와 서비스 기동은 정상이라
+> 원인을 알아채기 어렵습니다. 업로드 경로에 킬 스위치를 두지 않았기 때문입니다.
 
 부하 테스트용 `k6`는 `loadtest` 프로파일로 분리돼 있어 위 명령으로는 뜨지 않습니다
 ([load-test-guide.md](docs/load-test-guide.md) 참고).

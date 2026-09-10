@@ -52,6 +52,35 @@ services:
       retries: 5
       start_period: 30s
 
+  # 공연 등록 파일 업로드(#636)용 S3 대체. 로컬은 실제 AWS 자격증명 없이 업로드 → 공개 GET 왕복을
+  # 그대로 검증할 수 있어야 한다 — 업로드 경로에 킬 스위치를 두지 않았으므로, 이 컨테이너가 없으면
+  # local 프로파일의 공연 등록 API 가 실패한다.
+  # init/ready.d 스크립트가 기동 후 버킷 생성과 퍼블릭 읽기 정책 적용까지 마친다.
+  localstack:
+    image: localstack/localstack:4.13.1
+    container_name: localstack
+    ports:
+      - "127.0.0.1:4566:4566"
+    environment:
+      SERVICES: s3
+      # 컨테이너를 지우면 올린 파일도 사라진다. 로컬 개발용이라 의도한 동작이다.
+      PERSISTENCE: 0
+    volumes:
+      - ./deploy/localstack/init-s3.sh:/etc/localstack/init/ready.d/init-s3.sh:ro
+    networks:
+      - ticketrush-net
+    # 이 헬스체크를 depends_on 으로 기다리는 서비스는 없다(앱은 compose 밖 호스트에서 뜬다).
+    # `docker compose ps` 로 버킷 준비 완료를 눈으로 확인하는 용도다.
+    #
+    # 버킷 존재만이 아니라 퍼블릭 정책까지 본다. 정책이 빠지면 업로드는 되는데 익명 GET 만 403 이라,
+    # 버킷만 확인하면 그 상태를 초록불로 덮는다.
+    healthcheck:
+      test: ["CMD-SHELL", "awslocal s3api get-bucket-policy --bucket ticket-rush-local-bucket > /dev/null 2>&1 || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 20s
+
   prometheus:
     image: prom/prometheus:v2.53.0
     container_name: prometheus

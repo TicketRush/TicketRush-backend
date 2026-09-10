@@ -11,8 +11,11 @@ import static org.springframework.test.web.client.response.MockRestResponseCreat
 
 import com.ticketrush.boundedcontext.payment.out.apiclient.dto.BookingInfoResponse;
 import com.ticketrush.global.config.CustomSecurityProperties;
+import com.ticketrush.global.constants.MetricNames;
 import com.ticketrush.global.exception.BusinessException;
 import com.ticketrush.global.status.ErrorStatus;
+import io.micrometer.core.instrument.Timer;
+import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import java.io.IOException;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
@@ -32,6 +35,7 @@ class BookingRestClientTest {
 
   private MockRestServiceServer mockServer;
   private BookingRestClient client;
+  private SimpleMeterRegistry meterRegistry;
 
   @BeforeEach
   void setUp() {
@@ -41,7 +45,16 @@ class BookingRestClientTest {
     CustomSecurityProperties customSecurityProperties = new CustomSecurityProperties();
     customSecurityProperties.setInternalToken(INTERNAL_TOKEN);
 
-    client = new BookingRestClient(builder.build(), customSecurityProperties);
+    meterRegistry = new SimpleMeterRegistry();
+    client = new BookingRestClient(builder.build(), customSecurityProperties, meterRegistry);
+  }
+
+  /** outcome 태그가 붙은 왕복 Timer 를 찾는다. 없으면 null(= 그 갈래로 기록되지 않았다). */
+  private Timer lookupTimer(String outcome) {
+    return meterRegistry
+        .find(MetricNames.PAYMENT_BOOKING_LOOKUP)
+        .tag(MetricNames.TAG_OUTCOME, outcome)
+        .timer();
   }
 
   private static String successBody(String bookingStatus) {
@@ -300,5 +313,79 @@ class BookingRestClientTest {
             "errorStatus", ErrorStatus.PAYMENT_BOOKING_COMMUNICATION_FAILED);
 
     mockServer.verify();
+  }
+
+  @Test
+  @DisplayName("계측: 정상 조회는 왕복 Timer 를 outcome=success 로 한 건 기록한다 (#633)")
+  void getBooking_records_lookup_timer_with_success_outcome() {
+    expectGetAndRespondWith("PENDING");
+
+    client.getBooking(BOOKING_ID);
+
+    assertThat(lookupTimer("success")).isNotNull();
+    assertThat(lookupTimer("success").count()).isEqualTo(1);
+    assertThat(lookupTimer("not_found")).isNull();
+    assertThat(lookupTimer("failed")).isNull();
+
+    mockServer.verify();
+  }
+
+  @Test
+  @DisplayName("계측: 예매 없음(404)은 outcome=not_found 로 갈라 기록한다 — #571이 404를 서킷 실패로 세지 않기 때문이다")
+  void getBooking_records_lookup_timer_with_not_found_outcome() {
+    mockServer
+        .expect(requestTo(REQUEST_URL))
+        .andExpect(method(HttpMethod.GET))
+        .andExpect(header("X-Internal-Token", INTERNAL_TOKEN))
+        .andRespond(
+            withStatus(HttpStatus.NOT_FOUND)
+                .contentType(MediaType.APPLICATION_JSON)
+                .body(bookingNotFoundBody()));
+
+    assertThatThrownBy(() -> client.getBooking(BOOKING_ID)).isInstanceOf(BusinessException.class);
+
+    assertThat(lookupTimer("not_found")).isNotNull();
+    assertThat(lookupTimer("not_found").count()).isEqualTo(1);
+    assertThat(lookupTimer("success")).isNull();
+    assertThat(lookupTimer("failed")).isNull();
+
+    mockServer.verify();
+  }
+
+  @Test
+  @DisplayName("계측: 통신 실패도 왕복 Timer 에 outcome=failed 로 남는다 — 실패 건이 빠지면 느린 실패가 분포에서 사라진다")
+  void getBooking_records_lookup_timer_with_failed_outcome() {
+    expectGetAndRespondWithStatus(HttpStatus.FORBIDDEN);
+
+    assertThatThrownBy(() -> client.getBooking(BOOKING_ID)).isInstanceOf(BusinessException.class);
+
+    assertThat(lookupTimer("failed")).isNotNull();
+    assertThat(lookupTimer("failed").count()).isEqualTo(1);
+    assertThat(lookupTimer("success")).isNull();
+    assertThat(lookupTimer("not_found")).isNull();
+
+    mockServer.verify();
+  }
+
+  @Test
+  @DisplayName("계측: BusinessException 이 아닌 예외가 새어도 success 로 집계되지 않는다 (outcome 초기값 계약)")
+  void getBooking_records_failed_outcome_when_non_business_exception_escapes() {
+    mockServer
+        .expect(requestTo(REQUEST_URL))
+        .andExpect(method(HttpMethod.GET))
+        .andExpect(header("X-Internal-Token", INTERNAL_TOKEN))
+        .andRespond(
+            request -> {
+              throw new IllegalStateException("boom");
+            });
+
+    assertThatThrownBy(() -> client.getBooking(BOOKING_ID))
+        .isNotInstanceOf(BusinessException.class);
+
+    // getBooking 이 outcome 초기값을 failed 로 두는 이유가 이 경로다. success 로 두면 판정 불가로
+    // 끝난 호출이 정상 왕복 분포에 섞여 #571 임계값의 근거가 오염된다.
+    assertThat(lookupTimer("failed")).isNotNull();
+    assertThat(lookupTimer("failed").count()).isEqualTo(1);
+    assertThat(lookupTimer("success")).isNull();
   }
 }

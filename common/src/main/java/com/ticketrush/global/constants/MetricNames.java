@@ -77,6 +77,26 @@ public class MetricNames {
   // 이 태그가 소유자 차단을 구분하는 유일한 축이다.
   public static final String PAYMENT_CONFIRM_BOOKING_GUARD_BLOCKED =
       "ticketrush.payment.confirm.booking_guard.blocked";
+  // 결제 확정 경로의 booking 동기 조회 왕복 지연(#633). Timer.
+  // payment의 booking RestClient는 오토컨피그된 RestClient.Builder가 아니라 생 RestClient.builder()로
+  // 만들어져 ObservationRegistry가 붙지 않는다 — http_client_requests_seconds가 없어 이 구간의 지연을
+  // 볼 축이 하나도 없었다(#402가 ticket-service에서 겪은 것과 같은 제약이다). 바로 위 BOOKING_GUARD_BLOCKED는
+  // "막힌 건수"만 세므로 "얼마나 느렸나"는 답하지 못한다.
+  // 이 Timer가 필요한 이유는 #571 서킷브레이커의 임계값이 정확히 이 구간의 지연 분포 위에서 정해지기
+  // 때문이다. 근거 없이 ticket-service 값을 복사하면 오탐 open이 나는데, 이 조회는 fail-closed라 그 오탐이
+  // 곧 결제 전면 중단이 된다.
+  // 선례가 #496이다. ticket-service의 slowCallDurationThreshold 300ms는 **근거 없이 잡은 값이 아니라
+  // #402 실측 왕복 3.20ms를 기준선으로 잡은 값**이었는데(BookingCircuitBreakerConfig javadoc), 그럼에도
+  // 부하 회차의 재기동 구간에서 실패 0건에 차단 1,472건이 났다. 그 실측이 **워밍업이 끝난 상태의 값**
+  // 이었기 때문이다(측정 종료 후 500ms로 교정해 배포했다).
+  // 그래서 이 Timer는 정상 구간뿐 아니라 재기동 직후 구간의 분포까지 재는 것이 목적이다 — 정상 구간
+  // 실측만으로는 워밍업을 덮지 못한다는 것이 #496이 남긴 교훈이다.
+  // outcome 태그는 호출 결말과 1:1인 유한 집합 3종이다 — success(정상 반환), not_found(booking이 의도적으로
+  // 낸 404), failed(통신 실패·타임아웃·계약 붕괴 → 503).
+  // not_found를 반드시 갈라야 한다. #571이 404를 서킷 실패로 세지 않기로 했는데(없는 예매를 반복 조회하는
+  // 것만으로 서킷이 열리면 멀쩡한 결제가 전부 503이 된다), 한 덩어리로 재면 실패율 임계의 근거가 되는
+  // 분포에 정상 응답이 섞인다.
+  public static final String PAYMENT_BOOKING_LOOKUP = "ticketrush.payment.booking.lookup"; // Timer
   // 아직 해결되지 않은 환불 실패(FAILED 환불 이력) 건수(#574). Gauge.
   // 0이 아니면 "과금이 남았는데 환불이 성사되지 않은" 건이 그만큼 있다는 뜻이라, 수치 자체가 곧
   // 미해결 사고 건수다. PAYMENT_REFUND_FAILED(발생 카운터)와 달리 이쪽은 잔량이라 해결되면 내려간다.

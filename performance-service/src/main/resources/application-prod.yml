@@ -21,8 +21,22 @@ spring:
       credentials:
         access-key: ${AWS_S3_ACCESS_KEY:}
         secret-key: ${AWS_S3_SECRET_KEY:}
-      s3:
-        bucket: ${AWS_S3_BUCKET}
+
+# 버킷명은 spring.cloud.aws.s3.bucket 이 아니라 여기서 읽는다 — 그 키는 awspring 4.0.0 이 인식하지
+# 않아 어떤 빈도 바인딩하지 않는다(#636, S3Properties 주석 참고).
+#
+# 다른 필수 시크릿과 같이 기본값 없이 둔다: 미주입이면 기동에 실패한다. 버킷명 없이 뜨면
+# "등록은 201 인데 파일은 저장되지 않는" 상태가 되는데, 그것이 #636 이 고치려는 증상이다.
+# 배포 전 .env 에 AWS_S3_BUCKET 반영이 선행 조건이다.
+app:
+  s3:
+    bucket: ${AWS_S3_BUCKET}
+    # 버킷 퍼블릭 읽기 정책 전제. 비어 있으면 버킷·리전으로 조립하므로(S3Properties) 보통은 주입하지 않는다.
+    # CloudFront 를 붙일 때만 CDN 도메인을 넣는다.
+    #
+    # 여기에 ${VAR:default} 로 기본값을 두지 않는 이유: .env 의 빈 줄은 '미정의'가 아니라 '빈 문자열' 로
+    # 들어와 기본값이 적용되지 않는다. 조립은 코드에서 blank 를 보고 처리한다.
+    public-base-url: ${AWS_S3_PUBLIC_BASE_URL:}
 
 # base의 localhost 기본값을 '빈 값'으로 덮는다. 운영 컨테이너에서 localhost는 자기 자신이라,
 # 변수가 안 들어왔을 때 base 기본값이 살아 있으면 performance가 자기 자신에게 예매 집계를 물어

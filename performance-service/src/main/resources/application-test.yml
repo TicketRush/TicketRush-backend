@@ -37,6 +37,11 @@ service:
     url:
 
 app:
+  # S3Properties 는 @Validated @NotBlank 라 값이 없으면 컨텍스트 로딩 자체가 실패한다.
+  # 테스트는 실제 S3 를 부르지 않지만(호출부를 mock 하거나 LocalStack 으로 덮는다) 바인딩은 통과해야 한다.
+  s3:
+    bucket: test-bucket
+    public-base-url: https://test-bucket.s3.ap-northeast-2.amazonaws.com
   event-publisher:
     type: kafka
   scheduler:

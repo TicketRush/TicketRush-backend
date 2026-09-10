@@ -3,8 +3,11 @@ package com.ticketrush.boundedcontext.payment.out.apiclient;
 import com.ticketrush.boundedcontext.payment.out.apiclient.dto.BookingApiResponse;
 import com.ticketrush.boundedcontext.payment.out.apiclient.dto.BookingInfoResponse;
 import com.ticketrush.global.config.CustomSecurityProperties;
+import com.ticketrush.global.constants.MetricNames;
 import com.ticketrush.global.exception.BusinessException;
 import com.ticketrush.global.status.ErrorStatus;
+import io.micrometer.core.instrument.MeterRegistry;
+import io.micrometer.core.instrument.Timer;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
@@ -32,9 +35,13 @@ import org.springframework.web.client.RestClientException;
  *       TicketRestClient}, ticket-service의 동명 클라이언트.
  * </ul>
  *
- * <p>서킷브레이커는 이번 범위에 넣지 않았다. ticket-service의 임계값은 그쪽 실측 왕복(#402, 3.20ms)에 맞춰 잡은 값이라 근거 없이 복사하면 오탐
- * open이 나고, fail-closed와 겹치면 그 오탐이 곧 결제 전면 중단이 된다. payment→booking 경로의 부하 실측 뒤 후속 이슈로 다룬다. 그때까지 유일한
- * 완화 수단은 짧은 read-timeout이다({@code service.booking.read-timeout-ms}).
+ * <p>서킷브레이커는 아직 없다(#571). ticket-service의 임계값은 그쪽 실측 왕복(#402, 3.20ms)에 맞춰 잡은 값이라 근거 없이 복사하면 오탐
+ * open이 나고, fail-closed와 겹치면 그 오탐이 곧 결제 전면 중단이 된다. 그때까지 유일한 완화 수단은 짧은 read-timeout이다({@code
+ * service.booking.read-timeout-ms}).
+ *
+ * <p>그 임계값의 근거를 만들기 위해 이 왕복에 {@link MetricNames#PAYMENT_BOOKING_LOOKUP} Timer를 걸어 두었다(#633). 이
+ * 클라이언트가 쓰는 {@code RestClient}는 오토컨피그된 빌더가 아니라 생 {@code RestClient.builder()}로 만들어져 {@code
+ * http_client_requests_seconds}가 없으므로, 이 Timer 말고는 구간 지연을 볼 축이 없다.
  */
 @Slf4j
 @Component
@@ -43,8 +50,22 @@ public class BookingRestClient {
 
   private static final String INTERNAL_TOKEN_HEADER = "X-Internal-Token";
 
+  /** 정상 반환(200 + result 있음). */
+  private static final String LOOKUP_OUTCOME_SUCCESS = "success";
+
+  /** booking-service가 의도적으로 낸 404(BOOKING_404_001). 서킷 실패로 세지 않을 갈래다(#571). */
+  private static final String LOOKUP_OUTCOME_NOT_FOUND = "not_found";
+
+  /**
+   * 성공도 의도된 404도 아닌 나머지 전부. 통신 실패·타임아웃·계약 붕괴처럼 판정 불가(503)로 수렴한 건이 대부분이지만, {@code
+   * BusinessException}이 아닌 예외가 새어 원시 500으로 나가는 경로도 이 갈래로 센다 — #571 관점에서 둘 다 "정상 응답을 받지 못한 호출"로 같기
+   * 때문이다.
+   */
+  private static final String LOOKUP_OUTCOME_FAILED = "failed";
+
   private final RestClient bookingServiceRestClient;
   private final CustomSecurityProperties customSecurityProperties;
+  private final MeterRegistry meterRegistry;
 
   /**
    * 예매 정보를 booking-service에 동기 조회한다 (#490).
@@ -54,11 +75,37 @@ public class BookingRestClient {
    *
    * <p>정상 반환하는 경로는 200 + {@code result}가 있는 경우 하나뿐이다. 나머지는 전부 예외로 끊는다.
    *
+   * <p>호출 전체를 {@link MetricNames#PAYMENT_BOOKING_LOOKUP} Timer로 감싼다(#633). 재는 구간을 HTTP 왕복이 아니라 <b>이
+   * 메서드 진입~반환</b>으로 잡은 것은 #571이 서킷으로 감쌀 구간과 같은 범위를 재기 위해서다 — 서킷은 호출 전체를 보고 판정하므로, 예외 변환까지 포함한 이 구간이
+   * 임계값이 실제로 걸리는 지점이다.
+   *
    * @throws BusinessException {@code BOOKING_NOT_FOUND}(404) — booking-service가 {@code
    *     BOOKING_404_001}로 응답한 경우. 없는 예매로 결제를 진행시킬 수는 없으므로 이 역시 결제를 막는다.
    * @throws BusinessException {@code PAYMENT_BOOKING_COMMUNICATION_FAILED}(503) — 그 밖의 모든 판정 불가 응답
    */
   public BookingInfoResponse getBooking(Long bookingId) {
+    Timer.Sample sample = Timer.start(meterRegistry);
+    // 초기값을 failed로 둔다. BusinessException이 아닌 예외가 새어 나가도 성공으로 집계되지 않아야 한다.
+    String outcome = LOOKUP_OUTCOME_FAILED;
+    try {
+      BookingInfoResponse result = doGetBooking(bookingId);
+      outcome = LOOKUP_OUTCOME_SUCCESS;
+      return result;
+    } catch (BusinessException e) {
+      outcome =
+          ErrorStatus.BOOKING_NOT_FOUND == e.getErrorStatus()
+              ? LOOKUP_OUTCOME_NOT_FOUND
+              : LOOKUP_OUTCOME_FAILED;
+      throw e;
+    } finally {
+      sample.stop(
+          Timer.builder(MetricNames.PAYMENT_BOOKING_LOOKUP)
+              .tag(MetricNames.TAG_OUTCOME, outcome)
+              .register(meterRegistry));
+    }
+  }
+
+  private BookingInfoResponse doGetBooking(Long bookingId) {
     BookingApiResponse response;
     try {
       response =
