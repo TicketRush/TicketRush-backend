@@ -1,0 +1,161 @@
+SERIES_ID=260911-633-payment-booking-roundtrip
+ISSUE=#633 (선행: PR #634 계측 Timer + 회차 자산 / 후속: #571 서킷브레이커)
+DATE=2026-09-11 (KST) / 회차 실행 시각은 각 run 의 START_UTC 로 기록한다
+
+# ⚠ 이 파일의 판정 기준 절(무효 기준·게이트)은 회차 시작 "전"에 커밋되지 않았다.
+#   #598·#555 회차는 기준 절을 회차 전 커밋에 고정해 사후 조정 여지를 없앴지만,
+#   이 회차는 그 규율을 지키지 못했다. 기준 자체는 런북 §17.3·§17.7 에 회차 전부터
+#   있었고(PR #634, 2026-09-01 머지) 이 파일은 그것을 옮겨 적은 것이지만,
+#   "회차 전에 고정됐다"고 주장하지 않는다. 없는 규율을 지킨 척하지 않기 위해 적어 둔다.
+
+# ── 이 회차가 답해야 하는 것 ────────────────────────────────────────────────
+QUESTION=payment -> booking 동기 조회(BookingRestClient.getBooking, #490)의 왕복 지연
+#   분포는 얼마인가. #571 서킷브레이커 임계값 5종을 실측 위에 세우기 위한 것이다.
+#   #496 전례: 느린호출 임계를 #402 실측 3.20ms 위에 300ms 로 잡았는데도 배포 직후
+#   실패 0건에 차단 1,472건이 났다. 그래서 워밍업 구간을 정상 구간과 분리해 잰다.
+CONCLUSION_SCOPE=이 회차의 결론은 "이 구성에서의 값"이다. 단일 EC2 에 앱 8개 +
+#   Kafka·MySQL·Redis·관측 스택이 동거하고(ADR 0006 · ADR 0007), payment 와 booking 이
+#   같은 호스트의 컨테이너라 왕복이 싸게 나온다. 서비스가 다른 노드로 분리되면
+#   이 값은 커지고 #571 임계는 재검토 대상이다(#402 가 남긴 한계와 동일).
+
+# ── 토폴로지 ────────────────────────────────────────────────────────────────
+TARGET_HOST=https://api.ticketrush.store
+TOPOLOGY=k6 local (호스트 바이너리) --HTTPS--> EC2 deploy stack
+INSTANCE_TYPE=m7i-flex.large / INSTANCE_VCPU=2 (런북 §12 기준)
+GENERATOR=로컬 macOS, /opt/homebrew/bin/k6 (호스트 설치 바이너리)
+#   ⚠ compose loadtest 프로파일이 아니다. 기존 회차(#549·#554·#555)는 docker 로 돌았다.
+RUNBOOK=docs/load-test-guide.md §17
+SCENARIO=load-test/scenarios/payment-booking-roundtrip.js
+IMAGE_TAG=e77e18b8618223a81b81cdb83805bbbcaab7ff5c  (= origin/main, PR #640 머지 커밋)
+#   gateway·payment·booking·performance 4개 서비스 모두 동일 태그임을 회차 전 확인했다.
+PROM_SCRAPE_INTERVAL=15s
+METRIC=ticketrush_payment_booking_lookup_seconds (Timer, PR #634)
+METRIC_TAGS=outcome={success|not_found|failed}
+METRIC_BUCKETS=1ms,2ms,5ms,10ms,25ms,50ms,100ms,250ms,500ms,1s,2s
+#   (payment-service/src/main/resources/application.yml:167. 상한 2s 인 이유는
+#    connect 1s + read 1s 가 순차로 들어갈 수 있어서다 — 동 파일 162-166 주석)
+INSTANCE_LABEL=payment-service:8090 / JOB_LABEL=ticketrush-services
+
+# ── 🔴 한계 1: k6 시계열이 Prometheus 에 없다 ───────────────────────────────
+LIMIT_NO_TUNNEL=SSH 키가 없어 터널(-L 9090)을 띄우지 못했다. 따라서
+#   K6_PROMETHEUS_RW_SERVER_URL remote-write 를 쓰지 못했고, k6_* 시계열이 TSDB 에
+#   들어가지 않았다. k6 측 지표(dropped_iterations · rt_guard_blocked ·
+#   rt_booking_unavailable)는 **stdout 종료 요약**으로만 기록한다
+#   (k6-summary-w1.txt · k6-summary-b.txt · k6-summary-w2.txt 에 전문 보존).
+#   앱 계측(ticketrush_payment_booking_lookup_*)은 EC2 내부 Prometheus 가 스크랩하므로
+#   영향 없고, PromQL 은 EC2 셸에서 localhost:9090 에 직접 질의해 떴다.
+#   → 시계열 그래프(timeseries-*.json)와 grafana-capture-links.md 는 이 회차에 없다.
+#     대체 증적은 promql-evidence.md (질의 전문 + @ modifier epoch + 출력)다.
+
+# ── 🔴 한계 2: Rate Limit 을 완화한 상태의 측정이다 ─────────────────────────
+LIMIT_RATE_LIMIT=같은 배포(PR #635, #423)에 게이트웨이 Rate Limit 이 들어왔다.
+#   운영 기본값에서는 이 회차의 호출량 자체가 불가능하다:
+#     payment-confirm-rate-limit : replenishRate 3 · burstCapacity 120 · requestedTokens 60
+#       -> 사용자당 허용 = 3/60 = 0.05 req/s = 분당 3건 (버스트 2건)
+#     booking-create-rate-limit  : replenishRate 5 · burst 120 · tokens 60 -> 사용자당 분당 5건
+#   (gateway-service/src/main/resources/application.yml:64,66)
+#   키는 userOrIpKeyResolver (X-User-Id 있으면 user:{id}, 없으면 ip:{addr}).
+#   ⚠ 이 리밋은 **사용자당**이고 서킷브레이커 윈도우는 **인스턴스 전역** 집계다.
+#     따라서 "운영 confirm 상한 = 분당 3건"은 성립하지 않는다 — 전역 도달량은
+#     동시 confirm 사용자 수 × 분당 3건이다. report.md §10.1 에서 다룬다.
+#   회차 동안만 아래로 완화하고 종료 후 원복했다(.env 백업 .env.bak.20260911-115409):
+#     RATE_LIMIT_PAYMENT_CONFIRM_REPLENISH_RATE=900  BURST=1800  (= 15 req/s)
+#     RATE_LIMIT_BOOKING_REPLENISH_RATE=1500         BURST=3000  (= 25 req/s)
+#   gateway 만 --force-recreate --no-deps 로 재생성(restart 는 env_file 을 다시 읽지 않는다).
+#   스크립트: rate-limit-relax/20-rl-relax.sh · 21-rl-restore.sh
+
+# ── 대상 환경 (회차 전 실측) ────────────────────────────────────────────────
+SPRING_PROFILES_ACTIVE=prod
+QUEUE_ENABLED=false            # true 면 회차 2 배경 부하가 게이트웨이에서 전건 403
+TOSS_PAYMENTS_ENABLED=<미정의> # -> 기본값 false -> Toss 승인/조회/취소 빈이 등록되지 않는다.
+#   PG 스텁은 @Profile("!prod") 라 prod 에서 뜨지 않으므로, PaymentApprovalClientRouter 는
+#   매칭 구현체도 fallback 도 없어 전건 PAYMENT_PROVIDER_NOT_SUPPORTED 를 던진다.
+#   → 이 회차 동안 PG 도달 위험은 설정이 아니라 **빈 부재**로 원천 차단돼 있었다.
+AWS_S3_BUCKET=ticketrush-assets-prod-079209844823-ap-northeast-2-an / AWS_REGION=ap-northeast-2
+
+# ── 시딩 (§17.4) ────────────────────────────────────────────────────────────
+SEED_PREREQ=seed_load.sql (loadtest 계정 + LOADTEST-* 10공연 6,000석)
+#   loadtest user_id=172256 / 공연 performance_id 40~49 / seat_id 310703~316702
+#   ⚠ 런북 §17.5 예시값(PERF_ID=1, SEAT 1~6000)과 전혀 다르다. 실측값을 써야 한다.
+#     (이 불일치는 이 회차에서 런북을 고쳤다 — §17.5 수정분)
+#   ⚠ 계정 비밀번호는 팀 공용 평문을 몰라 이 회차용으로 재설정했다(bcrypt UPDATE).
+#     레포 시드 파일은 건드리지 않았다.
+SEED_COHORT=seed_payment_booking_roundtrip.sql @mode=seed @count=10000
+#   perf_id=55 (LTR-A) / booking_id_min=3000001 / seat_id_min=318894 / cohort_size=10000
+GATE_17_3=pending=0 · payments_on_cohort=0 · expired_on_cohort=0 · owner_ok=10000(=bookings)
+#   contiguous_bookings=1 · booking_id_min_ok=1 · seats=10000 sold=10000
+GATE_SMOKE=수동 curl 1건 -> HTTP 409 BOOKING_409_002 확인 (§17.3-4)
+#   이 첫 호출의 왕복이 Timer 에 326.6ms 로 찍혔다(콜드 상태 단일 표본).
+GATE_TIMER_PRESENT=ticketrush_payment_booking_lookup_seconds_bucket 존재 확인 (§17.3-5)
+#   job 라벨은 ticketrush-services 이고 서비스 구분은 instance=payment-service:8090 이다.
+GATE_DEPLOY=배포 검증 3건 통과 — AWS_S3_BUCKET/AWS_REGION 주입 · 버킷 익명 GET 200 ·
+#   nginx 호스트 client_max_body_size 50m
+
+# ── run 목록 ────────────────────────────────────────────────────────────────
+RUN_W1=warmup / RT_INDEX_OFFSET=0    / 2026-09-11T11:55:26Z ~ 11:58:26Z (3m00.2s)
+RUN_B =main   / RT_INDEX_OFFSET=1500 / 2026-09-11T12:40:24Z ~ 12:50:44Z (10m20.1s)
+#   B 내부 구간: B1 정상 8/s 12:40:24~12:45:24 / ramp 20s / B2 피크 12/s 12:45:44~12:50:44
+RUN_W2=warmup / RT_INDEX_OFFSET=7800 / 2026-09-11T12:58:37Z ~ 13:01:37Z (3m00.2s)
+RUN_2_*=회차 2 (배경 부하) / **미실시** — 런북 §17.2 가 스스로 "혼잡도를 과소평가한다"고
+#   적어 둔 회차다(#344 실측 409 비율 98.61%). 투입 대비 정보량이 가장 적다고 판단했다.
+#   되살릴 조건은 report.md §10.2 에 있다.
+
+# ── 결과: 왕복 분포 (outcome=success, Timer) ────────────────────────────────
+RESULT_W1_P50=6.676ms  / RESULT_W1_P95=14.650ms / RESULT_W1_P99=23.410ms / RESULT_W1_MAX=859.28ms
+RESULT_B_P50=3.567ms   / RESULT_B_P95=4.986ms   / RESULT_B_P99=9.280ms   / RESULT_B_MAX=22.30ms
+RESULT_W2_P50=7.081ms  / RESULT_W2_P95=18.288ms / RESULT_W2_P99=23.920ms / RESULT_W2_MAX=542.27ms
+#   ⚠ RESULT_W2_MAX 는 과소값이다. Micrometer 의 _max 는 롤링 2분 창이라 run 종료 직후에
+#     뜨지 않으면 사라진다. W2 에서 실제로 놓쳤다. p99 와 _max 를 함께 읽으라는 런북
+#     §17.7 지시의 근거가 이 사례다.
+RESULT_BOOKING_SERVER_P99=W1 16.075ms / B 5.743ms / W2 16.776ms
+#   booking 서버 자체 처리(http_server_requests)로 왕복의 **하한 축**이다. 차이가
+#   네트워크 + 클라이언트 오버헤드다(B 기준 약 3.5ms).
+RESULT_TIMER_COUNT=W1 1401.93 / B 6275.63 / W2 1438.99  (increase 외삽값)
+#   ⚠ 호출량 SSOT 는 k6 iteration 수다. PromQL rate()/increase() 는 창 경계와 15s 스크랩
+#     때문에 다르게 나온다. Timer 건수는 lookup:booking 1:1 대조용으로만 쓴다.
+
+# ── 결과: 꼬리 (버킷 구간 건수, @ modifier 로 run 구간 고정) ────────────────
+RESULT_W1_TAIL=>25ms 20.3건(1.45%) · >50ms 7.0건(0.50%) · >100ms 7.0건(0.50%) · >250ms 5 · >500ms 3 · >1s 0
+RESULT_B_TAIL=25ms 초과 전 구간 0건 (6275.63건 중)
+RESULT_W2_TAIL=>25ms 16.2건(1.13%) · >50ms 7.0건(0.49%) · >100ms 7.0건(0.49%) · >250ms 5 · >500ms 3 · >1s 0
+RESULT_EMPTY_BAND=50~100ms 는 세 run 모두 0건인 빈 구간이다.
+#   임계를 50ms 가 아니라 100ms 로 잡아도 초과율이 동일하므로 검출력 손실 없이
+#   여유만 두 배가 된다. slowCallDurationThreshold=100ms 권고의 핵심 근거.
+RESULT_REPRODUCIBILITY=W1 과 W2 의 꼬리가 **건수 단위로 일치**한다
+#   (>100ms 7/7 · >250ms 5/5 · >500ms 3/3 · >1s 0/0). 무효 판정 "W1·W2 p99 자릿수 차이"를
+#   큰 여유로 통과한다(23.410 vs 23.920ms).
+
+# ── 결과: k6 클라이언트 축 (stdout 요약이 SSOT) ─────────────────────────────
+K6_W1=iterations 1440 @ 7.989837/s · dropped_iterations 1 · vus_max 21(preAlloc 20)
+#   rt_guard_blocked 98.75% (1422/1440) · rt_booking_unavailable 1.25% (18/1440)
+#   rt_confirm_duration avg 64.31ms med 28.28ms p90 95.36ms p95 108.59ms max 2.7s
+K6_B=iterations 6200 @ 9.998471/s · dropped_iterations 없음(0) · vus_max 20
+#   rt_guard_blocked 100.00% (6200/6200) · rt_booking_unavailable 0.00% (0/6200)
+#   rt_confirm_duration avg 26.81ms med 17.22ms p90 66.12ms p95 92.04ms max 139.6ms
+K6_W2=iterations 1441 @ 7.996521/s · dropped_iterations 없음(0) · vus_max 20
+#   rt_guard_blocked 100.00% (1441/1441) · rt_booking_unavailable 0.00% (0/1441)
+#   rt_confirm_duration avg 38.41ms med 24.15ms p90 85.28ms p95 101.65ms max 1.08s
+#   ⚠ rt_confirm_duration 은 **왕복이 아니다.** 게이트웨이+인증+payment confirm 전 구간이다.
+#     왕복(Timer)과 같은 축으로 읽으면 안 된다. 대비 자체는 유용하다 — B 기준
+#     confirm p95 92.04ms 중 왕복 p95 는 4.986ms 로 약 5% 다. report.md §2.3 참조.
+
+# ── 무효 기준 대조 (런북 §17.7) ─────────────────────────────────────────────
+VALID_W1=yes (해석 주의 2건)
+#   - dropped_iterations 1 건: 런북 규칙은 "> 0 이면 무효"다. 그러나 1/1440 = 0.07% 이고
+#     도착률 7.989837/s 로 목표 8/s 를 채웠으며 생성기 기동 첫 순간에 발생했다.
+#     "대상이 느려서 생성기가 못 따라간" 신호로 읽을 수 없다 → 채택하고 런북 규칙을
+#     비율 임계로 고쳤다(§17.7 수정분).
+#   - rt_booking_unavailable 18 건(1.25%): 런북이 허용한 "분리해 해석"을 택했다.
+#     분포는 outcome=success 로만 내고 failed 18건은 report.md §4.3 에서 따로 다룬다.
+VALID_B=yes (9종 전부 통과)
+VALID_W2=yes (9종 전부 통과)
+PG_APPROVE_DELTA=0  (세 run 전부. 카운터는 finally 라 PROVIDER_NOT_SUPPORTED 로도 오르므로
+#   "④ 진입" 신호이지 "PG 성사" 신호가 아니다 — 0 이 아니면 오진단 위험)
+
+# ── 정리 ────────────────────────────────────────────────────────────────────
+CLEANUP=booking_number LIKE 'LT-R%' 마커 기준으로 정리 완료.
+#   🔴 id 범위 기준으로 지우면 안 된다. booking_id 명시 INSERT 가 AUTO_INCREMENT 를
+#     코호트 위로 올리기 때문에 그 뒤 생긴 실사용 결제가 함께 지워진다(로컬 재현 확인).
+CLEANUP_LOAD_SQL=미실행. 회차 2 를 돌리지 않기로 확정한 뒤에도 loadtest 계정과
+#   LOADTEST·LTQ 코호트는 다른 회차가 재사용하므로 남겨 두었다.
+RATE_LIMIT_REVERTED=yes (21-rl-restore.sh 실행 완료)
