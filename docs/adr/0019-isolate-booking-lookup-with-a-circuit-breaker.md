@@ -34,6 +34,8 @@ open 상태에서는 booking을 치지 않고 즉시 `PAYMENT_BOOKING_COMMUNICAT
 
 `ignoreException`으로 `BOOKING_NOT_FOUND`를 뺀다. booking-service가 **정상 동작 중일 때** 나오는 응답이기 때문이다. 실패로 세면 존재하지 않는 예매로 결제를 반복 시도하는 것만으로 서킷이 열려 멀쩡한 결제가 전부 503이 된다.
 
+⚠ **HALF_OPEN 구간에서는 그 대가가 반대 방향으로 나타난다.** 404는 창에 들어가지 않고 permit이 계속 반환되므로, **404만 흐르는 구간에서는 서킷이 판정을 유예한 채 booking으로 요청을 계속 통과시킨다**(차단이 아니다). 운영자가 그래프에서 "half-open인데 트래픽이 계속 나가고 상태가 바뀌지 않는다"를 보게 되는데, **그것이 정상 동작이다.** `recordException` 축이었다면 404 3건으로 곧장 CLOSED가 됐을 텐데, 그건 "booking이 아직 아픈데 성급히 닫는" 반대 오류라 지금 쪽이 보수적이다.
+
 🔴 **`recordException`이 아니라 `ignoreException`인 것이 이 결정의 핵심이다.** Resilience4j에서 "실패로 기록하지 않는다"는 곧 **성공으로 기록한다**는 뜻이다(`onSuccess`를 탄다). 그러면 셋이 따라온다 — ① 404 홍수가 `minimumNumberOfCalls`를 대신 채워 게이팅을 열어 주고, ② 성공 분모를 불려 실패율을 희석하며(404와 실패가 1:1로 섞이면 50%에 닿지 않아 booking이 실제로 아파도 열리지 않는다), ③ 느린호출 판정에도 들어간다. `ignoreException`은 permit을 돌려주고 창에서 통째로 뺀다. 우리가 원하는 것은 "이 응답은 서킷이 볼 신호가 아니다"이므로 후자다. (ticket-service는 `recordException` 축이라 이 점에서 다르다.) 이 경계는 #633이 왕복 Timer에 붙여 둔 `outcome` 태그(`success`/`not_found`/`failed`)와 **같은 선**이다. 두 축이 어긋나면 그 관측으로 서킷 동작을 설명할 수 없게 된다.
 
 ### 4. 윈도우는 시간 기반(TIME_BASED)으로 둔다 — ticket-service와 갈리는 지점
@@ -52,18 +54,25 @@ open 상태에서는 booking을 치지 않고 즉시 `PAYMENT_BOOKING_COMMUNICAT
 
 🔴 **그 대가로 #633이 쓰던 대조 규칙이 하나 깨진다.** 차단된 호출은 Timer에 남지 않지만 `PaymentConfirmUseCase`의 `guard_blocked{reason="lookup_failed"}`에는 남는다. 그래서 앞으로는 **"Timer `outcome=failed`는 0인데 `guard_blocked{lookup_failed}`는 오른다"가 정상 상태로 생긴다.** #633 리포트 §4.3이 503의 발생 층을 좁힐 때 근거로 삼은 것이 바로 그 두 축의 일치였으므로, 서킷 배포 이후의 측정에서는 `not_permitted_calls_total`을 세 번째 축으로 함께 읽어야 한다.
 
+### 7. HALF_OPEN에 시간 상한을 둔다
+
+`maxWaitDurationInHalfOpenState`를 60초로 둔다. 기본값 0은 "타이머 없음"인데, 그 상태에서는 **HALF_OPEN이 빠져나오지 못하는 경우가 있다.** resilience4j가 호출을 감싸는 지점의 catch가 `Exception`이라 `Error`는 성공·실패 어느 쪽으로도 기록되지 않고 permit도 반환되지 않는다. HALF_OPEN의 permit 3개가 그렇게 소진되면 상태 전이를 일으킬 '기록된 호출'이 영영 생기지 않는다 — **조회가 전건 차단된 채 고정되고, fail-closed 경로에서 그것은 결제 확정 영구 503이다.** 재기동이나 킬 스위치 말고는 빠져나올 길이 없다.
+
+도달 가능성은 낮지만 0이 아니다(`StackOverflowError`처럼 되풀이되는 종류면 3회는 어렵지 않다). 대가가 매출 영구 정지이므로 탈출구를 둔다. 값에 실측 근거는 없고 슬라이딩 윈도우와 같은 60초로 맞췄다.
+
 ## 결과
 
 ### 얻는 것
 
 - booking이 느려질 때 톰캣 스레드가 요청마다 1초씩 묶이는 전파가 끊긴다. 장애 범위가 "결제 확정만 막힌다"로 좁아진다.
 - 서킷 상태·차단 호출수가 Prometheus에 노출되어(`resilience4j_circuitbreaker_*`) 장애 구간을 사후에 분해할 수 있다.
-- 부수 효과로 **비 `BusinessException`이 새어 원시 500이 나가던 경로가 사라졌다.** confirm 경로에는 그 catch가 없어서, 지금까지는 그런 예외가 500으로 나가고 가드 카운터도 침묵했다. 이제 fallback이 503으로 수렴시킨다.
+- 부수 효과로 **비 `BusinessException` 중 `Exception` 갈래가 원시 500으로 나가던 경로가 사라졌다.** confirm 경로에는 그 catch가 없어서, 지금까지는 그런 예외가 500으로 나가고 가드 카운터도 침묵했다. 이제 fallback이 503으로 수렴시킨다. `Error`는 의도적으로 그대로 재던지므로 여전히 500이다(§7).
 
 ### 감수하는 것
 
 - 🔴 **오탐 open의 대가가 결제 전면 중단이다.** 느린호출 임계 100ms는 #633이 **재기동** 워밍업에서 얻은 값이고, **배포 직후 구간은 재현하지 못했다** — #496이 오탐을 겪은 것이 바로 그 구간이다. 첫 배포 직후 `resilience4j_circuitbreaker_state{name="booking"}`를 관찰해야 하고, 오탐이 나면 #496 선례대로 임계를 올리거나 킬 스위치로 끈다.
 - 다섯 임계값 중 **실측 근거가 있는 것은 `slowCallDurationThreshold` 하나뿐이다.** 실패율 50%는 서킷이 보는 구간의 실패 표본이 0건이라 도출된 값이 아니고, open 대기 10초는 ticket에서 차용했을 뿐 근거가 없다. 각 값의 등급과 "틀렸다면 무엇으로 알 수 있는가"를 `BookingCircuitBreakerConfig` javadoc에 남겼다.
+- **`Error` 구간에는 관측축 대부분이 눈을 감는다.** 서킷 창에 들어가지 않아 조회가 전건 실패해도 상태는 CLOSED고, 호출부 셋의 `catch (Exception)`도 `Error`를 잡지 않아 가드 카운터가 전부 침묵한다. 남는 축은 왕복 Timer의 `outcome=failed` 하나뿐이다.
 - 레포 유일한 서킷 선례(ticket, COUNT_BASED)와 윈도우 축이 갈린다. 같은 이름의 `slidingWindowSize`가 한쪽은 건수, 한쪽은 초를 뜻하므로 오독 가능성이 생긴다.
 - 🔴 **스케줄러가 사용자 경로와 서킷 윈도우를 공유한다.** 과금-만료 자동 환불 스케줄러의 기본 주기(60초)가 서킷 창(60초)과 **정확히 같고**, 그 랩의 조회 횟수는 `max-refunds-per-lap`(50)과 무관하다 — 조회에 실패한 건은 환불 시도로 세지 않으므로 `batch-size`(500)까지 나갈 수 있다. booking이 아픈 구간이라면 **이 버스트 한 방이 `minimumNumberOfCalls`를 혼자 채우고 창을 자기 표본으로 도배해 서킷을 연다.** 그 대가는 사용자 결제 확정의 fail-fast 503인데, 정작 스케줄러 자신은 예외를 삼켜(SKIPPED) 아무 영향도 받지 않는다 — **비용을 내는 쪽과 트래픽을 만드는 쪽이 다르다.**
 
