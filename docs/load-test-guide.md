@@ -2273,6 +2273,19 @@ python load-test/bench/arm-stats.py <OUTDIR> --table a20=<UTC> a40=<UTC> a30=<UT
 
 **(e) 도착률을 크게 잡지 않는다.** [`capacity-planning.md`](capacity-planning.md) §3의 예매 서버 수신 RPS **8.22**(#555 `b12`)와 입장 허용 상한 **`admit-rate` 12/s**가 현실값이다. 결제 확정은 예매를 통과한 사용자만 하므로 그보다 크게 잡으면 #571의 "최소 호출 수"·"슬라이딩 윈도우 크기" 근거가 현실에 없는 호출량 위에 서게 된다.
 
+**(f) 🔴 게이트웨이 Rate Limit이 이 회차의 호출량 자체를 막는다(#423 / PR #635).** 운영 기본값에서는 W1의 3번째 요청부터 `429 COMMON_429`가 나 `test.abort()`로 끝난다(2026-09-11 실측).
+
+| route | 기본 설정 | 사용자당 실제 허용량 |
+|---|---|---|
+| `payment-confirm-rate-limit` | replenish **3** · burst 120 · **requestedTokens 60** | 버스트 2건 + **분당 3건** |
+| `booking-create-rate-limit` | replenish **5** · burst 120 · tokens 60 | 분당 5건 |
+
+**`requestedTokens: 60`이 핵심이다.** `replenishRate`를 그대로 req/s로 읽으면 20배 틀린다 — 허용 req/s는 `replenishRate ÷ requestedTokens`다. 키는 `userOrIpKeyResolver`라 회차 트래픽은 `user:{loadtest id}` **한 키에 전부 몰린다.**
+
+> ⚠ **이 리밋은 사용자당이고, #571의 서킷브레이커 윈도우는 인스턴스 전역 집계다.** 둘을 같은 축으로 읽으면 안 된다 — "운영 confirm 상한 = 분당 3건"은 성립하지 않고, 전역 도달량은 `동시 confirm 사용자 수 × 분당 3건`이다. 다만 **한 사용자가 혼자 윈도우를 채울 수는 없다**는 제약은 실재하므로 §17.8의 윈도우 환산에 그대로 반영한다.
+
+회차 동안만 완화하고 **종료 후 반드시 원복한다**(§17.3-6). 완화·원복 스크립트 표본은 `load-tests/k6/results/260911-633-payment-booking-roundtrip/rate-limit-relax/`에 있다.
+
 ### 17.2 부하 모델
 
 **회차 2종 × run 3개.** 워밍업은 재기동 직후 부하가 시작돼야 하므로 별도 run으로 나눈다(`RT_PROFILE`).
@@ -2283,7 +2296,7 @@ python load-test/bench/arm-stats.py <OUTDIR> --table a20=<UTC> a40=<UTC> a30=<UT
 | B | `main` | 8/s × 5분 → 램프 20s → 12/s × 5분 | 완료조건 2·4 |
 | W2 | `warmup` | 재시작 직후 즉시 8/s × 3분 | 워밍업 **재현성** |
 
-**W를 두 번 도는 이유**는 워밍업 지연이 비결정적이기 때문이다. #496의 300ms는 근거 없이 잡은 값이 **아니었다** — #402 실측 왕복 3.20ms를 기준선으로 잡은 값이었는데도 재기동 구간에서 실패 0건에 차단 1,472건이 났다. 그 실측이 **워밍업이 끝난 상태의 값**이었기 때문이다. 즉 교훈은 "실측하라"가 아니라 **"정상 구간 실측만으로는 워밍업을 덮지 못한다"**이고, W1·W2가 그 구간을 정면으로 겨냥한다. **W1과 W2의 앞 120초 분포가 같은 자릿수여야** 임계 근거로 쓴다.
+**W를 두 번 도는 이유**는 워밍업 지연이 비결정적이기 때문이다. #496의 300ms는 근거 없이 잡은 값이 **아니었다** — #402 실측 왕복 3.20ms를 기준선으로 잡은 값이었는데도 재기동 구간에서 실패 0건에 차단 1,472건이 났다. 그 실측이 **워밍업이 끝난 상태의 값**이었기 때문이다. 즉 교훈은 "실측하라"가 아니라 **"정상 구간 실측만으로는 워밍업을 덮지 못한다"**이고, W1·W2가 그 구간을 정면으로 겨냥한다. **W1과 W2의 run 전체 p99가 같은 자릿수여야** 임계 근거로 쓴다(§17.7 무효 판정과 창을 맞춘다).
 
 > ⚠ **W1과 W2의 차이는 JIT만의 함수가 아니다.** `docker compose restart`는 앱만 재시작하므로 **MySQL 버퍼 풀은 초기화되지 않고**, W2는 W1·B가 이미 데운 페이지를 읽는다. 게다가 `exec.scenario.iterationInTest`는 run마다 0부터 시작하므로 오프셋을 주지 않으면 세 run이 코호트의 **같은 머리 부분**만 반복해 그 편향이 정확히 겹친다. §17.5가 run마다 `RT_INDEX_OFFSET`을 다르게 주는 이유이고, 그래도 남는 몫(버퍼 풀 워밍)은 리포트 한계 절에 적는다.
 
@@ -2314,6 +2327,12 @@ python load-test/bench/arm-stats.py <OUTDIR> --table a20=<UTC> a40=<UTC> a30=<UT
    count(ticketrush_payment_booking_lookup_seconds_bucket)
    ```
    값은 `outcome` 조합 수 × 12(`slo` 11 + `+Inf`)이다. **위 4번 curl을 먼저 흘려야 조합이 생긴다.**
+6. **Rate Limit 완화가 적용됐는지**(§17.1-f). 완화 없이는 회차가 3번째 요청에서 abort한다. 컨테이너에 실제로 주입됐는지까지 확인한다 — `.env`만 고치고 `restart`하면 반영되지 않는다(`env_file`은 컨테이너 생성 시점에만 읽힌다).
+   ```bash
+   docker inspect gateway-service --format '{{range .Config.Env}}{{println .}}{{end}}' \
+     | grep -E '^RATE_LIMIT_(PAYMENT_CONFIRM|BOOKING)_'
+   ```
+   🔴 **회차가 끝나면 원복도 게이트다.** 완화 상태를 방치하면 운영에 그대로 남는다. 원복 후 위 명령이 빈 결과(=기본값 복귀)인지 확인한다.
 
 > 🛡 **예방 2겹 + 탐지 3겹.** 둘을 구분해 두는 것이 중요하다 — 킬 스위치는 예방이 아니다.
 >
@@ -2361,6 +2380,21 @@ K6="docker compose --profile loadtest run --rm --no-deps \
   k6 run /scripts/scenarios/payment-booking-roundtrip.js"
 ```
 
+> ⚠ **SSH 터널을 띄울 수 없는 환경이면 위 `K6=`를 그대로 쓸 수 없다.** remote-write 대상
+> (`http://localhost:9090`)은 터널이 있어야 EC2의 Prometheus에 닿는다. 키가 없어 터널을 못 여는
+> 경우 **호스트에 설치한 k6 바이너리로 직접 돌리고 remote-write를 포기한다**:
+>
+> ```bash
+> K6="k6 run load-test/scenarios/payment-booking-roundtrip.js"   # 호스트 바이너리
+> ```
+>
+> 이때 **증적의 형태가 달라진다** — `k6_*` 시계열이 TSDB에 들어가지 않으므로 `dropped_iterations`·
+> `rt_guard_blocked`·`rt_booking_unavailable`은 **stdout 종료 요약이 유일한 SSOT**가 되고,
+> `timeseries-*.json`과 Grafana 캡처를 남길 수 없다. k6 stdout 전문을 회차 디렉토리에 통째로
+> 커밋하고, PromQL 질의문과 출력을 `promql-evidence.md`로 대체 증적을 만든다
+> (표본: `260911-633-payment-booking-roundtrip/`). 앱 계측은 EC2 내부 Prometheus가 스크랩하므로
+> 영향받지 않는다.
+
 > `RT_COHORT_SIZE`를 빠뜨리면 기본값 10,000이 쓰인다. 시드를 다른 `@count`로 돌린 회차는 코호트 밖 `booking_id`를 찍어 404 → `test.abort()`로 끝난다.
 
 **`RT_INDEX_OFFSET`을 run마다 다르게 준다.** 이 값이 없으면 세 run이 코호트의 같은 머리 부분만 반복해 읽고, W2가 W1이 데운 InnoDB 버퍼 풀의 이득을 그대로 받는다. 값은 **구간이 겹치지 않게** 잡는다 — 기본값 기준 iteration 수는 W1 ≈ 1,440(8/s × 180s), B ≈ 6,200(8/s × 300s + 램프 + 12/s × 300s), W2 ≈ 1,440이므로 `0` / `1500` / `7800`이면 셋이 코호트 10,000 안에서 서로 겹치지 않는다.
@@ -2381,14 +2415,35 @@ docker compose restart payment-service booking-service
 $K6 $COMMON -e RT_PROFILE=warmup -e RT_INDEX_OFFSET=7800 2>&1 | tee w2-k6.txt
 ```
 
+> 🔴 **`RT_PROFILE`은 반드시 `-e`로 준다. 셸 환경변수로 주면 조용히 `main`으로 떨어진다.**
+> `RT_PROFILE=warmup k6 run ...`처럼 앞에 붙이면 값이 `__ENV`에 들어가지 않아
+> `config/env.js`의 `|| 'main'` 폴백이 먹는다. **에러가 나지 않는다.** `env.js`는 `warmup`/`main`
+> 외의 값을 throw로 끊지만, 셸 변수로 준 경우는 `__ENV`에 **아예 없어서** 오타가 아니므로
+> 코드로는 잡히지 않는다.
+>
+> 밟으면 W1/W2가 10분 20초 피크 프로필로 돌아 **워밍업 p99 근거가 통째로 사라지고**
+> `RT_INDEX_OFFSET` 구간이 서로 겹친다(2026-09-11 실측).
+>
+> **그래서 run을 띄운 직후 k6 출력의 시나리오 이름을 눈으로 확인한다.**
+>
+> | `RT_PROFILE` | 떠야 하는 시나리오 | 모양 |
+> |---|---|---|
+> | `warmup` | `rt_warmup` | constant-arrival-rate 8/s · 3m (≈1,440 it) |
+> | `main` | `rt_main` | ramping-arrival-rate 5m@8 → 20s → 5m@12 (≈6,200 it) |
+>
+> 이름이 다르면 **즉시 중단하고 다시 띄운다.** 미리 확인하려면 `k6 inspect`로 같은 인자를 넣어
+> 시나리오만 떠 볼 수 있다.
+
 **회차 2(배경 부하)는 위 세 run에 아래를 더한다.**
 
 ```bash
-BG="-e RT_BACKGROUND_RATE=20 -e PERF_ID=1 -e SEAT_ID_MIN=1 -e SEAT_ID_MAX=6000"
+BG="-e RT_BACKGROUND_RATE=20 -e PERF_ID=<실측> -e SEAT_ID_MIN=<실측> -e SEAT_ID_MAX=<실측>"
 # 예: $K6 $COMMON $BG -e RT_PROFILE=main -e RT_INDEX_OFFSET=1500 2>&1 | tee main-bg-k6.txt
 ```
 
-> ⚠ `PERF_ID`·`SEAT_ID_MIN`·`SEAT_ID_MAX`를 **반드시 명시한다.** 배경 부하는 실제 좌석에 예매 생성 요청을 흘리는데, 빠뜨리면 `env.js` 기본값(`PERF_ID=1` / `1~100`)으로 떨어져 어떤 공연·어떤 좌석을 치는지 근거가 없어진다. 위 값은 §13.3(`seed_load.sql` 코호트)과 같은 대역이며, 회차 전에 그 공연이 실제로 존재하는지 확인한다.
+> ⚠ `PERF_ID`·`SEAT_ID_MIN`·`SEAT_ID_MAX`를 **반드시 명시하되, 값은 회차마다 실측해 넣는다.** 빠뜨리면 `env.js` 기본값(`PERF_ID=1` / `1~100`)으로 떨어져 어떤 공연·어떤 좌석을 치는지 근거가 없어진다.
+>
+> 🔴 **이 문서에 고정값을 박아 두지 않는다.** `seat_id`는 `AUTO_INCREMENT`라 시드를 돌릴 때마다 달라진다. 실제로 2026-09-11 회차의 `seed_load.sql` 코호트는 `performance_id 40~49` · `seat_id 310703~316702`로, 이전 판에 예시로 적혀 있던 `PERF_ID=1` / `1~6000`과 **전혀 달랐다.** §13.3의 확인 쿼리로 회차 직전에 떠서 넣고, 그 값을 `metadata.txt`에 남긴다.
 >
 > ⚠ **`QUEUE_ENABLED`가 `true`이면 배경 부하는 게이트웨이에서 전건 403이 되어 booking-service에 도달하지 못한다**(입장 토큰이 없는 `POST /api/v1/booking`은 대기열이 막는다). 그러면 혼잡도가 0인데 회차는 정상으로 보인다. 회차 전에 값을 확인하고 `metadata.txt`에 적는다.
 
@@ -2411,17 +2466,27 @@ mysql --init-command="SET NAMES utf8mb4 COLLATE utf8mb4_unicode_ci; SET @i_confi
 ```promql
 # ★ 왕복 분포 (SSOT). 구간 전체를 통째로 낼 때는 rate 대신 increase 를 쓴다 —
 #   워밍업처럼 짧은 구간은 스크랩 15초 해상도로 잘라 볼 수 없고, 표본 수는 스크랩이 아니라
-#   그 구간에 들어온 요청 수가 정한다(8/s x 120s = 960건).
+#   그 구간에 들어온 요청 수가 정한다(8/s x 180s = 1,440건).
+#
+# 🔴 창을 run 길이에 맞추고 @ <run 종료 epoch> 로 평가 시점을 고정한다.
+#   상대 창([3m] 만 쓰는 것)은 "조회 시점" 기준으로 뒤를 돌아보므로, 회차가 끝나고 몇 분만
+#   지나도 창이 run 바깥을 덮어 NaN 이나 0 이 나온다. 히스토그램 버킷은 누적 카운터라
+#   @ modifier 로 고정하면 언제 조회하든 그 run 의 구간이 정확히 복원된다.
+#   warmup=[3m] / main=[11m] / main 내부 구간(B1·B2)=[5m] 처럼 창을 run 에 맞춘다.
 histogram_quantile(0.50, sum by (le) (increase(ticketrush_payment_booking_lookup_seconds_bucket{
-  outcome="success"}[2m])))
+  outcome="success"}[3m] @ 1789127906)))
 histogram_quantile(0.95, sum by (le) (increase(ticketrush_payment_booking_lookup_seconds_bucket{
-  outcome="success"}[2m])))
+  outcome="success"}[3m] @ 1789127906)))
 histogram_quantile(0.99, sum by (le) (increase(ticketrush_payment_booking_lookup_seconds_bucket{
-  outcome="success"}[2m])))
+  outcome="success"}[3m] @ 1789127906)))
 
 # 왕복 최댓값 — 퍼센타일이 상한에 붙어 보일 때 실제 꼬리를 가르는 유일한 단서.
 # ⚠ instant query 로 max() 를 쓰면 안 된다. Micrometer 의 _max 는 롤링 윈도우(기본 2분) 값이라
 #   "쿼리 시점 기준 최근 2분의 최댓값" 만 나온다. 회차 전체를 대표하려면 구간을 명시해야 한다.
+#
+# 🔴 _max 는 run 종료 직후에 떠야 한다. 버킷과 달리 누적이 아니라서 @ modifier 로도 복원되지
+#   않는다 — 롤링 2분 창을 놓치면 값 자체가 사라진다. 2026-09-11 회차의 W2 에서 실제로 놓쳐
+#   과소값이 남았다. run 이 끝나면 다른 질의보다 이것을 먼저 뜬다.
 max_over_time(ticketrush_payment_booking_lookup_seconds_max[10m])
 
 # 왕복 평균 — #402 의 3.20ms 와 직접 비교할 수 있는 유일한 축(그쪽은 평균 차분이었다)
@@ -2467,14 +2532,14 @@ sum(rate(http_server_requests_seconds_count{instance="booking-service:8090"}[1m]
 
 | 조건 | 왜 |
 |---|---|
-| `dropped_iterations > 0` | 도착률을 못 채웠다. 대상이 느려서인지 생성기가 모자라서인지 가를 수 없다 |
+| `dropped_iterations`가 iteration의 **0.1% 초과** | 도착률을 못 채웠다. 대상이 느려서인지 생성기가 모자라서인지 가를 수 없다. **0 초과이되 0.1% 이하면 폐기가 아니라 기록·해석 의무다** — 도착률이 목표를 채웠는지(`iterations` rate)를 함께 보고 `metadata.txt`에 사유를 적는다. 2026-09-11 W1의 1건(1/1440 = 0.07%, 생성기 기동 첫 순간, 도착률 7.99/s로 목표 8/s 충족)이 그 사례다 |
 | 시나리오가 `test.abort()`로 끝남 | 기대하지 않은 응답이 왔다 = 시딩 오염 |
 | `rt_guard_blocked < 1.0` | 측정군 일부가 기대 code로 끝나지 않았다. **503은 이 값도 함께 떨어뜨리므로 `rt_booking_unavailable`을 뺀 나머지로 읽는다** — 503은 ③까지 내려가서 실패한 건이라 원인이 다르다 |
 | `rt_booking_unavailable > 0` | 왕복 분포에 `outcome=failed`가 섞였다. 분리해 해석하거나 폐기한다 |
 | **회차 2에서** `rt_background_ok < 1.0` | 배경 부하가 booking에 닿지 않았다(401·403·404·5xx). "혼잡한 상태에서 잰 값"이라는 전제가 깨지므로 회차 1과 비교할 수 없다 |
 | Timer count ≠ booking internal 요청 수 | 1:1이 깨졌다 = 통제되지 않은 트래픽이 섞였다 |
 | `ticketrush_payment_pg_approve_seconds_count` 증분 > 0 | **PG 승인이 실행됐다. 회차 무효를 넘어 사고다** |
-| W1과 W2의 앞 120초 p99가 자릿수 차이 | 워밍업이 재현되지 않았다. 임계 근거로 쓸 수 없다 |
+| W1과 W2의 **run 전체** p99가 자릿수 차이 | 워밍업이 재현되지 않았다. 임계 근거로 쓸 수 없다. 창은 §17.6의 버킷 질의와 같게 잡는다(warmup = `[3m]`) |
 | 회차 중 CD 배포 발생 | `IMAGE_TAG`가 바뀌면 회차 재현성이 깨진다 |
 
 ### 17.8 #571 임계값 5종 매핑
@@ -2486,5 +2551,5 @@ sum(rate(http_server_requests_seconds_count{instance="booking-service:8090"}[1m]
 | `slowCallDurationThreshold` | **워밍업 p99**(W1·W2) + 정상 p99 | `max(워밍업 p99 × 여유, 정상 p99 × 배수)`. 검증: `< read-timeout(1s)`이면서 `> W1·W2 양쪽 p99` |
 | `slowCallRateThreshold` | 정상/피크 구간의 임계 초과 비율 | 정상 구간에서 초과가 0에 수렴해야 50%가 안전하다 |
 | `failureRateThreshold` | `outcome` 별 호출량 | `not_found`를 뺀 실패 비율. 정상 구간에서 0이어야 한다 |
-| `slidingWindowSize` · `minimumNumberOfCalls` | **호출량 RPS** | 정상 8/s 기준으로 윈도우가 몇 초 분량인지 환산해 정한다. 표본이 몇 초 만에 차는지가 곧 검출 지연이다 |
+| `slidingWindowSize` · `minimumNumberOfCalls` | **호출량 RPS** + **Rate Limit 상한**(§17.1-f) | 실측 RPS로 윈도우가 몇 초 분량인지 환산하되, **회차 RPS는 Rate Limit을 완화한 값이라 운영 도달량이 아니다.** 🔴 리밋은 **사용자당**이고 서킷 윈도우는 **인스턴스 전역**이라 둘을 같은 축으로 환산하면 안 된다 — 전역 도달량은 `동시 사용자 수 × 사용자당 허용량`이다. 실측 RPS를 그대로 쓸 수 없으면 (i) prod 실제 RPS를 먼저 뜨거나 (ii) `TIME_BASED` 윈도우로 호출량 가정 자체를 뺀다 |
 | `waitDurationInOpenState` | 회차에서 관측된 회복 시간 | 워밍업이 가라앉는 데 걸린 시간보다 길어야 재차 오탐하지 않는다 |
