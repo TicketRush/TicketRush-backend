@@ -192,6 +192,11 @@ public class PaymentCancelUseCase {
       // 클라이언트가 접지 못한 예외까지 여기서 센다. 새어 나가면 사용자에게 원시 500 이 나가는 것보다
       // 이 카운터가 침묵하는 것이 더 나쁘다 — 유일한 관측 축이라 그 구간의 차단이 통째로 안 보인다
       // (ADR 0015 판정 3 과 같은 규율).
+      //
+      // ⚠ 서킷(#571)이 켜져 있는 동안 이 분기는 도달하지 않는다 — BookingRestClient 의 fallback 이
+      // 먼저 BusinessException 으로 수렴시키기 때문이다. 죽은 코드가 아니라 킬 스위치
+      // (service.booking.circuit-breaker.enabled=false)를 끈 순간 되살아나는 방어선이다. 지우면
+      // 스위치를 꺼도 #490 상태로 돌아가지 않는다.
       countBlocked(BLOCKED_LOOKUP_FAILED);
       log.error("결제 취소 차단: 예매 조회에서 예기치 못한 오류가 발생했습니다. bookingId={}", bookingId, e);
       throw new BusinessException(ErrorStatus.PAYMENT_BOOKING_COMMUNICATION_FAILED, e);
