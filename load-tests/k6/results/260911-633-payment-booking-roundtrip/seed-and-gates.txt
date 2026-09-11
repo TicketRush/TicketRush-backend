@@ -1,0 +1,64 @@
+# #633 회차 1 — 시딩 규모와 사전 게이트 결과
+# 원자료. 서술은 report.md §6 에 있다.
+
+## 선행 시드 (seed_load.sql)
+loadtest 계정 user_id = 172256
+LOADTEST-* 공연 performance_id = 40 ~ 49
+좌석 seat_id = 310703 ~ 316702 (6,000석)
+
+⚠ 런북 §17.5 의 예시값(PERF_ID=1 / SEAT_ID_MIN=1 / SEAT_ID_MAX=6000)과 전혀 다르다.
+  seat_id 는 AUTO_INCREMENT 라 고정값을 문서에 박아 두는 것 자체가 위험하다.
+  이 회차에서 런북을 "회차마다 §13.3 확인 쿼리로 실측해 넣는다"로 고쳤다.
+
+⚠ loadtest 계정 비밀번호는 팀 공용 평문을 몰라 이 회차용으로 재설정했다(bcrypt UPDATE).
+  레포의 시드 파일은 수정하지 않았다.
+
+## 코호트 시드 (seed_payment_booking_roundtrip.sql @mode=seed @count=10000)
+perf_id        = 55 (LTR-A)
+booking_id_min = 3000001
+seat_id_min    = 318894
+cohort_size    = 10000
+
+이 시드에는 reset 모드가 없다. 회차가 코호트를 소모하지 않기 때문이다 —
+CONFIRMED 로 심은 예매는 PaymentConfirmUseCase ③에서 BOOKING_409_002 로 끊겨
+④(PG 승인)에 도달하지 않고, 그 경로는 DB 쓰기가 0이다. 그래서 같은 코호트로
+세 run 을 반복할 수 있다.
+
+## 게이트 §17.3-1 ~ 3 (시드 검증 SELECT 출력)
+pending             = 0
+payments_on_cohort  = 0
+expired_on_cohort   = 0
+owner_ok            = 10000   (= bookings 수와 일치)
+contiguous_bookings = 1
+booking_id_min_ok   = 1
+seats               = 10000
+sold                = 10000
+
+## 게이트 §17.3-4 (스모크)
+POST /api/v1/payment/confirm  booking_id=3000001 seat_id=318894 provider=KAKAO
+-> HTTP 409 BOOKING_409_002   (기대한 응답)
+
+이 첫 호출의 왕복이 Timer 에 **326.6ms** 로 찍혔다. 콜드 상태 단일 표본이고,
+워밍업 p99(23.4~23.9ms)보다 한 자릿수 크다. waitDurationInOpenState 가 왜 필요한지에
+대한 이 회차의 유일한 직접 증거다(다만 단일 표본이라 값을 정하지는 못한다).
+
+## 게이트 §17.3-5 (계측 존재)
+ticketrush_payment_booking_lookup_seconds_bucket 존재 확인
+job=ticketrush-services / instance=payment-service:8090
+
+## 배포 검증 (회차 전제)
+IMAGE_TAG = e77e18b8618223a81b81cdb83805bbbcaab7ff5c
+  gateway · payment · booking · performance 4개 서비스 전부 동일 태그
+  (= origin/main = PR #640 머지 커밋. 이 커밋에 #634 의 Timer 가 들어 있다)
+AWS_S3_BUCKET / AWS_REGION 주입 확인
+버킷 퍼블릭 읽기 정책 익명 GET 200
+nginx 호스트 client_max_body_size = 50m
+
+## 환경 스위치
+SPRING_PROFILES_ACTIVE = prod
+QUEUE_ENABLED          = false
+TOSS_PAYMENTS_ENABLED  = <미정의>  -> 기본 false -> Toss 빈 미등록
+  PG 스텁은 @Profile("!prod") 라 prod 에서 뜨지 않는다. 따라서
+  PaymentApprovalClientRouter 는 매칭 구현체도 fallback 도 없이
+  PAYMENT_PROVIDER_NOT_SUPPORTED 를 던진다.
+  → PG 도달 위험이 설정이 아니라 **빈 부재**로 원천 차단돼 있었다.
