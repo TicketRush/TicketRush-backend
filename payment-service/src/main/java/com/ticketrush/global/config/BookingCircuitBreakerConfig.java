@@ -68,9 +68,17 @@ public class BookingCircuitBreakerConfig {
    * — 근거 없음.</b> ticket-service 값을 그대로 차용했다. #633 은 회복 곡선을 시간축으로 분해하지 못해(콜드 첫 호출 326.6ms 단일 표본뿐) 이
    * 값을 지지하지도 반증하지도 않는다. 틀렸다면 서킷 상태가 open→half_open→open 으로 되풀이되는 <b>플래핑</b>으로 드러난다.
    *
+   * <p><b>{@code maxWaitDurationInHalfOpenState} = 60초 — 영구 갇힘 방지용이다.</b> 기본값 0 은 "타이머 없음"인데, 그
+   * 상태에서는 HALF_OPEN 이 <b>빠져나오지 못하는 경우가 있다.</b> resilience4j 가 호출을 감싸는 지점의 catch 는 {@code Exception}
+   * 이라 {@code Error} 가 나면 성공·실패 어느 쪽으로도 기록되지 않고 permit 도 반환되지 않는다. HALF_OPEN 의 permit 3개가 그렇게 소진되면
+   * 상태 전이를 일으킬 '기록된 호출'이 영영 생기지 않아 <b>조회가 전건 차단된 채 고정</b>된다 — fail-closed 경로에서 그것은 결제 확정 영구 503 이고,
+   * 재기동이나 킬 스위치 말고는 빠져나올 길이 없다. 이 상한이 있으면 그 구간이 60초 뒤 OPEN 으로 떨어져 정상 회복 절차를 다시 탄다. 값에 실측 근거는 없고
+   * 슬라이딩 윈도우와 같은 60초로 맞췄다. 저트래픽이라 HALF_OPEN 에서 3콜을 모으는 데 60초가 넘으면 OPEN↔HALF_OPEN 을 오가는데, 그때도 매 주기
+   * 3콜씩 통과하므로 회복 탐지는 계속된다.
+   *
    * <p>public 인 이유는 테스트가 {@code CircuitBreakerConfig.from(...)} 으로 이 설정을 파생해 윈도우·대기 시간만 줄여 쓰기 위함이다.
-   * 실패 판정 규칙({@link #isDownstreamFailure})을 테스트가 손으로 복제하면 규칙이 바뀌어도 테스트가 눈치채지 못한다(ticket-service 선례와
-   * 같은 규율).
+   * 판정 규칙({@link #isNotACircuitSignal})을 테스트가 손으로 복제하면 규칙이 바뀌어도 테스트가 눈치채지 못한다(ticket-service 선례와 같은
+   * 규율).
    */
   public static CircuitBreakerConfig bookingConfig() {
     return CircuitBreakerConfig.custom()
@@ -82,6 +90,7 @@ public class BookingCircuitBreakerConfig {
         .slowCallRateThreshold(50)
         .waitDurationInOpenState(Duration.ofSeconds(10))
         .permittedNumberOfCallsInHalfOpenState(3)
+        .maxWaitDurationInHalfOpenState(Duration.ofSeconds(60))
         .ignoreException(BookingCircuitBreakerConfig::isNotACircuitSignal)
         .build();
   }

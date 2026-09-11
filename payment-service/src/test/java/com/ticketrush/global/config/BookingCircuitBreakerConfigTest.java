@@ -73,6 +73,9 @@ class BookingCircuitBreakerConfigTest {
           assertThat(config.getWaitIntervalFunctionInOpenState().apply(1))
               .isEqualTo(Duration.ofSeconds(10).toMillis());
           assertThat(config.getPermittedNumberOfCallsInHalfOpenState()).isEqualTo(3);
+          // 기본값 0(=타이머 없음)이면 HALF_OPEN 에서 permit 이 반환되지 않는 경우에 빠져나올 길이
+          // 없다. fail-closed 경로라 그 상태는 결제 확정 영구 503 이다.
+          assertThat(config.getMaxWaitDurationInHalfOpenState()).isEqualTo(Duration.ofSeconds(60));
         });
   }
 
@@ -97,11 +100,6 @@ class BookingCircuitBreakerConfigTest {
         .isFalse();
     assertThat(config.getIgnoreExceptionPredicate().test(new IllegalStateException("boom")))
         .isFalse();
-    assertThat(
-            config
-                .getRecordExceptionPredicate()
-                .test(new BusinessException(ErrorStatus.PAYMENT_BOOKING_COMMUNICATION_FAILED)))
-        .isTrue();
   }
 
   @Test

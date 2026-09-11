@@ -182,6 +182,17 @@ public class BookingRestClient {
    * OutOfMemoryError}·{@code LinkageError}까지 여기로 온다. 그것을 "예매 정보 조회에 실패했습니다"(503)로 바꾸면 JVM이 망가진 상태가
    * 일시 장애로 둔갑해, 재시도하면 되는 줄 알고 트래픽을 계속 받게 된다.
    *
+   * <p>⚠ <b>그 대가로 {@code Error} 구간에는 관측축 대부분이 눈을 감는다.</b> resilience4j가 호출을 감싸는 지점의 catch가 {@code
+   * Exception}이라 <b>서킷 창에 아예 들어가지 않고</b>(그 구간에 조회가 전건 실패해도 서킷은 CLOSED다), 호출부 셋의 {@code catch
+   * (Exception)}도 {@code Error}를 잡지 않아 {@code guard_blocked}·{@code countBlocked}·{@code
+   * countSkip}이 전부 침묵한다. confirm 경로는 {@code @ExceptionHandler(Exception.class)}도 받지 않아 컨테이너 500으로
+   * 나간다. 남는 축은 {@link MetricNames#PAYMENT_BOOKING_LOOKUP}{@code {outcome=failed}} 하나뿐이다 — {@link
+   * #measured}의 {@code finally}는 {@code Error}에도 실행된다.
+   *
+   * <p>🔴 HALF_OPEN 중에 {@code Error}가 permit 수만큼 나면 permit이 반환되지 않아 서킷이 그 상태에 고정될 수 있다. {@code
+   * maxWaitDurationInHalfOpenState}가 그 탈출구다 — 근거는 {@link
+   * com.ticketrush.global.config.BookingCircuitBreakerConfig#bookingConfig()} javadoc에 있다.
+   *
    * <p>로그에 {@code throwable}을 마지막 인자로 넘겨 <b>스택을 남긴다.</b> 여기서 변환된 {@code BusinessException}은 {@code
    * GlobalExceptionHandler}의 {@code log.warn("Business exception: {}", message)}로 끝나 스택이 없다 — 그 전에는
    * 같은 예외가 catch-all의 {@code log.error(..., e)}로 스택과 함께 남았다. fail-closed 경로라 이 로그가 없으면 "결제 전건 503인데

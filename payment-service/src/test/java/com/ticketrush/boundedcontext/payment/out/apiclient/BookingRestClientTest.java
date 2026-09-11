@@ -45,7 +45,11 @@ class BookingRestClientTest {
   /** 테스트가 몇 번 만에 서킷을 열 수 있는지. 프로덕션(10)을 그대로 쓰면 테스트가 불필요하게 길어진다. */
   private static final int TEST_MIN_CALLS = 4;
 
+  /** open 대기. 이 값 자체를 검증하는 테스트는 없다 — half-open 전이는 명시 호출로 만든다. */
   private static final Duration TEST_WAIT_IN_OPEN = Duration.ofMillis(100);
+
+  /** HALF_OPEN 시간 상한. 프로덕션은 60초라 그대로 두면 테스트가 그만큼 기다려야 한다. */
+  private static final Duration TEST_MAX_WAIT_IN_HALF_OPEN = Duration.ofMillis(200);
 
   private MockRestServiceServer mockServer;
   private BookingRestClient client;
@@ -70,7 +74,7 @@ class BookingRestClientTest {
   }
 
   /**
-   * 실패 판정 규칙({@code recordException})은 프로덕션 설정에서 그대로 승계하고 게이팅·대기 시간만 줄인다. 규칙을 여기서 손으로 복제하면 프로덕션 규칙이
+   * 판정 규칙({@code ignoreException})은 프로덕션 설정에서 그대로 승계하고 게이팅·대기 시간만 줄인다. 규칙을 여기서 손으로 복제하면 프로덕션 규칙이
    * 바뀌어도 테스트가 눈치채지 못한다.
    *
    * <p>느린호출 임계만은 예외로 크게 벌린다. 프로덕션 값은 100ms 인데 {@code MockRestServiceServer} 왕복이라도 첫 호출은 JIT·
@@ -84,6 +88,7 @@ class BookingRestClientTest {
             .slowCallDurationThreshold(Duration.ofSeconds(10))
             .waitDurationInOpenState(TEST_WAIT_IN_OPEN)
             .permittedNumberOfCallsInHalfOpenState(2)
+            .maxWaitDurationInHalfOpenState(TEST_MAX_WAIT_IN_HALF_OPEN)
             .build();
 
     circuitBreakerRegistry = CircuitBreakerRegistry.ofDefaults();
@@ -581,4 +586,44 @@ class BookingRestClientTest {
     assertThat(circuitState()).isEqualTo(CircuitBreaker.State.CLOSED);
     mockServer.verify();
   }
+
+  @Test
+  @DisplayName("서킷: half-open 에서 Error 로 permit 이 소진돼도 상한 시간이 지나면 빠져나온다")
+  void half_open_does_not_get_stuck_when_error_consumes_permits() throws InterruptedException {
+    for (int i = 0; i < TEST_MIN_CALLS; i++) {
+      expectOnce(withServerError());
+    }
+    for (int i = 0; i < TEST_MIN_CALLS; i++) {
+      assertThatThrownBy(() -> client.getBooking(BOOKING_ID)).isInstanceOf(BusinessException.class);
+    }
+    assertThat(circuitState()).isEqualTo(CircuitBreaker.State.OPEN);
+
+    mockServer.reset();
+    int permitted = 2;
+    for (int i = 0; i < permitted; i++) {
+      expectOnce(
+          request -> {
+            throw new TestError();
+          });
+    }
+    circuitBreakerRegistry
+        .circuitBreaker(BookingCircuitBreakerConfig.BOOKING_CIRCUIT_BREAKER)
+        .transitionToHalfOpenState();
+
+    // Error 는 서킷을 감싸는 지점의 catch(Exception)에 걸리지 않아 성공·실패 어느 쪽으로도 기록되지
+    // 않고 permit 도 돌아오지 않는다. permit 을 다 먹으면 상태 전이를 일으킬 '기록된 호출'이 없다.
+    for (int i = 0; i < permitted; i++) {
+      assertThatThrownBy(() -> client.getBooking(BOOKING_ID)).isInstanceOf(TestError.class);
+    }
+    assertThat(circuitState()).isEqualTo(CircuitBreaker.State.HALF_OPEN);
+
+    Thread.sleep(TEST_MAX_WAIT_IN_HALF_OPEN.toMillis() + 300);
+
+    // 상한이 없으면 여기가 HALF_OPEN 인 채로 고정된다 — fail-closed 경로에서 그것은 결제 확정 영구
+    // 503 이고 재기동이나 킬 스위치 말고는 빠져나올 길이 없다.
+    assertThat(circuitState()).isEqualTo(CircuitBreaker.State.OPEN);
+  }
+
+  /** {@code Error} 갈래를 재현하기 위한 테스트 전용 타입. 실제 {@code OutOfMemoryError} 를 쓸 수는 없다. */
+  private static final class TestError extends Error {}
 }
