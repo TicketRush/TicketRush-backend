@@ -365,6 +365,8 @@ public class PaymentRecoverChargedExpiredBookingUseCase {
           e.getErrorStatus().getCode());
       return null;
     } catch (Exception e) {
+      // ⚠ 서킷(#571)이 켜져 있는 동안 이 분기는 도달하지 않는다 — BookingRestClient 의 fallback 이
+      // 먼저 BusinessException 으로 수렴시킨다. 킬 스위치를 끈 순간 되살아나는 방어선이므로 지우지 않는다.
       countSkip(SKIP_BOOKING_LOOKUP_FAILED);
       log.error("만료 예매 재확인 중 예기치 못한 오류가 발생했습니다. bookingId={}", bookingId, e);
       return null;
