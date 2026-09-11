@@ -39,7 +39,7 @@ POST /api/v1/payment/confirm  booking_id=3000001 seat_id=318894 provider=KAKAO
 -> HTTP 409 BOOKING_409_002   (기대한 응답)
 
 이 첫 호출의 왕복이 Timer 에 **326.6ms** 로 찍혔다. 콜드 상태 단일 표본이고,
-워밍업 p99(23.4~23.9ms)보다 한 자릿수 크다. waitDurationInOpenState 가 왜 필요한지에
+워밍업 p99(확정값 24.392 / 32.133ms)보다 한 자릿수 크다. waitDurationInOpenState 가 왜 필요한지에
 대한 이 회차의 유일한 직접 증거다(다만 단일 표본이라 값을 정하지는 못한다).
 
 ## 게이트 §17.3-5 (계측 존재)

@@ -19,7 +19,15 @@
 # ⚠ W2 는 "재기동 직후"를 재는 run 이다. B 직후가 아니라 재기동 직후여야 워밍업
 #   구간이 재현된다. 이 간격 동안 payment-service 를 재기동했다.
 
-# PromQL @ modifier 용 epoch (run 종료 시점)
+# PromQL @ modifier 용 epoch
+#
+# 🔴 아래 "run 종료 시점" epoch 를 그대로 창에 쓰면 안 된다. @ run종료 에 run 길이만큼의
+#   창을 걸면 창이 run 시작 뒤부터 열려 앞부분이 잘린다(실제로 밟았다 — 총건수 1325 vs k6 1440).
+#   **확정 창은 metadata.txt 의 RUN_*_WINDOW 를 따른다:**
+#     W1 [3m10s] @ 1789127912 / B [11m] @ 1789131065 / W2 [3m10s] @ 1789131702
+#   창이 run 을 덮었는지는 총건수를 k6 iteration 과 대조해 확인한다.
+#
+# (참고) run 종료 시점 자체의 epoch
 #   W1 end = 1789127906
 #   B1 end = 1789130724
 #   B2 end = 1789131044   (= B end)

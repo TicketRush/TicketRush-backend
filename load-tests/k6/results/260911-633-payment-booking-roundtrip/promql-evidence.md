@@ -127,7 +127,7 @@ sum(increase(ticketrush_payment_booking_lookup_seconds_count{outcome="success",�
 
 ---
 
-## 5. outcome 별 분포 — 🔴 503 이 Timer 에 없다
+## 5. outcome 별 분포 — 🔴 503 이 payment 계측 어디에도 없다
 
 | outcome | W1 | B | W2 |
 |---|---|---|---|
@@ -137,17 +137,51 @@ sum(increase(ticketrush_payment_booking_lookup_seconds_count{outcome="success",�
 
 `failed` 버킷은 W1 에서 **전 구간 0** 이다(`le=1.0`·`le=2.0` 포함).
 
-그런데 k6 는 같은 run 에서 `rt_booking_unavailable` **18건(1.25%)** 을 셌다. 그리고
-**Timer 총건수(1422.93)가 k6 iteration(1440)보다 17.1건 적다.** 두 수가 거의 일치한다.
+### 가드 카운터 (`ticketrush_payment_confirm_booking_guard_blocked_total`)
 
-**즉 그 503 들은 `getBooking` 의 Timer 를 통과하지 않았다.** Timer 는 메서드 전체를
-`try/finally` 로 감싸므로(`BookingRestClient` 86-106행), 예외가 났더라도 `finally` 에서
-`outcome=failed` 로 기록됐어야 한다. 기록이 없다는 것은 **실패 지점이 그 메서드 바깥**이라는 뜻이다.
+```promql
+sum by (reason) (increase(
+  ticketrush_payment_confirm_booking_guard_blocked_total[3m10s] @ 1789127912))
+```
 
-이 사실이 #571 에 직접 영향을 준다 — **서킷브레이커가 감쌀 구간에서 이 실패는 보이지 않는다.**
-`failureRateThreshold` 를 이 회차의 k6 실패율 위에 세울 수 없는 이유이고, 원인 규명은
-#571 로 넘긴다(회차 노트 §9.5).
+| reason | W1 | B | W2 |
+|---|---|---|---|
+| `CONFIRMED` | **1422.928** | 6344.186046511628 | 1443.857 |
+| `owner_unknown` | **0** | 0 | 0 |
+| `lookup_failed` | **0** | 0 | 0 |
+
+**`CONFIRMED` 가 Timer `success` 와 소수점까지 같다**(W1 1422.928 / B 6344.186046511628).
+같은 인스턴스의 메트릭이라 스크랩이 동일해 외삽 오차가 상쇄된 결과다.
+
+그런데 k6 는 W1 에서 HTTP 503 을 **18건** 셌다. payment 의 세 카운터 어디에도 그 흔적이 없다.
+→ **그 503 은 payment 의 booking 조회 경로에 도달하지 않았다.** 서킷(#571)이 감쌀 구간 밖이다.
+세 갈래를 어떻게 배제했는지는 회차 리포트 §4.3 에 있다.
+
+### booking 서버 수신 건수 (왕복 1:1 검증)
+
+```promql
+sum(increase(http_server_requests_seconds_count{
+  instance="booking-service:8090",
+  uri="/api/v1/internal/booking/{bookingId}"}[3m10s] @ 1789127912))
+```
+
+| run | booking 수신 | payment Timer success | 차이 | 응답 status |
+|---|---|---|---|---|
+| W1 | 1387.86 | 1422.93 | **−35.07** | 200 전건 |
+| B | **6344.186046511628** | **6344.186046511628** | **0** | 200 전건 |
+| W2 | 1478.46 | 1443.86 | **+34.60** | 200 전건 |
+
+🔴 **짧은 창에서 `increase()` 는 ±2.5% 흔들린다.** W1 은 35건 적고 W2 는 35건 많은데 부호가
+반대라 "트래픽이 샜다"로 읽을 수 없다. 3분 창에 15초 스크랩이면 표본이 12개뿐이라 경계 외삽
+오차가 그대로 실린다. **11분 창인 B 에서만 소수점까지 일치**했다.
+
+이 사실이 §4.3 의 논증 방식을 정했다 — **건수 차이가 아니라 카운터의 0 과 CONFIRMED↔success
+일치에 기댄다.**
+
+> ⚠ `uri` 라벨은 완전 일치 매처로 질의해 값이 반환되는 것을 확인했다(위 질의). 템플릿
+> 정규화는 성립한다. 다만 §3 의 하한 축 수치는 회차 당일 정규식 매처로 뜬 값이라 그대로 남는다.
 
 > ⚠ **소유자 불일치는 `not_found` 가 아니라 `success` 로 기록된다.** #572 의 소유자 대조는
 > `getBooking` 이 200 을 반환한 *뒤* UseCase 가 하는 판정이라, Timer 관점에서는 정상 왕복이다.
-> 게이트 `owner_ok=10000` 이 그 오염을 막는다.
+> 게이트 `owner_ok=10000` 이 그 오염을 막는다. `owner_mismatch` 는 404, `owner_unknown` 은
+> 503 으로 갈리며 이 회차는 둘 다 0 이다.

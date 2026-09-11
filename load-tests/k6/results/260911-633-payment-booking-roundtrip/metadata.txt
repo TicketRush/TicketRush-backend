@@ -35,12 +35,12 @@ METRIC_BUCKETS=1ms,2ms,5ms,10ms,25ms,50ms,100ms,250ms,500ms,1s,2s
 #   (payment-service/src/main/resources/application.yml:167. 상한 2s 인 이유는
 #    connect 1s + read 1s 가 순차로 들어갈 수 있어서다 — 동 파일 162-166 주석)
 INSTANCE_LABEL=payment-service:8090 / JOB_LABEL=ticketrush-services
-URI_LABEL=🔴 **미이행.** 런북 §17.7 은 booking 하한 축의 uri 라벨이
-#   /api/v1/internal/booking/{bookingId} 템플릿으로 정규화되는지 스모크에서 확인하고
-#   이 파일에 고정하라고 요구하는데, 이 회차는 그 확인을 하지 않았다.
-#   증적 질의도 uri=~".*internal/booking.*" 정규식 매처를 썼다(promql-evidence.md).
-#   정규식은 다른 internal booking 엔드포인트까지 포함할 수 있어 "왕복의 하한 축"이라는
-#   정의를 흔든다. 하한 축 수치를 그만큼 느슨하게 읽어야 한다.
+URI_LABEL=/api/v1/internal/booking/{bookingId}  (사후 확인)
+#   ⚠ 런북 §17.7 은 스모크 단계에서 확인해 이 파일에 고정하라고 요구하는데 그 절차는 밟지
+#     못했다. 재조회 때 완전 일치 매처로 질의해 값이 반환되는 것을 확인했으므로 템플릿
+#     정규화 자체는 성립한다(RESULT_BOOKING_SERVER_COUNT 가 그 질의 결과다).
+#   ⚠ 다만 회차 당일 하한 축 수치(RESULT_BOOKING_SERVER_P99)는 정규식 매처로 뜬 값이라
+#     그대로 남는다. 다른 internal 엔드포인트가 섞였을 수 있어 느슨하게 읽어야 한다.
 
 # ── 🔴 한계 1: k6 시계열이 Prometheus 에 없다 ───────────────────────────────
 LIMIT_NO_TUNNEL=SSH 키가 없어 터널(-L 9090)을 띄우지 못했다. 따라서
@@ -164,16 +164,25 @@ K6_W2=iterations 1441 @ 7.996521/s · dropped_iterations 없음(0) · vus_max 20
 #   ⚠ rt_confirm_duration 은 **왕복이 아니다.** 게이트웨이+인증+payment confirm 전 구간이다.
 #     서로 다른 분포의 퍼센타일을 나눠 "왕복이 confirm 의 몇 %" 라고 쓰지 않는다.
 
-# ── 🔴 결과: 503 18건이 Timer 에 기록되지 않았다 ────────────────────────────
-RESULT_FAILED_ABSENT=W1 의 outcome=failed 는 0 건이고 failed 버킷도 전 구간 0 이다.
-#   그런데 k6 는 같은 run 에서 rt_booking_unavailable 18건을 셌고,
-#   Timer 총건수(1422.93)가 k6 iteration(1440)보다 17.1건 적다. 두 수가 거의 일치한다.
-#   -> 그 503 들은 getBooking 의 Timer 를 통과하지 않았다. Timer 는 메서드 전체를
-#      try/finally 로 감싸므로(BookingRestClient 86-106행) 예외가 났어도 finally 에서
-#      outcome=failed 로 찍혔어야 한다. 기록이 없다 = 실패 지점이 그 메서드 바깥이다.
-#   🔴 #571 에 직접 영향: **서킷브레이커가 감쌀 구간에서 이 실패는 보이지 않는다.**
-#      failureRateThreshold 를 이 회차의 k6 실패율(1.25%) 위에 세울 수 없다.
-#      원인 규명은 #571 로 넘긴다.
+# ── 🔴 결과: 503 18건이 payment 계측 어디에도 없다 ────────────────────────
+RESULT_503_OUTSIDE_SCOPE=W1 의 k6 503 18건이 payment 의 세 카운터 어디에도 없다.
+#   Timer outcome=failed        = 0  (failed 버킷도 le=1.0·2.0 포함 전 구간 0)
+#   guard_blocked owner_unknown = 0  (getBooking 200 반환 "뒤" 의 503 경로 — 배제됨)
+#   guard_blocked lookup_failed = 0
+#   guard_blocked CONFIRMED     = 1422.928 = Timer success 1422.928 (소수점까지 일치)
+#   -> payment 에 도달한 요청은 전부 정상 왕복해 전부 기대 경로(③ BOOKING_409_002)로 끊겼다.
+#      그 503 들은 payment 의 booking 조회 경로에 애초에 도달하지 않았다.
+#   🔴 #571 함의: **서킷브레이커가 감쌀 구간에서 이 실패는 보이지 않는다.**
+#      failureRateThreshold 를 k6 실패율(1.25%) 위에 세울 수 없고(서킷이 보는 값은 0%),
+#      더 중요하게는 서킷을 붙여도 사용자는 같은 503 을 받는다. 별도 완화 수단이 필요하다.
+#   어느 층인지는 미규명. 게이트웨이에도 503 이 있고(AUTH_503_001·QUEUE_503_001) k6 는
+#   상태 코드만 보므로 그쪽도 같은 카운터에 들어간다. W1 이 재기동 직후 run 인 점과 정합하나
+#   k6 가 응답 body 의 code 를 남기지 않아 확정 불가. #571 착수 전 확인 1순위.
+RESULT_BOOKING_SERVER_COUNT=W1 1387.86 / B 6344.186046511628 / W2 1478.46
+#   payment Timer success 와의 차이: W1 -35.07 / B 0 / W2 +34.60. 응답은 세 run 전부 200.
+#   🔴 부호가 반대라 "트래픽이 샜다" 로 읽을 수 없다 — 짧은 창의 increase() 외삽 오차다.
+#     3분 창에 15초 스크랩이면 표본이 12개뿐이다. 11분 창인 B 에서만 소수점까지 일치했다.
+#     따라서 건수 차이(1440-1422.93=17.1)를 근거로 쓰지 않는다.
 RESULT_NOT_FOUND=세 run 전부 0. 코호트가 전부 실재하는 예매이기 때문이며,
 #   이 갈래는 #571 에서 서킷 실패로 세지 않을 분류라 회차가 일부러 비워 둔 축이다.
 
