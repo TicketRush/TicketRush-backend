@@ -2332,7 +2332,10 @@ python load-test/bench/arm-stats.py <OUTDIR> --table a20=<UTC> a40=<UTC> a30=<UT
    docker inspect gateway-service --format '{{range .Config.Env}}{{println .}}{{end}}' \
      | grep -E '^RATE_LIMIT_(PAYMENT_CONFIRM|BOOKING)_'
    ```
-   🔴 **회차가 끝나면 원복도 게이트다.** 완화 상태를 방치하면 운영에 그대로 남는다. 원복 후 위 명령이 빈 결과(=기본값 복귀)인지 확인한다.
+   🔴 **회차가 끝나면 원복도 게이트다.** 완화 상태를 방치하면 운영에 그대로 남는다.
+   판정은 "빈 결과"가 아니라 **회차 전 백업(`.env.bak.*`)과 같은 값인지**로 한다 — 운영 `.env` 가
+   원래 이 키들을 정의하고 있었다면 원복 성공 상태에서도 결과가 비지 않고, 반대로 컨테이너가
+   없거나 `inspect` 가 실패해도 빈 결과가 나오기 때문이다.
 
 > 🛡 **예방 2겹 + 탐지 3겹.** 둘을 구분해 두는 것이 중요하다 — 킬 스위치는 예방이 아니다.
 >
@@ -2472,13 +2475,23 @@ mysql --init-command="SET NAMES utf8mb4 COLLATE utf8mb4_unicode_ci; SET @i_confi
 #   상대 창([3m] 만 쓰는 것)은 "조회 시점" 기준으로 뒤를 돌아보므로, 회차가 끝나고 몇 분만
 #   지나도 창이 run 바깥을 덮어 NaN 이나 0 이 나온다. 히스토그램 버킷은 누적 카운터라
 #   @ modifier 로 고정하면 언제 조회하든 그 run 의 구간이 정확히 복원된다.
-#   warmup=[3m] / main=[11m] / main 내부 구간(B1·B2)=[5m] 처럼 창을 run 에 맞춘다.
+#   warmup=[3m10s] / main=[11m] 처럼 창을 run 보다 조금 넉넉하게 잡는다.
+#
+# 🔴 창의 "시작점"도 검산한다. @ run종료+20s 에 [3m] 을 걸면 창이 run시작+20s 부터 열려
+#   run 앞부분이 통째로 잘린다(#633 회차에서 실제로 밟았다 — 총건수 1325 vs k6 1440).
+#   -> 반드시 총건수를 k6 iteration 과 대조해 창이 run 을 덮었는지 확인한다. 아래 세 질의를
+#      "한 세트로" 뜬다. 분위수와 버킷을 따로 뜨면 창이 어긋나도 알아차릴 방법이 없다
+#      (#633 당일 값이 그렇게 모순됐다: le=25ms 누적 98.55% 인데 p99 23.410ms).
 histogram_quantile(0.50, sum by (le) (increase(ticketrush_payment_booking_lookup_seconds_bucket{
-  outcome="success"}[3m] @ 1789127906)))
+  outcome="success"}[<창>] @ <run종료 epoch>)))
 histogram_quantile(0.95, sum by (le) (increase(ticketrush_payment_booking_lookup_seconds_bucket{
-  outcome="success"}[3m] @ 1789127906)))
+  outcome="success"}[<창>] @ <run종료 epoch>)))
 histogram_quantile(0.99, sum by (le) (increase(ticketrush_payment_booking_lookup_seconds_bucket{
-  outcome="success"}[3m] @ 1789127906)))
+  outcome="success"}[<창>] @ <run종료 epoch>)))
+
+# ★ 창 검산 — 이 값이 k6 iteration 과 어긋나면 창이 틀린 것이다. 분위수보다 먼저 본다.
+sum(increase(ticketrush_payment_booking_lookup_seconds_count{
+  outcome="success"}[<창>] @ <run종료 epoch>))
 
 # 왕복 최댓값 — 퍼센타일이 상한에 붙어 보일 때 실제 꼬리를 가르는 유일한 단서.
 # ⚠ instant query 로 max() 를 쓰면 안 된다. Micrometer 의 _max 는 롤링 윈도우(기본 2분) 값이라
@@ -2497,14 +2510,23 @@ sum(rate(ticketrush_payment_booking_lookup_seconds_count{outcome="success"}[1m])
 # outcome 별 호출량 — #571 의 실패율 임계 근거. not_found 는 서킷 실패로 세지 않을 갈래다.
 sum by (outcome) (rate(ticketrush_payment_booking_lookup_seconds_count[1m]))
 
-# 왕복 하한 (booking 자체 처리시간). SSOT 와의 차이가 네트워크+클라이언트 오버헤드다.
+# 왕복 하한 (booking 자체 처리시간).
+# ⚠ 왕복 분위수와 "같은 창·같은 @ epoch" 로 떠야 한다. 창이 다르면 두 값을 나란히 놓을 수 없다.
+# ⚠ 그리고 두 퍼센타일을 빼서 "오버헤드" 라고 쓰지 않는다 — 서로 다른 분포의 분위수 차는
+#   어떤 요청의 오버헤드도 아니다(17.1-c 가 차분법을 기각한 것과 같은 이유). 자릿수 비교까지만 한다.
+# ⚠ uri 는 반드시 템플릿 그대로 매칭한다. 정규식(.*internal/booking.*)을 쓰면 다른 internal
+#   엔드포인트가 섞여 "하한 축" 정의가 흔들린다(#633 회차가 이행하지 못한 게이트다).
 histogram_quantile(0.99, sum by (le) (increase(http_server_requests_seconds_bucket{
-  instance="booking-service:8090", uri="/api/v1/internal/booking/{bookingId}"}[2m])))
+  instance="booking-service:8090", uri="/api/v1/internal/booking/{bookingId}"}[<창>] @ <run종료 epoch>)))
 
-# ★ 설계 검증 — 이 둘이 1:1 이어야 측정군이 전건 ③까지 내려간 것이다
-sum(rate(ticketrush_payment_booking_lookup_seconds_count[1m]))
-sum(rate(http_server_requests_seconds_count{
-  instance="booking-service:8090", uri="/api/v1/internal/booking/{bookingId}"}[1m]))
+# ★ 설계 검증 — 이 둘이 1:1 이어야 측정군이 전건 ③까지 내려간 것이다.
+#   rate([1m]) 은 회차 중 실시간 확인용이고, 회차 후 판정은 run 구간을 고정해 건수로 본다.
+sum(increase(ticketrush_payment_booking_lookup_seconds_count[<창>] @ <run종료 epoch>))
+sum(increase(http_server_requests_seconds_count{
+  instance="booking-service:8090", uri="/api/v1/internal/booking/{bookingId}"}[<창>] @ <run종료 epoch>))
+# ⚠ Timer 건수가 k6 iteration 보다 "적으면" 창 문제일 수도 있지만, 창을 맞춘 뒤에도 적다면
+#   그 호출들이 Timer 구간에 도달하지 못했다는 뜻이다 — #633 회차에서 503 18건이 그랬다.
+#   서킷(#571)이 감쌀 구간 밖의 실패이므로 반드시 원인을 규명한다.
 
 # ★ 안전 확인 — 회차 내내 0 이어야 한다.
 # ⚠ 이 값은 "PG 호출이 성사됐다" 가 아니라 "④ PG 단계에 진입했다" 신호다. 해당 Timer 는

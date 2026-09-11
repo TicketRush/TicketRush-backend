@@ -35,6 +35,12 @@ METRIC_BUCKETS=1ms,2ms,5ms,10ms,25ms,50ms,100ms,250ms,500ms,1s,2s
 #   (payment-service/src/main/resources/application.yml:167. 상한 2s 인 이유는
 #    connect 1s + read 1s 가 순차로 들어갈 수 있어서다 — 동 파일 162-166 주석)
 INSTANCE_LABEL=payment-service:8090 / JOB_LABEL=ticketrush-services
+URI_LABEL=🔴 **미이행.** 런북 §17.7 은 booking 하한 축의 uri 라벨이
+#   /api/v1/internal/booking/{bookingId} 템플릿으로 정규화되는지 스모크에서 확인하고
+#   이 파일에 고정하라고 요구하는데, 이 회차는 그 확인을 하지 않았다.
+#   증적 질의도 uri=~".*internal/booking.*" 정규식 매처를 썼다(promql-evidence.md).
+#   정규식은 다른 internal booking 엔드포인트까지 포함할 수 있어 "왕복의 하한 축"이라는
+#   정의를 흔든다. 하한 축 수치를 그만큼 느슨하게 읽어야 한다.
 
 # ── 🔴 한계 1: k6 시계열이 Prometheus 에 없다 ───────────────────────────────
 LIMIT_NO_TUNNEL=SSH 키가 없어 터널(-L 9090)을 띄우지 못했다. 따라서
@@ -53,7 +59,8 @@ LIMIT_RATE_LIMIT=같은 배포(PR #635, #423)에 게이트웨이 Rate Limit 이 
 #     payment-confirm-rate-limit : replenishRate 3 · burstCapacity 120 · requestedTokens 60
 #       -> 사용자당 허용 = 3/60 = 0.05 req/s = 분당 3건 (버스트 2건)
 #     booking-create-rate-limit  : replenishRate 5 · burst 120 · tokens 60 -> 사용자당 분당 5건
-#   (gateway-service/src/main/resources/application.yml:64,66)
+#   (gateway-service/src/main/resources/application.yml — confirm 은 64·66행,
+#    booking-create 는 110-112행)
 #   키는 userOrIpKeyResolver (X-User-Id 있으면 user:{id}, 없으면 ip:{addr}).
 #   ⚠ 이 리밋은 **사용자당**이고 서킷브레이커 윈도우는 **인스턴스 전역** 집계다.
 #     따라서 "운영 confirm 상한 = 분당 3건"은 성립하지 않는다 — 전역 도달량은
@@ -101,34 +108,53 @@ RUN_2_*=회차 2 (배경 부하) / **미실시** — 런북 §17.2 가 스스로
 #   되살릴 조건은 report.md §10.2 에 있다.
 
 # ── 결과: 왕복 분포 (outcome=success, Timer) ────────────────────────────────
-RESULT_W1_P50=6.676ms  / RESULT_W1_P95=14.650ms / RESULT_W1_P99=23.410ms / RESULT_W1_MAX=859.28ms
-RESULT_B_P50=3.567ms   / RESULT_B_P95=4.986ms   / RESULT_B_P99=9.280ms   / RESULT_B_MAX=22.30ms
-RESULT_W2_P50=7.081ms  / RESULT_W2_P95=18.288ms / RESULT_W2_P99=23.920ms / RESULT_W2_MAX=542.27ms
-#   ⚠ RESULT_W2_MAX 는 과소값이다. Micrometer 의 _max 는 롤링 2분 창이라 run 종료 직후에
-#     뜨지 않으면 사라진다. W2 에서 실제로 놓쳤다. p99 와 _max 를 함께 읽으라는 런북
-#     §17.7 지시의 근거가 이 사례다.
-RESULT_BOOKING_SERVER_P99=W1 16.075ms / B 5.743ms / W2 16.776ms
-#   booking 서버 자체 처리(http_server_requests)로 왕복의 **하한 축**이다. 차이가
-#   네트워크 + 클라이언트 오버헤드다(B 기준 약 3.5ms).
-RESULT_TIMER_COUNT=W1 1401.93 / B 6275.63 / W2 1438.99  (increase 외삽값)
-#   ⚠ 호출량 SSOT 는 k6 iteration 수다. PromQL rate()/increase() 는 창 경계와 15s 스크랩
-#     때문에 다르게 나온다. Timer 건수는 lookup:booking 1:1 대조용으로만 쓴다.
+# 🔴 아래 값은 회차 당일 값이 아니라 **사후 재조회로 확정한 값**이다. 당일에 뜬 값은
+#   분위수와 버킷이 서로 다른 창에서 나와 내적으로 모순이었다(le=25ms 누적 98.55% 인데
+#   p99 23.410ms — 98.55% < 99% 면 p99 는 25ms 초과여야 한다). 셀프 리뷰에서 잡아
+#   같은 창·같은 @ epoch 로 전부 다시 떴다. 확정 창은 아래 RUN_*_WINDOW 다.
+RUN_W1_WINDOW=[3m10s] @ 1789127912   # 11:55:22~11:58:32, 총건수 1422.93 (k6 1440)
+RUN_B_WINDOW=[11m]    @ 1789131065   # 12:40:05~12:51:05, 총건수 6344.19 (k6 6200)
+RUN_W2_WINDOW=[3m10s] @ 1789131702   # 12:58:32~13:01:42, 총건수 1443.86 (k6 1441)
+#   ⚠ 창의 시작점도 검산해야 한다. @ run종료+20s 에 [3m] 을 걸면 run 앞부분이 잘린다
+#     (재조회 1차에서 실제로 밟았다 — W1 총건수 1325 vs k6 1440).
+#     총건수를 k6 iteration 과 대조하는 것이 창 검산 방법이다.
 
-# ── 결과: 꼬리 (버킷 구간 건수, @ modifier 로 run 구간 고정) ────────────────
-RESULT_W1_TAIL=>25ms 20.3건(1.45%) · >50ms 7.0건(0.50%) · >100ms 7.0건(0.50%) · >250ms 5 · >500ms 3 · >1s 0
-RESULT_B_TAIL=25ms 초과 전 구간 0건 (6275.63건 중)
-RESULT_W2_TAIL=>25ms 16.2건(1.13%) · >50ms 7.0건(0.49%) · >100ms 7.0건(0.49%) · >250ms 5 · >500ms 3 · >1s 0
-RESULT_EMPTY_BAND=50~100ms 는 세 run 모두 0건인 빈 구간이다.
-#   임계를 50ms 가 아니라 100ms 로 잡아도 초과율이 동일하므로 검출력 손실 없이
-#   여유만 두 배가 된다. slowCallDurationThreshold=100ms 권고의 핵심 근거.
-RESULT_REPRODUCIBILITY=W1 과 W2 의 꼬리가 **건수 단위로 일치**한다
-#   (>100ms 7/7 · >250ms 5/5 · >500ms 3/3 · >1s 0/0). 무효 판정 "W1·W2 p99 자릿수 차이"를
-#   큰 여유로 통과한다(23.410 vs 23.920ms).
+RESULT_W1_P50=7.334ms  / RESULT_W1_P95=20.905ms / RESULT_W1_P99=24.392ms / RESULT_W1_MAX=859.28ms
+RESULT_B_P50=3.616ms   / RESULT_B_P95=6.735ms   / RESULT_B_P99=9.723ms   / RESULT_B_MAX=22.30ms
+RESULT_W2_P50=7.435ms  / RESULT_W2_P95=21.668ms / RESULT_W2_P99=32.133ms / RESULT_W2_MAX=542.27ms
+RESULT_MEAN=W1 7.352ms / B 3.424ms / W2 7.752ms   (sum/count. #402 의 평균 차분 3.20ms 와 비교 가능한 유일한 축)
+#   ⚠ _MAX 두 값은 회차 당일 롤링 2분 창에서 뜬 값이고 재조회로 복원되지 않는다
+#     (_max 는 누적이 아니라서 @ modifier 로 되살릴 수 없다). W2 는 창을 놓쳐 과소값이다.
+#     p99 와 _max 를 함께 읽으라는 런북 §17.7 지시의 근거가 이 사례다.
+RESULT_B_WINDOW_STABLE=yes  # [11m]/[12m] 두 창에서 p99 가 소수점 아래까지 동일(0.009722891566…)
+RESULT_BOOKING_SERVER_P99=W1 16.075ms / B 5.743ms / W2 16.776ms
+#   booking 서버 자체 처리(http_server_requests)로 왕복의 **하한 축**이다.
+#   ⚠ 이 값은 회차 당일 값이며 왕복과 같은 창으로 재조회하지 않았다. 왕복 분위수와
+#     직접 빼서 쓰지 않는다(퍼센타일 차분은 성립하지 않는다 — §1.2 와 같은 이유).
+RESULT_TIMER_COUNT=W1 1422.93 / B 6344.19 / W2 1443.86  (increase 외삽값)
+#   ⚠ 호출량 SSOT 는 k6 iteration 수다. PromQL increase() 는 스크랩 경계에서 외삽하므로
+#     정수로 떨어지지 않는다. Timer 건수는 lookup:booking 1:1 대조용으로만 쓴다.
+
+# ── 결과: 꼬리 (버킷 구간 건수, 확정 창 기준) ──────────────────────────────
+RESULT_W1_TAIL=>25ms 4.31건(0.303%) · >50ms 1.08건(0.076%) · >100ms 1.08건(0.076%) · >250ms 0 · >500ms 0 · >1s 0
+RESULT_B_TAIL=25ms 초과 전 구간 0건 (6344.19건 중)
+RESULT_W2_TAIL=>25ms 17.01건(1.178%) · >50ms 8.00건(0.554%) · >100ms 8.00건(0.554%) · >250ms 5.00 · >500ms 3.00 · >1s 0
+RESULT_EMPTY_BAND=50~100ms 는 세 run 모두 구간건수가 정확히 0 인 빈 구간이다.
+#   임계를 50ms 가 아니라 100ms 로 잡아도 초과 건수가 동일하므로 검출력 손실 없이
+#   여유만 두 배가 된다. slowCallDurationThreshold=100ms 권고의 핵심 근거이고,
+#   재조회 전후로 변하지 않은 유일한 논거다.
+RESULT_REPRODUCIBILITY=🔴 꼬리는 재현되지 않는다.
+#   W1 은 250ms 초과가 0건인데 W2 는 5건이다. p99 도 24.392 vs 32.133ms 로 32% 차이다.
+#   자릿수는 유지되므로 무효 기준(§17.7 "자릿수 차이")은 통과하지만, "같은 모양으로
+#   재현된다"고 말할 수 없다. 회차 당일 노트의 "꼬리가 건수 단위로 일치(7/7·5/5·3/3)"는
+#   모순된 창에서 나온 값이었고 철회한다.
 
 # ── 결과: k6 클라이언트 축 (stdout 요약이 SSOT) ─────────────────────────────
 K6_W1=iterations 1440 @ 7.989837/s · dropped_iterations 1 · vus_max 21(preAlloc 20)
 #   rt_guard_blocked 98.75% (1422/1440) · rt_booking_unavailable 1.25% (18/1440)
 #   rt_confirm_duration avg 64.31ms med 28.28ms p90 95.36ms p95 108.59ms max 2.7s
+#   ⚠ k6 자체 threshold(http_req_failed rate<0.01)를 1.24% 로 깨고 error 로 종료했다.
+#     런북 §17.7 무효 기준에는 k6 threshold 가 없으므로 회차 유효성과는 무관하다.
 K6_B=iterations 6200 @ 9.998471/s · dropped_iterations 없음(0) · vus_max 20
 #   rt_guard_blocked 100.00% (6200/6200) · rt_booking_unavailable 0.00% (0/6200)
 #   rt_confirm_duration avg 26.81ms med 17.22ms p90 66.12ms p95 92.04ms max 139.6ms
@@ -136,19 +162,33 @@ K6_W2=iterations 1441 @ 7.996521/s · dropped_iterations 없음(0) · vus_max 20
 #   rt_guard_blocked 100.00% (1441/1441) · rt_booking_unavailable 0.00% (0/1441)
 #   rt_confirm_duration avg 38.41ms med 24.15ms p90 85.28ms p95 101.65ms max 1.08s
 #   ⚠ rt_confirm_duration 은 **왕복이 아니다.** 게이트웨이+인증+payment confirm 전 구간이다.
-#     왕복(Timer)과 같은 축으로 읽으면 안 된다. 대비 자체는 유용하다 — B 기준
-#     confirm p95 92.04ms 중 왕복 p95 는 4.986ms 로 약 5% 다. report.md §2.3 참조.
+#     서로 다른 분포의 퍼센타일을 나눠 "왕복이 confirm 의 몇 %" 라고 쓰지 않는다.
+
+# ── 🔴 결과: 503 18건이 Timer 에 기록되지 않았다 ────────────────────────────
+RESULT_FAILED_ABSENT=W1 의 outcome=failed 는 0 건이고 failed 버킷도 전 구간 0 이다.
+#   그런데 k6 는 같은 run 에서 rt_booking_unavailable 18건을 셌고,
+#   Timer 총건수(1422.93)가 k6 iteration(1440)보다 17.1건 적다. 두 수가 거의 일치한다.
+#   -> 그 503 들은 getBooking 의 Timer 를 통과하지 않았다. Timer 는 메서드 전체를
+#      try/finally 로 감싸므로(BookingRestClient 86-106행) 예외가 났어도 finally 에서
+#      outcome=failed 로 찍혔어야 한다. 기록이 없다 = 실패 지점이 그 메서드 바깥이다.
+#   🔴 #571 에 직접 영향: **서킷브레이커가 감쌀 구간에서 이 실패는 보이지 않는다.**
+#      failureRateThreshold 를 이 회차의 k6 실패율(1.25%) 위에 세울 수 없다.
+#      원인 규명은 #571 로 넘긴다.
+RESULT_NOT_FOUND=세 run 전부 0. 코호트가 전부 실재하는 예매이기 때문이며,
+#   이 갈래는 #571 에서 서킷 실패로 세지 않을 분류라 회차가 일부러 비워 둔 축이다.
 
 # ── 무효 기준 대조 (런북 §17.7) ─────────────────────────────────────────────
 VALID_W1=yes (해석 주의 2건)
-#   - dropped_iterations 1 건: 런북 규칙은 "> 0 이면 무효"다. 그러나 1/1440 = 0.07% 이고
-#     도착률 7.989837/s 로 목표 8/s 를 채웠으며 생성기 기동 첫 순간에 발생했다.
-#     "대상이 느려서 생성기가 못 따라간" 신호로 읽을 수 없다 → 채택하고 런북 규칙을
-#     비율 임계로 고쳤다(§17.7 수정분).
+#   - dropped_iterations 1 건: 런북 규칙은 "> 0 이면 무효"였다. 그러나 1/1440 = 0.07% 이고
+#     도착률 7.989837/s 로 목표 8/s 를 채웠다. "대상이 느려서 생성기가 못 따라간" 신호로
+#     읽을 근거가 없다 → 채택하고 런북 규칙을 비율 임계로 고쳤다(§17.7 수정분).
+#     🔴 이 판단은 **결과를 본 뒤 기준을 완화한 것**이다. 순서를 숨기지 않기 위해 적어 둔다.
+#     ⚠ k6 stdout 에는 총계만 있고 발생 시점이 없다. "기동 첫 순간"은 관측이 아니라 추정이므로
+#       판단 근거에서 뺐다.
 #   - rt_booking_unavailable 18 건(1.25%): 런북이 허용한 "분리해 해석"을 택했다.
-#     분포는 outcome=success 로만 내고 failed 18건은 report.md §4.3 에서 따로 다룬다.
-VALID_B=yes (9종 전부 통과)
-VALID_W2=yes (9종 전부 통과)
+#     분포는 outcome=success 로만 낸다. 단 그 18건은 Timer 에 아예 없다(RESULT_FAILED_ABSENT).
+VALID_B=yes (적용 가능한 8종 전부 통과. 9번 W1·W2 p99 대조는 B 에 적용 불가)
+VALID_W2=yes (8종 통과. 9번 재현성은 자릿수 기준으로만 통과 — RESULT_REPRODUCIBILITY 참조)
 PG_APPROVE_DELTA=0  (세 run 전부. 카운터는 finally 라 PROVIDER_NOT_SUPPORTED 로도 오르므로
 #   "④ 진입" 신호이지 "PG 성사" 신호가 아니다 — 0 이 아니면 오진단 위험)
 
