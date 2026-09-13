@@ -115,6 +115,12 @@ TicketRush는 API Gateway를 단일 진입점으로 두고, 인증·회원·공�
 운영 환경에서는 Nginx가 외부 HTTPS 요청을 받아 `gateway-service`로 전달하고, Gateway가 요청 경로에 따라 각 도메인 서비스로 라우팅합니다.
 서비스 간 상태 변경은 Kafka 이벤트를 중심으로 처리하며, 좌석 선점·대기열처럼 빠른 상태 접근과 동시성 제어가 필요한 영역에는 Redis를 사용합니다.
 
+#### 인프라 구성
+
+<img src="docs/images/architecture.png" width="800" alt="TicketRush AWS 인프라 아키텍처 — Nginx·Gateway·7개 도메인 서비스와 MySQL·Redis·Kafka·관측 스택이 단일 EC2의 Docker Compose에서 실행">
+
+#### 서비스 간 흐름
+
 ```mermaid
 flowchart TB
     CLIENT["Web Client"]
