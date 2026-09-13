@@ -117,7 +117,7 @@ TicketRush는 API Gateway를 단일 진입점으로 두고, 인증·회원·공�
 
 #### 인프라 구성
 
-<img src="docs/images/architecture.png" width="800" alt="TicketRush AWS 인프라 아키텍처 — Nginx·Gateway·7개 도메인 서비스와 MySQL·Redis·Kafka·관측 스택이 단일 EC2의 Docker Compose에서 실행">
+<img src="docs/images/architecture.png" width="800" alt="TicketRush AWS 인프라 아키텍처 — EC2 호스트의 Nginx가 HTTPS를 받아 Docker Compose로 실행되는 Gateway·7개 도메인 서비스와 MySQL·Redis·Kafka·관측 스택으로 전달">
 
 #### 서비스 간 흐름
 
