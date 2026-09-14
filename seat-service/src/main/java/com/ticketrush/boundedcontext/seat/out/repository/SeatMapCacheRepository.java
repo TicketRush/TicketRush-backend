@@ -9,7 +9,7 @@ import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.stereotype.Repository;
 
 /**
- * 좌석맵 조회 응답의 JSON 배열 문자열 캐시(#469).
+ * 좌석맵 조회 응답의 JSON 객체 문자열 캐시(#469, 형식은 #645).
  *
  * <p>DTO가 아니라 직렬화된 JSON을 값으로 두는 이유는 {@code SeatFacade#getPerformanceSeatMap} 참고. 모든 연산이
  * <b>fail-open</b>이다 — prod Redis는 {@code maxmemory 64mb} + {@code noeviction}(락 키 evict 방지,
@@ -24,7 +24,8 @@ public class SeatMapCacheRepository {
   // Redis 키 컨벤션 {도메인}:{엔티티}[:{식별자}] (docs/backend-convention.md §4).
   // seat:lock: 프리픽스가 아니므로 TTL 만료 이벤트가 SeatLockExpirationListener에 걸리지 않는다.
   // v2: hold_expired_at을 UTC(Z)로 직렬화한 원문. 구 포맷(무시간대) 값을 읽지 않도록 키를 분리했다 (#646).
-  private static final String SEAT_MAP_PREFIX = "seat:seat-map:v2:";
+  // v3: 배열이 아니라 {"layout":..,"seats":[..]} 객체다 (#645). 구버전이 적재한 v2 배열 원문을 읽지 않는다.
+  private static final String SEAT_MAP_PREFIX = "seat:seat-map:v3:";
 
   // 무효화는 SeatStatusEventPublisher가 담당하고, TTL은 evict 누락·cache-aside 경합(커밋 직전 스냅샷이
   // evict 직후 적재되는 창)의 stale 상한이다(performance-service PERFORMANCE_LIST_TTL과 같은 근거).
@@ -54,7 +55,7 @@ public class SeatMapCacheRepository {
         .register(meterRegistry);
   }
 
-  /** 히트 시 캐시된 JSON 배열 문자열, 미스·Redis 장애·손상 값이면 null. */
+  /** 히트 시 캐시된 JSON 객체 문자열, 미스·Redis 장애·손상 값이면 null. */
   public String get(Long performanceId) {
     String cached;
     try {
@@ -65,11 +66,11 @@ public class SeatMapCacheRepository {
       return null;
     }
 
-    if (cached != null && !cached.startsWith("[")) {
+    if (cached != null && !cached.startsWith("{")) {
       // 이 값은 파싱 없이 응답 본문에 그대로 스플라이스되므로(RawValue), 외부에서 손상된 값이 실리면
       // 응답 전체가 invalid JSON이 된다. 파싱 없는 최소 검증으로 걸러 버리고 DB로 내려간다.
       failureCounter.increment();
-      log.warn("좌석맵 캐시 값이 JSON 배열 형태가 아니라 폐기한다. performanceId: {}", performanceId);
+      log.warn("좌석맵 캐시 값이 JSON 객체 형태가 아니라 폐기한다. performanceId: {}", performanceId);
       evict(performanceId);
       return null;
     }

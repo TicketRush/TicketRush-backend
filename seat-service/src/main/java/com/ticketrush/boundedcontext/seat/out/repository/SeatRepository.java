@@ -137,7 +137,8 @@ public interface SeatRepository extends JpaRepository<Seat, Long> {
 
   @Query(
       "SELECT new com.ticketrush.boundedcontext.seat.app.dto.response.SeatMapItemResponse("
-          + "s.id, s.seatLayoutId, s.seatNumber, s.seatStatus, s.holdExpiredAt) "
+          + "s.id, s.seatLayoutId, s.seatNumber, s.seatRow, s.seatCol, s.seatStatus, "
+          + "s.holdExpiredAt) "
           + "FROM Seat s "
           + "WHERE s.performanceId = :performanceId")
   List<SeatMapItemResponse> findSeatMapByPerformanceId(@Param("performanceId") Long performanceId);
