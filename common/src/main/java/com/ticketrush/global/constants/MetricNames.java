@@ -126,7 +126,7 @@ public class MetricNames {
   // already_refunded 와 refund_failed_history 는 "돈이 돌아갔는가"가 정반대이고(후자는 미해결 사고인데
   // 예매가 EXPIRED 라 booking 쪽 관리자 게이트도 열리지 않아 이 태그가 유일한 창구다),
   // booking_alive 와 booking_status_unknown 은 "정상"과 "상대가 계약을 바꿔 복구가 전면 정지"의 차이다.
-  //
+
   // ⚠️ already_refunded 는 오늘 코드에서 사실상 도달하지 않는다. 후보가 되려면 payment 가 COMPLETED 여야
   // 하는데 PaymentCancelPersister 가 환불 저장과 markCanceled 를 한 트랜잭션에 묶으므로
   // refund=COMPLETED 인 booking 은 payment 가 CANCELED 라 앞선 결제 대조에서 이미 빠진다. 그래서 이 값이
