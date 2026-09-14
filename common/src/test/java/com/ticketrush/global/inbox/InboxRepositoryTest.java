@@ -5,6 +5,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import com.ticketrush.global.jpa.config.JpaConfig;
 import java.time.LocalDateTime;
+import java.time.ZoneOffset;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -83,12 +84,14 @@ class InboxRepositoryTest {
         InboxEntity.of("seat-group", "evt-old", "PerformanceCreatedEvent"));
 
     // when & then: 과거 threshold면 아무것도 삭제되지 않는다
-    int deletedByPast = inboxRepository.deleteCreatedBefore(LocalDateTime.now().minusMinutes(1));
+    int deletedByPast =
+        inboxRepository.deleteCreatedBefore(LocalDateTime.now(ZoneOffset.UTC).minusMinutes(1));
     assertThat(deletedByPast).isZero();
     assertThat(inboxRepository.existsByConsumerGroupAndEventId("seat-group", "evt-old")).isTrue();
 
     // 미래 threshold면 방금 저장된 row가 삭제된다
-    int deletedByFuture = inboxRepository.deleteCreatedBefore(LocalDateTime.now().plusMinutes(1));
+    int deletedByFuture =
+        inboxRepository.deleteCreatedBefore(LocalDateTime.now(ZoneOffset.UTC).plusMinutes(1));
     assertThat(deletedByFuture).isEqualTo(1);
     assertThat(inboxRepository.existsByConsumerGroupAndEventId("seat-group", "evt-old")).isFalse();
   }

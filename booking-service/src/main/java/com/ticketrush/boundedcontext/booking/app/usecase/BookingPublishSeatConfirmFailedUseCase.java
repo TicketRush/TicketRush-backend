@@ -8,6 +8,7 @@ import com.ticketrush.global.exception.BusinessException;
 import com.ticketrush.global.status.ErrorStatus;
 import com.ticketrush.shared.booking.event.SeatConfirmFailedEvent;
 import java.time.LocalDateTime;
+import java.time.ZoneOffset;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
@@ -62,6 +63,6 @@ public class BookingPublishSeatConfirmFailedUseCase {
             booking.getBookingNumber(),
             booking.getSeatId(),
             booking.getUserId(),
-            LocalDateTime.now()));
+            LocalDateTime.now(ZoneOffset.UTC)));
   }
 }

@@ -86,7 +86,7 @@ class SeatReleaseSoldSeatUseCaseTest {
   void execute_skip_when_booking_number_missing_and_seat_owned_by_others() {
     // given: 이슈 #608 시나리오 — A의 예매가 좌석을 놓친 뒤 B가 그 좌석을 사서 SOLD가 됐고,
     // 그 상태에서 A가 결제 취소를 누르면 예매 번호 없는 반환 이벤트가 B의 좌석에 도착한다.
-    //
+
     // 주의: 이 테스트는 가드를 켠 구성이다. 배포 기본값(false)에서 이 시나리오를 실제로 막는 것은
     // payment 가 예매 번호를 채우는 쪽이고, seat 에서는 아래 mismatch 테스트가 그 방어를 고정한다.
     refundReleaseProperties.setRequireBookingNumber(true);

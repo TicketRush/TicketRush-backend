@@ -2,6 +2,7 @@ package com.ticketrush.boundedcontext.payment.out.apiclient;
 
 import com.ticketrush.boundedcontext.payment.domain.types.PaymentProvider;
 import java.time.LocalDateTime;
+import java.time.ZoneOffset;
 import java.util.UUID;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
@@ -49,7 +50,7 @@ public class StubPaymentApprovalClient implements PaymentApprovalClient {
     /* method는 stub이 지어낼 값이지만, 비워두면 local/dev에서 결제수단이 항상 null이라 저장·노출 경로를 눈으로 확인할 수
      * 없다(#593). Toss가 실제로 내려주는 한글 원문 중 가장 흔한 값을 고정으로 쓴다. */
     return new PaymentApprovalResponse(
-        UUID.randomUUID().toString(), request.amount(), LocalDateTime.now(), "카드");
+        UUID.randomUUID().toString(), request.amount(), LocalDateTime.now(ZoneOffset.UTC), "카드");
   }
 
   private String mask(String value) {

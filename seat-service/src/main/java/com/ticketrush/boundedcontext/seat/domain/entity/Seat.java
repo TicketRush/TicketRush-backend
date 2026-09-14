@@ -11,8 +11,10 @@ import jakarta.persistence.EnumType;
 import jakarta.persistence.Enumerated;
 import jakarta.persistence.Index;
 import jakarta.persistence.Table;
+import jakarta.persistence.UniqueConstraint;
 import jakarta.persistence.Version;
 import java.time.LocalDateTime;
+import java.time.ZoneOffset;
 import lombok.AccessLevel;
 import lombok.Builder;
 import lombok.Getter;
@@ -30,7 +32,7 @@ import lombok.NoArgsConstructor;
  *       cost ≈ 1.29ms + 0.996µs × 좌석수}). 커버링이 되면 그 몫이 줄어든다 — <b>고정항 1.29ms는 남으며 이 최적화의 상한이
  *       거기다</b>(#521).
  *   <li><b>좌석맵 조회</b>({@code findSeatMapByPerformanceId})는 {@code seat_layout_id}·{@code
- *       seat_number}까지 읽어 커버링은 안 되지만, 선두 컬럼이 {@code performance_id}로 같아 range scan 진입은 동일하다.
+ *       seat_number}·좌표까지 읽어 커버링은 안 되지만, 선두 컬럼이 {@code performance_id}로 같아 range scan 진입은 동일하다.
  * </ul>
  *
  * <p><b>단일 컬럼 {@code idx_seat_performance_id}는 제거했다(#521).</b> 위 인덱스가 그것의 leftmost prefix 상위집합이라 두
@@ -78,6 +80,11 @@ import lombok.NoArgsConstructor;
  * <pre>
  *   ALTER TABLE seat ADD COLUMN version bigint NOT NULL DEFAULT 0;
  * </pre>
+ *
+ * <p><b>좌표 컬럼 {@code seat_row}·{@code seat_col}과 유니크 키도 기존 가동 DB에 수동 적용한다(#645).</b> 좌석맵 조회가 이 좌표를
+ * 읽어 프론트가 좌석 번호를 파싱하지 않게 한다. 확장 → 백필 → 제약 강화 순서의 SQL은 {@code
+ * deploy/mysql/migrations/645-seat-row-col/}, 순서와 롤백은 {@code docs/seat-map-layout-rollout.md}가
+ * SSOT다.
  */
 @Entity
 @Table(
@@ -87,6 +94,11 @@ import lombok.NoArgsConstructor;
           name = "idx_seat_performance_id_status_hold_expired_at",
           columnList = "performance_id, seat_status, hold_expired_at"),
       @Index(name = "idx_seat_status_hold_expired_at", columnList = "seat_status, hold_expired_at")
+    },
+    uniqueConstraints = {
+      @UniqueConstraint(
+          name = "uk_seat_performance_id_seat_row_seat_col",
+          columnNames = {"performance_id", "seat_row", "seat_col"})
     })
 @Getter
 @NoArgsConstructor(access = AccessLevel.PROTECTED)
@@ -110,6 +122,19 @@ public class Seat extends AutoIdBaseEntity {
 
   @Column(nullable = false, length = 10)
   private String seatNumber;
+
+  /*
+   * 1부터 시작하는 좌석 좌표(#645). seatNumber는 표시용으로 남는다.
+   *
+   * updatable = false인 이유: 좌표는 생성 후 바뀌지 않는다. 그리고 기존 DB 백필 도중 신버전이 백필 전에 읽은 엔티티(좌표 null)를
+   * 더티 체킹으로 flush하면, Hibernate가 전 컬럼 UPDATE로 백필 값을 NULL로 되돌린다. @Version도 이를 못 잡는다 — 백필 SQL은
+   * version을 올리지 않는다.
+   */
+  @Column(nullable = false, updatable = false)
+  private Integer seatRow;
+
+  @Column(nullable = false, updatable = false)
+  private Integer seatCol;
 
   @Enumerated(EnumType.STRING)
   @Column(nullable = false)
@@ -171,12 +196,16 @@ public class Seat extends AutoIdBaseEntity {
       Long seatLayoutId,
       Long performanceId,
       String seatNumber,
+      Integer seatRow,
+      Integer seatCol,
       SeatStatus seatStatus,
       LocalDateTime holdExpiredAt,
       String bookingNumber) {
     this.seatLayoutId = seatLayoutId;
     this.performanceId = performanceId;
     this.seatNumber = seatNumber;
+    this.seatRow = seatRow;
+    this.seatCol = seatCol;
     this.seatStatus = seatStatus;
     this.holdExpiredAt = holdExpiredAt;
     this.bookingNumber = bookingNumber;
@@ -211,7 +240,7 @@ public class Seat extends AutoIdBaseEntity {
     }
 
     // 3. 시간 유효성 검증
-    if (expiredAt == null || expiredAt.isBefore(LocalDateTime.now())) {
+    if (expiredAt == null || expiredAt.isBefore(LocalDateTime.now(ZoneOffset.UTC))) {
       throw new BusinessException(ErrorStatus.SEAT_HOLD_TIME_INVALID);
     }
 

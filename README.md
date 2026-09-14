@@ -115,6 +115,12 @@ TicketRush는 API Gateway를 단일 진입점으로 두고, 인증·회원·공�
 운영 환경에서는 Nginx가 외부 HTTPS 요청을 받아 `gateway-service`로 전달하고, Gateway가 요청 경로에 따라 각 도메인 서비스로 라우팅합니다.
 서비스 간 상태 변경은 Kafka 이벤트를 중심으로 처리하며, 좌석 선점·대기열처럼 빠른 상태 접근과 동시성 제어가 필요한 영역에는 Redis를 사용합니다.
 
+#### 인프라 구성
+
+<img src="docs/images/architecture.png" width="800" alt="TicketRush AWS 인프라 아키텍처 — EC2 호스트의 Nginx가 HTTPS를 받아 Docker Compose로 실행되는 Gateway·7개 도메인 서비스와 MySQL·Redis·Kafka·관측 스택으로 전달">
+
+#### 서비스 간 흐름
+
 ```mermaid
 flowchart TB
     CLIENT["Web Client"]
@@ -379,6 +385,8 @@ SPRING_PROFILES_ACTIVE=prod
 DB·Redis·Kafka 또한 각각 `DB_HOST`, `REDIS_HOST`, `KAFKA_BOOTSTRAP_SERVERS`로 접속 대상을 분리하여 인프라 변경이 애플리케이션 코드 변경으로 이어지지 않도록 구성했습니다.
 
 현재 `docker-compose.prod.yml`에서는 **MySQL·Redis·Kafka를 애플리케이션과 동일한 EC2에서 컨테이너로 실행**합니다. 접속 정보가 외부화되어 있으므로 향후 RDS·ElastiCache·MSK 등 관리형 인프라로 이전할 수 있습니다.
+
+발생·만료 시각 응답의 UTC 전환(#646) 배포·롤백 전 확인 사항과 절차는 [`docs/utc-timestamp-rollout.md`](docs/utc-timestamp-rollout.md)를 따릅니다.
 
 
 ## 🚀 시작하기 (Getting Started)

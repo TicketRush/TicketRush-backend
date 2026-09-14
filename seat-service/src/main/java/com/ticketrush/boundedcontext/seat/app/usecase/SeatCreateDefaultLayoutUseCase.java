@@ -21,7 +21,12 @@ import org.springframework.transaction.annotation.Transactional;
  *
  * <p><b>SeatLayout의 totalRows × maxCols는 실제 좌석 수와 다를 수 있다.</b> 마지막 행이 부분 행이기 때문이다(10,000석이면 26행 ×
  * 385열 = 10,010칸 중 10,000석만 만들고 Z행은 375석에서 끊긴다). 이 두 값을 곱해 좌석 수를 유도하는 코드를 만들면 안 된다 — 좌석 수의 원본은 seat
- * 테이블의 행 수다. 현재 이 둘을 읽는 곳은 이 클래스의 생성 루프뿐이다(#590 시점 grep 확인).
+ * 테이블의 행 수다. 이 둘은 생성 루프와, 프론트가 배치 크기를 그리도록 내려주는 좌석맵 조회(#645)가 읽는다.
+ *
+ * <p><b>좌석마다 1부터 시작하는 좌표({@code seatRow}·{@code seatCol})를 함께 저장한다(#645).</b> 프론트가 {@code
+ * seatNumber}를 파싱하지 않고 렌더링하기 위해서다. 기존 DB 백필({@code
+ * deploy/mysql/migrations/645-seat-row-col/2-backfill.sql})의 격자 해석이 이 루프의 행 우선 채움과 같은 산식이므로, 채움 순서를
+ * 바꾸면 백필 판정도 함께 바꿔야 한다.
  */
 @Slf4j
 @Service
@@ -113,6 +118,8 @@ public class SeatCreateDefaultLayoutUseCase {
                 .seatLayoutId(seatLayout.getId())
                 .performanceId(seatLayout.getPerformanceId())
                 .seatNumber(rowName + "-" + col)
+                .seatRow(row + 1)
+                .seatCol(col)
                 .seatStatus(SeatStatus.AVAILABLE)
                 .holdExpiredAt(null)
                 .build());

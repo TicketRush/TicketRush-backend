@@ -17,6 +17,7 @@ import com.ticketrush.global.exception.BusinessException;
 import io.micrometer.core.instrument.Counter;
 import io.micrometer.core.instrument.MeterRegistry;
 import java.time.LocalDateTime;
+import java.time.ZoneOffset;
 import java.util.List;
 import java.util.Locale;
 import java.util.Set;
@@ -159,7 +160,7 @@ public class PaymentRecoverChargedExpiredBookingUseCase {
 
     Set<Long> chargedBookingIds = chargedBookingIds(targets);
     RefundHistory refundHistory = refundHistory(chargedBookingIds);
-    LocalDateTime graceDeadline = LocalDateTime.now().minusMinutes(graceMinutes);
+    LocalDateTime graceDeadline = LocalDateTime.now(ZoneOffset.UTC).minusMinutes(graceMinutes);
 
     int detected = 0;
     int recovered = 0;
@@ -171,7 +172,7 @@ public class PaymentRecoverChargedExpiredBookingUseCase {
       // 그 코드의 javadoc 이 "가장 나오기 쉬운 구간은 대량 보상 환불 버스트"라고 적고 있다. 거기 걸리면
       // #573 인라인 재시도까지 같은 이유로 소진돼 FAILED 이력이 남고, 그 건은 판정 1 에 걸려 자동 복구에서
       // 영구히 빠진다 — 되돌릴 수 없는 부작용을 다루는 경로에서 가장 나쁜 결말이다.
-      //
+
       // 이 검사가 커서 전진보다 앞에 있어야 한다. 뒤에 두면 상한에 걸려 처리하지 못한 바로 그 건까지
       // 커서가 넘어가 다음 주기가 건너뛴다. 대가로 상한에 도달하면 만료 스캔 자체가 멈추지만(뒤쪽에
       // 과금되지 않은 정상 건이 있어도 이번 주기엔 보지 않는다), 다음 주기가 곧바로 이어받으므로
@@ -365,6 +366,8 @@ public class PaymentRecoverChargedExpiredBookingUseCase {
           e.getErrorStatus().getCode());
       return null;
     } catch (Exception e) {
+      // ⚠ 서킷(#571)이 켜져 있는 동안 이 분기는 도달하지 않는다 — BookingRestClient 의 fallback 이
+      // 먼저 BusinessException 으로 수렴시킨다. 킬 스위치를 끈 순간 되살아나는 방어선이므로 지우지 않는다.
       countSkip(SKIP_BOOKING_LOOKUP_FAILED);
       log.error("만료 예매 재확인 중 예기치 못한 오류가 발생했습니다. bookingId={}", bookingId, e);
       return null;

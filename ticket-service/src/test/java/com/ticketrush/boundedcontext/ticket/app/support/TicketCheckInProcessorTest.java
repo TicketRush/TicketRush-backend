@@ -14,16 +14,23 @@ import com.ticketrush.boundedcontext.ticket.domain.types.TicketStatus;
 import com.ticketrush.boundedcontext.ticket.out.repository.TicketRepository;
 import com.ticketrush.global.exception.BusinessException;
 import com.ticketrush.global.status.ErrorStatus;
+import java.time.Instant;
+import java.time.ZoneOffset;
 import java.util.Optional;
+import java.util.TimeZone;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.junit.jupiter.api.parallel.ResourceLock;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.test.util.ReflectionTestUtils;
 
 @ExtendWith(MockitoExtension.class)
+@ResourceLock("java.util.TimeZone.default")
 class TicketCheckInProcessorTest {
 
   @InjectMocks private TicketCheckInProcessor ticketCheckInProcessor;
@@ -102,5 +109,29 @@ class TicketCheckInProcessorTest {
     assertThatThrownBy(() -> ticketCheckInProcessor.markUsed(1L))
         .isInstanceOf(BusinessException.class)
         .hasFieldOrPropertyWithValue("errorStatus", ErrorStatus.TICKET_NOT_USABLE);
+  }
+
+  @ParameterizedTest
+  @ValueSource(strings = {"UTC", "Asia/Seoul"})
+  @DisplayName("입장 저장 시각과 응답 usedAt은 같은 UTC 현재 시각이다")
+  void checkInPersistsAndReturnsUtcTime(String zone) {
+    TimeZone original = TimeZone.getDefault();
+    try {
+      TimeZone.setDefault(TimeZone.getTimeZone(zone));
+      assertThat(TimeZone.getDefault().getID()).isEqualTo(zone);
+      given(
+              ticketRepository.markUsedById(
+                  eq(1L), any(), eq(TicketStatus.USED), eq(TicketStatus.UNUSED)))
+          .willReturn(1);
+      Instant before = Instant.now();
+      EntryCheckInResponse response = ticketCheckInProcessor.markUsed(1L);
+      Instant after = Instant.now();
+      assertThat(response.usedAt().toInstant(ZoneOffset.UTC)).isBetween(before, after);
+      then(ticketRepository)
+          .should()
+          .markUsedById(1L, response.usedAt(), TicketStatus.USED, TicketStatus.UNUSED);
+    } finally {
+      TimeZone.setDefault(original);
+    }
   }
 }

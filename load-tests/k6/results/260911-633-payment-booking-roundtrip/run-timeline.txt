@@ -1,0 +1,34 @@
+# #633 회차 1 run 타임라인 (UTC)
+# duration 은 k6 stdout 의 최종 running(...) 값이다.
+
+11:55:26  W1 start   warmup / RT_INDEX_OFFSET=0
+11:58:26  W1 end     3m00.2s · 1440 iterations @ 7.989837/s
+
+12:40:24  B  start   main / RT_INDEX_OFFSET=1500
+12:45:24  B1 end     정상 8/s 구간 종료 (300s)
+12:45:44  ramp end   20s 램프 종료
+12:50:44  B  end     10m20.1s · 6200 iterations @ 9.998471/s (B2 피크 12/s 300s 포함)
+
+12:58:37  W2 start   warmup / RT_INDEX_OFFSET=7800
+13:01:37  W2 end     3m00.2s · 1441 iterations @ 7.996521/s
+
+# run 사이 간격
+#   W1 -> B  : 41m58s (시딩 검증 · Rate Limit 완화 확인에 쓴 시간)
+#   B  -> W2 : 7m53s  (재기동 후 W2 를 띄우기까지)
+#
+# ⚠ W2 는 "재기동 직후"를 재는 run 이다. B 직후가 아니라 재기동 직후여야 워밍업
+#   구간이 재현된다. 이 간격 동안 payment-service 를 재기동했다.
+
+# PromQL @ modifier 용 epoch
+#
+# 🔴 아래 "run 종료 시점" epoch 를 그대로 창에 쓰면 안 된다. @ run종료 에 run 길이만큼의
+#   창을 걸면 창이 run 시작 뒤부터 열려 앞부분이 잘린다(실제로 밟았다 — 총건수 1325 vs k6 1440).
+#   **확정 창은 metadata.txt 의 RUN_*_WINDOW 를 따른다:**
+#     W1 [3m10s] @ 1789127912 / B [11m] @ 1789131065 / W2 [3m10s] @ 1789131702
+#   창이 run 을 덮었는지는 총건수를 k6 iteration 과 대조해 확인한다.
+#
+# (참고) run 종료 시점 자체의 epoch
+#   W1 end = 1789127906
+#   B1 end = 1789130724
+#   B2 end = 1789131044   (= B end)
+#   W2 end = 1789131697

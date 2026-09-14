@@ -15,6 +15,8 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.mockito.junit.jupiter.MockitoSettings;
@@ -33,8 +35,8 @@ import org.springframework.data.redis.core.ValueOperations;
 class SeatMapCacheRepositoryTest {
 
   private static final Long PERFORMANCE_ID = 1L;
-  private static final String KEY = "seat:seat-map:1";
-  private static final String JSON = "[{\"seat_id\":1}]";
+  private static final String KEY = "seat:seat-map:v3:1";
+  private static final String JSON = "{\"layout\":{\"total_rows\":1,\"max_cols\":1},\"seats\":[]}";
 
   @Mock private StringRedisTemplate redisTemplate;
   @Mock private ValueOperations<String, String> valueOperations;
@@ -79,10 +81,12 @@ class SeatMapCacheRepositoryTest {
     assertThat(cacheCount(MetricNames.RESULT_MISS)).isZero();
   }
 
-  @Test
-  @DisplayName("JSON 배열 형태가 아닌 손상 값은 폐기하고 null을 반환한다 — RawValue 스플라이스가 invalid JSON을 내보내지 않게")
-  void get_corruptValue_evictedAndTreatedAsMiss() {
-    given(valueOperations.get(KEY)).willReturn("corrupt");
+  @DisplayName("JSON 객체 형태가 아닌 손상 값은 폐기하고 null을 반환한다 — RawValue 스플라이스가 invalid JSON을 내보내지 않게")
+  @ParameterizedTest
+  // 구 좌석맵 계약의 배열 원문(#645 이전)도 신 계약 응답에 스플라이스되면 안 되므로 손상과 같이 버린다
+  @ValueSource(strings = {"corrupt", "[{\"seat_id\":1}]"})
+  void get_corruptValue_evictedAndTreatedAsMiss(String cached) {
+    given(valueOperations.get(KEY)).willReturn(cached);
 
     assertThat(seatMapCacheRepository.get(PERFORMANCE_ID)).isNull();
     verify(redisTemplate).delete(KEY);

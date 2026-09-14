@@ -10,8 +10,12 @@ import com.ticketrush.boundedcontext.seat.out.repository.SeatRepository;
 import com.ticketrush.global.types.SeatStatus;
 import com.ticketrush.shared.performance.event.PerformanceCreatedEvent;
 import java.util.List;
+import java.util.Map;
+import java.util.stream.Collectors;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.CsvSource;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.data.jpa.test.autoconfigure.DataJpaTest;
 import org.springframework.context.annotation.Import;
@@ -131,6 +135,60 @@ class SeatCreateDefaultLayoutUseCaseTest {
             seatNumber -> {
               assertThat(seatNumber).matches("[A-Z]-\\d+");
               assertThat(seatNumber.length()).isLessThanOrEqualTo(10);
+            });
+  }
+
+  @ParameterizedTest(name = "{0}석 → {1}행 x {2}열, 마지막 행 {3}석")
+  @CsvSource({
+    "120, 10, 12, 12",
+    "125, 11, 12, 5",
+    "313, 25, 13, 1",
+    "500, 25, 20, 20",
+    "10000, 26, 385, 375"
+  })
+  @DisplayName("좌석마다 번호와 일치하는 1-based 좌표를 중복 없이 저장하고, 좌표가 배치 크기 안에 있다 (#645)")
+  void executeStoresCoordinatesMatchingSeatNumber(
+      int totalSeats, int expectedRows, int expectedCols, int lastRowSeats) {
+    // given
+    Long performanceId = 1L;
+
+    // when
+    useCase.execute(performanceId, totalSeats);
+
+    // then
+    SeatLayout layout = seatLayoutRepository.findAll().getFirst();
+    assertThat(layout.getTotalRows()).isEqualTo(expectedRows);
+    assertThat(layout.getMaxCols()).isEqualTo(expectedCols);
+
+    List<SeatMapItemResponse> seats = seatRepository.findSeatMapByPerformanceId(performanceId);
+    assertThat(seats).hasSize(totalSeats);
+    // 프론트가 번호를 파싱하지 않아도 되는 근거: 좌표만으로 번호가 복원된다
+    assertThat(seats)
+        .allSatisfy(
+            seat ->
+                assertThat(seat.seatNumber())
+                    .isEqualTo((char) ('A' + seat.seatRow() - 1) + "-" + seat.seatCol()));
+    assertThat(seats)
+        .extracting(seat -> seat.seatRow() + ":" + seat.seatCol())
+        .doesNotHaveDuplicates();
+    assertThat(seats).extracting(SeatMapItemResponse::seatRow).allMatch(row -> row >= 1);
+    assertThat(seats).extracting(SeatMapItemResponse::seatCol).allMatch(col -> col >= 1);
+    assertThat(seats.stream().mapToInt(SeatMapItemResponse::seatRow).max().orElseThrow())
+        .isEqualTo(expectedRows);
+    assertThat(seats.stream().mapToInt(SeatMapItemResponse::seatCol).max().orElseThrow())
+        .isEqualTo(expectedCols);
+
+    // 마지막 행만 부분 행일 수 있고, 나머지 행은 꽉 찬다
+    Map<Integer, Long> seatsPerRow =
+        seats.stream()
+            .collect(Collectors.groupingBy(SeatMapItemResponse::seatRow, Collectors.counting()));
+    assertThat(seatsPerRow.get(expectedRows)).isEqualTo(lastRowSeats);
+    assertThat(seatsPerRow)
+        .allSatisfy(
+            (row, count) -> {
+              if (row < expectedRows) {
+                assertThat(count).isEqualTo(expectedCols);
+              }
             });
   }
 

@@ -7,6 +7,7 @@ import com.ticketrush.boundedcontext.ticket.out.repository.TicketRepository;
 import com.ticketrush.global.exception.BusinessException;
 import com.ticketrush.global.status.ErrorStatus;
 import java.time.LocalDateTime;
+import java.time.ZoneOffset;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
@@ -25,7 +26,7 @@ public class TicketCheckInProcessor {
 
   @Transactional
   public EntryCheckInResponse markUsed(Long ticketId) {
-    LocalDateTime usedAt = LocalDateTime.now();
+    LocalDateTime usedAt = LocalDateTime.now(ZoneOffset.UTC);
     int updatedCount =
         ticketRepository.markUsedById(ticketId, usedAt, TicketStatus.USED, TicketStatus.UNUSED);
 

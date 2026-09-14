@@ -73,7 +73,7 @@ class UserControllerTest {
         .andExpect(jsonPath("$.message").value("성공입니다."))
         .andExpect(jsonPath("$.result.name").value(USER_NAME))
         .andExpect(jsonPath("$.result.email").value(USER_EMAIL))
-        .andExpect(jsonPath("$.result.created_at").exists())
+        .andExpect(jsonPath("$.result.created_at").value("2026-05-30T07:00:00Z"))
         .andExpect(jsonPath("$.result.role").value(RESPONSE_ROLE));
   }
 }

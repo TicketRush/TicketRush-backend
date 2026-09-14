@@ -1,8 +1,8 @@
 package com.ticketrush.boundedcontext.seat.app.usecase;
 
-import com.ticketrush.boundedcontext.seat.app.dto.response.SeatMapItemResponse;
+import com.ticketrush.boundedcontext.seat.app.dto.response.SeatMapResponse;
+import com.ticketrush.boundedcontext.seat.out.repository.SeatLayoutRepository;
 import com.ticketrush.boundedcontext.seat.out.repository.SeatRepository;
-import java.util.List;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -13,9 +13,12 @@ import org.springframework.transaction.annotation.Transactional;
 public class SeatGetSeatMapUseCase {
 
   private final SeatRepository seatRepository;
+  private final SeatLayoutRepository seatLayoutRepository;
 
-  public List<SeatMapItemResponse> execute(Long performanceId) {
-    // 공연 ID에 해당하는 정적 좌석 맵 리스트 반환
-    return seatRepository.findSeatMapByPerformanceId(performanceId);
+  /** 배치 크기는 공연당 한 번, 좌석은 좌표를 포함해 조회한다(#645). 배치도가 없으면 layout은 null이다. */
+  public SeatMapResponse execute(Long performanceId) {
+    return new SeatMapResponse(
+        seatLayoutRepository.findSizeByPerformanceId(performanceId).orElse(null),
+        seatRepository.findSeatMapByPerformanceId(performanceId));
   }
 }

@@ -9,12 +9,14 @@ import com.ticketrush.boundedcontext.seat.domain.entity.Seat;
 import com.ticketrush.boundedcontext.seat.domain.entity.SeatLayout;
 import com.ticketrush.global.types.SeatStatus;
 import java.time.LocalDateTime;
+import java.time.ZoneOffset;
 import java.util.List;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.data.jpa.test.autoconfigure.DataJpaTest;
 import org.springframework.boot.jpa.test.autoconfigure.TestEntityManager;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.orm.ObjectOptimisticLockingFailureException;
 
@@ -47,6 +49,8 @@ class SeatRepositoryTest {
             .seatLayoutId(targetLayout.getId())
             .performanceId(targetPerformanceId)
             .seatNumber("A-1")
+            .seatRow(1)
+            .seatCol(1)
             .seatStatus(SeatStatus.AVAILABLE)
             .build();
     Seat seat2 =
@@ -54,6 +58,8 @@ class SeatRepositoryTest {
             .seatLayoutId(targetLayout.getId())
             .performanceId(targetPerformanceId)
             .seatNumber("A-2")
+            .seatRow(1)
+            .seatCol(2)
             .seatStatus(SeatStatus.AVAILABLE)
             .build();
     Seat otherSeat =
@@ -61,6 +67,8 @@ class SeatRepositoryTest {
             .seatLayoutId(otherLayout.getId())
             .performanceId(otherPerformanceId)
             .seatNumber("A-1")
+            .seatRow(1)
+            .seatCol(1)
             .seatStatus(SeatStatus.AVAILABLE)
             .build();
 
@@ -83,10 +91,58 @@ class SeatRepositoryTest {
             SeatMapItemResponse::seatId,
             SeatMapItemResponse::seatLayoutId,
             SeatMapItemResponse::seatNumber,
+            SeatMapItemResponse::seatRow,
+            SeatMapItemResponse::seatCol,
             SeatMapItemResponse::seatStatus)
         .containsExactlyInAnyOrder(
-            tuple(seat1.getId(), targetLayout.getId(), "A-1", SeatStatus.AVAILABLE),
-            tuple(seat2.getId(), targetLayout.getId(), "A-2", SeatStatus.AVAILABLE));
+            tuple(seat1.getId(), targetLayout.getId(), "A-1", 1, 1, SeatStatus.AVAILABLE),
+            tuple(seat2.getId(), targetLayout.getId(), "A-2", 1, 2, SeatStatus.AVAILABLE));
+  }
+
+  @Test
+  @DisplayName("같은 공연에 같은 좌표의 좌석은 유니크 키로 거부되고, 다른 공연이면 허용된다 (#645)")
+  void seatCoordinateIsUniquePerPerformance() {
+    // given
+    seatRepository.saveAndFlush(seatAt(1L, "A-1", 1, 1));
+    seatRepository.saveAndFlush(seatAt(2L, "A-1", 1, 1));
+
+    // when & then: 표시용 번호가 달라도 좌표가 같으면 한 칸에 두 좌석이 그려진다
+    assertThatThrownBy(() -> seatRepository.saveAndFlush(seatAt(1L, "B-9", 1, 1)))
+        .isInstanceOf(DataIntegrityViolationException.class);
+  }
+
+  @Test
+  @DisplayName("좌표는 생성 후 UPDATE되지 않는다 — 백필 전에 읽은 엔티티가 백필 값을 덮지 않게 (#645)")
+  void seatCoordinateIsNotUpdatedByDirtyChecking() {
+    // given: 엔티티를 읽어 둔 뒤 좌표가 바뀐다(백필 SQL이 채운 상황의 대역)
+    Seat seat = seatRepository.saveAndFlush(seatAt(1L, "A-1", 1, 1));
+    entityManager
+        .getEntityManager()
+        .createNativeQuery("UPDATE seat SET seat_row = 3, seat_col = 4 WHERE seat_id = :id")
+        .setParameter("id", seat.getId())
+        .executeUpdate();
+
+    // when: 낡은 좌표를 든 엔티티가 상태 전이로 flush된다
+    seat.hold(LocalDateTime.now(ZoneOffset.UTC).plusMinutes(5), "BOOK-645");
+    seatRepository.saveAndFlush(seat);
+    entityManager.clear();
+
+    // then
+    Seat persisted = seatRepository.findById(seat.getId()).orElseThrow();
+    assertThat(persisted.getSeatStatus()).isEqualTo(SeatStatus.HOLD);
+    assertThat(persisted.getSeatRow()).isEqualTo(3);
+    assertThat(persisted.getSeatCol()).isEqualTo(4);
+  }
+
+  private Seat seatAt(Long performanceId, String seatNumber, int row, int col) {
+    return Seat.builder()
+        .seatLayoutId(1L)
+        .performanceId(performanceId)
+        .seatNumber(seatNumber)
+        .seatRow(row)
+        .seatCol(col)
+        .seatStatus(SeatStatus.AVAILABLE)
+        .build();
   }
 
   @Test
@@ -101,6 +157,8 @@ class SeatRepositoryTest {
             .seatLayoutId(1L)
             .performanceId(100L)
             .seatNumber("A1")
+            .seatRow(1)
+            .seatCol(1)
             .seatStatus(SeatStatus.HOLD)
             .holdExpiredAt(now.minusMinutes(1))
             .build();
@@ -109,6 +167,8 @@ class SeatRepositoryTest {
             .seatLayoutId(1L)
             .performanceId(100L)
             .seatNumber("A2")
+            .seatRow(1)
+            .seatCol(2)
             .seatStatus(SeatStatus.HOLD)
             .holdExpiredAt(now.minusMinutes(3))
             .build();
@@ -117,6 +177,8 @@ class SeatRepositoryTest {
             .seatLayoutId(1L)
             .performanceId(100L)
             .seatNumber("A3")
+            .seatRow(1)
+            .seatCol(3)
             .seatStatus(SeatStatus.HOLD)
             .holdExpiredAt(now.minusMinutes(5))
             .build();
@@ -127,6 +189,8 @@ class SeatRepositoryTest {
             .seatLayoutId(1L)
             .performanceId(100L)
             .seatNumber("A4")
+            .seatRow(1)
+            .seatCol(4)
             .seatStatus(SeatStatus.HOLD)
             .holdExpiredAt(now.plusMinutes(5))
             .build();
@@ -137,6 +201,8 @@ class SeatRepositoryTest {
             .seatLayoutId(1L)
             .performanceId(100L)
             .seatNumber("A5")
+            .seatRow(1)
+            .seatCol(5)
             .seatStatus(SeatStatus.SOLD)
             .holdExpiredAt(now.minusMinutes(1))
             .build();
@@ -169,6 +235,8 @@ class SeatRepositoryTest {
             .seatLayoutId(1L)
             .performanceId(targetPerformanceId)
             .seatNumber("A1")
+            .seatRow(1)
+            .seatCol(1)
             .seatStatus(SeatStatus.AVAILABLE)
             .build();
     Seat availableSeat2 =
@@ -176,6 +244,8 @@ class SeatRepositoryTest {
             .seatLayoutId(1L)
             .performanceId(targetPerformanceId)
             .seatNumber("A2")
+            .seatRow(1)
+            .seatCol(2)
             .seatStatus(SeatStatus.AVAILABLE)
             .build();
     Seat holdSeat =
@@ -183,6 +253,8 @@ class SeatRepositoryTest {
             .seatLayoutId(1L)
             .performanceId(targetPerformanceId)
             .seatNumber("A3")
+            .seatRow(1)
+            .seatCol(3)
             .seatStatus(SeatStatus.HOLD)
             .holdExpiredAt(now.plusMinutes(5))
             .build();
@@ -191,6 +263,8 @@ class SeatRepositoryTest {
             .seatLayoutId(1L)
             .performanceId(targetPerformanceId)
             .seatNumber("A4")
+            .seatRow(1)
+            .seatCol(4)
             .seatStatus(SeatStatus.SOLD)
             .build();
     Seat expiredHoldSeat =
@@ -198,6 +272,8 @@ class SeatRepositoryTest {
             .seatLayoutId(1L)
             .performanceId(targetPerformanceId)
             .seatNumber("A5")
+            .seatRow(1)
+            .seatCol(5)
             .seatStatus(SeatStatus.HOLD)
             .holdExpiredAt(now.minusMinutes(1))
             .build();
@@ -206,6 +282,8 @@ class SeatRepositoryTest {
             .seatLayoutId(2L)
             .performanceId(otherPerformanceId)
             .seatNumber("A1")
+            .seatRow(1)
+            .seatCol(1)
             .seatStatus(SeatStatus.AVAILABLE)
             .build();
 
@@ -321,6 +399,8 @@ class SeatRepositoryTest {
         .seatLayoutId(1L)
         .performanceId(performanceId)
         .seatNumber(seatNumber)
+        .seatRow(1)
+        .seatCol(Integer.parseInt(seatNumber.replaceAll("[^0-9]", "")))
         .seatStatus(status)
         .holdExpiredAt(holdExpiredAt)
         .build();
@@ -350,6 +430,8 @@ class SeatRepositoryTest {
             .seatLayoutId(1L)
             .performanceId(100L)
             .seatNumber("A1")
+            .seatRow(1)
+            .seatCol(1)
             .seatStatus(SeatStatus.HOLD)
             .holdExpiredAt(holdExpiredAt)
             .bookingNumber("BOOK-1234")
@@ -360,6 +442,8 @@ class SeatRepositoryTest {
             .seatLayoutId(1L)
             .performanceId(100L)
             .seatNumber("A3")
+            .seatRow(1)
+            .seatCol(3)
             .seatStatus(SeatStatus.AVAILABLE)
             .build();
 
@@ -580,6 +664,8 @@ class SeatRepositoryTest {
         .seatLayoutId(1L)
         .performanceId(100L)
         .seatNumber(seatNumber)
+        .seatRow(1)
+        .seatCol(Integer.parseInt(seatNumber.replaceAll("[^0-9]", "")))
         .seatStatus(status)
         .holdExpiredAt(holdExpiredAt)
         .bookingNumber(bookingNumber)

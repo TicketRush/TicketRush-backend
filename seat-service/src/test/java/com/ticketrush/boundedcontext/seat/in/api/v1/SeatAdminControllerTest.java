@@ -1,5 +1,7 @@
 package com.ticketrush.boundedcontext.seat.in.api.v1;
 
+import static org.hamcrest.Matchers.hasKey;
+import static org.hamcrest.Matchers.not;
 import static org.mockito.BDDMockito.given;
 import static org.mockito.BDDMockito.willThrow;
 import static org.mockito.Mockito.verify;
@@ -11,6 +13,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 
 import com.ticketrush.boundedcontext.seat.app.dto.response.SeatAdminMonitoringResponse;
 import com.ticketrush.boundedcontext.seat.app.dto.response.SeatAdminSeatDetailResponse;
+import com.ticketrush.boundedcontext.seat.app.dto.response.SeatLayoutSizeResponse;
 import com.ticketrush.boundedcontext.seat.app.dto.response.SeatMapItemResponse;
 import com.ticketrush.boundedcontext.seat.app.dto.response.SeatStatusCountsResponse;
 import com.ticketrush.boundedcontext.seat.app.facade.SeatFacade;
@@ -73,11 +76,14 @@ class SeatAdminControllerTest {
         .willReturn(
             new SeatAdminMonitoringResponse(
                 new SeatStatusCountsResponse(100L, 80L, 15L, 5L),
+                new SeatLayoutSizeResponse(10, 12),
                 List.of(
                     new SeatMapItemResponse(
                         SEAT_ID,
                         101L,
                         "A-1",
+                        1,
+                        1,
                         SeatStatus.HOLD,
                         LocalDateTime.of(2026, 5, 22, 10, 35)))));
 
@@ -90,7 +96,11 @@ class SeatAdminControllerTest {
         .andExpect(jsonPath("$.result.summary.available_count").value(80))
         .andExpect(jsonPath("$.result.summary.sold_count").value(15))
         .andExpect(jsonPath("$.result.summary.hold_count").value(5))
+        .andExpect(jsonPath("$.result.layout.total_rows").value(10))
+        .andExpect(jsonPath("$.result.layout.max_cols").value(12))
         .andExpect(jsonPath("$.result.seats.length()").value(1))
+        .andExpect(jsonPath("$.result.seats[0].seat_row").value(1))
+        .andExpect(jsonPath("$.result.seats[0].seat_col").value(1))
         .andExpect(jsonPath("$.result.seats[0].seat_id").value(100))
         .andExpect(jsonPath("$.result.seats[0].seat_number").value("A-1"))
         .andExpect(jsonPath("$.result.seats[0].seat_status").value("HOLD"));
@@ -121,8 +131,8 @@ class SeatAdminControllerTest {
         .andExpect(jsonPath("$.result.seat_number").value("A-1"))
         .andExpect(jsonPath("$.result.seat_status").value("HOLD"))
         .andExpect(jsonPath("$.result.booking_number").value("X7B29-KLPW1"))
-        .andExpect(jsonPath("$.result.hold_started_at").value("2026-05-22 10:30:00"))
-        .andExpect(jsonPath("$.result.hold_expired_at").value("2026-05-22 10:35:00"))
+        .andExpect(jsonPath("$.result.hold_started_at").value("2026-05-22T10:30:00Z"))
+        .andExpect(jsonPath("$.result.hold_expired_at").value("2026-05-22T10:35:00Z"))
         .andExpect(jsonPath("$.result.remaining_seconds").value(212));
   }
 
@@ -134,13 +144,16 @@ class SeatAdminControllerTest {
     given(seatFacade.getAdminMonitoring(PERFORMANCE_ID))
         .willReturn(
             new SeatAdminMonitoringResponse(
-                new SeatStatusCountsResponse(0L, 0L, 0L, 0L), List.of()));
+                new SeatStatusCountsResponse(0L, 0L, 0L, 0L), null, List.of()));
 
     // when & then
     mockMvc
         .perform(asAdmin(get("/api/v1/seat/admin/{performanceId}/monitoring", PERFORMANCE_ID)))
         .andExpect(status().isOk())
-        .andExpect(jsonPath("$.result.summary").exists());
+        .andExpect(jsonPath("$.result.summary").exists())
+        // 배치도가 없으면 layout 키는 전역 NON_NULL로 생략된다 (#645). doesNotExist()는 null 값도 통과시키므로
+        // 키 자체의 부재를 본다.
+        .andExpect(jsonPath("$.result", not(hasKey("layout"))));
 
     verify(seatFacade).getAdminMonitoring(PERFORMANCE_ID);
   }

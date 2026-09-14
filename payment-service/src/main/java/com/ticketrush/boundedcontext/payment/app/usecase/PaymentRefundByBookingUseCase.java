@@ -16,6 +16,7 @@ import com.ticketrush.global.exception.BusinessException;
 import io.micrometer.core.instrument.MeterRegistry;
 import io.micrometer.core.instrument.Timer;
 import java.time.LocalDateTime;
+import java.time.ZoneOffset;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
@@ -114,7 +115,7 @@ public class PaymentRefundByBookingUseCase {
             payment.getAmount(),
             result.pgRefundKey(),
             trigger.getReason(),
-            LocalDateTime.now(),
+            LocalDateTime.now(ZoneOffset.UTC),
             result.canceledAt());
 
     // 영속화(refund 저장 + 상태 전이)만 짧은 트랜잭션으로 분리한다. 동시 환불 시 unique 위반은 리스너가 멱등 처리한다(#296).

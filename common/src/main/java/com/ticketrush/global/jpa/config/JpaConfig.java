@@ -4,6 +4,7 @@ import com.querydsl.jpa.impl.JPAQueryFactory;
 import jakarta.persistence.EntityManager;
 import java.time.Clock;
 import java.time.LocalDateTime;
+import java.time.ZoneOffset;
 import java.util.Optional;
 import lombok.RequiredArgsConstructor;
 import org.springframework.beans.factory.ObjectProvider;
@@ -27,7 +28,7 @@ public class JpaConfig {
 
   @Bean
   public DateTimeProvider auditingDateTimeProvider() {
-    Clock clock = clockProvider.getIfAvailable(Clock::systemDefaultZone);
+    Clock clock = clockProvider.getIfAvailable(Clock::systemUTC).withZone(ZoneOffset.UTC);
     return () -> Optional.of(LocalDateTime.now(clock));
   }
 }

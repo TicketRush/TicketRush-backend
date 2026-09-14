@@ -86,11 +86,12 @@ SET @layout_id = (SELECT seat_layout_id FROM seat_layout WHERE performance_id = 
 -- ---- 4) seat (rows x cols, 전부 AVAILABLE) ---------------------------------
 -- 좌석 id 도 연속이어야 한다(위 사용자와 같은 이유). ORDER BY 로 삽입 순서를 고정해
 -- seat_number 순서와 seat_id 순서가 어긋나지 않게 한다.
-INSERT INTO seat (seat_layout_id, performance_id, seat_number, seat_status, created_at, updated_at)
+-- seat_row/seat_col(#645)은 번호와 같은 1-based 좌표다.
+INSERT INTO seat (seat_layout_id, performance_id, seat_number, seat_row, seat_col, seat_status, created_at, updated_at)
 WITH RECURSIVE
   r(ri) AS (SELECT 1 UNION ALL SELECT ri + 1 FROM r WHERE ri < @rows_per),
   c(ci) AS (SELECT 1 UNION ALL SELECT ci + 1 FROM c WHERE ci < @cols_per)
-SELECT @layout_id, @perf_id, CONCAT(CHAR(64 + r.ri), '-', c.ci), 'AVAILABLE', NOW(), NOW()
+SELECT @layout_id, @perf_id, CONCAT(CHAR(64 + r.ri), '-', c.ci), r.ri, c.ci, 'AVAILABLE', NOW(), NOW()
 FROM r CROSS JOIN c
 WHERE NOT EXISTS (
   SELECT 1 FROM seat s

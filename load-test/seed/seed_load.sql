@@ -74,12 +74,13 @@ WHERE p.title LIKE CONCAT(@marker, '-%')
   AND NOT EXISTS (SELECT 1 FROM seat_layout sl WHERE sl.performance_id = p.performance_id);
 
 -- ---- 3) seat (공연 × 행 × 열, 전부 AVAILABLE, seat_number = 'A-1' 형식) -----
-INSERT INTO seat (seat_layout_id, performance_id, seat_number, seat_status, created_at, updated_at)
+-- seat_row/seat_col(#645)은 번호와 같은 1-based 좌표다. 누락하면 NOT NULL로 INSERT가 실패한다.
+INSERT INTO seat (seat_layout_id, performance_id, seat_number, seat_row, seat_col, seat_status, created_at, updated_at)
 WITH RECURSIVE
   r(ri) AS (SELECT 1 UNION ALL SELECT ri + 1 FROM r WHERE ri < @rows_per),
   c(ci) AS (SELECT 1 UNION ALL SELECT ci + 1 FROM c WHERE ci < @cols_per)
 SELECT sl.seat_layout_id, sl.performance_id,
-       CONCAT(CHAR(64 + r.ri), '-', c.ci), 'AVAILABLE', NOW(), NOW()
+       CONCAT(CHAR(64 + r.ri), '-', c.ci), r.ri, c.ci, 'AVAILABLE', NOW(), NOW()
 FROM seat_layout sl
 JOIN performance p ON p.performance_id = sl.performance_id AND p.title LIKE CONCAT(@marker, '-%')
 CROSS JOIN r

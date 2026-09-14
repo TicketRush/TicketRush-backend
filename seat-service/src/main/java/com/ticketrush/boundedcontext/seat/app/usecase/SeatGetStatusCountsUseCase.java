@@ -3,6 +3,7 @@ package com.ticketrush.boundedcontext.seat.app.usecase;
 import com.ticketrush.boundedcontext.seat.app.dto.response.SeatStatusCountsResponse;
 import com.ticketrush.boundedcontext.seat.out.repository.SeatRepository;
 import java.time.LocalDateTime;
+import java.time.ZoneOffset;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -15,6 +16,7 @@ public class SeatGetStatusCountsUseCase {
   private final SeatRepository seatRepository;
 
   public SeatStatusCountsResponse execute(Long performanceId) {
-    return seatRepository.getStatusCountsByPerformanceId(performanceId, LocalDateTime.now());
+    return seatRepository.getStatusCountsByPerformanceId(
+        performanceId, LocalDateTime.now(ZoneOffset.UTC));
   }
 }

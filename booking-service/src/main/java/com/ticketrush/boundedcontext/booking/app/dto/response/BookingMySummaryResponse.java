@@ -2,9 +2,11 @@ package com.ticketrush.boundedcontext.booking.app.dto.response;
 
 import com.ticketrush.boundedcontext.booking.domain.types.BookingStatus;
 import com.ticketrush.boundedcontext.booking.out.apiclient.dto.PerformanceInfoResponse;
+import com.ticketrush.global.json.UtcLocalDateTimeSerializer;
 import io.swagger.v3.oas.annotations.media.Schema;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
+import tools.jackson.databind.annotation.JsonSerialize;
 
 /**
  * 회원 예매 목록 응답 (#560). {@link BookingSummaryResponse}(admin 목록과 공유)에 회원 예매 조회 화면이 요구하는 공연·좌석·금액 필드를
@@ -20,21 +22,26 @@ public record BookingMySummaryResponse(
     @Schema(description = "공연 ID. 공연 필드가 비어 있을 때 재조회 키다.", example = "10") Long performanceId,
     @Schema(description = "좌석 ID. 좌석 번호가 비어 있을 때 재조회 키다.", example = "100") Long seatId,
     @Schema(description = "예매 상태", example = "CONFIRMED") BookingStatus bookingStatus,
-    @Schema(description = "예매 확정일", example = "2026-05-22 10:30:00") LocalDateTime confirmedAt,
+    @Schema(description = "예매 확정일", example = "2026-05-22T10:30:00Z")
+        @JsonSerialize(using = UtcLocalDateTimeSerializer.class)
+        LocalDateTime confirmedAt,
     @Schema(
             description =
                 "마지막 환불 실패 시각. null이 아니면 환불에 실패해 예매가 유지된 것이다. "
                     + "직접 취소를 요청한 경우 외에, 좌석 확정 실패로 시스템이 건 자동 환불이 실패한 경우도 포함된다(#492).",
-            example = "2026-05-23 11:00:00")
+            example = "2026-05-23T11:00:00Z")
+        @JsonSerialize(using = UtcLocalDateTimeSerializer.class)
         LocalDateTime refundFailedAt,
     @Schema(
             description = "마지막 변경 시각. REFUNDING이면 환불 요청이 시작된 시각이다 (#397).",
-            example = "2026-05-23 11:00:00")
+            example = "2026-05-23T11:00:00Z")
+        @JsonSerialize(using = UtcLocalDateTimeSerializer.class)
         LocalDateTime updatedAt,
     @Schema(
             description =
                 "PENDING 예매의 결제 마감 시각. PENDING이 아니면 null이다. 새로고침 후에도 이 값으로 카운트다운을 복원할 수 있다 (#559).",
-            example = "2026-05-22 10:35:00")
+            example = "2026-05-22T10:35:00Z")
+        @JsonSerialize(using = UtcLocalDateTimeSerializer.class)
         LocalDateTime expiresAt,
     @Schema(description = "공연 이름. performance-service 장애 시 null.", example = "오페라의 유령")
         String performanceTitle,

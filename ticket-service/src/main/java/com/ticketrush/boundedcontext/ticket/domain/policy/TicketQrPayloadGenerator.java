@@ -5,7 +5,7 @@ import io.jsonwebtoken.Jwts;
 import io.jsonwebtoken.security.Keys;
 import java.nio.charset.StandardCharsets;
 import java.time.LocalDateTime;
-import java.time.ZoneId;
+import java.time.ZoneOffset;
 import java.util.Date;
 import javax.crypto.SecretKey;
 import org.springframework.beans.factory.annotation.Value;
@@ -45,9 +45,8 @@ public class TicketQrPayloadGenerator {
             .signWith(key)
             .compact();
 
-    // issuedAt(Ticket.createdAt)이 JPA Auditing의 LocalDateTime.now()로 JVM 기본 타임존 기준 생성되므로,
-    // expiresAt도 동일하게 systemDefault 기준으로 변환해 두 시각의 기준을 일치시킨다. JVM 타임존 표준화는 전 서비스 공통 인프라 사안.
-    LocalDateTime expiresAt = LocalDateTime.ofInstant(expiry.toInstant(), ZoneId.systemDefault());
+    // JWT expiration과 같은 시점을 UTC LocalDateTime으로 표현해, 응답 expiresAt이 exp와 초 단위로 일치하게 한다 (#646).
+    LocalDateTime expiresAt = LocalDateTime.ofInstant(expiry.toInstant(), ZoneOffset.UTC);
     return new QrPayload(token, expiresAt);
   }
 }

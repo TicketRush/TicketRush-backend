@@ -101,7 +101,7 @@ SET @perf_id = (SELECT performance_id FROM performance WHERE title = @title);
 -- ---- 2) seat_layout (공연당 1건, performance_id UNIQUE) ---------------------
 -- 좌석 번호는 'S-<n>' 단조 증가다(seed_load.sql 의 'A-1' 행/열 형식과 다르다). 행/열 형식은
 -- CHAR(64+ri) 때문에 26행을 넘길 수 없어 3,000석 규모를 못 만든다. total_rows/max_cols 는
--- 좌석 생성에 쓰이지 않고 응답에도 실리지 않으므로 규모만 맞춰 채운다.
+-- 좌석맵 응답의 layout 으로 실리므로(#645) 아래 좌석 좌표와 같은 50열 기준으로 맞춘다.
 INSERT INTO seat_layout (performance_id, total_rows, max_cols, created_at, updated_at)
 SELECT @perf_id, CEIL(@seats / 50), 50, @app_now, @app_now
 FROM DUAL
@@ -117,13 +117,15 @@ SET @layout_id = (SELECT seat_layout_id FROM seat_layout WHERE performance_id = 
 -- 60초 주기 SeatStatusScheduler 가 측정 도중 AVAILABLE 로 해제해 상태 분포가 회차 중간에
 -- 변한다(chunk-size 25 x max-chunks 80 = tick 당 최대 2,000건). 그러면 좌석 수 대비 곡선의
 -- 통제 변수가 깨진다. 만료 HOLD 가 필요한 회차는 @mode='expire' 로 따로 만든다.
+-- seat_row/seat_col(#645)은 'S-<i>'를 layout(max_cols = 50)에 행 우선으로 채운 1-based 좌표다. 위 seat_layout의
+-- CEIL(n/50)·50과 같은 식이어야 좌석맵이 배치 크기 안에 그려진다(deploy/mysql/migrations/645-seat-row-col 백필의 SEQ 판정과 동일).
 INSERT INTO seat
-  (seat_layout_id, performance_id, seat_number, seat_status, hold_expired_at,
+  (seat_layout_id, performance_id, seat_number, seat_row, seat_col, seat_status, hold_expired_at,
    created_at, updated_at)
 WITH RECURSIVE n(i) AS (
   SELECT 1 UNION ALL SELECT i + 1 FROM n WHERE i < @seats
 )
-SELECT @layout_id, @perf_id, CONCAT('S-', n.i),
+SELECT @layout_id, @perf_id, CONCAT('S-', n.i), CEIL(n.i / 50), MOD(n.i - 1, 50) + 1,
        CASE
          WHEN ((n.i - 1) % 100) < @sold_pct                          THEN 'SOLD'
          WHEN ((n.i - 1) % 100) < @sold_pct + @hold_pct              THEN 'HOLD'

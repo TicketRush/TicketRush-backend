@@ -9,6 +9,7 @@ import com.ticketrush.global.eventpublisher.EventPublisher;
 import com.ticketrush.global.types.SeatStatus;
 import com.ticketrush.shared.seat.event.SeatHoldExpiredEvent;
 import java.time.LocalDateTime;
+import java.time.ZoneOffset;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -31,7 +32,7 @@ class SeatHoldExpiredPublisherTest {
   @DisplayName("bookingNumber와 holdExpiredAt이 있으면 해당 값으로 SeatHoldExpiredEvent를 발행한다")
   void publish_WithBookingNumberAndExpiry() {
     // given
-    LocalDateTime holdExpiredAt = LocalDateTime.now().minusMinutes(1);
+    LocalDateTime holdExpiredAt = LocalDateTime.now(ZoneOffset.UTC).minusMinutes(1);
     Seat seat =
         Seat.builder()
             .seatLayoutId(1L)
@@ -56,7 +57,7 @@ class SeatHoldExpiredPublisherTest {
   @DisplayName("holdExpiredAt이 null이면 현재 시각으로 대체해 발행한다")
   void publish_WhenHoldExpiredAtNull_UsesNow() {
     // given
-    LocalDateTime before = LocalDateTime.now();
+    LocalDateTime before = LocalDateTime.now(ZoneOffset.UTC);
     Seat seat =
         Seat.builder()
             .seatLayoutId(1L)

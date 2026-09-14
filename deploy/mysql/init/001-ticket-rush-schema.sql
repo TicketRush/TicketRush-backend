@@ -233,11 +233,14 @@ CREATE TABLE `seat` (
   `booking_number` varchar(50) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
   `hold_expired_at` datetime(6) DEFAULT NULL,
   `performance_id` bigint NOT NULL,
+  `seat_col` int NOT NULL,
   `seat_layout_id` bigint NOT NULL,
   `seat_number` varchar(10) COLLATE utf8mb4_unicode_ci NOT NULL,
+  `seat_row` int NOT NULL,
   `seat_status` enum('AVAILABLE','HOLD','SOLD') COLLATE utf8mb4_unicode_ci NOT NULL,
   `version` bigint NOT NULL DEFAULT '0',
   PRIMARY KEY (`seat_id`),
+  UNIQUE KEY `uk_seat_performance_id_seat_row_seat_col` (`performance_id`,`seat_row`,`seat_col`),
   KEY `idx_seat_performance_id_status_hold_expired_at` (`performance_id`,`seat_status`,`hold_expired_at`),
   KEY `idx_seat_status_hold_expired_at` (`seat_status`,`hold_expired_at`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;

@@ -19,6 +19,20 @@ spring:
   autoconfigure:
     exclude:
       - org.springframework.boot.data.redis.autoconfigure.DataRedisAutoConfiguration
+  cloud:
+    circuitbreaker:
+      resilience4j:
+        # 서킷 호출을 별도 스레드풀로 감싸지 않는다(#571). 이 이슈의 목적이 '요청당 톰캣 스레드 점유
+        # 상한'인데 풀을 끼우면 톰캣 스레드와 풀 스레드를 둘 다 잡는다. 끄면 호출 스레드에서 그대로
+        # 실행되고, 상한은 아래 service.booking.read-timeout-ms(1s) 하나가 준다 — 두 개의 타임아웃이
+        # 겹치면 어느 쪽이 끊었는지 알 수 없다. ticket-service 가 #496 에서 같은 판단을 했다.
+        #
+        # ⚠ 겹침을 실제로 막는 것은 disable-threadpool 하나다. 풀이 없으면 TimeLimiter 경로 자체를
+        # 타지 않아 disable-timelimiter 는 이 조합에서 읽히지도 않는다(팩토리가 풀 없는 생성자를 타며
+        # 내부적으로 false 로 고정한다). 위 값을 되돌리는 사람이 "타임아웃은 여전히 하나"로 오해하지
+        # 않도록 함께 남겨 둔다.
+        disable-threadpool: true
+        disable-timelimiter: true
   jpa:
     open-in-view: false
   # payment 에 @Scheduled 가 생긴 것은 #574 가 처음이다. 기본 풀은 스레드 1개라 스케줄러가 늘면
@@ -92,6 +106,14 @@ service:
     # ticket-service가 같은 엔드포인트에 쓰는 값과 그 근거인 #402 실측 왕복 3.20ms다.
     connect-timeout-ms: ${BOOKING_HTTP_CONNECT_TIMEOUT_MS:1000}
     read-timeout-ms: ${BOOKING_HTTP_READ_TIMEOUT_MS:1000}
+    # 서킷브레이커 킬 스위치 (#571). false 면 서킷을 거치지 않고 booking 을 직접 호출한다 —
+    # 끈 결과는 #490 상태(완화 수단이 read-timeout 하나뿐)로 정확히 되돌아가는 것이라 이미 아는
+    # 동작이다. 이 스위치를 두는 이유는 이 조회가 fail-closed 이기 때문이다. 서킷이 오탐으로 열리면
+    # 대가가 '결제 확정 전건 503' 인데, 임계값은 코드에 박혀 있어 배포 없이는 바꿀 수 없다
+    # (ticket-service 가 그 한계를 그대로 안고 있다 — docs/load-test-guide.md §12.6).
+    # ⚠ env_file 은 컨테이너 생성 시점에만 읽힌다. restart 가 아니라 --force-recreate 여야 반영된다.
+    circuit-breaker:
+      enabled: ${BOOKING_CIRCUIT_BREAKER_ENABLED:true}
 
 custom:
   global:

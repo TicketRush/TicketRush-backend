@@ -271,7 +271,7 @@ DB CPU 24.1% / 미분류 17.1% / DB 대기 9.6% / **앱 코드 0.7% / 커넥션 
 
 | 문서 | 내용 |
 |---|---|
-| [`performance-report.md`](performance-report.md) | 회차 23개 종합 — 병목 이동 · 개선 전후 · 한계 |
+| [`performance-report.md`](performance-report.md) | 회차 24개 종합 — 병목 이동 · 개선 전후 · 한계 |
 | [`load-test-guide.md`](load-test-guide.md) | 실행 절차 · 시나리오별 런북 · 재현성 규약 |
 | [ADR 0003](adr/0003-shared-database-with-service-boundaries.md) | 단일 공유 DB 유지 |
 | [ADR 0006](adr/0006-eight-gib-container-memory-limits.md) | 컨테이너별 메모리 상한 |

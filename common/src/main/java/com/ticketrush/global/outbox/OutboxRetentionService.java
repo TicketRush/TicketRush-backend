@@ -1,6 +1,7 @@
 package com.ticketrush.global.outbox;
 
 import java.time.LocalDateTime;
+import java.time.ZoneOffset;
 import java.util.List;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -30,7 +31,8 @@ public class OutboxRetentionService {
       return 0;
     }
 
-    LocalDateTime threshold = LocalDateTime.now().minusHours(outboxProperties.getRetentionHours());
+    LocalDateTime threshold =
+        LocalDateTime.now(ZoneOffset.UTC).minusHours(outboxProperties.getRetentionHours());
     int deleted = outboxRepository.deleteSentBefore(aggregateTypes, OutboxStatus.SENT, threshold);
     if (deleted > 0) {
       log.info("Outbox retention: SENT row {}건 삭제 (threshold={})", deleted, threshold);

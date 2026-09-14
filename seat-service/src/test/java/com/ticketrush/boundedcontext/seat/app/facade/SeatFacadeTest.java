@@ -11,12 +11,15 @@ import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 
+import com.ticketrush.boundedcontext.seat.app.dto.response.SeatLayoutSizeResponse;
 import com.ticketrush.boundedcontext.seat.app.dto.response.SeatMapItemResponse;
+import com.ticketrush.boundedcontext.seat.app.dto.response.SeatMapResponse;
 import com.ticketrush.boundedcontext.seat.app.usecase.SeatGetSeatMapUseCase;
 import com.ticketrush.boundedcontext.seat.app.usecase.SeatHoldUseCase;
 import com.ticketrush.boundedcontext.seat.app.usecase.SeatLockUseCase;
 import com.ticketrush.boundedcontext.seat.app.usecase.SeatUnlockUseCase;
 import com.ticketrush.boundedcontext.seat.out.repository.SeatMapCacheRepository;
+import com.ticketrush.global.config.JacksonConfig;
 import com.ticketrush.global.eventpublisher.EventPublisher;
 import com.ticketrush.global.json.JsonConverter;
 import com.ticketrush.global.types.SeatStatus;
@@ -72,14 +75,21 @@ class SeatFacadeTest {
         null,
         null,
         seatMapCacheRepository,
-        new JsonConverter(JsonMapper.builder().build()));
+        new JsonConverter(productionJsonMapper()));
+  }
+
+  /* 전역 NON_NULL 아래에서도 layout: null이 나가는지(@JsonInclude ALWAYS)까지 보려면 실물 설정이어야 한다. */
+  private static JsonMapper productionJsonMapper() {
+    JsonMapper.Builder builder = JsonMapper.builder();
+    new JacksonConfig().jacksonCustomizer().customize(builder);
+    return builder.build();
   }
 
   @Test
   @DisplayName("좌석맵 캐시 히트: DB 유스케이스를 호출하지 않고 캐시된 JSON을 그대로 반환한다")
   void getPerformanceSeatMap_cacheHit_skipsDb() {
     // given
-    String cachedJson = "[{\"seat_id\":1}]";
+    String cachedJson = "{\"layout\":{\"total_rows\":1,\"max_cols\":1},\"seats\":[]}";
     given(seatMapCacheRepository.get(PERFORMANCE_ID)).willReturn(cachedJson);
 
     // when
@@ -96,28 +106,48 @@ class SeatFacadeTest {
     // given
     given(seatMapCacheRepository.get(PERFORMANCE_ID)).willReturn(null);
     given(seatGetSeatMapUseCase.execute(PERFORMANCE_ID))
-        .willReturn(List.of(new SeatMapItemResponse(1L, 101L, "A-1", SeatStatus.AVAILABLE, null)));
+        .willReturn(
+            new SeatMapResponse(
+                new SeatLayoutSizeResponse(10, 12),
+                List.of(
+                    new SeatMapItemResponse(1L, 101L, "A-1", 1, 1, SeatStatus.AVAILABLE, null))));
 
     // when
     String result = seatMapFacade().getPerformanceSeatMap(PERFORMANCE_ID);
 
     // then — 응답과 캐시가 같은 직렬화 1회의 산물이다
-    assertThat(result).contains("A-1").contains("AVAILABLE");
+    assertThat(result).startsWith("{").contains("A-1").contains("AVAILABLE");
     verify(seatMapCacheRepository).set(PERFORMANCE_ID, result);
   }
 
   @Test
-  @DisplayName("좌석맵이 빈 리스트면 캐시에 적재하지 않는다(좌석 생성 전 stale 빈 응답 방지)")
-  void getPerformanceSeatMap_emptyList_notCached() {
+  @DisplayName("배치도 미생성 응답은 캐시에 적재하지 않는다(좌석 생성 전 stale 빈 응답 방지)")
+  void getPerformanceSeatMap_layoutNotCreated_notCached() {
     // given
     given(seatMapCacheRepository.get(PERFORMANCE_ID)).willReturn(null);
-    given(seatGetSeatMapUseCase.execute(PERFORMANCE_ID)).willReturn(List.of());
+    given(seatGetSeatMapUseCase.execute(PERFORMANCE_ID))
+        .willReturn(new SeatMapResponse(null, List.of()));
 
     // when
     String result = seatMapFacade().getPerformanceSeatMap(PERFORMANCE_ID);
 
     // then — 좌석 생성 경로는 상태 변경 발행을 안 거쳐 evict로 걷어낼 수 없으므로 애초에 적재하지 않는다
-    assertThat(result).isEqualTo("[]");
+    assertThat(result).isEqualTo("{\"layout\":null,\"seats\":[]}");
+    verify(seatMapCacheRepository, never()).set(anyLong(), anyString());
+  }
+
+  @Test
+  @DisplayName("배치도는 있지만 좌석이 없으면 캐시에 적재하지 않는다")
+  void getPerformanceSeatMap_layoutWithoutSeats_notCached() {
+    // given
+    given(seatMapCacheRepository.get(PERFORMANCE_ID)).willReturn(null);
+    given(seatGetSeatMapUseCase.execute(PERFORMANCE_ID))
+        .willReturn(new SeatMapResponse(new SeatLayoutSizeResponse(10, 12), List.of()));
+
+    // when
+    seatMapFacade().getPerformanceSeatMap(PERFORMANCE_ID);
+
+    // then
     verify(seatMapCacheRepository, never()).set(anyLong(), anyString());
   }
 

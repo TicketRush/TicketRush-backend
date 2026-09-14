@@ -34,7 +34,12 @@ public class SeatController {
       summary = "공연별 좌석 배치 조회",
       description =
           """
-          공연 ID에 해당하는 좌석 ID, 좌석 배치 ID, 좌석 번호, 좌석 상태, 선점 만료 시각을 조회합니다. 인증이 필요 없습니다.
+          공연 ID에 해당하는 좌석 배치 크기와 좌석 목록을 조회합니다. 인증이 필요 없습니다.
+
+          `result`는 `{ layout, seats }` 객체입니다(#645). `layout`(`total_rows`, `max_cols`)은 공연당 한 번만 싣고,
+          `seats[]`는 좌석 ID, 좌석 배치 ID, 좌석 번호, 1부터 시작하는 좌표(`seat_row`, `seat_col`), 좌석 상태, 선점 만료 시각을
+          담습니다. 렌더링은 좌표로 하고 `seat_number`는 표시용으로만 씁니다. 마지막 행은 부분 행일 수 있어
+          `total_rows × max_cols`는 좌석 수가 아닙니다. 배치도가 아직 생성되지 않은 공연은 `{"layout": null, "seats": []}`입니다.
 
           **선점 만료 시각(`hold_expired_at`)은 인증 없이 계속 공개합니다(#562 검토 결론).** 이 값은 예매자를 식별하는
           개인정보가 아니라 "이 좌석이 언제 다시 예매 가능해지는지"라는 좌석 상태의 일부이며, 예매 화면이 선점 해제를
@@ -46,8 +51,8 @@ public class SeatController {
           """)
   @SeatMapApiResponses
   public ResponseEntity<ApiResponse<Object>> getSeatMap(@PathVariable Long performanceId) {
-    // 파사드가 캐시/직렬화한 JSON 배열을 재파싱 없이 result 자리에 그대로 끼운다(#469). 래퍼를 응답째 캐싱하지
-    // 않는 이유는 ApiResponse.traceId가 요청마다 새로 뽑히기 때문 — 래퍼만 매번 만들고 배열은 RawValue로 스플라이스.
+    // 파사드가 캐시/직렬화한 JSON 객체를 재파싱 없이 result 자리에 그대로 끼운다(#469). 래퍼를 응답째 캐싱하지
+    // 않는 이유는 ApiResponse.traceId가 요청마다 새로 뽑히기 때문 — 래퍼만 매번 만들고 result는 RawValue로 스플라이스.
     String seatMapJson = seatFacade.getPerformanceSeatMap(performanceId);
     return ApiResponse.onSuccess(SuccessStatus.OK, new RawValue(seatMapJson));
   }

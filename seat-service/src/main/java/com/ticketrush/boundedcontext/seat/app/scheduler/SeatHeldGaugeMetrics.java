@@ -7,6 +7,7 @@ import io.micrometer.core.instrument.Gauge;
 import io.micrometer.core.instrument.MeterRegistry;
 import jakarta.annotation.PostConstruct;
 import java.time.LocalDateTime;
+import java.time.ZoneOffset;
 import java.util.concurrent.atomic.AtomicLong;
 import lombok.RequiredArgsConstructor;
 import org.springframework.scheduling.annotation.Scheduled;
@@ -35,7 +36,7 @@ public class SeatHeldGaugeMetrics {
    */
   @Scheduled(fixedDelay = 30000)
   public void refreshHeldSeats() {
-    LocalDateTime now = LocalDateTime.now();
+    LocalDateTime now = LocalDateTime.now(ZoneOffset.UTC);
     heldSeats.set(seatRepository.countHeldSeats(SeatStatus.HOLD, now));
     expiredHoldBacklog.set(seatRepository.countExpiredHoldSeats(SeatStatus.HOLD, now));
   }

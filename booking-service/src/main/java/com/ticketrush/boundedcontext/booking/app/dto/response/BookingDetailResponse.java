@@ -3,10 +3,12 @@ package com.ticketrush.boundedcontext.booking.app.dto.response;
 import com.ticketrush.boundedcontext.booking.domain.entity.Booking;
 import com.ticketrush.boundedcontext.booking.domain.types.BookingStatus;
 import com.ticketrush.boundedcontext.booking.out.apiclient.dto.PerformanceInfoResponse;
+import com.ticketrush.global.json.UtcLocalDateTimeSerializer;
 import io.swagger.v3.oas.annotations.media.Schema;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.LocalTime;
+import tools.jackson.databind.annotation.JsonSerialize;
 
 /**
  * 예매 단건 상세 응답 (#560). 공연·좌석 필드는 각 서비스 조회 실패 시 null(응답에서 생략)일 수 있다 — 그때 프론트는 {@code
@@ -31,12 +33,15 @@ public record BookingDetailResponse(
         String performanceAddress,
     @Schema(description = "좌석 ID. 좌석 번호가 비어 있을 때 재조회 키다.", example = "100") Long seatId,
     @Schema(description = "좌석 번호. seat-service 장애 시 null.", example = "A-1") String seatNumber,
-    @Schema(description = "예매 확정일", example = "2026-05-22 10:30:00") LocalDateTime confirmedAt,
+    @Schema(description = "예매 확정일", example = "2026-05-22T10:30:00Z")
+        @JsonSerialize(using = UtcLocalDateTimeSerializer.class)
+        LocalDateTime confirmedAt,
     @Schema(
             description =
                 "PENDING 예매의 결제 마감 시각. PENDING이 아니면 null이다. 예매번호만 든 화면(딥링크·새로고침)에서도 "
                     + "이 값으로 카운트다운을 복원할 수 있다 (#559).",
-            example = "2026-05-22 10:35:00")
+            example = "2026-05-22T10:35:00Z")
+        @JsonSerialize(using = UtcLocalDateTimeSerializer.class)
         LocalDateTime expiresAt,
     @Schema(
             description =

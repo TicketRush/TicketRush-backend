@@ -28,6 +28,7 @@ import com.ticketrush.global.exception.BusinessException;
 import com.ticketrush.global.status.ErrorStatus;
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import java.time.LocalDateTime;
+import java.time.ZoneOffset;
 import java.util.Arrays;
 import java.util.List;
 import org.junit.jupiter.api.BeforeEach;
@@ -57,7 +58,7 @@ class PaymentRecoverChargedExpiredBookingUseCaseTest {
   private static final String BOOKING_NUMBER = "BOOK-1";
 
   /** grace 를 넉넉히 넘긴 만료 시각. 실제 시각에 의존하지 않도록 now 기준 상대값으로 만든다. */
-  private static final LocalDateTime LONG_EXPIRED = LocalDateTime.now().minusHours(2);
+  private static final LocalDateTime LONG_EXPIRED = LocalDateTime.now(ZoneOffset.UTC).minusHours(2);
 
   @Mock private ExpiredBookingRepository expiredBookingRepository;
   @Mock private PaymentRepository paymentRepository;
@@ -199,7 +200,9 @@ class PaymentRecoverChargedExpiredBookingUseCaseTest {
   @DisplayName("판정 순서: 이미 환불된 건은 grace 를 따지기도 전에 걸러진다")
   void already_refunded_is_checked_before_grace() {
     // given — 두 조건이 동시에 참인 건을 만든다. 방금 만료됐고(grace 미경과) 환불 이력도 있다.
-    givenTargets(0L, List.of(expiredBooking(1L, BOOKING_ID, LocalDateTime.now().minusMinutes(1))));
+    givenTargets(
+        0L,
+        List.of(expiredBooking(1L, BOOKING_ID, LocalDateTime.now(ZoneOffset.UTC).minusMinutes(1))));
     givenCharged(BOOKING_ID);
     givenRefundHistory(BOOKING_ID, RefundStatus.COMPLETED);
 
@@ -268,7 +271,9 @@ class PaymentRecoverChargedExpiredBookingUseCaseTest {
   @DisplayName("판정 순서: 만료 직후(grace 미경과)면 booking 을 조회하지 않고 건너뛴다")
   void skips_within_grace_period() {
     // given — 방금 만료된 건
-    givenTargets(0L, List.of(expiredBooking(1L, BOOKING_ID, LocalDateTime.now().minusMinutes(1))));
+    givenTargets(
+        0L,
+        List.of(expiredBooking(1L, BOOKING_ID, LocalDateTime.now(ZoneOffset.UTC).minusMinutes(1))));
     givenCharged(BOOKING_ID);
     givenNoRefundHistory();
 
@@ -285,7 +290,10 @@ class PaymentRecoverChargedExpiredBookingUseCaseTest {
   @DisplayName("성공: grace 를 갓 넘긴 건은 환불 대상이 된다")
   void refunds_just_past_grace_boundary() {
     // given — 유예 30분에 만료 31분 전. 경계 바깥이라 통과해야 한다.
-    givenTargets(0L, List.of(expiredBooking(1L, BOOKING_ID, LocalDateTime.now().minusMinutes(31))));
+    givenTargets(
+        0L,
+        List.of(
+            expiredBooking(1L, BOOKING_ID, LocalDateTime.now(ZoneOffset.UTC).minusMinutes(31))));
     givenCharged(BOOKING_ID);
     givenNoRefundHistory();
     givenBooking(BOOKING_ID, "EXPIRED", BOOKING_NUMBER);

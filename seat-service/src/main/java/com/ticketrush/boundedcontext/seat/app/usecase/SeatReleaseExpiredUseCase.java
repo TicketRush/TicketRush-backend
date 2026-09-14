@@ -2,6 +2,7 @@ package com.ticketrush.boundedcontext.seat.app.usecase;
 
 import com.ticketrush.global.config.SeatReleaseProperties;
 import java.time.LocalDateTime;
+import java.time.ZoneOffset;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
@@ -22,7 +23,7 @@ public class SeatReleaseExpiredUseCase {
   private final SeatReleaseProperties seatReleaseProperties;
 
   public void execute() {
-    LocalDateTime now = LocalDateTime.now();
+    LocalDateTime now = LocalDateTime.now(ZoneOffset.UTC);
     int chunkSize = seatReleaseProperties.getChunkSize();
     int maxChunks = seatReleaseProperties.getMaxChunks();
 

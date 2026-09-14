@@ -48,6 +48,13 @@ dependencies {
 	annotationProcessor 'org.projectlombok:lombok-mapstruct-binding:0.2.0'
 	annotationProcessor 'org.mapstruct:mapstruct-processor:1.5.5.Final'
 
+	// booking 동기 호출 장애 격리 — 서킷브레이커 (#571).
+	// 버전은 하단 dependencyManagement 의 Spring Cloud BOM 이 관리한다.
+	// resilience4j-micrometer(서킷 상태·차단 호출수를 /actuator/prometheus 에 노출)는 이 스타터가
+	// 전이로 가져오므로 따로 선언하지 않는다. 배포 직후 오탐 감시가 전적으로 그 메트릭에 의존한다 —
+	// ticket-service 는 실패 0건인데 차단 1,472건인 구간을 그것으로 찾아냈다(#496).
+	implementation 'org.springframework.cloud:spring-cloud-starter-circuitbreaker-resilience4j'
+
 	// Kafka
 	implementation 'org.springframework.boot:spring-boot-starter-kafka'
 	testImplementation 'org.springframework.boot:spring-boot-starter-kafka-test'

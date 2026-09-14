@@ -158,3 +158,6 @@ build/
 
 # oh-my-claudecode
 .omc/
+.omx/
+.omx-state-locks/
+.omx-state-locks.identity.json
