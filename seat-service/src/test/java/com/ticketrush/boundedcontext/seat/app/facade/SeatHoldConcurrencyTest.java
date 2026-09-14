@@ -318,6 +318,9 @@ class SeatHoldConcurrencyTest {
         .seatLayoutId(1L)
         .performanceId(1L)
         .seatNumber(seatNumber)
+        // "B-3" 형식에서 좌표를 유도한다 — (performance_id, seat_row, seat_col) 유니크 키(#645)
+        .seatRow(seatNumber.charAt(0) - 'A' + 1)
+        .seatCol(Integer.parseInt(seatNumber.substring(2)))
         .seatStatus(SeatStatus.AVAILABLE)
         .build();
   }

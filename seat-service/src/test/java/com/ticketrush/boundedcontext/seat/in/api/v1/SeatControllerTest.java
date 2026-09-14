@@ -46,15 +46,16 @@ class SeatControllerTest {
   @Test
   @DisplayName("공연 ID로 전체 좌석 맵 조회를 성공하고 200 OK를 반환한다")
   void getSeatMap() throws Exception {
-    // given: 파사드가 캐시/직렬화해 돌려주는 형태 그대로의 snake_case JSON 배열(#469).
-    // RawValue 스플라이스가 이 문자열을 이스케이프된 String이 아니라 실제 JSON 배열로 내보내는지가
-    // 아래 jsonPath 단언의 핵심이다 — 기존 응답 형태 회귀 방지.
+    // given: 파사드가 캐시/직렬화해 돌려주는 형태 그대로의 snake_case JSON 객체(#469, #645).
+    // RawValue 스플라이스가 이 문자열을 이스케이프된 String이 아니라 실제 JSON 객체로 내보내는지가
+    // 아래 jsonPath 단언의 핵심이다 — 응답 형태 회귀 방지.
     Long performanceId = 1L;
     String seatMapJson =
-        "[{\"seat_id\":1,\"seat_layout_id\":101,"
-            + "\"seat_number\":\"A-1\",\"seat_status\":\"AVAILABLE\"},"
-            + "{\"seat_id\":2,\"seat_layout_id\":101,"
-            + "\"seat_number\":\"A-2\",\"seat_status\":\"HOLD\"}]";
+        "{\"layout\":{\"total_rows\":1,\"max_cols\":12},\"seats\":["
+            + "{\"seat_id\":1,\"seat_layout_id\":101,\"seat_number\":\"A-1\","
+            + "\"seat_row\":1,\"seat_col\":1,\"seat_status\":\"AVAILABLE\"},"
+            + "{\"seat_id\":2,\"seat_layout_id\":101,\"seat_number\":\"A-2\","
+            + "\"seat_row\":1,\"seat_col\":2,\"seat_status\":\"HOLD\"}]}";
     given(seatFacade.getPerformanceSeatMap(performanceId)).willReturn(seatMapJson);
 
     // when & then
@@ -62,14 +63,18 @@ class SeatControllerTest {
         .perform(get("/api/v1/seat/{performanceId}/seat-layouts", performanceId))
         .andExpect(status().isOk())
         .andExpect(jsonPath("$.is_success").value(true))
-        .andExpect(jsonPath("$.result.length()").value(2))
-        .andExpect(jsonPath("$.result[0].seat_id").value(1))
-        .andExpect(jsonPath("$.result[0].seat_layout_id").value(101))
-        .andExpect(jsonPath("$.result[0].seat_number").value("A-1"))
-        .andExpect(jsonPath("$.result[0].seat_status").value("AVAILABLE"))
-        .andExpect(jsonPath("$.result[1].seat_id").value(2))
-        .andExpect(jsonPath("$.result[1].seat_number").value("A-2"))
-        .andExpect(jsonPath("$.result[1].seat_status").value("HOLD"));
+        .andExpect(jsonPath("$.result.layout.total_rows").value(1))
+        .andExpect(jsonPath("$.result.layout.max_cols").value(12))
+        .andExpect(jsonPath("$.result.seats.length()").value(2))
+        .andExpect(jsonPath("$.result.seats[0].seat_id").value(1))
+        .andExpect(jsonPath("$.result.seats[0].seat_layout_id").value(101))
+        .andExpect(jsonPath("$.result.seats[0].seat_number").value("A-1"))
+        .andExpect(jsonPath("$.result.seats[0].seat_row").value(1))
+        .andExpect(jsonPath("$.result.seats[0].seat_col").value(1))
+        .andExpect(jsonPath("$.result.seats[0].seat_status").value("AVAILABLE"))
+        .andExpect(jsonPath("$.result.seats[1].seat_id").value(2))
+        .andExpect(jsonPath("$.result.seats[1].seat_col").value(2))
+        .andExpect(jsonPath("$.result.seats[1].seat_status").value("HOLD"));
   }
 
   @Test

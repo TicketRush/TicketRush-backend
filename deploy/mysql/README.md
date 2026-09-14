@@ -31,6 +31,8 @@ init SQL은 **빈 DB의 최초 기동에만** 실행된다. 이미 데이터가 
 컬럼 추가·타입 변경은 `validate`가 검출하므로 **배포 전에 실행하지 않으면 기동이 실패한다.**
 수동 DDL은 관례상 해당 엔티티의 javadoc(예: `Seat`, `Payment.completedBookingId`) 또는 ADR(예:
 [ADR 0005](../../docs/adr/0005-refund-state-machine-and-recovery.md))에 적어둔다.
+백필까지 필요한 변경은 실행·테스트 가능한 SQL을 `migrations/<이슈>-<요약>/`에 둔다(예: `migrations/645-seat-row-col/`,
+절차는 [좌석맵 layout 전환 가이드](../../docs/seat-map-layout-rollout.md)).
 
 ## 재생성 절차
 
@@ -101,7 +103,7 @@ init SQL은 **빈 DB의 최초 기동에만** 실행된다. 이미 데이터가 
    다만 빠지면 시딩 SQL이 `ERROR 1364`로 깨지고 `validate` CI는 이를 검출하지 못하므로, 여기서 눈으로 확인한다.
 
    ```sh
-   grep -E "idx_seat_performance_id_status_hold_expired_at|uk_seat_layout_performance_id" deploy/mysql/init/001-ticket-rush-schema.sql
+   grep -E "idx_seat_performance_id_status_hold_expired_at|uk_seat_layout_performance_id|uk_seat_performance_id_seat_row_seat_col" deploy/mysql/init/001-ticket-rush-schema.sql
    grep -c "NOT NULL DEFAULT '0'" deploy/mysql/init/001-ticket-rush-schema.sql   # @Version 엔티티 수와 일치해야 한다
    grep -E "uk_payment_completed_booking|GENERATED ALWAYS" deploy/mysql/init/001-ticket-rush-schema.sql  # #422 수동 DDL
    grep -E "idx_outbox_aggtype_status_id" deploy/mysql/init/001-ticket-rush-schema.sql  # #483 릴레이 조회

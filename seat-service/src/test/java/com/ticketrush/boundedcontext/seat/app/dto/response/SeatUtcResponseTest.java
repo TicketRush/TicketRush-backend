@@ -32,7 +32,7 @@ class SeatUtcResponseTest {
       LocalDateTime expiry = LocalDateTime.of(2026, 1, 1, 0, 0, 0, 987654321);
       List<Object> responses =
           List.of(
-              new SeatMapItemResponse(1L, 2L, "A-1", SeatStatus.HOLD, expiry),
+              new SeatMapItemResponse(1L, 2L, "A-1", 1, 1, SeatStatus.HOLD, expiry),
               new SeatStatusChangedResponse(3L, 1L, 2L, "A-1", SeatStatus.HOLD, expiry),
               new SeatAdminSeatDetailResponse(
                   1L, "A-1", SeatStatus.HOLD, "BOOK-646", expiry.minusMinutes(5), expiry, 300));
@@ -46,7 +46,7 @@ class SeatUtcResponseTest {
       }
       for (Object response :
           List.of(
-              new SeatMapItemResponse(1L, 2L, "A-1", SeatStatus.AVAILABLE, null),
+              new SeatMapItemResponse(1L, 2L, "A-1", 1, 1, SeatStatus.AVAILABLE, null),
               new SeatStatusChangedResponse(3L, 1L, 2L, "A-1", SeatStatus.SOLD, null),
               new SeatAdminSeatDetailResponse(
                   1L, "A-1", SeatStatus.AVAILABLE, null, null, null, 0))) {

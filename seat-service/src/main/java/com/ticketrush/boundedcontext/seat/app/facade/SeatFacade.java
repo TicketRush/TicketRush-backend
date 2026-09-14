@@ -2,7 +2,7 @@ package com.ticketrush.boundedcontext.seat.app.facade;
 
 import com.ticketrush.boundedcontext.seat.app.dto.response.SeatAdminMonitoringResponse;
 import com.ticketrush.boundedcontext.seat.app.dto.response.SeatAdminSeatDetailResponse;
-import com.ticketrush.boundedcontext.seat.app.dto.response.SeatMapItemResponse;
+import com.ticketrush.boundedcontext.seat.app.dto.response.SeatMapResponse;
 import com.ticketrush.boundedcontext.seat.app.dto.response.SeatNumberResponse;
 import com.ticketrush.boundedcontext.seat.app.dto.response.SeatStatusCountsByPerformanceResponse;
 import com.ticketrush.boundedcontext.seat.app.dto.response.SeatStatusCountsResponse;
@@ -57,7 +57,7 @@ public class SeatFacade {
   private final JsonConverter jsonConverter;
 
   /**
-   * 좌석맵을 응답 본문에 그대로 실을 JSON 배열 문자열로 반환한다(#469).
+   * 좌석맵을 응답 본문에 그대로 실을 JSON 객체 문자열({@code {"layout":..,"seats":[..]}}, #645)로 반환한다(#469).
    *
    * <p>DTO 리스트가 아니라 직렬화된 JSON을 캐싱하는 이유: 이 경로의 병목이 DB가 아니라 CPU(직렬화 포함)라는 실측(#509·#518) 때문이다. 히트는 DB
    * 커넥션·JPA 매핑·Jackson 직렬화를 전부 건너뛰고, 캐시 확인이 {@code SeatGetSeatMapUseCase}의 트랜잭션 밖에 있어 히트 시 커넥션 풀도
@@ -70,14 +70,14 @@ public class SeatFacade {
       return cached;
     }
 
-    List<SeatMapItemResponse> seatMap = seatGetSeatMapUseCase.execute(performanceId);
+    SeatMapResponse seatMap = seatGetSeatMapUseCase.execute(performanceId);
     // 공용 JsonConverter는 MVC 응답과 같은 auto-configured ObjectMapper를 쓰므로
     // snake_case·날짜 포맷이 기존 응답과 동일하다.
     String json = jsonConverter.serialize(seatMap);
 
-    // 좌석 생성 전의 빈 배열을 캐싱하면 생성 직후 TTL까지 빈 좌석맵이 보이므로 캐시하지 않는다
+    // 좌석 생성 전의 응답(layout 없음·좌석 없음)을 캐싱하면 생성 직후 TTL까지 빈 좌석맵이 보이므로 캐시하지 않는다
     // (생성 경로는 상태 변경 발행을 안 거쳐 evict로 걷어낼 수 없다).
-    if (!seatMap.isEmpty()) {
+    if (seatMap.layout() != null && !seatMap.seats().isEmpty()) {
       seatMapCacheRepository.set(performanceId, json);
     }
 
@@ -99,9 +99,9 @@ public class SeatFacade {
    * 개인정보를 조회할 키가 새지 않는다 — 단건 상세와 갈리는 지점이다.
    */
   public SeatAdminMonitoringResponse getAdminMonitoring(Long performanceId) {
+    SeatMapResponse seatMap = seatGetSeatMapUseCase.execute(performanceId);
     return new SeatAdminMonitoringResponse(
-        seatGetStatusCountsUseCase.execute(performanceId),
-        seatGetSeatMapUseCase.execute(performanceId));
+        seatGetStatusCountsUseCase.execute(performanceId), seatMap.layout(), seatMap.seats());
   }
 
   /**

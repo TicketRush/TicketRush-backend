@@ -85,6 +85,8 @@ INSERT INTO seat (
   performance_id,
   seat_layout_id,
   seat_number,
+  seat_row,
+  seat_col,
   seat_status
 )
 SELECT
@@ -95,6 +97,8 @@ SELECT
   @performance_id,
   @seat_layout_id,
   CONCAT(CHAR(64 + row_nums.row_no), '-', col_nums.col_no),
+  row_nums.row_no,
+  col_nums.col_no,
   'AVAILABLE'
 FROM (
   SELECT 1 AS row_no UNION ALL
