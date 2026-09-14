@@ -64,8 +64,8 @@ class TicketQrControllerTest {
         .andExpect(jsonPath("$.is_success").value(true))
         .andExpect(jsonPath("$.result.payload").value("jwt-payload"))
         .andExpect(jsonPath("$.result.ticket_status").value("UNUSED"))
-        .andExpect(jsonPath("$.result.issued_at").value("2026-06-25 10:00:00"))
-        .andExpect(jsonPath("$.result.expires_at").value("2026-06-25 10:05:00"));
+        .andExpect(jsonPath("$.result.issued_at").value("2026-06-25T10:00:00Z"))
+        .andExpect(jsonPath("$.result.expires_at").value("2026-06-25T10:05:00Z"));
   }
 
   @Test

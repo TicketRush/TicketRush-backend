@@ -1,10 +1,12 @@
 package com.ticketrush.boundedcontext.seat.app.dto.response;
 
 import com.ticketrush.boundedcontext.seat.domain.entity.Seat;
+import com.ticketrush.global.json.UtcLocalDateTimeSerializer;
 import com.ticketrush.global.types.SeatStatus;
 import io.swagger.v3.oas.annotations.media.Schema;
 import java.time.Duration;
 import java.time.LocalDateTime;
+import tools.jackson.databind.annotation.JsonSerialize;
 
 /**
  * 관리자 좌석 단건 상세 응답 (#562).
@@ -29,9 +31,11 @@ public record SeatAdminSeatDetailResponse(
         String bookingNumber,
     @Schema(
             description = "예약 시작 시간. 선점 만료 시각에서 선점 유지 시간을 뺀 값이며 HOLD가 아니면 null.",
-            example = "2026-05-22 10:30:00")
+            example = "2026-05-22T10:30:00Z")
+        @JsonSerialize(using = UtcLocalDateTimeSerializer.class)
         LocalDateTime holdStartedAt,
-    @Schema(description = "예약 만료 시각. HOLD가 아니면 null.", example = "2026-05-22 10:35:00")
+    @Schema(description = "예약 만료 시각. HOLD가 아니면 null.", example = "2026-05-22T10:35:00Z")
+        @JsonSerialize(using = UtcLocalDateTimeSerializer.class)
         LocalDateTime holdExpiredAt,
     @Schema(
             description = "남은 예약 시간(초). 이미 만료됐거나 HOLD가 아니면 0. 화면 타이머는 이 값을 기준으로 센다.",

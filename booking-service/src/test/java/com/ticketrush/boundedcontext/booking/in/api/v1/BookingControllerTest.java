@@ -133,7 +133,7 @@ class BookingControllerTest {
         .andExpect(jsonPath("$.result[0].performance_id").value(2))
         .andExpect(jsonPath("$.result[0].seat_id").value(3))
         .andExpect(jsonPath("$.result[0].booking_status").value("CONFIRMED"))
-        .andExpect(jsonPath("$.result[0].confirmed_at").value("2026-05-22 10:30:00"))
+        .andExpect(jsonPath("$.result[0].confirmed_at").value("2026-05-22T10:30:00Z"))
         .andExpect(jsonPath("$.result[0].performance_title").value("오페라의 유령"))
         .andExpect(jsonPath("$.result[0].performance_date").value("2026-05-22"))
         .andExpect(jsonPath("$.result[0].performance_address").value("서울 예술의전당 오페라극장"))
@@ -191,7 +191,7 @@ class BookingControllerTest {
         .andExpect(jsonPath("$.result.performance_address").value("서울 예술의전당 오페라극장"))
         .andExpect(jsonPath("$.result.seat_id").value(3))
         .andExpect(jsonPath("$.result.seat_number").value("A-1"))
-        .andExpect(jsonPath("$.result.confirmed_at").value("2026-05-22 10:30:00"))
+        .andExpect(jsonPath("$.result.confirmed_at").value("2026-05-22T10:30:00Z"))
         .andExpect(jsonPath("$.result.payment_amount").value(150000));
 
     verify(bookingFacade).getMyBooking(eq(userId), eq(bookingNumber));

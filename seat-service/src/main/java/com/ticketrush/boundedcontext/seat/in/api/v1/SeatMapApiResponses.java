@@ -51,7 +51,7 @@ import java.lang.annotation.Target;
                                 "seat_layout_id": 101,
                                 "seat_number": "A-2",
                                 "seat_status": "HOLD",
-                                "hold_expired_at": "2026-08-01 12:00:00"
+                                "hold_expired_at": "2026-08-01T12:00:00Z"
                               }
                             ]
                           }

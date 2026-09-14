@@ -85,7 +85,7 @@ class PaymentControllerTest {
         .andExpect(jsonPath("$.is_success").value(true))
         .andExpect(jsonPath("$.result.payment_id").value(1))
         .andExpect(jsonPath("$.result.status").value("COMPLETED"))
-        .andExpect(jsonPath("$.result.paid_at").value("2026-05-22 10:00:00"));
+        .andExpect(jsonPath("$.result.paid_at").value("2026-05-22T10:00:00Z"));
 
     verify(paymentFacade).confirm(eq(userId), any(PaymentConfirmRequest.class));
   }
@@ -315,7 +315,7 @@ class PaymentControllerTest {
         .andExpect(jsonPath("$.result.status").value("CANCELED"))
         .andExpect(jsonPath("$.result.refund_id").value(5))
         .andExpect(jsonPath("$.result.refunded_amount").value(55000))
-        .andExpect(jsonPath("$.result.canceled_at").value("2026-05-22 10:00:00"));
+        .andExpect(jsonPath("$.result.canceled_at").value("2026-05-22T10:00:00Z"));
 
     verify(paymentFacade).cancel(eq(userId), eq(paymentId), any(PaymentCancelRequest.class));
   }

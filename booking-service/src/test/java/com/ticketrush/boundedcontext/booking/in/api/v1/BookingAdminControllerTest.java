@@ -87,7 +87,7 @@ class BookingAdminControllerTest {
         .andExpect(jsonPath("$.result[0].booking_number").value(BOOKING_NUMBER))
         .andExpect(jsonPath("$.result[0].user_id").value(5))
         .andExpect(jsonPath("$.result[0].booking_status").value("CONFIRMED"))
-        .andExpect(jsonPath("$.result[0].refund_failed_at").value("2026-07-10 12:00:00"))
+        .andExpect(jsonPath("$.result[0].refund_failed_at").value("2026-07-10T12:00:00Z"))
         .andExpect(jsonPath("$.pagination_info.total_elements").value(1));
 
     verify(bookingFacade).getRefundFailedBookings(new OffsetPageRequest(0, 10));
@@ -125,7 +125,7 @@ class BookingAdminControllerTest {
         .andExpect(jsonPath("$.is_success").value(true))
         .andExpect(jsonPath("$.result[0].booking_number").value(BOOKING_NUMBER))
         .andExpect(jsonPath("$.result[0].booking_status").value("REFUNDING"))
-        .andExpect(jsonPath("$.result[0].updated_at").value("2026-07-13 11:00:00"))
+        .andExpect(jsonPath("$.result[0].updated_at").value("2026-07-13T11:00:00Z"))
         .andExpect(jsonPath("$.pagination_info.total_elements").value(1));
 
     verify(bookingFacade).getRefundingStuckBookings(new OffsetPageRequest(0, 10));
@@ -196,7 +196,7 @@ class BookingAdminControllerTest {
         .andExpect(status().isOk())
         .andExpect(jsonPath("$.is_success").value(true))
         .andExpect(jsonPath("$.result[0].booking_number").value(BOOKING_NUMBER))
-        .andExpect(jsonPath("$.result[0].booked_at").value("2026-05-22 10:30:00"))
+        .andExpect(jsonPath("$.result[0].booked_at").value("2026-05-22T10:30:00Z"))
         .andExpect(jsonPath("$.result[0].performance_title").value("오페라의 유령"))
         .andExpect(jsonPath("$.result[0].performance_date").value("2026-05-22"))
         .andExpect(jsonPath("$.result[0].booker_name").value("김소희"))
