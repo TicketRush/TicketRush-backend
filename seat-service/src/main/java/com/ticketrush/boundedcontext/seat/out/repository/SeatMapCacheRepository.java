@@ -23,7 +23,8 @@ public class SeatMapCacheRepository {
 
   // Redis 키 컨벤션 {도메인}:{엔티티}[:{식별자}] (docs/backend-convention.md §4).
   // seat:lock: 프리픽스가 아니므로 TTL 만료 이벤트가 SeatLockExpirationListener에 걸리지 않는다.
-  private static final String SEAT_MAP_PREFIX = "seat:seat-map:";
+  // v2: hold_expired_at을 UTC(Z)로 직렬화한 원문. 구 포맷(무시간대) 값을 읽지 않도록 키를 분리했다 (#646).
+  private static final String SEAT_MAP_PREFIX = "seat:seat-map:v2:";
 
   // 무효화는 SeatStatusEventPublisher가 담당하고, TTL은 evict 누락·cache-aside 경합(커밋 직전 스냅샷이
   // evict 직후 적재되는 창)의 stale 상한이다(performance-service PERFORMANCE_LIST_TTL과 같은 근거).
