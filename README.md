@@ -386,6 +386,8 @@ DB·Redis·Kafka 또한 각각 `DB_HOST`, `REDIS_HOST`, `KAFKA_BOOTSTRAP_SERVERS
 
 현재 `docker-compose.prod.yml`에서는 **MySQL·Redis·Kafka를 애플리케이션과 동일한 EC2에서 컨테이너로 실행**합니다. 접속 정보가 외부화되어 있으므로 향후 RDS·ElastiCache·MSK 등 관리형 인프라로 이전할 수 있습니다.
 
+발생·만료 시각 응답의 UTC 전환(#646) 배포·롤백 전 확인 사항과 절차는 [`docs/utc-timestamp-rollout.md`](docs/utc-timestamp-rollout.md)를 따릅니다.
+
 
 ## 🚀 시작하기 (Getting Started)
 
