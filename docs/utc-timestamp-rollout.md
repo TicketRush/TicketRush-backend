@@ -46,6 +46,7 @@
 - `Dockerfile`: `TZ=UTC`, `-Duser.timezone=UTC`. 이 설정은 DB 데이터가 UTC라는 증거가 아니다.
 - 런타임 시간대 영향만 받는 비목표: performance-service의 `PerformanceOpenBookingUseCase`, `PerformanceClearBookingOpenAtUseCase`, `Performance.deletedAt`, 대시보드·통계의 `LocalDate.now()`.
   - 비UTC JVM(로컬 IDE)에서는 performance 벌크 JPQL의 `updatedAt = :now`(호스트 시각)와 UTC auditing 값이 한 테이블에 섞인다. 운영(UTC)은 영향 없다.
+  - #651에서 추가한 CLOSED 벌크 전환(`PerformanceCloseShowUseCase`)은 예외다 — `updatedAt`에 UTC Clock 값을 쓰고, 공연 시각 비교는 Asia/Seoul 벽시계로 한다(ADR 0020).
   - booking 일별 매출 집계(`cast(confirmedAt as LocalDate)`)의 날짜 경계는 UTC 자정이다.
 
 ### 좌석맵 캐시
