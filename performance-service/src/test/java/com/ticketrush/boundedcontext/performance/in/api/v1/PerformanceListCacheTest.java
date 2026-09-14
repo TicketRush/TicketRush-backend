@@ -12,8 +12,10 @@ import com.ticketrush.boundedcontext.performance.app.dto.request.PerformanceCrea
 import com.ticketrush.boundedcontext.performance.app.dto.request.PerformancePatchRequest;
 import com.ticketrush.boundedcontext.performance.app.dto.response.PerformanceListResponse;
 import com.ticketrush.boundedcontext.performance.app.facade.PerformanceFacade;
+import com.ticketrush.boundedcontext.performance.app.usecase.PerformanceCloseShowUseCase;
 import com.ticketrush.boundedcontext.performance.app.usecase.PerformanceOpenBookingUseCase;
 import com.ticketrush.boundedcontext.performance.domain.entity.Performance;
+import com.ticketrush.boundedcontext.performance.domain.policy.PerformanceShowTimePolicy;
 import com.ticketrush.boundedcontext.performance.domain.types.Genre;
 import com.ticketrush.boundedcontext.performance.domain.types.PerformanceStatus;
 import com.ticketrush.boundedcontext.performance.out.apiclient.SeatRestClient;
@@ -94,6 +96,7 @@ class PerformanceListCacheTest {
 
   @Autowired private PerformanceFacade performanceFacade;
   @Autowired private PerformanceOpenBookingUseCase performanceOpenBookingUseCase;
+  @Autowired private PerformanceCloseShowUseCase performanceCloseShowUseCase;
   @Autowired private PerformanceRepository performanceRepository;
   @Autowired private StringRedisTemplate redisTemplate;
   @Autowired private CacheManager cacheManager;
@@ -273,6 +276,37 @@ class PerformanceListCacheTest {
     assertThat(redisTemplate.hasKey(FIRST_PAGE_KEY)).isTrue();
   }
 
+  /**
+   * CLOSED 전환의 캐시 무효화 (#651). 여기서는 정책을 대체하지 않는다 — 실제 Clock에 물린 정책이 "어제"를 지난 것으로 판정하는지까지 함께 본다. 어제
+   * 날짜는 하루 중 어느 시각에 돌려도 지난 것이라 자정 경계와 무관하다.
+   */
+  @Test
+  @DisplayName("CLOSED 전환 스케줄러가 상태를 전환하면 캐시가 무효화된다")
+  void closeShow_transitioned_evictsCache() {
+    LocalDate yesterday = LocalDate.now(PerformanceShowTimePolicy.SHOW_ZONE).minusDays(1);
+    final Long pastId = saveOnSaleShowOn(yesterday).getId();
+    warmCache();
+
+    int closedCount = performanceCloseShowUseCase.execute();
+
+    assertThat(closedCount).isEqualTo(1);
+    assertThat(redisTemplate.hasKey(FIRST_PAGE_KEY)).isFalse();
+    assertThat(performanceRepository.findById(pastId).orElseThrow().getPerformanceStatus())
+        .isEqualTo(PerformanceStatus.CLOSED);
+  }
+
+  @Test
+  @DisplayName("CLOSED 전환 스케줄러가 전환한 공연이 없으면 캐시를 유지한다")
+  void closeShow_nothingTransitioned_keepsCache() {
+    saveOnSaleShowOn(LocalDate.now(PerformanceShowTimePolicy.SHOW_ZONE).plusDays(30));
+    warmCache();
+
+    int closedCount = performanceCloseShowUseCase.execute();
+
+    assertThat(closedCount).isZero();
+    assertThat(redisTemplate.hasKey(FIRST_PAGE_KEY)).isTrue();
+  }
+
   @Test
   @DisplayName("좌석 수도 목록과 함께 캐시된다 — 캐시가 살아 있는 동안은 좌석 서비스를 다시 부르지 않는다")
   void seatCounts_cachedTogetherWithList() {
@@ -388,6 +422,26 @@ class PerformanceListCacheTest {
             .address("서울")
             .bookingOpenAt(bookingOpenAt)
             .build());
+  }
+
+  /** 이 클래스는 {@code @Transactional}이 아니라 상태 변경을 save로 반영한다. */
+  private Performance saveOnSaleShowOn(LocalDate showDate) {
+    Performance performance =
+        Performance.builder()
+            .title("공연명")
+            .performer("출연진")
+            .genre(Genre.CONCERT)
+            .description("설명")
+            .showDate(showDate)
+            .showTime(LocalTime.of(19, 0))
+            .durationMinutes(120)
+            .price(50000L)
+            .totalSeats(100)
+            .address("서울")
+            .build();
+    performance.changeStatus(PerformanceStatus.ON_SALE);
+
+    return performanceRepository.save(performance);
   }
 
   private PerformanceCreateRequest buildCreateRequest(String title) {
