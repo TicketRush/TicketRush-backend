@@ -1,6 +1,7 @@
 package com.ticketrush.global.outbox;
 
 import java.time.LocalDateTime;
+import java.time.ZoneOffset;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnExpression;
@@ -26,7 +27,7 @@ public class OutboxStatusTransition {
   /** 발행 성공을 SENT로 전이한다. */
   @Transactional(propagation = Propagation.REQUIRES_NEW)
   public void markSuccess(Long id) {
-    outboxRepository.findById(id).ifPresent(row -> row.markSent(LocalDateTime.now()));
+    outboxRepository.findById(id).ifPresent(row -> row.markSent(LocalDateTime.now(ZoneOffset.UTC)));
   }
 
   /**

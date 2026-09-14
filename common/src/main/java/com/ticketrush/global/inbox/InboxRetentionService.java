@@ -1,6 +1,7 @@
 package com.ticketrush.global.inbox;
 
 import java.time.LocalDateTime;
+import java.time.ZoneOffset;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
@@ -52,7 +53,7 @@ public class InboxRetentionService {
       return 0;
     }
 
-    LocalDateTime threshold = LocalDateTime.now().minusDays(retentionDays);
+    LocalDateTime threshold = LocalDateTime.now(ZoneOffset.UTC).minusDays(retentionDays);
     int totalDeleted = 0;
     for (int batch = 0; batch < maxBatchesPerRun; batch++) {
       int deleted = batchDeleter.deleteBatch(threshold, batchSize);
