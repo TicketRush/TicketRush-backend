@@ -139,13 +139,15 @@ SET @layout_id = (SELECT seat_layout_id FROM seat_layout WHERE performance_id = 
 -- SOLD 로 두는 이유는 SeatStatusScheduler 때문이다. 그 스케줄러는 '만료된 HOLD' 만 AVAILABLE 로
 -- 되돌리므로 SOLD 는 건드리지 않는다 — HOLD 로 심으면 hold_expired_at 을 미래로 미는 관리가
 -- 따라붙는데, 이 회차에는 아무 이득이 없다.
+-- seat_row/seat_col(#645)은 'S-<i>'를 layout(max_cols = 50)에 행 우선으로 채운 1-based 좌표다. 위 seat_layout의
+-- CEIL(n/50)·50과 같은 식이어야 좌석맵이 배치 크기 안에 그려진다(deploy/mysql/migrations/645-seat-row-col 백필의 SEQ 판정과 동일).
 INSERT INTO seat
-  (seat_layout_id, performance_id, seat_number, seat_status, booking_number,
+  (seat_layout_id, performance_id, seat_number, seat_row, seat_col, seat_status, booking_number,
    hold_expired_at, created_at, updated_at)
 WITH RECURSIVE n(i) AS (
   SELECT 1 UNION ALL SELECT i + 1 FROM n WHERE i < @count
 )
-SELECT @layout_id, @perf_id, CONCAT('S-', n.i), 'SOLD',
+SELECT @layout_id, @perf_id, CONCAT('S-', n.i), CEIL(n.i / 50), MOD(n.i - 1, 50) + 1, 'SOLD',
        CONCAT(@bk_prefix, LPAD(n.i, 9, '0')),
        NULL, @app_now, @app_now
 FROM n

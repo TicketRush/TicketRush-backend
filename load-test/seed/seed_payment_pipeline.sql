@@ -128,13 +128,15 @@ SET @layout_id = (SELECT seat_layout_id FROM seat_layout WHERE performance_id = 
 -- booking_number 를 여기서 함께 박아 두는 것이 핵심이다. confirmSoldById 는
 -- `WHERE seat_id=? AND booking_number=? AND seat_status='HOLD'` 로 갱신하므로 이 셋이 전부
 -- 맞아야 SOLD 가 된다.
+-- seat_row/seat_col(#645)은 'S-<i>'를 layout(max_cols = 50)에 행 우선으로 채운 1-based 좌표다. 위 seat_layout의
+-- CEIL(n/50)·50과 같은 식이어야 좌석맵이 배치 크기 안에 그려진다(deploy/mysql/migrations/645-seat-row-col 백필의 SEQ 판정과 동일).
 INSERT INTO seat
-  (seat_layout_id, performance_id, seat_number, seat_status, booking_number,
+  (seat_layout_id, performance_id, seat_number, seat_row, seat_col, seat_status, booking_number,
    hold_expired_at, created_at, updated_at)
 WITH RECURSIVE n(i) AS (
   SELECT 1 UNION ALL SELECT i + 1 FROM n WHERE i < @count
 )
-SELECT @layout_id, @perf_id, CONCAT('S-', n.i), 'HOLD',
+SELECT @layout_id, @perf_id, CONCAT('S-', n.i), CEIL(n.i / 50), MOD(n.i - 1, 50) + 1, 'HOLD',
        CONCAT(@bk_prefix, LPAD(n.i, 9, '0')),
        @future, @app_now, @app_now
 FROM n

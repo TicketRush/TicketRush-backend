@@ -85,8 +85,9 @@ export default function () {
     'status is 200': (res) => res.status === 200,
     'API response is successful': () => payload?.is_success === true,
     [`result contains ${EXPECTED_SEATS} seats`]: () =>
-      Array.isArray(payload?.result) &&
-      payload.result.length === EXPECTED_SEATS,
+      // #645: result 는 { layout, seats } 객체다.
+      Array.isArray(payload?.result?.seats) &&
+      payload.result.seats.length === EXPECTED_SEATS,
   });
 
   sleep(PAUSE_SECONDS);

@@ -141,7 +141,8 @@ export function setup() {
     headers: { 'Accept-Encoding': 'gzip' },
     tags: { name: 'setup_seat_layouts' },
   });
-  const seats = jsonField(res, 'result');
+  // #645: result 는 { layout, seats } 객체다.
+  const seats = jsonField(res, 'result.seats');
   if (!Array.isArray(seats)) {
     fail(`setup: 좌석맵 조회 실패 perfId=${SSE_PERF_ID} status=${res.status}`);
   }
