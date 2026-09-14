@@ -9,7 +9,7 @@ import io.micrometer.core.instrument.Counter;
 import io.micrometer.core.instrument.MeterRegistry;
 import java.io.IOException;
 import java.time.LocalDateTime;
-import java.time.ZoneId;
+import java.time.ZoneOffset;
 import java.util.List;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Qualifier;
@@ -261,7 +261,7 @@ public class TossPaymentCancelClient implements PaymentCancelClient {
             : response.paymentKey();
 
     LocalDateTime canceledAt =
-        latest.canceledAt().atZoneSameInstant(ZoneId.systemDefault()).toLocalDateTime();
+        latest.canceledAt().withOffsetSameInstant(ZoneOffset.UTC).toLocalDateTime();
 
     return new PaymentCancelResult(pgRefundKey, latest.cancelAmount(), canceledAt);
   }

@@ -4,6 +4,7 @@ import com.ticketrush.boundedcontext.seat.domain.entity.Seat;
 import com.ticketrush.global.eventpublisher.EventPublisher;
 import com.ticketrush.shared.seat.event.SeatHoldExpiredEvent;
 import java.time.LocalDateTime;
+import java.time.ZoneOffset;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
@@ -33,7 +34,9 @@ public class SeatHoldExpiredPublisher {
     }
 
     LocalDateTime expiredAt =
-        seat.getHoldExpiredAt() != null ? seat.getHoldExpiredAt() : LocalDateTime.now();
+        seat.getHoldExpiredAt() != null
+            ? seat.getHoldExpiredAt()
+            : LocalDateTime.now(ZoneOffset.UTC);
     eventPublisher.publish(new SeatHoldExpiredEvent(seat.getId(), bookingNumber, expiredAt));
   }
 }

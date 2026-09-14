@@ -16,6 +16,7 @@ import com.ticketrush.global.status.ErrorStatus;
 import com.ticketrush.global.types.SeatStatus;
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import java.time.LocalDateTime;
+import java.time.ZoneOffset;
 import java.util.Optional;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
@@ -46,7 +47,7 @@ class SeatHoldUseCaseTest {
     // given
     Long seatId = 1L;
     String bookingNumber = "BOOK-1234";
-    LocalDateTime expiredAt = LocalDateTime.now().plusMinutes(5);
+    LocalDateTime expiredAt = LocalDateTime.now(ZoneOffset.UTC).plusMinutes(5);
 
     // mock() 대신 실제 Seat 객체 생성 (초기 상태: AVAILABLE)
     Seat seat =
@@ -81,7 +82,7 @@ class SeatHoldUseCaseTest {
   void execute_returns_false_when_not_available() {
     // given: 이미 SOLD된 좌석(미가용)
     Long seatId = 1L;
-    LocalDateTime expiredAt = LocalDateTime.now().plusMinutes(5);
+    LocalDateTime expiredAt = LocalDateTime.now(ZoneOffset.UTC).plusMinutes(5);
     Seat seat =
         Seat.builder()
             .seatLayoutId(10L)
@@ -112,7 +113,7 @@ class SeatHoldUseCaseTest {
   void execute_fail_booking_number_required() {
     // given
     Long seatId = 1L;
-    LocalDateTime expiredAt = LocalDateTime.now().plusMinutes(5);
+    LocalDateTime expiredAt = LocalDateTime.now(ZoneOffset.UTC).plusMinutes(5);
 
     Seat seat =
         Seat.builder()
@@ -139,7 +140,7 @@ class SeatHoldUseCaseTest {
   void execute_fail_invalid_expired_at() {
     // given
     Long seatId = 1L;
-    LocalDateTime pastTime = LocalDateTime.now().minusMinutes(5); // 과거 시간 세팅
+    LocalDateTime pastTime = LocalDateTime.now(ZoneOffset.UTC).minusMinutes(5); // 과거 시간 세팅
 
     Seat seat = Seat.builder().seatStatus(SeatStatus.AVAILABLE).build();
 
@@ -157,7 +158,7 @@ class SeatHoldUseCaseTest {
   void execute_fail_seat_not_found() {
     // given
     Long seatId = 1L;
-    LocalDateTime expiredAt = LocalDateTime.now().plusMinutes(5);
+    LocalDateTime expiredAt = LocalDateTime.now(ZoneOffset.UTC).plusMinutes(5);
 
     given(seatRepository.findById(seatId)).willReturn(Optional.empty());
 

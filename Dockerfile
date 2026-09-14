@@ -33,4 +33,6 @@ USER appuser
 
 EXPOSE 8080
 
-ENTRYPOINT ["java", "-jar", "app.jar"]
+ENV TZ=UTC
+
+ENTRYPOINT ["java", "-Duser.timezone=UTC", "-jar", "app.jar"]

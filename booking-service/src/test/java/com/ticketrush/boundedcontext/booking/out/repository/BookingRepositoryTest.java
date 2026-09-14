@@ -11,6 +11,7 @@ import com.ticketrush.boundedcontext.booking.domain.types.BookingStatus;
 import com.ticketrush.global.jpa.config.JpaConfig;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
+import java.time.ZoneOffset;
 import java.util.List;
 import java.util.Optional;
 import org.junit.jupiter.api.DisplayName;
@@ -118,7 +119,7 @@ class BookingRepositoryTest {
     // auditing이 관리하는 updatedAt은 저장 시각으로 고정되므로, 고착 시나리오는 벌크 UPDATE로 과거로 되돌린다
     em.getEntityManager()
         .createQuery("UPDATE Booking b SET b.updatedAt = :past WHERE b.id = :id")
-        .setParameter("past", LocalDateTime.now().minusHours(1))
+        .setParameter("past", LocalDateTime.now(ZoneOffset.UTC).minusHours(1))
         .setParameter("id", stuck.getId())
         .executeUpdate();
     em.clear();
@@ -126,7 +127,9 @@ class BookingRepositoryTest {
     // when: cutoff = 30분 전
     Page<Booking> found =
         bookingRepository.findByBookingStatusAndUpdatedAtBefore(
-            BookingStatus.REFUNDING, LocalDateTime.now().minusMinutes(30), PageRequest.of(0, 10));
+            BookingStatus.REFUNDING,
+            LocalDateTime.now(ZoneOffset.UTC).minusMinutes(30),
+            PageRequest.of(0, 10));
 
     // then: 방금 REFUNDING에 들어간 건과 다른 상태는 잡히지 않는다
     assertThat(found.getContent())

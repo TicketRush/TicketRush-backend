@@ -2,6 +2,7 @@ package com.ticketrush.boundedcontext.payment.out.apiclient;
 
 import com.ticketrush.boundedcontext.payment.domain.types.PaymentProvider;
 import java.time.LocalDateTime;
+import java.time.ZoneOffset;
 import java.util.Optional;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
@@ -40,7 +41,8 @@ public class StubPaymentInquiryClient implements PaymentInquiryClient {
   public Optional<PaymentInquiryResult> inquire(String paymentKey) {
     log.info("[PG-STUB] inquire paymentKey={}", mask(paymentKey));
     return Optional.of(
-        new PaymentInquiryResult(paymentKey, null, null, "DONE", LocalDateTime.now()));
+        new PaymentInquiryResult(
+            paymentKey, null, null, "DONE", LocalDateTime.now(ZoneOffset.UTC)));
   }
 
   private String mask(String value) {

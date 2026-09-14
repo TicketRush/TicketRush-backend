@@ -5,6 +5,7 @@ import com.ticketrush.boundedcontext.payment.domain.entity.Refund;
 import com.ticketrush.global.exception.BusinessException;
 import com.ticketrush.global.status.ErrorStatus;
 import java.time.LocalDateTime;
+import java.time.ZoneOffset;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.dao.DataIntegrityViolationException;
@@ -71,7 +72,7 @@ public class FailedRefundRecorder {
               payment.getBookingId(),
               payment.getAmount(),
               ErrorStatus.PAYMENT_REFUND_FAILED.getMessage(),
-              LocalDateTime.now());
+              LocalDateTime.now(ZoneOffset.UTC));
       paymentCancelPersister.persistFailedRefund(failed);
     } catch (DataIntegrityViolationException dup) {
       // 재전달/DLT 재처리로 이미 FAILED 이력이 있으면 payment_id unique 위반 = 정상 멱등. 원 예외는 호출부에서 그대로 재던져 보상된다.

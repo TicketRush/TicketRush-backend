@@ -9,6 +9,7 @@ import com.ticketrush.boundedcontext.seat.domain.constant.SeatLockKey;
 import com.ticketrush.global.constants.MetricNames;
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import java.time.LocalDateTime;
+import java.time.ZoneOffset;
 import java.util.Optional;
 import java.util.concurrent.TimeUnit;
 import org.junit.jupiter.api.BeforeEach;
@@ -53,7 +54,8 @@ class SeatLockUseCaseTest {
 
     // then
     assertThat(result).isPresent();
-    assertThat(result.get()).isAfter(LocalDateTime.now().plusMinutes(4)); // 약 5분 뒤인지 확인
+    assertThat(result.get())
+        .isAfter(LocalDateTime.now(ZoneOffset.UTC).plusMinutes(4)); // 약 5분 뒤인지 확인
     verify(redissonClient).getLock(expectedKey);
   }
 

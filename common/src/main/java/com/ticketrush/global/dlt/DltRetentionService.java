@@ -1,6 +1,7 @@
 package com.ticketrush.global.dlt;
 
 import java.time.LocalDateTime;
+import java.time.ZoneOffset;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
@@ -30,7 +31,7 @@ public class DltRetentionService {
       log.warn("DLT retention: retentionDays({})가 0 이하여서 purge를 건너뜁니다.", retentionDays);
       return 0;
     }
-    LocalDateTime threshold = LocalDateTime.now().minusDays(retentionDays);
+    LocalDateTime threshold = LocalDateTime.now(ZoneOffset.UTC).minusDays(retentionDays);
     int deleted = repository.deleteCreatedBefore(threshold);
     if (deleted > 0) {
       log.info("DLT retention: dead_letter_record {}건 삭제 (threshold={})", deleted, threshold);

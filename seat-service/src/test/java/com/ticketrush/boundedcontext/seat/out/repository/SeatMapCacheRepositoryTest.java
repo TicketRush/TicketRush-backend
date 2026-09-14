@@ -33,7 +33,7 @@ import org.springframework.data.redis.core.ValueOperations;
 class SeatMapCacheRepositoryTest {
 
   private static final Long PERFORMANCE_ID = 1L;
-  private static final String KEY = "seat:seat-map:1";
+  private static final String KEY = "seat:seat-map:v2:1";
   private static final String JSON = "[{\"seat_id\":1}]";
 
   @Mock private StringRedisTemplate redisTemplate;

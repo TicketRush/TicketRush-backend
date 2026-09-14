@@ -4,9 +4,11 @@ import com.ticketrush.boundedcontext.booking.domain.entity.Booking;
 import com.ticketrush.boundedcontext.booking.domain.types.BookingStatus;
 import com.ticketrush.boundedcontext.booking.out.apiclient.dto.PerformanceInfoResponse;
 import com.ticketrush.boundedcontext.booking.out.apiclient.dto.UserSummaryInfoResponse;
+import com.ticketrush.global.json.UtcLocalDateTimeSerializer;
 import io.swagger.v3.oas.annotations.media.Schema;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
+import tools.jackson.databind.annotation.JsonSerialize;
 
 /**
  * 관리자 예매 목록 응답 (#561). 목록 컬럼과 행 확장 드롭다운(예매자 정보·좌석 정보·좌석 수·단가·총액)을 한 응답에 함께 싣는다 — 1인 1매라 드롭다운 필드가 목록
@@ -26,7 +28,9 @@ public record BookingAdminSummaryResponse(
     @Schema(description = "공연 ID. 공연 필드가 비어 있을 때 재조회 키다.", example = "10") Long performanceId,
     @Schema(description = "좌석 ID. 좌석 번호가 비어 있을 때 재조회 키다.", example = "100") Long seatId,
     @Schema(description = "예매 상태", example = "CONFIRMED") BookingStatus bookingStatus,
-    @Schema(description = "예매 일시", example = "2026-05-22 10:30:00") LocalDateTime bookedAt,
+    @Schema(description = "예매 일시", example = "2026-05-22T10:30:00Z")
+        @JsonSerialize(using = UtcLocalDateTimeSerializer.class)
+        LocalDateTime bookedAt,
     @Schema(description = "공연 이름. performance-service 장애 시 null.", example = "오페라의 유령")
         String performanceTitle,
     @Schema(description = "공연 날짜. performance-service 장애 시 null.", example = "2026-05-22")

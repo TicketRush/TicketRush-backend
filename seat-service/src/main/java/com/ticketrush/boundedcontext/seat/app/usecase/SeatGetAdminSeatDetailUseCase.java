@@ -5,6 +5,7 @@ import com.ticketrush.boundedcontext.seat.out.repository.SeatRepository;
 import com.ticketrush.global.exception.BusinessException;
 import com.ticketrush.global.status.ErrorStatus;
 import java.time.LocalDateTime;
+import java.time.ZoneOffset;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -20,7 +21,7 @@ public class SeatGetAdminSeatDetailUseCase {
   public SeatAdminSeatDetailResponse execute(Long performanceId, Long seatId) {
     return seatRepository
         .findByIdAndPerformanceId(seatId, performanceId)
-        .map(seat -> SeatAdminSeatDetailResponse.of(seat, LocalDateTime.now()))
+        .map(seat -> SeatAdminSeatDetailResponse.of(seat, LocalDateTime.now(ZoneOffset.UTC)))
         .orElseThrow(() -> new BusinessException(ErrorStatus.SEAT_NOT_FOUND));
   }
 }

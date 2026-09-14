@@ -7,7 +7,7 @@ import com.ticketrush.global.exception.BusinessException;
 import com.ticketrush.global.status.ErrorStatus;
 import java.io.IOException;
 import java.time.LocalDateTime;
-import java.time.ZoneId;
+import java.time.ZoneOffset;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
@@ -142,7 +142,7 @@ public class TossPaymentApprovalClient implements PaymentApprovalClient {
       }
 
       LocalDateTime approvedAt =
-          response.approvedAt().atZoneSameInstant(ZoneId.systemDefault()).toLocalDateTime();
+          response.approvedAt().withOffsetSameInstant(ZoneOffset.UTC).toLocalDateTime();
 
       /* method는 Toss 명세상 nullable이라 위 세 가드와 달리 승인을 실패시키지 않는다. 결제수단은 보존 대상일 뿐
        * 승인 성립 요건이 아니다(#593). 평상시 소음을 만들지 않도록 debug로만 남긴다. */

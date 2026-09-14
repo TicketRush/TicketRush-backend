@@ -7,7 +7,7 @@ import io.micrometer.core.instrument.MeterRegistry;
 import jakarta.annotation.PostConstruct;
 import java.time.Instant;
 import java.time.LocalDateTime;
-import java.time.ZoneId;
+import java.time.ZoneOffset;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.List;
@@ -213,7 +213,7 @@ public class OutboxRelayService {
 
   private Instant toInstant(LocalDateTime createdAt) {
     // outbox는 envelope의 원본 createdAt(Instant)을 보존하지 않아 행 auditing 시각으로 근사한다.
-    return createdAt == null ? Instant.now() : createdAt.atZone(ZoneId.systemDefault()).toInstant();
+    return createdAt == null ? Instant.now() : createdAt.toInstant(ZoneOffset.UTC);
   }
 
   private String errorMessage(Throwable ex) {

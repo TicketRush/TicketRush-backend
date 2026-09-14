@@ -89,7 +89,7 @@ class EntryControllerTest {
         .andExpect(jsonPath("$.is_success").value(true))
         .andExpect(jsonPath("$.result.ticket_id").value(1))
         .andExpect(jsonPath("$.result.ticket_status").value("USED"))
-        .andExpect(jsonPath("$.result.used_at").value("2026-06-26 19:30:00"));
+        .andExpect(jsonPath("$.result.used_at").value("2026-06-26T19:30:00Z"));
   }
 
   @Test

@@ -8,19 +8,32 @@ import static org.springframework.test.web.client.response.MockRestResponseCreat
 import static org.springframework.test.web.client.response.MockRestResponseCreators.withStatus;
 import static org.springframework.test.web.client.response.MockRestResponseCreators.withSuccess;
 
+import com.ticketrush.boundedcontext.payment.app.dto.response.PaymentConfirmResponse;
 import com.ticketrush.boundedcontext.payment.domain.types.PaymentProvider;
+import com.ticketrush.global.config.JacksonConfig;
 import com.ticketrush.global.exception.BusinessException;
 import com.ticketrush.global.status.ErrorStatus;
+import java.time.Instant;
+import java.time.LocalDateTime;
+import java.time.OffsetDateTime;
+import java.time.ZoneOffset;
+import java.time.temporal.ChronoUnit;
 import java.util.Optional;
+import java.util.TimeZone;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.parallel.ResourceLock;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.CsvSource;
 import org.springframework.http.HttpMethod;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.test.web.client.MockRestServiceServer;
 import org.springframework.web.client.RestClient;
+import tools.jackson.databind.json.JsonMapper;
 
+@ResourceLock("java.util.TimeZone.default")
 class TossPaymentInquiryClientTest {
 
   private static final String BASE_URL = "https://api.tosspayments.com";
@@ -151,5 +164,50 @@ class TossPaymentInquiryClientTest {
   void provider_is_toss() {
     assertThat(client.provider()).isEqualTo(PaymentProvider.TOSS);
     assertThat(client.isFallback()).isFalse();
+  }
+
+  @ParameterizedTest
+  @CsvSource({
+    "UTC,2026-01-01T00:15:00.123456789+09:00",
+    "Asia/Seoul,2026-01-01T00:15:00.123456789+09:00",
+    "UTC,2026-12-31T23:45:00.987654321-05:00",
+    "Asia/Seoul,2026-12-31T23:45:00.987654321-05:00"
+  })
+  @DisplayName("PG 오프셋은 정확한 UTC로 정규화하고 초 미만 절삭은 응답에서만 수행한다")
+  void normalizesOffsetWithoutLosingPrecision(String zone, String input) {
+    TimeZone original = TimeZone.getDefault();
+    try {
+      TimeZone.setDefault(TimeZone.getTimeZone(zone));
+      assertThat(TimeZone.getDefault().getID()).isEqualTo(zone);
+      mockServer
+          .expect(requestTo(INQUIRY_URL))
+          .andRespond(
+              withSuccess(
+                  """
+          {"paymentKey":"pgKey_xyz","orderId":"BKG-0000100",
+           "transactionKey":"TX-1","totalAmount":55000,"status":"DONE",
+           "approvedAt":"%s"}
+          """
+                      .formatted(input),
+                  MediaType.APPLICATION_JSON));
+      PaymentInquiryResult result = client.inquire(PAYMENT_KEY).orElseThrow();
+      LocalDateTime actual = result.approvedAt();
+      Instant expected = OffsetDateTime.parse(input).toInstant();
+      assertThat(actual).isEqualTo(LocalDateTime.ofInstant(expected, ZoneOffset.UTC));
+      assertThat(actual.getNano()).isEqualTo(expected.getNano());
+      JsonMapper.Builder builder = JsonMapper.builder();
+      new JacksonConfig().jacksonCustomizer().customize(builder);
+      JsonMapper mapper = builder.build();
+      String wire =
+          mapper
+              .readTree(
+                  mapper.writeValueAsString(new PaymentConfirmResponse(1L, "COMPLETED", actual)))
+              .get("paid_at")
+              .asText();
+      assertThat(Instant.parse(wire)).isEqualTo(expected.truncatedTo(ChronoUnit.SECONDS));
+      mockServer.verify();
+    } finally {
+      TimeZone.setDefault(original);
+    }
   }
 }

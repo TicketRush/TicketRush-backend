@@ -2,8 +2,10 @@ package com.ticketrush.boundedcontext.payment.app.dto.response;
 
 import com.ticketrush.boundedcontext.payment.domain.types.PaymentProvider;
 import com.ticketrush.boundedcontext.payment.domain.types.PaymentStatus;
+import com.ticketrush.global.json.UtcLocalDateTimeSerializer;
 import io.swagger.v3.oas.annotations.media.Schema;
 import java.time.LocalDateTime;
+import tools.jackson.databind.annotation.JsonSerialize;
 
 @Schema(description = "결제 내역 단건 상세 응답 DTO")
 public record PaymentDetailResponse(
@@ -13,6 +15,7 @@ public record PaymentDetailResponse(
     @Schema(description = "결제수단 (PG 원본 문자열, 미확보 시 응답에서 생략)", example = "카드") String method,
     @Schema(description = "결제 금액", example = "55000") Long amount,
     @Schema(description = "결제 상태", example = "COMPLETED") PaymentStatus status,
-    @Schema(description = "결제 완료 시각") LocalDateTime paidAt,
+    @Schema(description = "결제 완료 시각") @JsonSerialize(using = UtcLocalDateTimeSerializer.class)
+        LocalDateTime paidAt,
     @Schema(description = "PG사 응답 승인 번호") String approvalNumber,
     @Schema(description = "환불 정보 (환불이 있는 경우에만 포함)") RefundResponse refund) {}

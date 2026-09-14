@@ -2,8 +2,10 @@ package com.ticketrush.boundedcontext.payment.app.dto.response;
 
 import com.ticketrush.boundedcontext.payment.domain.types.PaymentProvider;
 import com.ticketrush.boundedcontext.payment.domain.types.PaymentStatus;
+import com.ticketrush.global.json.UtcLocalDateTimeSerializer;
 import io.swagger.v3.oas.annotations.media.Schema;
 import java.time.LocalDateTime;
+import tools.jackson.databind.annotation.JsonSerialize;
 
 @Schema(description = "결제 내역 목록 응답 DTO")
 public record PaymentSummaryResponse(
@@ -12,4 +14,5 @@ public record PaymentSummaryResponse(
     @Schema(description = "결제를 처리한 PG사", example = "TOSS") PaymentProvider provider,
     @Schema(description = "결제 금액", example = "55000") Long amount,
     @Schema(description = "결제 상태", example = "COMPLETED") PaymentStatus status,
-    @Schema(description = "결제 완료 시각") LocalDateTime paidAt) {}
+    @Schema(description = "결제 완료 시각") @JsonSerialize(using = UtcLocalDateTimeSerializer.class)
+        LocalDateTime paidAt) {}

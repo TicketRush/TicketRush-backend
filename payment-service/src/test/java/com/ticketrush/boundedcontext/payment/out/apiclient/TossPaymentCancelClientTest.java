@@ -12,22 +12,35 @@ import static org.springframework.test.web.client.response.MockRestResponseCreat
 import static org.springframework.test.web.client.response.MockRestResponseCreators.withSuccess;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.ticketrush.boundedcontext.payment.app.dto.response.PaymentCancelResponse;
 import com.ticketrush.boundedcontext.payment.domain.types.PaymentProvider;
+import com.ticketrush.global.config.JacksonConfig;
 import com.ticketrush.global.constants.MetricNames;
 import com.ticketrush.global.exception.BusinessException;
 import com.ticketrush.global.status.ErrorStatus;
 import io.micrometer.core.instrument.MeterRegistry;
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
+import java.time.Instant;
+import java.time.LocalDateTime;
+import java.time.OffsetDateTime;
+import java.time.ZoneOffset;
+import java.time.temporal.ChronoUnit;
+import java.util.TimeZone;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.parallel.ResourceLock;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.CsvSource;
 import org.springframework.http.HttpMethod;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.test.web.client.MockRestServiceServer;
 import org.springframework.web.client.RestClient;
+import tools.jackson.databind.json.JsonMapper;
 
+@ResourceLock("java.util.TimeZone.default")
 class TossPaymentCancelClientTest {
 
   private static final String BASE_URL = "https://api.tosspayments.com";
@@ -483,5 +496,46 @@ class TossPaymentCancelClientTest {
   private PaymentCancelCommand command() {
     return new PaymentCancelCommand(
         PaymentProvider.TOSS, "pgKey_xyz", 55_000L, CANCEL_REASON, IDEMPOTENCY_KEY);
+  }
+
+  @ParameterizedTest
+  @CsvSource({
+    "UTC,2026-01-01T00:15:00.123456789+09:00",
+    "Asia/Seoul,2026-01-01T00:15:00.123456789+09:00",
+    "UTC,2026-12-31T23:45:00.987654321-05:00",
+    "Asia/Seoul,2026-12-31T23:45:00.987654321-05:00"
+  })
+  @DisplayName("PG 오프셋은 정확한 UTC로 정규화하고 초 미만 절삭은 응답에서만 수행한다")
+  void normalizesOffsetWithoutLosingPrecision(String zone, String input) {
+    TimeZone original = TimeZone.getDefault();
+    try {
+      TimeZone.setDefault(TimeZone.getTimeZone(zone));
+      assertThat(TimeZone.getDefault().getID()).isEqualTo(zone);
+      mockServer
+          .expect(requestTo(CANCEL_URL))
+          .andRespond(
+              withSuccess(
+                  SUCCESS_BODY.replace("2026-05-22T10:00:00+09:00", input),
+                  MediaType.APPLICATION_JSON));
+      PaymentCancelResult result = client.cancel(command());
+      LocalDateTime actual = result.canceledAt();
+      Instant expected = OffsetDateTime.parse(input).toInstant();
+      assertThat(actual).isEqualTo(LocalDateTime.ofInstant(expected, ZoneOffset.UTC));
+      assertThat(actual.getNano()).isEqualTo(expected.getNano());
+      JsonMapper.Builder builder = JsonMapper.builder();
+      new JacksonConfig().jacksonCustomizer().customize(builder);
+      JsonMapper mapper = builder.build();
+      String wire =
+          mapper
+              .readTree(
+                  mapper.writeValueAsString(
+                      new PaymentCancelResponse(1L, "CANCELED", 2L, 55000L, actual)))
+              .get("canceled_at")
+              .asText();
+      assertThat(Instant.parse(wire)).isEqualTo(expected.truncatedTo(ChronoUnit.SECONDS));
+      mockServer.verify();
+    } finally {
+      TimeZone.setDefault(original);
+    }
   }
 }

@@ -121,8 +121,8 @@ class SeatAdminControllerTest {
         .andExpect(jsonPath("$.result.seat_number").value("A-1"))
         .andExpect(jsonPath("$.result.seat_status").value("HOLD"))
         .andExpect(jsonPath("$.result.booking_number").value("X7B29-KLPW1"))
-        .andExpect(jsonPath("$.result.hold_started_at").value("2026-05-22 10:30:00"))
-        .andExpect(jsonPath("$.result.hold_expired_at").value("2026-05-22 10:35:00"))
+        .andExpect(jsonPath("$.result.hold_started_at").value("2026-05-22T10:30:00Z"))
+        .andExpect(jsonPath("$.result.hold_expired_at").value("2026-05-22T10:35:00Z"))
         .andExpect(jsonPath("$.result.remaining_seconds").value(212));
   }
 

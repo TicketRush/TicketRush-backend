@@ -13,6 +13,7 @@ import jakarta.persistence.Index;
 import jakarta.persistence.Table;
 import jakarta.persistence.Version;
 import java.time.LocalDateTime;
+import java.time.ZoneOffset;
 import lombok.AccessLevel;
 import lombok.Builder;
 import lombok.Getter;
@@ -211,7 +212,7 @@ public class Seat extends AutoIdBaseEntity {
     }
 
     // 3. 시간 유효성 검증
-    if (expiredAt == null || expiredAt.isBefore(LocalDateTime.now())) {
+    if (expiredAt == null || expiredAt.isBefore(LocalDateTime.now(ZoneOffset.UTC))) {
       throw new BusinessException(ErrorStatus.SEAT_HOLD_TIME_INVALID);
     }
 

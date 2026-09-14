@@ -23,6 +23,7 @@ import com.ticketrush.global.status.ErrorStatus;
 import io.micrometer.core.instrument.Counter;
 import io.micrometer.core.instrument.MeterRegistry;
 import java.time.LocalDateTime;
+import java.time.ZoneOffset;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
@@ -119,7 +120,7 @@ public class PaymentCancelUseCase {
             payment.getAmount(),
             result.pgRefundKey(),
             request.reason(),
-            LocalDateTime.now(),
+            LocalDateTime.now(ZoneOffset.UTC),
             result.canceledAt());
 
     // 영속화(refund 저장 + 상태 전이)만 짧은 트랜잭션으로 분리한다. 동시 취소 시 unique 위반은 PaymentFacade가 멱등 처리한다.
@@ -192,7 +193,7 @@ public class PaymentCancelUseCase {
       // 클라이언트가 접지 못한 예외까지 여기서 센다. 새어 나가면 사용자에게 원시 500 이 나가는 것보다
       // 이 카운터가 침묵하는 것이 더 나쁘다 — 유일한 관측 축이라 그 구간의 차단이 통째로 안 보인다
       // (ADR 0015 판정 3 과 같은 규율).
-      //
+
       // ⚠ 서킷(#571)이 켜져 있는 동안 이 분기는 도달하지 않는다 — BookingRestClient 의 fallback 이
       // 먼저 BusinessException 으로 수렴시키기 때문이다. 죽은 코드가 아니라 킬 스위치
       // (service.booking.circuit-breaker.enabled=false)를 끈 순간 되살아나는 방어선이다. 지우면
