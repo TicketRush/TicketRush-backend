@@ -45,8 +45,7 @@ public class TicketQrPayloadGenerator {
             .signWith(key)
             .compact();
 
-    // issuedAt(Ticket.createdAt)이 UTC JPA Auditing으로 생성되므로 expiresAt도 UTC로 변환해 두 시각의 기준을 맞춘다
-    // (#646).
+    // JWT expiration과 같은 시점을 UTC LocalDateTime으로 표현해, 응답 expiresAt이 exp와 초 단위로 일치하게 한다 (#646).
     LocalDateTime expiresAt = LocalDateTime.ofInstant(expiry.toInstant(), ZoneOffset.UTC);
     return new QrPayload(token, expiresAt);
   }
