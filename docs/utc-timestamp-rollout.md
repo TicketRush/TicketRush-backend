@@ -72,7 +72,15 @@
 구·신 버전의 동시 서비스는 지원하지 않는다. 구버전은 v2 캐시를 무효화하지 못하기 때문이다.
 
 1. 구버전의 트래픽을 차단하고, SSE 장기 연결·스케줄러·Kafka 컨슈머 등 쓰기 주체를 멈춘 뒤 진행 중 작업이 끝나기를 기다린다.
-2. 좌석맵 캐시 네임스페이스만 한정해 정리한다: `seat:seat-map:*` (v2 포함). 운영 Redis는 전 서비스가 DB 0을 공유하므로 `KEYS` 대신 `redis-cli --scan --pattern 'seat:seat-map:*' | xargs -r redis-cli unlink`처럼 `SCAN` + `UNLINK`로 지운다. `FLUSHALL`·`seat:lock:*` 정리는 금지.
+2. 좌석맵 캐시 네임스페이스만 한정해 정리한다: `seat:seat-map:*` (v2 포함). 운영 Redis는 전 서비스가 DB 0을 공유하므로 `KEYS` 대신 `SCAN` + `UNLINK`로 지운다. `FLUSHALL`·`seat:lock:*` 정리는 금지.
+   운영 Redis는 포트를 publish하지 않고 `--requirepass`를 쓰므로, 인증값 `REDISCLI_AUTH`가 있는 `ticketrush-redis` 컨테이너 안에서 실행한다(`-a`는 붙이지 않는다 — `docs/load-test-guide.md`의 같은 관용구 참고).
+
+   ```bash
+   docker exec ticketrush-redis sh -c \
+     'redis-cli --scan --pattern "seat:seat-map:*" | xargs -r redis-cli unlink'
+   # 0이어야 한다
+   docker exec ticketrush-redis sh -c 'redis-cli --scan --pattern "seat:seat-map:*" | wc -l'
+   ```
 3. UTC 런타임의 신버전만 기동·활성화한다.
 4. 마지막 구버전 쓰기가 끝난 뒤 한 번 더 2번을 수행해 구 포맷 재적재를 막는다.
 5. 스모크 테스트: 대상 응답 필드의 `Z` 형식, 예매 `expires_at` = 생성 + 5분, QR `expires_at` = JWT `exp`, 좌석맵 캐시 미스·히트와 SSE `hold_expired_at`의 일치.
