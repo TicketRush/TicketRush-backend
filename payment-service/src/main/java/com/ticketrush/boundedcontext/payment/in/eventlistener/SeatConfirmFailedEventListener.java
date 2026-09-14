@@ -14,6 +14,7 @@ import com.ticketrush.shared.booking.event.SeatConfirmFailedEvent;
 import io.micrometer.core.instrument.Counter;
 import io.micrometer.core.instrument.MeterRegistry;
 import java.time.LocalDateTime;
+import java.time.ZoneOffset;
 import java.util.Locale;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -163,7 +164,10 @@ public class SeatConfirmFailedEventListener {
 
     // booking 의 refundFailedAt 을 채워 미해결 목록과 (티켓 미사용 건이면) 관리자 재환불 API 에 이 건이 잡히게 한다(#391).
     paymentEventPublisher.publishRefundFailed(
-        event.bookingId(), event.bookingNumber(), REASON_REFUND_FAILED, LocalDateTime.now());
+        event.bookingId(),
+        event.bookingNumber(),
+        REASON_REFUND_FAILED,
+        LocalDateTime.now(ZoneOffset.UTC));
 
     Counter.builder(MetricNames.PAYMENT_REFUND_FAILED)
         .tag(MetricNames.TAG_TRIGGER, RefundTrigger.SEAT_CONFIRM_FAILED.tag())

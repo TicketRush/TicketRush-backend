@@ -9,6 +9,7 @@ import com.ticketrush.global.status.ErrorStatus;
 import com.ticketrush.shared.booking.event.BookingExpiredEvent;
 import com.ticketrush.shared.booking.event.RefundRequestedEvent;
 import java.time.LocalDateTime;
+import java.time.ZoneOffset;
 import java.util.Optional;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -63,7 +64,7 @@ public class BookingCancelMyBookingUseCase {
             booking.getBookingNumber(),
             booking.getSeatId(),
             booking.getUserId(),
-            LocalDateTime.now()));
+            LocalDateTime.now(ZoneOffset.UTC)));
 
     return Optional.empty();
   }
@@ -78,7 +79,8 @@ public class BookingCancelMyBookingUseCase {
   private Optional<Long> cancelPending(Booking booking) {
     booking.cancelPendingPayment();
 
-    eventPublisher.publish(new BookingExpiredEvent(booking.getId(), LocalDateTime.now()));
+    eventPublisher.publish(
+        new BookingExpiredEvent(booking.getId(), LocalDateTime.now(ZoneOffset.UTC)));
 
     log.info(
         "PENDING 예매를 사용자 요청으로 즉시 취소했습니다. bookingNumber: {}, bookingId: {}, seatId: {}",

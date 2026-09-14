@@ -6,6 +6,7 @@ import com.ticketrush.global.constants.MetricNames;
 import io.micrometer.core.instrument.Counter;
 import io.micrometer.core.instrument.MeterRegistry;
 import java.time.LocalDateTime;
+import java.time.ZoneOffset;
 import java.util.Optional;
 import java.util.concurrent.TimeUnit;
 import lombok.RequiredArgsConstructor;
@@ -36,7 +37,7 @@ public class SeatLockUseCase {
 
       if (isLocked) {
         // 락 획득 성공 시 만료 시간 반환
-        return Optional.of(LocalDateTime.now().plusMinutes(LOCK_TTL_MINUTES));
+        return Optional.of(LocalDateTime.now(ZoneOffset.UTC).plusMinutes(LOCK_TTL_MINUTES));
       }
 
       // 락 획득 실패 (이미 다른 사용자가 선점 중, 락 경합)

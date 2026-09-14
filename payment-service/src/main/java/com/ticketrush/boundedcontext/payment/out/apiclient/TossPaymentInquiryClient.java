@@ -5,7 +5,7 @@ import com.ticketrush.global.exception.BusinessException;
 import com.ticketrush.global.status.ErrorStatus;
 import java.io.IOException;
 import java.time.LocalDateTime;
-import java.time.ZoneId;
+import java.time.ZoneOffset;
 import java.util.Optional;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Qualifier;
@@ -134,7 +134,7 @@ public class TossPaymentInquiryClient implements PaymentInquiryClient {
     LocalDateTime approvedAt =
         body.approvedAt() == null
             ? null
-            : body.approvedAt().atZoneSameInstant(ZoneId.systemDefault()).toLocalDateTime();
+            : body.approvedAt().withOffsetSameInstant(ZoneOffset.UTC).toLocalDateTime();
     return new PaymentInquiryResult(
         body.paymentKey(), body.orderId(), body.totalAmount(), body.status(), approvedAt);
   }

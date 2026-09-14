@@ -3,6 +3,7 @@ package com.ticketrush.boundedcontext.seat.app.usecase;
 import com.ticketrush.boundedcontext.seat.app.dto.response.SeatStatusCountsByPerformanceResponse;
 import com.ticketrush.boundedcontext.seat.out.repository.SeatRepository;
 import java.time.LocalDateTime;
+import java.time.ZoneOffset;
 import java.util.List;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
@@ -31,6 +32,7 @@ public class SeatGetAllStatusCountsUseCase {
    * <p>관리자 대시보드는 전 공연이 모수라 필터 없이 부르고, 관리자 공연 목록은 현재 페이지의 공연만 실어 보낸다.
    */
   public List<SeatStatusCountsByPerformanceResponse> execute(List<Long> performanceIds) {
-    return seatRepository.getStatusCountsGroupedByPerformance(LocalDateTime.now(), performanceIds);
+    return seatRepository.getStatusCountsGroupedByPerformance(
+        LocalDateTime.now(ZoneOffset.UTC), performanceIds);
   }
 }

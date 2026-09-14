@@ -58,7 +58,7 @@ class TicketQrGetUseCaseTest {
   void execute_returns_qr_payload() {
     // given
     LocalDateTime issuedAt = LocalDateTime.of(2026, 6, 25, 10, 0);
-    LocalDateTime expiresAt = issuedAt.plusMinutes(5);
+    LocalDateTime expiresAt = issuedAt.plusDays(3).plusMinutes(5);
     Ticket ticket = ticket(USER_ID, TicketStatus.UNUSED, issuedAt);
     given(ticketRepository.findByBookingId(BOOKING_ID)).willReturn(Optional.of(ticket));
     given(ticketQrPayloadGenerator.generate(ticket))

@@ -17,6 +17,7 @@ import com.ticketrush.global.exception.BusinessException;
 import io.micrometer.core.instrument.Counter;
 import io.micrometer.core.instrument.MeterRegistry;
 import java.time.LocalDateTime;
+import java.time.ZoneOffset;
 import java.util.List;
 import java.util.Locale;
 import java.util.Set;
@@ -159,7 +160,7 @@ public class PaymentRecoverChargedExpiredBookingUseCase {
 
     Set<Long> chargedBookingIds = chargedBookingIds(targets);
     RefundHistory refundHistory = refundHistory(chargedBookingIds);
-    LocalDateTime graceDeadline = LocalDateTime.now().minusMinutes(graceMinutes);
+    LocalDateTime graceDeadline = LocalDateTime.now(ZoneOffset.UTC).minusMinutes(graceMinutes);
 
     int detected = 0;
     int recovered = 0;

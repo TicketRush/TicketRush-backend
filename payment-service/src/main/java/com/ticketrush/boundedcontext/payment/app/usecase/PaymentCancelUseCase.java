@@ -23,6 +23,7 @@ import com.ticketrush.global.status.ErrorStatus;
 import io.micrometer.core.instrument.Counter;
 import io.micrometer.core.instrument.MeterRegistry;
 import java.time.LocalDateTime;
+import java.time.ZoneOffset;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
@@ -119,7 +120,7 @@ public class PaymentCancelUseCase {
             payment.getAmount(),
             result.pgRefundKey(),
             request.reason(),
-            LocalDateTime.now(),
+            LocalDateTime.now(ZoneOffset.UTC),
             result.canceledAt());
 
     // 영속화(refund 저장 + 상태 전이)만 짧은 트랜잭션으로 분리한다. 동시 취소 시 unique 위반은 PaymentFacade가 멱등 처리한다.

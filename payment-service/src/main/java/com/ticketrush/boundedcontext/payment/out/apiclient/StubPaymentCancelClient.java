@@ -2,6 +2,7 @@ package com.ticketrush.boundedcontext.payment.out.apiclient;
 
 import com.ticketrush.boundedcontext.payment.domain.types.PaymentProvider;
 import java.time.LocalDateTime;
+import java.time.ZoneOffset;
 import java.util.UUID;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
@@ -46,7 +47,7 @@ public class StubPaymentCancelClient implements PaymentCancelClient {
         command.idempotencyKey());
 
     return new PaymentCancelResult(
-        UUID.randomUUID().toString(), command.amount(), LocalDateTime.now());
+        UUID.randomUUID().toString(), command.amount(), LocalDateTime.now(ZoneOffset.UTC));
   }
 
   private String mask(String value) {
