@@ -3,7 +3,9 @@ package com.ticketrush.boundedcontext.performance.out.repository;
 import com.ticketrush.boundedcontext.performance.app.dto.response.PerformanceAggregateRow;
 import com.ticketrush.boundedcontext.performance.domain.entity.Performance;
 import com.ticketrush.boundedcontext.performance.domain.types.PerformanceStatus;
+import java.time.LocalDate;
 import java.time.LocalDateTime;
+import java.time.LocalTime;
 import java.util.List;
 import java.util.Optional;
 import org.springframework.data.jpa.repository.EntityGraph;
@@ -58,6 +60,40 @@ public interface PerformanceRepository
       @Param("from") PerformanceStatus from,
       @Param("to") PerformanceStatus to,
       @Param("now") LocalDateTime now);
+
+  /**
+   * 공연 시작 시각이 지난 공연을 벌크 전환한다 (#651).
+   *
+   * <p>"지났다"의 정의와 시간대 해석은 {@link
+   * com.ticketrush.boundedcontext.performance.domain.policy.PerformanceShowTimePolicy}가 소유한다 — 시작
+   * 시각 정각을 포함해 현재 시각과 같거나 이전이면 지난 것이다. <b>이 WHERE는 사용자 목록 조건({@code
+   * PerformanceRepositoryImpl.findByFilters})의 정확한 여집합이어야 한다.</b> 어긋나면 목록에는 없는데 ON_SALE인 공연이 생긴다.
+   * 그래서 목록이 {@code >}·{@code (=, >)}인 자리에 여기는 {@code <}·{@code (=, <=)}를 쓰고, 두 경로가 같은 컷오프 값을 받는다.
+   *
+   * <p>날짜·시각 두 컬럼을 함수로 합쳐 비교하지 않는다. 함수는 H2(MySQL 모드)와 MySQL이 갈릴 수 있지만 비교 연산자는 양쪽에서 같은 결과를 냈다.
+   *
+   * <p><b>비교 축과 기록 축이 다르다.</b> {@code today}·{@code nowTime}은 Asia/Seoul 벽시계(공연 시각의 해석)이고 {@code
+   * updatedAt}은 auditing과 같은 UTC Clock 값이다. 하나의 {@code now}로 둘 다 채우면 어느 한쪽이 9시간 어긋난다.
+   *
+   * <p>{@code @SQLRestriction}·Auditing이 벌크 JPQL에 적용되지 않으므로 deletedAt 조건과 updatedAt을 명시하고, from 상태
+   * 가드로 어드민이 먼저 커밋한 CANCELED 등을 덮지 않는다 — {@link #bulkTransitionStatusByBookingOpenAtDue}와 같은 전제다.
+   * 전이표상 {@code CLOSED}에서 {@code ON_SALE}로 돌아가는 길은 없으므로, 어드민이 지난 공연을 다시 ON_SALE로 바꾸면 다음 주기에 여기서 다시
+   * 닫힌다(self-heal). 반대로 이 전환이 오판이었을 때도 되돌릴 전이가 없다는 뜻이라, 시간대 해석이 틀리면 대가가 크다.
+   *
+   * <p>{@code clearAutomatically = true}가 호출 트랜잭션의 영속성 컨텍스트 전체를 비우므로 스케줄러 전용으로만 호출한다.
+   */
+  @Modifying(clearAutomatically = true)
+  @Query(
+      "UPDATE Performance p SET p.performanceStatus = :to, p.updatedAt = :updatedAt "
+          + "WHERE p.performanceStatus = :from "
+          + "AND (p.showDate < :today OR (p.showDate = :today AND p.showTime <= :nowTime)) "
+          + "AND p.deletedAt IS NULL")
+  int bulkTransitionStatusByShowTimePassed(
+      @Param("from") PerformanceStatus from,
+      @Param("to") PerformanceStatus to,
+      @Param("today") LocalDate today,
+      @Param("nowTime") LocalTime nowTime,
+      @Param("updatedAt") LocalDateTime updatedAt);
 
   /**
    * 예매 오픈 시각만 해제해 스케줄러 자동 전환 대상에서 제외한다.

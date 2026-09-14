@@ -1,6 +1,7 @@
 package com.ticketrush.boundedcontext.performance.in.datainit;
 
 import com.ticketrush.boundedcontext.performance.domain.entity.Performance;
+import com.ticketrush.boundedcontext.performance.domain.policy.PerformanceShowTimePolicy;
 import com.ticketrush.boundedcontext.performance.domain.types.Genre;
 import com.ticketrush.boundedcontext.performance.out.repository.PerformanceRepository;
 import com.ticketrush.shared.performance.event.PerformanceCreatedEvent;
@@ -27,6 +28,13 @@ public class DataInitRunner implements ApplicationRunner {
   private static final String PLACEHOLDER_MODEL_3D = "https://placehold.co/placeholder.glb";
   private static final String PLACEHOLDER_GALLERY = "https://placehold.co/800x600.jpg";
 
+  /**
+   * 시드 공연일의 기준 (#651). 고정 날짜(2025년)로 두면 시작 시각이 지난 공연을 목록에서 제외하는 조건에 전부 걸려 로컬 화면이 비고, 이슈 재현 절차도
+   * 어긋난다. 정책과 같은 시간대(Asia/Seoul)의 오늘을 기준으로 앞으로 1주~11주 사이에 흩어 둔다. 제목의 연도 표기는 데이터일 뿐이라 그대로 둔다.
+   */
+  private static final LocalDate SEED_BASE_DATE =
+      LocalDate.now(PerformanceShowTimePolicy.SHOW_ZONE);
+
   @Override
   @Transactional
   public void run(ApplicationArguments args) {
@@ -42,7 +50,7 @@ public class DataInitRunner implements ApplicationRunner {
                 .performer("류정한, 카이, 민경아")
                 .genre(Genre.MUSICAL)
                 .description("빅토르 위고의 불후의 명작을 무대 위에 펼쳐내는 뮤지컬 레미제라블. 자유와 혁명, 사랑과 구원의 이야기.")
-                .showDate(LocalDate.of(2025, 7, 5))
+                .showDate(SEED_BASE_DATE.plusDays(7))
                 .showTime(LocalTime.of(19, 30))
                 .durationMinutes(170)
                 .price(140000L)
@@ -58,7 +66,7 @@ public class DataInitRunner implements ApplicationRunner {
                 .performer("BTS")
                 .genre(Genre.CONCERT)
                 .description("BTS의 글로벌 월드 투어 공연. 서울 잠실을 시작으로 전 세계를 연결하는 특별한 무대.")
-                .showDate(LocalDate.of(2025, 8, 15))
+                .showDate(SEED_BASE_DATE.plusDays(14))
                 .showTime(LocalTime.of(19, 0))
                 .durationMinutes(150)
                 .price(165000L)
@@ -78,7 +86,7 @@ public class DataInitRunner implements ApplicationRunner {
                 .performer("오스모 벤스케 지휘 / 서울시립교향악단")
                 .genre(Genre.CLASSIC)
                 .description("핀란드 출신의 세계적인 지휘자 오스모 벤스케와 서울시향이 선보이는 브람스 교향곡 전곡 시리즈.")
-                .showDate(LocalDate.of(2025, 9, 12))
+                .showDate(SEED_BASE_DATE.plusDays(21))
                 .showTime(LocalTime.of(20, 0))
                 .durationMinutes(120)
                 .price(50000L)
@@ -94,7 +102,7 @@ public class DataInitRunner implements ApplicationRunner {
                 .performer("이정식 밴드, 나윤선, 말로")
                 .genre(Genre.JAZZ)
                 .description("서울 한복판에서 펼쳐지는 최고의 재즈 나이트. 국내 최정상 재즈 아티스트들이 한 자리에 모입니다.")
-                .showDate(LocalDate.of(2025, 10, 3))
+                .showDate(SEED_BASE_DATE.plusDays(30))
                 .showTime(LocalTime.of(18, 0))
                 .durationMinutes(180)
                 .price(75000L)
@@ -110,7 +118,7 @@ public class DataInitRunner implements ApplicationRunner {
                 .performer("잔나비, 10cm, 적재, 요조, 검정치마")
                 .genre(Genre.FESTIVAL)
                 .description("도심 속 자연 공원에서 즐기는 감성 뮤직 페스티벌. 인디부터 팝까지 다채로운 라인업.")
-                .showDate(LocalDate.of(2025, 5, 17))
+                .showDate(SEED_BASE_DATE.plusDays(45))
                 .showTime(LocalTime.of(12, 0))
                 .durationMinutes(480)
                 .price(99000L)
@@ -127,7 +135,7 @@ public class DataInitRunner implements ApplicationRunner {
                 .performer("국립발레단")
                 .genre(Genre.BALLET)
                 .description("차이콥스키의 명작 발레 '호두까기 인형'. 국립발레단이 선보이는 크리스마스 시즌 특별 공연.")
-                .showDate(LocalDate.of(2025, 12, 20))
+                .showDate(SEED_BASE_DATE.plusDays(60))
                 .showTime(LocalTime.of(15, 0))
                 .durationMinutes(110)
                 .price(80000L)
@@ -143,7 +151,7 @@ public class DataInitRunner implements ApplicationRunner {
                 .performer("아이브 (IVE)")
                 .genre(Genre.FANMEETING)
                 .description("아이브와 직접 만나는 특별한 팬미팅. 토크, 게임, 미니 콘서트로 가득한 팬들을 위한 하루.")
-                .showDate(LocalDate.of(2025, 11, 8))
+                .showDate(SEED_BASE_DATE.plusDays(75))
                 .showTime(LocalTime.of(17, 0))
                 .durationMinutes(120)
                 .price(110000L)

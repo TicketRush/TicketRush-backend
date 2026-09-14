@@ -124,7 +124,19 @@ public class PerformanceAdminController {
     return ApiResponse.onSuccess(SuccessStatus.CREATED, response);
   }
 
-  @Operation(summary = "공연 상태 변경", description = "공연의 상태를 변경합니다.")
+  @Operation(
+      summary = "공연 상태 변경",
+      description =
+          """
+          공연의 상태를 변경합니다.
+
+          공연 시작 시각(`showDate` + `showTime`, Asia/Seoul 기준)이 지난 공연을 `ON_SALE`로 바꾸면 요청은 성공하지만,
+          약 1분 주기 스케줄러가 다시 `CLOSED`로 되돌립니다. 지난 공연을 계속 판매 중으로 두는 방법은 없습니다.
+
+          **자동으로 `CLOSED`가 된 공연은 `ON_SALE`로 되돌릴 수 없습니다** (`CLOSED`에서 나가는 전이는 `CANCELED`뿐).
+          공연을 연기하려면 시작 시각이 지나기 전에 `showDate`·`showTime`을 수정해야 합니다.
+          이미 닫힌 공연의 일정을 미래로 고쳐도 상태는 `CLOSED`로 남으며, 이를 다시 판매하는 방법은 현재 없습니다.
+          """)
   @PatchMapping("/{id}/status")
   public ResponseEntity<ApiResponse<Void>> changePerformanceStatus(
       @PathVariable Long id,
