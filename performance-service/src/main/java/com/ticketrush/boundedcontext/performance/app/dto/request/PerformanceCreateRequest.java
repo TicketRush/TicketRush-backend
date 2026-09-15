@@ -63,7 +63,8 @@ public record PerformanceCreateRequest(
         @NotBlank(message = "공연장 주소는 필수입니다.")
         String address,
     @Schema(
-            description = "예매 오픈 시각 (yyyy-MM-dd HH:mm:ss, 선택 — 미설정 시 자동 오픈 없이 수동 전환만 가능)",
+            description =
+                "예매 오픈 시각 (yyyy-MM-dd HH:mm:ss, Asia/Seoul 기준, 선택 — 미설정 시 자동 오픈 없이 수동 전환만 가능)",
             example = "2027-08-01 20:00:00",
             nullable = true)
         @JsonFormat(shape = JsonFormat.Shape.STRING, pattern = "yyyy-MM-dd HH:mm:ss")
