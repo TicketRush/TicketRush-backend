@@ -1,6 +1,8 @@
 package com.ticketrush.boundedcontext.performance.app.dto.request;
 
 import com.fasterxml.jackson.annotation.JsonFormat;
+import com.ticketrush.boundedcontext.performance.app.support.CharacterConstraints;
+import com.ticketrush.boundedcontext.performance.app.support.JsonObjectMaxBytes;
 import com.ticketrush.boundedcontext.performance.domain.types.Genre;
 import com.ticketrush.shared.performance.event.PerformanceCreatedEvent;
 import io.swagger.v3.oas.annotations.media.Schema;
@@ -8,11 +10,13 @@ import jakarta.validation.constraints.Max;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Positive;
+import jakarta.validation.constraints.Size;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.LocalTime;
 import java.util.List;
 import lombok.Builder;
+import tools.jackson.databind.JsonNode;
 
 @Schema(description = "공연 등록 요청 (multipart JSON 파트)")
 @Builder
@@ -65,4 +69,28 @@ public record PerformanceCreateRequest(
         @JsonFormat(shape = JsonFormat.Shape.STRING, pattern = "yyyy-MM-dd HH:mm:ss")
         LocalDateTime bookingOpenAt,
     @Schema(description = "편의시설 목록 (선택)", example = "[\"주차장\", \"수유실\", \"장애인석\"]", nullable = true)
-        List<String> facilities) {}
+        List<String> facilities,
+    @Schema(
+            description =
+                "3D 캐릭터 구성 JSON 객체 (선택). 문자열이 아니라 JSON 객체 그대로 보낸다. "
+                    + "백엔드는 내용을 해석하지 않으며(스키마는 프론트 소유),"
+                    + " JSON 객체인지와 compact 직렬화 UTF-8 4,096바이트·중첩 32단 상한만 검증한다."
+                    + " 저장 시 키 순서는 보존되지 않는다.",
+            implementation = Object.class,
+            example =
+                "{\"schemaVersion\": 1, \"outfitModelId\": \"festival\", "
+                    + "\"hairColor\": \"#151515\"}",
+            nullable = true)
+        @JsonObjectMaxBytes(
+            max = CharacterConstraints.CONFIG_MAX_BYTES,
+            maxDepth = CharacterConstraints.CONFIG_MAX_DEPTH,
+            message = "캐릭터 구성은 JSON 객체여야 하며 {max}바이트·중첩 {maxDepth}단을 넘을 수 없습니다.")
+        JsonNode characterConfig,
+    @Schema(
+            description = "캐릭터 한마디 (선택, 최대 50자). 빈 문자열(공백만 있는 문자열 포함)은 '없음'으로 저장한다.",
+            example = "공연장에서 만나요!",
+            nullable = true)
+        @Size(
+            max = CharacterConstraints.MESSAGE_MAX_LENGTH,
+            message = "캐릭터 한마디는 {max}자를 초과할 수 없습니다.")
+        String characterMessage) {}

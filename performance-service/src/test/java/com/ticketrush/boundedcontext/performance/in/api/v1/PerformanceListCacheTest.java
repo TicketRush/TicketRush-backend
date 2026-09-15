@@ -175,7 +175,7 @@ class PerformanceListCacheTest {
     performanceFacade.patchPerformance(
         saved.getId(),
         new PerformancePatchRequest(
-            "수정된 제목", null, null, null, null, null, null, null, null, null));
+            "수정된 제목", null, null, null, null, null, null, null, null, null, null, null));
 
     assertThat(redisTemplate.hasKey(FIRST_PAGE_KEY)).isFalse();
     assertThat(getUnfilteredFirstPage().getContent()).anyMatch(p -> p.title().equals("수정된 제목"));
@@ -336,7 +336,7 @@ class PerformanceListCacheTest {
     performanceFacade.patchPerformance(
         saved.getId(),
         new PerformancePatchRequest(
-            "수정된 제목", null, null, null, null, null, null, null, null, null));
+            "수정된 제목", null, null, null, null, null, null, null, null, null, null, null));
 
     assertThat(getUnfilteredFirstPage().getContent().getFirst().remainingSeats()).isEqualTo(50L);
     verify(seatRestClient, times(2)).getSeatCounts(anyList());
