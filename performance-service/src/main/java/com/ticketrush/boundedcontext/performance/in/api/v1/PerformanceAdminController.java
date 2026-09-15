@@ -83,11 +83,18 @@ public class PerformanceAdminController {
           **요청 형식:** `multipart/form-data`
           - `request` 파트: 공연 정보 JSON (Content-Type: application/json)
           - `mainImage` 파트: 메인 이미지 파일 — `jpg`, `jpeg`, `png` / 최대 5MB
-          - `model3d` 파트: 3D 모델 파일 — `glb`, `obj` / 최대 10MB
+          - `model3d` 파트: 3D 모델 파일 (선택) — `glb`, `obj` / 최대 10MB. 비어 있는 파트는 보내지 않은 것으로 처리합니다.
           - `gallery` 파트: 갤러리 이미지 파일 (선택, 최대 3개) — `jpg`, `jpeg`, `png` / 각 최대 5MB
 
           업로드한 파일은 S3에 저장되며, 응답의 `imageMainUrl`·`image3dUrl`·`imageGalleryUrls`는
-          인증 없이 바로 GET 할 수 있는 공개 URL입니다.
+          인증 없이 바로 GET 할 수 있는 공개 URL입니다. `model3d`를 보내지 않으면 `image3dUrl`은 응답에서 빠집니다.
+
+          **3D 캐릭터는 `request` 파트의 `characterConfig`·`characterMessage`로 등록합니다.**
+          - `characterConfig`: JSON 객체 그대로(문자열 아님). 백엔드는 내용을 해석하지 않고 저장하며,
+            JSON 객체인지와 compact 직렬화 UTF-8 4,096바이트·중첩 32단 상한만 검증합니다(위반 시 400 `VALID_400_001`).
+            저장 시 키 순서는 보존되지 않습니다.
+          - `characterMessage`: 최대 50자. 빈 문자열(공백만 있는 문자열 포함)은 '없음'으로 저장합니다.
+          - 둘 다 선택입니다. 캐릭터 없이 등록한 공연은 상세 응답에서 두 키가 빠집니다.
 
           **형식 판정은 파일명 확장자로만 합니다.** 브라우저가 보내는 `Content-Type`은 검증하지 않습니다
           (클라이언트가 임의로 지정할 수 있어 신뢰할 수 없습니다). 확장자가 파트와 맞지 않으면 400,
@@ -115,7 +122,7 @@ public class PerformanceAdminController {
   public ResponseEntity<ApiResponse<PerformanceCreateResponse>> createPerformance(
       @RequestPart("request") @Valid PerformanceCreateRequest request,
       @RequestPart("mainImage") MultipartFile mainImage,
-      @RequestPart("model3d") MultipartFile model3d,
+      @RequestPart(value = "model3d", required = false) MultipartFile model3d,
       @RequestPart(value = "gallery", required = false) List<MultipartFile> gallery) {
 
     PerformanceCreateResponse response =
@@ -148,7 +155,17 @@ public class PerformanceAdminController {
     return ApiResponse.onSuccess(SuccessStatus.OK);
   }
 
-  @Operation(summary = "공연 정보 수정", description = "공연 정보를 부분 수정합니다. null 필드는 수정하지 않습니다.")
+  @Operation(
+      summary = "공연 정보 수정",
+      description =
+          """
+          공연 정보를 부분 수정합니다. null 필드는 수정하지 않습니다.
+
+          **캐릭터 필드만 규칙이 하나 더 있습니다.**
+          - `characterMessage`: null=수정 안 함, **빈 문자열(`""`, 공백만 있는 문자열 포함)=삭제**. 최대 50자.
+          - `characterConfig`: null=수정 안 함, JSON 객체를 보내면 통째로 덮어씁니다. 삭제 규칙은 없습니다.
+            JSON 객체인지와 compact 직렬화 UTF-8 4,096바이트·중첩 32단 상한만 검증합니다(위반 시 400 `VALID_400_001`).
+          """)
   @PatchMapping("/{id}")
   public ResponseEntity<ApiResponse<Void>> patchPerformance(
       @Parameter(description = "공연 ID") @Positive @PathVariable Long id,

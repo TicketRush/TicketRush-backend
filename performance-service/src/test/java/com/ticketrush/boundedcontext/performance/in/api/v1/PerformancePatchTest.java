@@ -24,6 +24,7 @@ import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.transaction.annotation.Transactional;
+import tools.jackson.databind.json.JsonMapper;
 
 @SpringBootTest
 @ActiveProfiles("test")
@@ -43,10 +44,32 @@ class PerformancePatchTest {
   @Autowired private EntityManager em;
 
   private static final LocalDateTime ORIGINAL_BOOKING_OPEN_AT = LocalDateTime.of(2025, 8, 1, 20, 0);
+  private static final JsonMapper JSON = JsonMapper.builder().build();
+  private static final String ORIGINAL_CONFIG =
+      "{\"schemaVersion\":1,\"outfitModelId\":\"festival\"}";
+  private static final String ORIGINAL_MESSAGE = "원래 한마디";
+
+  private PerformancePatchRequest characterOnly(String configJson, String message) {
+    return new PerformancePatchRequest(
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        configJson == null ? null : JSON.readTree(configJson),
+        message);
+  }
 
   private Performance savePerformance() {
     return performanceRepository.save(
         Performance.builder()
+            .characterConfig(ORIGINAL_CONFIG)
+            .characterMessage(ORIGINAL_MESSAGE)
             .title("원래 공연명")
             .performer("원래 출연진")
             .genre(Genre.CONCERT)
@@ -81,7 +104,9 @@ class PerformancePatchTest {
             150,
             80000L,
             "부산",
-            newBookingOpenAt));
+            newBookingOpenAt,
+            null,
+            null));
 
     em.flush();
     em.clear();
@@ -110,7 +135,7 @@ class PerformancePatchTest {
     performancePatchUseCase.execute(
         performance.getId(),
         new PerformancePatchRequest(
-            "새로운 공연명", null, null, null, null, null, null, null, null, null));
+            "새로운 공연명", null, null, null, null, null, null, null, null, null, null, null));
 
     em.flush();
     em.clear();
@@ -128,10 +153,81 @@ class PerformancePatchTest {
   @DisplayName("존재하지 않는 공연 ID로 수정 요청 시 예외 발생")
   void patchPerformance_notFound() {
     PerformancePatchRequest request =
-        new PerformancePatchRequest("새 제목", null, null, null, null, null, null, null, null, null);
+        new PerformancePatchRequest(
+            "새 제목", null, null, null, null, null, null, null, null, null, null, null);
 
     assertThatThrownBy(() -> performancePatchUseCase.execute(999L, request))
         .isInstanceOf(BusinessException.class)
         .hasMessage(ErrorStatus.PERFORMANCE_NOT_FOUND.getMessage());
+  }
+
+  /*
+   * #650 — 캐릭터 필드의 PATCH 계약. characterMessage만 "빈 문자열=삭제"라는 규칙이 추가됐다(이 레포 PATCH 최초).
+   */
+  @Test
+  @DisplayName("characterMessage에 빈 문자열을 보내면 한마디가 삭제(null)되고 구성은 유지된다")
+  void patchCharacterMessage_emptyString_deletes() {
+    Performance performance = savePerformance();
+
+    performancePatchUseCase.execute(performance.getId(), characterOnly(null, ""));
+    em.flush();
+    em.clear();
+
+    Performance updated = performanceRepository.findById(performance.getId()).orElseThrow();
+    assertThat(updated.getCharacterMessage()).isNull();
+    assertThat(JSON.readTree(updated.getCharacterConfig()))
+        .isEqualTo(JSON.readTree(ORIGINAL_CONFIG));
+  }
+
+  @Test
+  @DisplayName("characterMessage가 공백만 있는 문자열이어도 삭제로 본다 (등록의 정규화와 같은 기준)")
+  void patchCharacterMessage_blank_deletes() {
+    Performance performance = savePerformance();
+
+    performancePatchUseCase.execute(performance.getId(), characterOnly(null, "   "));
+    em.flush();
+    em.clear();
+
+    assertThat(
+            performanceRepository.findById(performance.getId()).orElseThrow().getCharacterMessage())
+        .isNull();
+  }
+
+  @Test
+  @DisplayName("캐릭터 필드가 null이면 구성·한마디 모두 기존 값을 유지한다")
+  void patchCharacter_null_unchanged() {
+    Performance performance = savePerformance();
+
+    performancePatchUseCase.execute(performance.getId(), characterOnly(null, null));
+    em.flush();
+    em.clear();
+
+    Performance updated = performanceRepository.findById(performance.getId()).orElseThrow();
+    assertThat(updated.getCharacterMessage()).isEqualTo(ORIGINAL_MESSAGE);
+    assertThat(JSON.readTree(updated.getCharacterConfig()))
+        .isEqualTo(JSON.readTree(ORIGINAL_CONFIG));
+  }
+
+  @Test
+  @DisplayName("characterConfig에 객체를 보내면 통째로 덮어쓰고 (빈 객체 포함) 한마디는 새 값으로 바뀐다")
+  void patchCharacterConfig_object_overwrites() {
+    Performance performance = savePerformance();
+    String newConfig = "{\"schemaVersion\":2,\"nested\":{\"hairColor\":\"#fff\"}}";
+
+    performancePatchUseCase.execute(performance.getId(), characterOnly(newConfig, "새 한마디"));
+    em.flush();
+    em.clear();
+
+    Performance updated = performanceRepository.findById(performance.getId()).orElseThrow();
+    assertThat(JSON.readTree(updated.getCharacterConfig())).isEqualTo(JSON.readTree(newConfig));
+    assertThat(updated.getCharacterMessage()).isEqualTo("새 한마디");
+
+    performancePatchUseCase.execute(performance.getId(), characterOnly("{}", null));
+    em.flush();
+    em.clear();
+
+    Performance emptied = performanceRepository.findById(performance.getId()).orElseThrow();
+    assertThat(JSON.readTree(emptied.getCharacterConfig())).isEqualTo(JSON.readTree("{}"));
+    assertThat(emptied.getCharacterMessage()).isEqualTo("새 한마디");
   }
 }

@@ -165,6 +165,8 @@ CREATE TABLE `performance` (
   `updated_at` datetime(6) DEFAULT NULL,
   `address` varchar(255) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
   `booking_open_at` datetime(6) DEFAULT NULL,
+  `character_config` json DEFAULT NULL,
+  `character_message` varchar(50) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
   `deleted_at` datetime(6) DEFAULT NULL,
   `description` text COLLATE utf8mb4_unicode_ci,
   `duration_minutes` int NOT NULL,

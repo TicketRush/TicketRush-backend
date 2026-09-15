@@ -132,7 +132,7 @@ public enum ErrorStatus {
 
   // Performance 400
   PERFORMANCE_MAIN_IMAGE_MISSING(HttpStatus.BAD_REQUEST, "PERFORMANCE_400_001", "메인 이미지는 필수입니다."),
-  PERFORMANCE_MODEL_3D_MISSING(HttpStatus.BAD_REQUEST, "PERFORMANCE_400_002", "3D 모델 파일은 필수입니다."),
+  // PERFORMANCE_400_002(3D 모델 파일 필수)는 등록의 model3d 파트가 선택이 되면서(#650) 결번
   PERFORMANCE_GALLERY_LIMIT_EXCEEDED(
       HttpStatus.BAD_REQUEST, "PERFORMANCE_400_003", "갤러리 이미지는 최대 3개까지 업로드할 수 있습니다."),
   PERFORMANCE_INVALID_STATUS_TRANSITION(

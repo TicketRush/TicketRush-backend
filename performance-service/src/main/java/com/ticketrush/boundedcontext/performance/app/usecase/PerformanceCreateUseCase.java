@@ -28,7 +28,13 @@ public class PerformanceCreateUseCase {
   private final PerformanceMapper performanceMapper;
   private final EventPublisher eventPublisher;
 
-  /** 공연 정보와 파일들을 받아 S3 업로드 후 DB에 저장 */
+  /**
+   * 공연 정보와 파일들을 받아 S3 업로드 후 DB에 저장.
+   *
+   * <p>{@code model3d}는 #650부터 선택이다. 캐릭터는 완성 GLB 대신 {@code characterConfig} JSON으로 저장하므로 3D 모델 파일은
+   * 있을 때만 검증·업로드하고, 없으면 {@code image3dUrl}을 null로 둔다. 비어 있는 파트(0바이트)는 보내지 않은 것으로 본다 — 파일을 고르지 않은
+   * {@code <input type="file">}도 0바이트 파트로 전송되기 때문이며, 교체 유스케이스(#637)와 같은 정의다.
+   */
   @CacheEvict(cacheNames = CacheConstants.PERFORMANCE_LIST_CACHE, allEntries = true)
   @Transactional
   public PerformanceCreateResponse execute(
@@ -40,7 +46,8 @@ public class PerformanceCreateUseCase {
     validateFiles(mainImage, model3d, gallery);
 
     String mainImageUrl = s3UploadUtils.uploadFile(mainImage, FileKind.MAIN_IMAGE);
-    String model3dUrl = s3UploadUtils.uploadFile(model3d, FileKind.MODEL_3D);
+    String model3dUrl =
+        hasFile(model3d) ? s3UploadUtils.uploadFile(model3d, FileKind.MODEL_3D) : null;
     List<String> galleryUrls =
         (gallery != null)
             ? gallery.stream()
@@ -73,10 +80,6 @@ public class PerformanceCreateUseCase {
       throw new BusinessException(ErrorStatus.PERFORMANCE_MAIN_IMAGE_MISSING);
     }
 
-    if (model3d == null || model3d.isEmpty()) {
-      throw new BusinessException(ErrorStatus.PERFORMANCE_MODEL_3D_MISSING);
-    }
-
     if (gallery != null && gallery.size() > FileKind.GALLERY_MAX_COUNT) {
       throw new BusinessException(ErrorStatus.PERFORMANCE_GALLERY_LIMIT_EXCEEDED);
     }
@@ -88,13 +91,20 @@ public class PerformanceCreateUseCase {
      * 객체가 생긴다. 여기서 먼저 걸러내면 잘못된 요청은 업로드를 한 건도 시작하지 않는다.
      *
      * 위의 존재 여부 검사를 먼저 두는 이유는 "메인 이미지는 필수입니다" 같은 파트별 메시지를 유지하기 위해서다 —
-     * FileKind.validate는 빈 파일을 파트 구분 없이 FILE_EMPTY로 처리한다.
+     * FileKind.validate는 빈 파일을 파트 구분 없이 FILE_EMPTY로 처리한다. model3d는 선택(#650)이라 있을 때만 검사한다.
      */
     FileKind.MAIN_IMAGE.validate(mainImage);
-    FileKind.MODEL_3D.validate(model3d);
+    if (hasFile(model3d)) {
+      FileKind.MODEL_3D.validate(model3d);
+    }
 
     if (gallery != null) {
       gallery.forEach(FileKind.GALLERY::validate);
     }
+  }
+
+  /** 교체 유스케이스(#637)의 정의와 같다 — null과 0바이트 파트를 모두 "보내지 않음"으로 본다. */
+  private static boolean hasFile(MultipartFile file) {
+    return file != null && !file.isEmpty();
   }
 }
