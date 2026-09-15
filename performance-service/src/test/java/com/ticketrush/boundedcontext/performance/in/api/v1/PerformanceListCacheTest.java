@@ -250,10 +250,16 @@ class PerformanceListCacheTest {
     assertThat(uploadedInsideTransaction).as("트랜잭션 밖에서 업로드하면 롤백돼도 S3 객체가 정리되지 않는다").isTrue();
   }
 
+  /**
+   * 오픈 전환의 캐시 무효화. CLOSED 케이스와 같이 정책을 대체하지 않고 정책의 존(Asia/Seoul)으로 상대값을 만든다 (#653) — JVM 기본 존의
+   * {@code now()}를 쓰면 정책이 KST로 판정하는 지금과 어긋나 JVM 존에 따라 결과가 갈린다. 시각 판정의 결정적 검증은 {@code
+   * PerformanceOpenBookingTest}가 맡는다.
+   */
   @Test
   @DisplayName("예매 오픈 스케줄러가 상태를 전환하면 캐시가 무효화된다")
   void openBooking_transitioned_evictsCache() {
-    savePerformance(Genre.CONCERT, LocalDateTime.now().minusMinutes(1));
+    savePerformance(
+        Genre.CONCERT, LocalDateTime.now(PerformanceShowTimePolicy.SHOW_ZONE).minusMinutes(1));
     warmCache();
 
     int openedCount = performanceOpenBookingUseCase.execute();
@@ -267,7 +273,8 @@ class PerformanceListCacheTest {
   @Test
   @DisplayName("예매 오픈 스케줄러가 전환한 공연이 없으면 캐시를 유지한다")
   void openBooking_nothingTransitioned_keepsCache() {
-    savePerformance(Genre.CONCERT, LocalDateTime.now().plusHours(1));
+    savePerformance(
+        Genre.CONCERT, LocalDateTime.now(PerformanceShowTimePolicy.SHOW_ZONE).plusHours(1));
     warmCache();
 
     int openedCount = performanceOpenBookingUseCase.execute();
