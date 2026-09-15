@@ -26,6 +26,7 @@ TicketRush의 아키텍처 결정을 번호 매긴 Markdown으로 축적하는 �
 - [18. 공연 파일은 퍼블릭 읽기 버킷에 올리고, DB에는 완성된 공개 URL을 저장한다](0018-store-public-object-urls-in-a-public-read-bucket.md)
 - [19. 결제 확정의 booking 동기 조회를 서킷브레이커로 격리하고, 열린 동안에도 fail-closed를 유지한다](0019-isolate-booking-lookup-with-a-circuit-breaker.md)
 - [20. 공연 시작 시각(show_date·show_time)은 Asia/Seoul 벽시계로 해석하고, 그 비교에 쓰는 현재 시각은 UTC Clock을 존 변환해 만든다](0020-interpret-show-datetime-as-seoul-wall-clock.md)
+- [21. 공연 캐릭터 구성은 해석하지 않는 JSON 컬럼에 문자열로 저장하고, 스키마는 프론트가 소유한다](0021-store-character-config-as-uninterpreted-json-string-column.md)
 
 ## 사용법
 
