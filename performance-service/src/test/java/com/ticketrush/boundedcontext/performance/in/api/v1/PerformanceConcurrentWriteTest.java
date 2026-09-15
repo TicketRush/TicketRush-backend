@@ -10,6 +10,7 @@ import com.ticketrush.boundedcontext.performance.app.usecase.PerformanceDeleteUs
 import com.ticketrush.boundedcontext.performance.app.usecase.PerformanceOpenBookingUseCase;
 import com.ticketrush.boundedcontext.performance.app.usecase.PerformancePatchUseCase;
 import com.ticketrush.boundedcontext.performance.domain.entity.Performance;
+import com.ticketrush.boundedcontext.performance.domain.policy.PerformanceShowTimePolicy;
 import com.ticketrush.boundedcontext.performance.domain.types.Genre;
 import com.ticketrush.boundedcontext.performance.domain.types.PerformanceStatus;
 import com.ticketrush.boundedcontext.performance.out.repository.PerformanceRepository;
@@ -179,7 +180,8 @@ class PerformanceConcurrentWriteTest {
   @Test
   @DisplayName("PATCH가 로드한 뒤 스케줄러가 예매를 오픈하면, PATCH 커밋이 상태를 되돌리지 않는다")
   void patchDoesNotRevertScheduledStatusTransition() {
-    Long performanceId = saveCommitted(LocalDateTime.now().minusMinutes(1));
+    Long performanceId =
+        saveCommitted(LocalDateTime.now(PerformanceShowTimePolicy.SHOW_ZONE).minusMinutes(1));
 
     outerTx.executeWithoutResult(
         status -> {

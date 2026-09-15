@@ -46,7 +46,7 @@
 
 - 사용자 목록은 시작 시각이 지난 공연을 즉시 걸러내고, 스케줄러가 1분 주기로 `ON_SALE`을 `CLOSED`로 맞춘다. 상세 조회는 예매 내역·티켓에서 들어오는 경로를 막지 않기 위해 그대로 둔다.
 - 목록 캐시 키에 시각을 넣지 않아 TTL(30초)만큼 늦게 빠질 수 있다. 키에 시각을 넣으면 캐시가 무의미해지므로 감수한다.
-- **`booking_open_at`은 같은 형식인데 아직 `LocalDateTime.now()`(JVM 존)와 비교한다.** 한 서비스 안에 두 해석이 공존하는 상태가 남는다. 어드민이 KST 의도로 입력했다면 운영(UTC)에서 9시간 늦게 열리는 잠재 버그이며, 이 결정을 근거로 후속 이슈에서 같은 정책으로 맞춘다.
+- (해소됨 · #653) ~~`booking_open_at`은 같은 형식인데 아직 `LocalDateTime.now()`(JVM 존)와 비교한다. 한 서비스 안에 두 해석이 공존하는 상태가 남는다.~~ — `bookingOpenAt`도 같은 정책으로 해석한다. `PerformanceShowTimePolicy.bookingOpenCutoff()`가 Asia/Seoul 벽시계 `LocalDateTime`(초 절삭)을 내고, 오픈 벌크 전환(`bulkTransitionStatusByBookingOpenAtDue`)은 그 값과 비교하며 `updatedAt`은 common `ClockConfig`의 UTC Clock 빈 값으로 따로 받는다 — CLOSED 전환과 같은 꼴이다. 해제 API의 `updatedAt`도 같은 Clock으로 맞춰 performance 벌크 JPQL의 기록 축이 전부 auditing과 같아졌다(auditing은 그 Clock을 UTC로 재해석하므로, 이 동일성은 Clock 빈이 UTC라는 전제 위에 있다). 사람이 입력하는 공연 시각의 해석은 이제 한 서비스 안에서 하나다.
 - **`CLOSED`가 어드민의 의도적 행위에서 시스템이 자동으로 만드는 상태로 바뀌었는데, 전이표에 `CLOSED → ON_SALE`이 없다.** 어드민이 당일 공연을 연기하려고 수정 화면을 열어 둔 사이 스케줄러가 닫으면, 수정이 커밋돼도 상태는 건드리지 않으므로 "시작 시각은 미래인데 `CLOSED`"인 공연이 생기고 되돌릴 전이가 없다. 이미 지난 공연을 연기해 재판매하는 운영 케이스도 같은 벽에 막힌다. 이번 범위에서는 관리자 API 설명에 제약을 명시하는 데 그치며, `CLOSED → ON_SALE`(또는 `UPCOMING`) 전이 허용 여부는 후속 이슈로 결정한다.
 - **배포 전에 운영 DB의 `show_time` 표본이 KST 벽시계인지 사람이 확인해야 한다.** 이 결정의 근거는 정황이지 데이터 확인이 아니다. 표본이 05:00~11:00대에 몰려 있으면 UTC로 입력된 데이터일 수 있어 배포를 멈춘다. 첫 주기에 닫힐 `ON_SALE` id 스냅샷을 배포 전에 확보해 오판 시 수동 복구 입력으로 쓴다.
 - 전이표에 `UPCOMING → CLOSED`가 없어 `UPCOMING`인 채 시작 시각이 지난 공연은 상태가 영구 `UPCOMING`으로 남는다. 목록에서는 빠지므로 노출은 막히며, 처리 방침은 후속 이슈다.

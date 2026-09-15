@@ -1,8 +1,10 @@
 package com.ticketrush.boundedcontext.performance.app.usecase;
 
+import com.ticketrush.boundedcontext.performance.domain.policy.PerformanceShowTimePolicy;
 import com.ticketrush.boundedcontext.performance.domain.types.PerformanceStatus;
 import com.ticketrush.boundedcontext.performance.out.repository.PerformanceRepository;
 import com.ticketrush.global.constants.CacheConstants;
+import java.time.Clock;
 import java.time.LocalDateTime;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -13,19 +15,32 @@ import org.springframework.transaction.annotation.Transactional;
 import org.springframework.transaction.support.TransactionSynchronization;
 import org.springframework.transaction.support.TransactionSynchronizationManager;
 
+/**
+ * 예매 오픈 시각이 도래한 UPCOMING 공연을 ON_SALE로 벌크 전환한다 (#298).
+ *
+ * <p>비교용 시각(Asia/Seoul 벽시계, {@link PerformanceShowTimePolicy#bookingOpenCutoff()})과 기록용 시각(UTC,
+ * auditing과 동일)을 따로 만든다 (#653). 예전에는 JVM 기본 존의 {@code now()} 하나를 양쪽에 썼는데, 운영 컨테이너가 UTC라 어드민이 KST로
+ * 넣은 오픈 시각이 9시간 늦게 열렸다. 로컬(KST JVM)에서는 드러나지 않는 버그였다. 자세한 이유는 {@code
+ * PerformanceRepository.bulkTransitionStatusByBookingOpenAtDue} 문서 참고.
+ */
 @Slf4j
 @Service
 @RequiredArgsConstructor
 public class PerformanceOpenBookingUseCase {
 
   private final PerformanceRepository performanceRepository;
+  private final PerformanceShowTimePolicy showTimePolicy;
   private final CacheManager cacheManager;
+  private final Clock clock;
 
   @Transactional
   public int execute() {
     int openedCount =
         performanceRepository.bulkTransitionStatusByBookingOpenAtDue(
-            PerformanceStatus.UPCOMING, PerformanceStatus.ON_SALE, LocalDateTime.now());
+            PerformanceStatus.UPCOMING,
+            PerformanceStatus.ON_SALE,
+            showTimePolicy.bookingOpenCutoff(),
+            LocalDateTime.now(clock));
 
     if (openedCount > 0) {
       log.info("예매 오픈 시각 도래 공연 {}건을 ON_SALE 상태로 전환했습니다.", openedCount);

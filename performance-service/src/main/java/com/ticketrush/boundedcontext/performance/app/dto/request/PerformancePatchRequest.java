@@ -57,7 +57,7 @@ public record PerformancePatchRequest(
         String address,
     @Schema(
             description =
-                "예매 오픈 시각 (yyyy-MM-dd HH:mm:ss, null=수정 안 함 — 해제하려면 "
+                "예매 오픈 시각 (yyyy-MM-dd HH:mm:ss, Asia/Seoul 기준, null=수정 안 함 — 해제하려면 "
                     + "DELETE /api/v1/performance/admin/{id}/booking-open-at 사용)",
             example = "2027-08-01 20:00:00")
         @JsonFormat(shape = JsonFormat.Shape.STRING, pattern = "yyyy-MM-dd HH:mm:ss")
