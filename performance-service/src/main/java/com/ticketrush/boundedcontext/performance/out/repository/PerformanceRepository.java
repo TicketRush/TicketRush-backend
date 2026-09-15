@@ -47,19 +47,26 @@ public interface PerformanceRepository
    * 이유는 {@code PerformanceStatus.canTransitionTo}상 <b>UPCOMING을 목적지로 갖는 전이가 없어</b> 생성 외에는 UPCOMING을
    * 쓸 경로가 없기 때문이다. 전이표에 →UPCOMING이 추가되면 이 전제가 깨진다.
    *
+   * <p><b>비교 축과 기록 축이 다르다 (#653).</b> {@code cutoff}는 Asia/Seoul 벽시계({@code
+   * PerformanceShowTimePolicy.bookingOpenCutoff()}, 어드민이 입력한 {@code bookingOpenAt}의 해석)이고 {@code
+   * updatedAt}은 auditing과 같은 UTC Clock 값이다. 예전처럼 하나의 {@code now}로 둘 다 채우면 운영(UTC)에서 오픈이 9시간 늦거나
+   * updatedAt이 9시간 어긋난다 — {@link #bulkTransitionStatusByShowTimePassed}와 같은 전제다. 정각 포함({@code <=})은
+   * 정각에 열리는 티켓 오픈의 존재 이유다.
+   *
    * <p>{@code clearAutomatically = true}가 호출 트랜잭션의 영속성 컨텍스트 전체를 비우므로, 엔티티를 로드하는 다른 트랜잭션에서 재사용하지 말고
    * 스케줄러 전용으로만 호출해야 한다.
    */
   @Modifying(clearAutomatically = true)
   @Query(
-      "UPDATE Performance p SET p.performanceStatus = :to, p.updatedAt = :now "
+      "UPDATE Performance p SET p.performanceStatus = :to, p.updatedAt = :updatedAt "
           + "WHERE p.performanceStatus = :from "
-          + "AND p.bookingOpenAt IS NOT NULL AND p.bookingOpenAt <= :now "
+          + "AND p.bookingOpenAt IS NOT NULL AND p.bookingOpenAt <= :cutoff "
           + "AND p.deletedAt IS NULL")
   int bulkTransitionStatusByBookingOpenAtDue(
       @Param("from") PerformanceStatus from,
       @Param("to") PerformanceStatus to,
-      @Param("now") LocalDateTime now);
+      @Param("cutoff") LocalDateTime cutoff,
+      @Param("updatedAt") LocalDateTime updatedAt);
 
   /**
    * 공연 시작 시각이 지난 공연을 벌크 전환한다 (#651).
@@ -105,7 +112,8 @@ public interface PerformanceRepository
    * 때문이다({@code PerformanceClearBookingOpenAtUseCase}).
    *
    * <p>벌크 JPQL은 {@code @SQLRestriction}과 Auditing이 적용되지 않으므로 deletedAt 조건과 updatedAt을 명시한다. 영향 행 수가
-   * 0이면 대상 공연이 없거나 이미 소프트 삭제된 경우다.
+   * 0이면 대상 공연이 없거나 이미 소프트 삭제된 경우다. {@code updatedAt}은 다른 두 벌크와 같이 auditing과 같은 UTC Clock 값이다 (#653)
+   * — 여기는 시각 비교가 없어 기록 축만 있다.
    *
    * <p><b>역방향 경합 창은 해소됐다(#459).</b> 예전에는 엔티티를 로드하는 PATCH·상태 변경 UseCase가 전체 컬럼 UPDATE를 내보내, 그들이
    * bookingOpenAt을 로드한 뒤 이 해제가 커밋되면 마지막 커밋이 해제된 값을 되살렸다. 지금은 {@code Performance}의
@@ -119,7 +127,7 @@ public interface PerformanceRepository
    */
   @Modifying(clearAutomatically = true)
   @Query(
-      "UPDATE Performance p SET p.bookingOpenAt = null, p.updatedAt = :now "
+      "UPDATE Performance p SET p.bookingOpenAt = null, p.updatedAt = :updatedAt "
           + "WHERE p.id = :id AND p.deletedAt IS NULL")
-  int clearBookingOpenAt(@Param("id") Long id, @Param("now") LocalDateTime now);
+  int clearBookingOpenAt(@Param("id") Long id, @Param("updatedAt") LocalDateTime updatedAt);
 }
