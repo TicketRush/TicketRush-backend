@@ -7,7 +7,8 @@ import java.time.temporal.ChronoUnit;
 import org.springframework.stereotype.Component;
 
 /**
- * 공연 시작 시각({@code showDate} + {@code showTime})의 시간대 해석과 "지났다"의 판정 기준을 소유한다 (#651, ADR 0020).
+ * 공연 시작 시각({@code showDate} + {@code showTime})과 예매 오픈 시각({@code bookingOpenAt})의 시간대 해석과 판정 기준을
+ * 소유한다 (#651·#653, ADR 0020).
  *
  * <p><b>기준 문장:</b> 공연 시작 시각(showDate + showTime, Asia/Seoul)이 지났다 = 시작 시각 정각을 포함해 현재 시각과 같거나 이전이다.
  * 사용자 목록의 제외 조건({@code PerformanceRepositoryImpl.findByFilters})과 CLOSED 벌크 전환({@code
@@ -27,13 +28,17 @@ import org.springframework.stereotype.Component;
  * <p><b>초 단위로 절삭한다.</b> {@code show_time}은 초 정밀도 컬럼이라 나노초가 섞인 파라미터로 비교하면 정각 판정이 드라이버·방언에 따라 흔들릴 수
  * 있다. 목록·전환이 같은 절삭값을 쓰므로 여집합은 유지된다.
  *
- * <p>같은 형식의 {@code bookingOpenAt}은 아직 {@code LocalDateTime.now()}(JVM 존)와 비교한다 ({@code
- * PerformanceOpenBookingUseCase}). 그 정합은 이 이슈 범위 밖이며 후속 이슈로 남긴다.
+ * <p>같은 형식의 {@code bookingOpenAt}도 같은 해석이다 (#653). 어드민이 오프셋 없는 {@code yyyy-MM-dd HH:mm:ss}로 입력한 값이라
+ * {@code show_date}·{@code show_time}과 축이 같고, 한 서비스 안에서 사람이 입력한 시각의 해석은 하나여야 한다. 오픈 벌크 전환({@code
+ * PerformanceRepository.bulkTransitionStatusByBookingOpenAtDue})은 {@link #bookingOpenCutoff()} 값과
+ * 비교한다 — 예전처럼 {@code LocalDateTime.now()}(JVM 존)와 비교하면 운영(UTC)에서 9시간 늦게 열린다.
  */
 @Component
 public class PerformanceShowTimePolicy {
 
-  /** {@code show_date}·{@code show_time}을 해석하는 시간대. 근거는 클래스 문서와 ADR 0020. */
+  /**
+   * {@code show_date}·{@code show_time}·{@code booking_open_at}을 해석하는 시간대. 근거는 클래스 문서와 ADR 0020.
+   */
   public static final ZoneId SHOW_ZONE = ZoneId.of("Asia/Seoul");
 
   private final Clock clock;
@@ -48,9 +53,23 @@ public class PerformanceShowTimePolicy {
    * <p>한 번의 {@code now}에서 날짜와 시각을 함께 뽑는다. 따로 두 번 읽으면 자정 근처에서 날짜는 어제, 시각은 오늘 것이 섞일 수 있다.
    */
   public ShowTimeCutoff cutoff() {
-    LocalDateTime now =
-        LocalDateTime.now(clock.withZone(SHOW_ZONE)).truncatedTo(ChronoUnit.SECONDS);
+    LocalDateTime now = seoulNow();
 
     return new ShowTimeCutoff(now.toLocalDate(), now.toLocalTime());
+  }
+
+  /**
+   * 지금 이 순간의 예매 오픈 판정 기준 (#653). {@code booking_open_at}은 DATETIME 한 컬럼이라 비교값도 하나다.
+   *
+   * <p>{@link #cutoff()}와 같은 존·같은 초 절삭 규칙을 쓴다. 요청이 초 단위({@code yyyy-MM-dd HH:mm:ss})로 바인딩되므로 절삭은
+   * 저장값을 바꾸지 않고, 파라미터에 나노초가 섞여 정각 판정이 흔들리는 것만 막는다.
+   */
+  public LocalDateTime bookingOpenCutoff() {
+    return seoulNow();
+  }
+
+  /** 두 판정 기준이 같은 존·같은 절삭 규칙을 한 곳에서 공유한다. */
+  private LocalDateTime seoulNow() {
+    return LocalDateTime.now(clock.withZone(SHOW_ZONE)).truncatedTo(ChronoUnit.SECONDS);
   }
 }
