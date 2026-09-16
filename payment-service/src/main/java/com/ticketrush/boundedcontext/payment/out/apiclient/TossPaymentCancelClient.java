@@ -1,13 +1,11 @@
 package com.ticketrush.boundedcontext.payment.out.apiclient;
 
-import com.fasterxml.jackson.databind.ObjectMapper;
 import com.ticketrush.boundedcontext.payment.domain.types.PaymentProvider;
 import com.ticketrush.global.constants.MetricNames;
 import com.ticketrush.global.exception.BusinessException;
 import com.ticketrush.global.status.ErrorStatus;
 import io.micrometer.core.instrument.Counter;
 import io.micrometer.core.instrument.MeterRegistry;
-import java.io.IOException;
 import java.time.LocalDateTime;
 import java.time.ZoneOffset;
 import java.util.List;
@@ -23,6 +21,7 @@ import org.springframework.util.StringUtils;
 import org.springframework.web.client.ResourceAccessException;
 import org.springframework.web.client.RestClient;
 import org.springframework.web.client.RestClientException;
+import tools.jackson.databind.json.JsonMapper;
 
 /**
  * Toss Payments 결제 취소(환불) API 연동 구현체.
@@ -73,17 +72,20 @@ public class TossPaymentCancelClient implements PaymentCancelClient {
   private static final String RETRY_OUTCOME_DISABLED = "disabled";
 
   private final RestClient restClient;
-  private final ObjectMapper objectMapper;
   private final MeterRegistry meterRegistry;
   private final long retryDelayMs;
 
+  /**
+   * Toss가 보내는 camelCase 에러 body 전용 매퍼다. 근거는 {@link TossPaymentApprovalClient}의 같은 필드에 적어 두었다 — 요점은
+   * 프레임워크가 주는 매퍼 타입에 결합하지 않는 것이다(#657).
+   */
+  private final JsonMapper jsonMapper = JsonMapper.builder().build();
+
   public TossPaymentCancelClient(
       @Qualifier("tossPaymentRestClient") RestClient restClient,
-      ObjectMapper objectMapper,
       MeterRegistry meterRegistry,
       @Value("${payment.pg.toss.cancel-retry-delay-ms:1000}") long retryDelayMs) {
     this.restClient = restClient;
-    this.objectMapper = objectMapper;
     this.meterRegistry = meterRegistry;
     this.retryDelayMs = retryDelayMs;
   }
@@ -231,12 +233,22 @@ public class TossPaymentCancelClient implements PaymentCancelClient {
         .increment();
   }
 
+  /**
+   * body를 읽지 못하면 재시도 여부를 판정할 수 없다. 화이트리스트 밖으로 떨어져 기존 동작(결정적 거절)을 유지한다.
+   *
+   * <p>catch가 {@code Exception}인 이유는 {@link TossPaymentApprovalClient#readErrorBody}에 적어 두었다. 다만
+   * <b>여기서 놓쳤을 때의 대가가 더 크다.</b> 새어 나간 예외는 {@code attemptCancel}의 catch 체인에도 {@code cancel}의 {@code
+   * RetryableRejection} 처리에도 걸리지 않고 {@code ErrorStatus} 없는 예외로 클라이언트 밖에 나가는데, 그러면 {@code
+   * FailedRefundRecorder}가 결정적 거절을 판정하지 못해 FAILED 이력과 보상 이벤트의 짝(#334 불변식)이 깨진다.
+   */
   private TossErrorResponse readErrorBody(ClientHttpResponse response) {
     try {
-      return objectMapper.readValue(response.getBody(), TossErrorResponse.class);
-    } catch (IOException e) {
-      // body를 읽지 못하면 재시도 여부를 판정할 수 없다. 화이트리스트 밖으로 떨어져 기존 동작(결정적 거절)을 유지한다.
-      log.warn("[PG-TOSS] 취소 에러 응답 body 파싱 실패. message={}", e.getMessage());
+      return jsonMapper.readValue(response.getBody(), TossErrorResponse.class);
+    } catch (Exception e) {
+      log.warn(
+          "[PG-TOSS] 취소 에러 응답 body 파싱 실패. exception={}, message={}",
+          e.getClass().getSimpleName(),
+          e.getMessage());
       return null;
     }
   }
