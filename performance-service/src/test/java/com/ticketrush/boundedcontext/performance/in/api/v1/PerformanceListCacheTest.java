@@ -12,8 +12,10 @@ import com.ticketrush.boundedcontext.performance.app.dto.request.PerformanceCrea
 import com.ticketrush.boundedcontext.performance.app.dto.request.PerformancePatchRequest;
 import com.ticketrush.boundedcontext.performance.app.dto.response.PerformanceListResponse;
 import com.ticketrush.boundedcontext.performance.app.facade.PerformanceFacade;
+import com.ticketrush.boundedcontext.performance.app.usecase.PerformanceCloseShowUseCase;
 import com.ticketrush.boundedcontext.performance.app.usecase.PerformanceOpenBookingUseCase;
 import com.ticketrush.boundedcontext.performance.domain.entity.Performance;
+import com.ticketrush.boundedcontext.performance.domain.policy.PerformanceShowTimePolicy;
 import com.ticketrush.boundedcontext.performance.domain.types.Genre;
 import com.ticketrush.boundedcontext.performance.domain.types.PerformanceStatus;
 import com.ticketrush.boundedcontext.performance.out.apiclient.SeatRestClient;
@@ -94,6 +96,7 @@ class PerformanceListCacheTest {
 
   @Autowired private PerformanceFacade performanceFacade;
   @Autowired private PerformanceOpenBookingUseCase performanceOpenBookingUseCase;
+  @Autowired private PerformanceCloseShowUseCase performanceCloseShowUseCase;
   @Autowired private PerformanceRepository performanceRepository;
   @Autowired private StringRedisTemplate redisTemplate;
   @Autowired private CacheManager cacheManager;
@@ -172,7 +175,7 @@ class PerformanceListCacheTest {
     performanceFacade.patchPerformance(
         saved.getId(),
         new PerformancePatchRequest(
-            "수정된 제목", null, null, null, null, null, null, null, null, null));
+            "수정된 제목", null, null, null, null, null, null, null, null, null, null, null));
 
     assertThat(redisTemplate.hasKey(FIRST_PAGE_KEY)).isFalse();
     assertThat(getUnfilteredFirstPage().getContent()).anyMatch(p -> p.title().equals("수정된 제목"));
@@ -247,10 +250,16 @@ class PerformanceListCacheTest {
     assertThat(uploadedInsideTransaction).as("트랜잭션 밖에서 업로드하면 롤백돼도 S3 객체가 정리되지 않는다").isTrue();
   }
 
+  /**
+   * 오픈 전환의 캐시 무효화. CLOSED 케이스와 같이 정책을 대체하지 않고 정책의 존(Asia/Seoul)으로 상대값을 만든다 (#653) — JVM 기본 존의
+   * {@code now()}를 쓰면 정책이 KST로 판정하는 지금과 어긋나 JVM 존에 따라 결과가 갈린다. 시각 판정의 결정적 검증은 {@code
+   * PerformanceOpenBookingTest}가 맡는다.
+   */
   @Test
   @DisplayName("예매 오픈 스케줄러가 상태를 전환하면 캐시가 무효화된다")
   void openBooking_transitioned_evictsCache() {
-    savePerformance(Genre.CONCERT, LocalDateTime.now().minusMinutes(1));
+    savePerformance(
+        Genre.CONCERT, LocalDateTime.now(PerformanceShowTimePolicy.SHOW_ZONE).minusMinutes(1));
     warmCache();
 
     int openedCount = performanceOpenBookingUseCase.execute();
@@ -264,12 +273,44 @@ class PerformanceListCacheTest {
   @Test
   @DisplayName("예매 오픈 스케줄러가 전환한 공연이 없으면 캐시를 유지한다")
   void openBooking_nothingTransitioned_keepsCache() {
-    savePerformance(Genre.CONCERT, LocalDateTime.now().plusHours(1));
+    savePerformance(
+        Genre.CONCERT, LocalDateTime.now(PerformanceShowTimePolicy.SHOW_ZONE).plusHours(1));
     warmCache();
 
     int openedCount = performanceOpenBookingUseCase.execute();
 
     assertThat(openedCount).isZero();
+    assertThat(redisTemplate.hasKey(FIRST_PAGE_KEY)).isTrue();
+  }
+
+  /**
+   * CLOSED 전환의 캐시 무효화 (#651). 여기서는 정책을 대체하지 않는다 — 실제 Clock에 물린 정책이 "어제"를 지난 것으로 판정하는지까지 함께 본다. 어제
+   * 날짜는 하루 중 어느 시각에 돌려도 지난 것이라 자정 경계와 무관하다.
+   */
+  @Test
+  @DisplayName("CLOSED 전환 스케줄러가 상태를 전환하면 캐시가 무효화된다")
+  void closeShow_transitioned_evictsCache() {
+    LocalDate yesterday = LocalDate.now(PerformanceShowTimePolicy.SHOW_ZONE).minusDays(1);
+    final Long pastId = saveOnSaleShowOn(yesterday).getId();
+    warmCache();
+
+    int closedCount = performanceCloseShowUseCase.execute();
+
+    assertThat(closedCount).isEqualTo(1);
+    assertThat(redisTemplate.hasKey(FIRST_PAGE_KEY)).isFalse();
+    assertThat(performanceRepository.findById(pastId).orElseThrow().getPerformanceStatus())
+        .isEqualTo(PerformanceStatus.CLOSED);
+  }
+
+  @Test
+  @DisplayName("CLOSED 전환 스케줄러가 전환한 공연이 없으면 캐시를 유지한다")
+  void closeShow_nothingTransitioned_keepsCache() {
+    saveOnSaleShowOn(LocalDate.now(PerformanceShowTimePolicy.SHOW_ZONE).plusDays(30));
+    warmCache();
+
+    int closedCount = performanceCloseShowUseCase.execute();
+
+    assertThat(closedCount).isZero();
     assertThat(redisTemplate.hasKey(FIRST_PAGE_KEY)).isTrue();
   }
 
@@ -302,7 +343,7 @@ class PerformanceListCacheTest {
     performanceFacade.patchPerformance(
         saved.getId(),
         new PerformancePatchRequest(
-            "수정된 제목", null, null, null, null, null, null, null, null, null));
+            "수정된 제목", null, null, null, null, null, null, null, null, null, null, null));
 
     assertThat(getUnfilteredFirstPage().getContent().getFirst().remainingSeats()).isEqualTo(50L);
     verify(seatRestClient, times(2)).getSeatCounts(anyList());
@@ -388,6 +429,26 @@ class PerformanceListCacheTest {
             .address("서울")
             .bookingOpenAt(bookingOpenAt)
             .build());
+  }
+
+  /** 이 클래스는 {@code @Transactional}이 아니라 상태 변경을 save로 반영한다. */
+  private Performance saveOnSaleShowOn(LocalDate showDate) {
+    Performance performance =
+        Performance.builder()
+            .title("공연명")
+            .performer("출연진")
+            .genre(Genre.CONCERT)
+            .description("설명")
+            .showDate(showDate)
+            .showTime(LocalTime.of(19, 0))
+            .durationMinutes(120)
+            .price(50000L)
+            .totalSeats(100)
+            .address("서울")
+            .build();
+    performance.changeStatus(PerformanceStatus.ON_SALE);
+
+    return performanceRepository.save(performance);
   }
 
   private PerformanceCreateRequest buildCreateRequest(String title) {

@@ -25,7 +25,9 @@ import lombok.Builder;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
 import org.hibernate.annotations.DynamicUpdate;
+import org.hibernate.annotations.JdbcTypeCode;
 import org.hibernate.annotations.SQLRestriction;
+import org.hibernate.type.SqlTypes;
 
 /**
  * 공연.
@@ -42,7 +44,8 @@ import org.hibernate.annotations.SQLRestriction;
  * 선택지를 남겨 뒀다), 스케줄러가 10초마다 도는 탓에 어드민 PATCH가 산발적으로 409를 맞게 된다. 여기서 원한 것은 충돌을 알리는 게 아니라 서로 무관한 수정이
  * 조용히 둘 다 성립하는 것이라 동적 UPDATE를 골랐다.
  *
- * <p>동적 UPDATE로 충분한 이유는 경합하는 경로들이 <b>서로소 컬럼을 쓰기 때문이다.</b> PATCH는 update()가 받은 non-null 필드만, 상태 변경은
+ * <p>동적 UPDATE로 충분한 이유는 경합하는 경로들이 <b>서로소 컬럼을 쓰기 때문이다.</b> PATCH는 update()가 받은 non-null 필드와
+ * updateCharacter()의 캐릭터 2컬럼(character_config·character_message, #650 — PATCH만 쓴다)만, 상태 변경은
  * performance_status만, 소프트 삭제는 deleted_at만, 두 벌크는 각각 performance_status와 booking_open_at만 건드린다. 변경
  * 컬럼만 SET에 실리면 서로의 쓰기를 덮을 일이 없다. 다섯 경로가 공유하는 컬럼은 updated_at 하나뿐인데, Auditing 리스너와 벌크 JPQL이 언제나 현재
  * 시각을 넣으므로 stale 값이 실릴 수 없어 무해하다.
@@ -76,6 +79,18 @@ import org.hibernate.annotations.SQLRestriction;
  *
  * <p>{@code @DynamicInsert}는 이번 범위 밖이다. null 컬럼을 INSERT문에서 빼 DB default가 먹게 하는 기능이라 이 이슈가 다루는 동시
  * 쓰기와는 무관하다.
+ *
+ * <p><b>prod 수동 DDL (#650).</b> prod는 {@code ddl-auto: validate}라 캐릭터 컬럼 2개를 배포 전에 직접 추가해야 한다. 순서가
+ * 바뀌면 기동 시 validate가 실패한다.
+ *
+ * <pre>
+ * ALTER TABLE performance
+ *   ADD COLUMN character_config JSON NULL,
+ *   ADD COLUMN character_message VARCHAR(50) NULL;
+ * </pre>
+ *
+ * 컬럼 위치({@code AFTER})는 지정하지 않는다 — validate는 순서를 보지 않고, 위치 지정은 MySQL 8.0.29 미만에서 INSTANT ALTER를
+ * 막는다.
  */
 @Entity
 @Table(name = "performance")
@@ -143,6 +158,24 @@ public class Performance extends AutoIdBaseEntity {
   @OrderColumn(name = "facility_order")
   private List<String> facilities = new ArrayList<>();
 
+  /**
+   * 3D 캐릭터 구성 JSON(#650). 프론트가 파츠 조합·색상으로 캐릭터를 재구성하는 데 쓰는 값이며 <b>백엔드는 내용을 해석하지 않는다.</b> 스키마는 프론트가
+   * {@code schemaVersion}으로 소유·진화시키고, 백엔드는 "JSON 객체인가"와 크기 상한만 요청 DTO에서 검증한다.
+   *
+   * <p><b>{@code String}으로 두는 이유(ADR 0021).</b> Hibernate 7.2의 JSON {@code FormatMapper}는 Jackson
+   * 2만 인식하는데 이 앱의 직렬화는 Jackson 3다. {@code Map}·{@code JsonNode}로 매핑하면 전이 의존으로만 들어와 있는 Jackson 2에
+   * 기대게 된다. 문자열은 {@code FormatMapper} 변환을 거치지 않아 그 경계에 걸리지 않고, 요청에서 한 번 compact 직렬화한 값이 그대로 저장된다.
+   *
+   * <p>null이면 캐릭터가 없는 공연이다(#650 이전 등록분). 등록 시 프론트가 필수를 검증하지만 백엔드는 기존 공연 호환을 위해 null을 허용한다.
+   */
+  @JdbcTypeCode(SqlTypes.JSON)
+  @Column(name = "character_config")
+  private String characterConfig;
+
+  /** 캐릭터가 말풍선으로 보여주는 한마디(#650). 공연에 종속된 문구라 캐릭터 구성 JSON 밖에 둔다. 프론트 UI 제한이 50자. */
+  @Column(name = "character_message", length = 50)
+  private String characterMessage;
+
   @Column(name = "deleted_at")
   private LocalDateTime deletedAt;
 
@@ -162,7 +195,9 @@ public class Performance extends AutoIdBaseEntity {
       String image3dUrl,
       String imageMainUrl,
       List<String> imageGalleryUrls,
-      List<String> facilities) {
+      List<String> facilities,
+      String characterConfig,
+      String characterMessage) {
     this.title = title;
     this.performer = performer;
     this.genre = genre;
@@ -178,11 +213,17 @@ public class Performance extends AutoIdBaseEntity {
     this.imageMainUrl = imageMainUrl;
     this.imageGalleryUrls = imageGalleryUrls != null ? imageGalleryUrls : new ArrayList<>();
     this.facilities = facilities != null ? facilities : new ArrayList<>();
+    this.characterConfig = characterConfig;
+    this.characterMessage = characterMessage;
 
     // [비즈니스 로직] 생성 시점에는 항상 UPCOMING 상태로 고정 (안전성 확보)
     this.performanceStatus = PerformanceStatus.UPCOMING;
   }
 
+  /**
+   * 등록 직후 업로드된 파일 URL을 세팅한다. {@code model3dUrl}은 #650부터 null일 수 있다 — 3D 모델 파트가 선택이 되어 캐릭터는 {@link
+   * #characterConfig}로 저장한다. 나머지 두 값은 등록 경로가 항상 채운다.
+   */
   public void updateUrls(String mainImageUrl, String model3dUrl, List<String> galleryUrls) {
     this.imageMainUrl = mainImageUrl;
     this.image3dUrl = model3dUrl;
@@ -192,8 +233,9 @@ public class Performance extends AutoIdBaseEntity {
   /**
    * 전달된 파일 URL만 갈아끼운다. null인 파트는 기존 값을 그대로 둔다(#637).
    *
-   * <p>{@link #updateUrls}와 갈라 둔 이유는 계약이 반대이기 때문이다 — 등록은 세 값을 전부 세팅하는 것이 계약이고, 교체는 보내지 않은 파트를 건드리지
-   * 않는 것이 계약이다. 한 메서드로 합치면 등록 경로가 null을 조용히 허용하게 된다.
+   * <p>{@link #updateUrls}와 갈라 둔 이유는 계약이 반대이기 때문이다 — 등록은 메인 이미지·갤러리를 반드시 세팅하고 3D 모델은 선택(#650)이라
+   * null을 "없음"으로 저장하는 것이 계약이고, 교체는 보내지 않은 파트를 건드리지 않는 것이 계약이다. 한 메서드로 합치면 같은 null이 한쪽에서는 "없음", 다른
+   * 쪽에서는 "유지"가 되어 구분할 수 없다.
    *
    * <p><b>갤러리는 컬렉션 인스턴스를 갈아끼우지 않고 clear() + addAll()로 채운다.</b> 이 메서드는 {@code updateUrls()}와 달리 이미
    * 영속 상태인 엔티티에서 호출되므로, 새 List로 필드를 덮으면 Hibernate가 관리하던 {@code PersistentCollection} 래퍼가 떨어져 나간다.
@@ -262,6 +304,26 @@ public class Performance extends AutoIdBaseEntity {
     }
     if (bookingOpenAt != null) {
       this.bookingOpenAt = bookingOpenAt;
+    }
+  }
+
+  /**
+   * 캐릭터 구성과 한마디를 갈아끼운다(#650).
+   *
+   * <p>{@link #update}와 갈라 둔 이유는 계약이 다르기 때문이다. {@code update()}는 "null이면 수정하지 않는다" 하나만 알지만, 한마디는
+   * <b>빈 문자열(공백만 있는 문자열 포함)이면 삭제(null 저장)</b>한다 — 이 레포의 PATCH에서 빈 문자열을 삭제 신호로 읽는 첫 필드다. 공백만 있는 한마디는
+   * 말풍선을 비워 보이게 할 뿐 의미가 없어 등록의 정규화({@code PerformanceMapper.blankToNull})와 같은 기준으로 지운다. 프론트가 캐릭터
+   * 자체를 제거하는 기능은 두지 않기로 해 캐릭터 구성에는 삭제 규칙이 없고(덮어쓰기만), 한마디만 비울 수 있어야 해서 이렇게 갈렸다. 그래서 요청 DTO의 {@code
+   * characterMessage}에는 {@code @NullOrNotBlank}를 붙이지 않는다.
+   *
+   * <p>{@code characterConfig}는 호출부(매퍼)가 이미 compact 직렬화한 JSON 문자열이다. 여기서는 해석하지 않는다.
+   */
+  public void updateCharacter(String characterConfig, String characterMessage) {
+    if (characterConfig != null) {
+      this.characterConfig = characterConfig;
+    }
+    if (characterMessage != null) {
+      this.characterMessage = characterMessage.isBlank() ? null : characterMessage;
     }
   }
 

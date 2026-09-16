@@ -44,8 +44,8 @@
 - Toss 승인·조회·취소의 오프셋 시각은 `withOffsetSameInstant(ZoneOffset.UTC)`로 변환한다(초 미만 정밀도는 응답 직렬화 때만 절삭).
 - Outbox 외피 시각은 audited `createdAt`을 UTC로 해석한다. Inbox/DLT/Outbox 보존 기간 임계값과 Outbox `publishedAt`도 UTC다.
 - `Dockerfile`: `TZ=UTC`, `-Duser.timezone=UTC`. 이 설정은 DB 데이터가 UTC라는 증거가 아니다.
-- 런타임 시간대 영향만 받는 비목표: performance-service의 `PerformanceOpenBookingUseCase`, `PerformanceClearBookingOpenAtUseCase`, `Performance.deletedAt`, 대시보드·통계의 `LocalDate.now()`.
-  - 비UTC JVM(로컬 IDE)에서는 performance 벌크 JPQL의 `updatedAt = :now`(호스트 시각)와 UTC auditing 값이 한 테이블에 섞인다. 운영(UTC)은 영향 없다.
+- 런타임 시간대 영향만 받는 비목표: performance-service의 `Performance.deletedAt`, 대시보드·통계의 `LocalDate.now()`.
+  - performance 벌크 JPQL(오픈 전환 #653·CLOSED 전환 #651·오픈 시각 해제 #653)은 `updatedAt`에 UTC Clock 값을 쓰고, 공연 시각·예매 오픈 시각 비교는 Asia/Seoul 벽시계로 한다(ADR 0020). 비교 축과 기록 축이 다르므로 하나의 `now`로 둘 다 채우지 않는다.
   - booking 일별 매출 집계(`cast(confirmedAt as LocalDate)`)의 날짜 경계는 UTC 자정이다.
 
 ### 좌석맵 캐시
@@ -63,7 +63,7 @@
 3. **Kafka 미처리 메시지**: 컨슈머 lag에 남은 이벤트의 시각 출처 시간대.
 4. **DLT 재처리 데이터**: 재처리 대상 페이로드·외피의 시각 출처 시간대.
 5. **소비자 준비**: 프런트엔드·관리자 화면이 `Z` 포함 ISO-8601과 기존 무시간대 형식(`yyyy-MM-dd HH:mm:ss`, UTC로 해석)을 **둘 다** 파싱할 수 있는지. 롤백 시 무시간대 형식이 돌아오기 때문이다.
-6. **`booking_open_at` 업무 의미**: KST 벽시계 값이라면 UTC 런타임의 `LocalDateTime.now(UTC)` 비교와 충돌하는지. 운영 앱은 이미 UTC 런타임이라 이번 변경이 새로 만든 위험은 아니지만, 충돌이 확인되면 값을 바꾸지 말고 별도 이슈로 다룬다.
+6. **`booking_open_at` 업무 의미**: KST 벽시계로 확정했다(ADR 0020·#653). 오픈 전환은 UTC 런타임에서도 Asia/Seoul 벽시계와 비교하므로 충돌은 해소됐다. #653 배포 전에는 기존 `booking_open_at` 값이 KST 의도인지 확인한다 — UTC 의도로 넣은 값은 배포 첫 주기에 KST 기준 이미 도래한 것이 한꺼번에 열리고, 그 뒤로도 건마다 9시간 일찍 열린다. `ON_SALE → UPCOMING` 전이가 없어 코드 롤백으로 되돌릴 수 없으므로 첫 주기 대상 id를 배포 전에 스냅샷한다.
 
 금지: 추측에 따른 +9/-9시간 보정, 시각 재표기, 메시지 폐기·유실로 대기열 비우기. UTC임이 확인된 기존 페이로드는 원문 바이트와 이벤트 ID를 유지한 채 재처리한다.
 

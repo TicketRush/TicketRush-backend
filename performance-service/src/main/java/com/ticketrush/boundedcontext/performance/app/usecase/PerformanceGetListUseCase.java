@@ -3,6 +3,7 @@ package com.ticketrush.boundedcontext.performance.app.usecase;
 import com.ticketrush.boundedcontext.performance.app.dto.response.PerformanceListResponse;
 import com.ticketrush.boundedcontext.performance.app.dto.response.PerformanceListSlice;
 import com.ticketrush.boundedcontext.performance.app.mapper.PerformanceMapper;
+import com.ticketrush.boundedcontext.performance.domain.policy.PerformanceShowTimePolicy;
 import com.ticketrush.boundedcontext.performance.domain.types.Genre;
 import com.ticketrush.boundedcontext.performance.domain.types.PerformanceStatus;
 import com.ticketrush.boundedcontext.performance.out.apiclient.SeatRestClient;
@@ -25,10 +26,15 @@ public class PerformanceGetListUseCase {
   private final PerformanceRepository performanceRepository;
   private final PerformanceMapper performanceMapper;
   private final SeatRestClient seatRestClient;
+  private final PerformanceShowTimePolicy showTimePolicy;
 
   /**
    * 캐싱 대상은 메인 화면 트래픽이 집중되는 <b>무필터 + 첫 페이지</b> 조합만으로 제한한다 — minPrice/maxPrice/cursorId가 자유값이라 전 조합
    * 캐싱은 키 카디널리티가 무한하기 때문(키는 size별 최대 {@code MAX_PAGE_SIZE}개).
+   *
+   * <p><b>시작 시각이 지난 공연은 싣지 않는다</b> (#651). 기준 시각은 {@link PerformanceShowTimePolicy}가 호출 시점에 만들며 캐시
+   * 키에는 들어가지 않는다 — 캐시된 목록은 저장 시점의 기준이라, TTL(30초) 안에 시작 시각을 넘긴 공연이 그만큼 늦게 빠진다. 키에 시각을 넣으면 매 초 새 키가
+   * 생겨 캐시가 무의미해지므로 그 지연을 감수한다.
    *
    * <p><b>좌석 수는 캐시 안에서 합성한다</b> (#176). 따라서 좌석 수도 목록과 같은 수명을 갖는다 — 최대 TTL만큼 지난 값일 수 있고, 좌석 상태가 바뀌어도
    * 캐시는 깨지지 않는다(evict는 공연 변경에만 걸려 있다). 좌석의 실시간성은 상세 화면 SSE가 담당하며, 목록에서까지 최신을 보장하려 들면 오픈런 순간 메인 화면
@@ -60,7 +66,13 @@ public class PerformanceGetListUseCase {
     Slice<PerformanceListResponse> performances =
         performanceRepository
             .findByFilters(
-                genre, minPrice, maxPrice, status, pageRequest.cursorId(), pageRequest.size())
+                genre,
+                minPrice,
+                maxPrice,
+                status,
+                pageRequest.cursorId(),
+                pageRequest.size(),
+                showTimePolicy.cutoff())
             .map(performanceMapper::toListResponse);
 
     // 페이지당 한 번만 부른다. 조회 자체는 size+1건이지만 초과분은 Slice가 이미 잘라낸 뒤라

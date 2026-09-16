@@ -43,6 +43,12 @@ public class PerformanceController {
 
           슬라이드 영역과 그리드 목록 모두 이 API를 사용합니다.
 
+          **노출 기준:** 공연 시작 시각(`showDate` + `showTime`, Asia/Seoul 기준)이 아직 지나지 않은 공연만 실립니다.
+          시작 시각 정각부터는 지난 것으로 보아 제외되며, `status` 필터와 무관하게 항상 적용됩니다.
+          다만 무필터 첫 페이지는 캐시(최대 30초)를 타므로, 시작 시각을 막 넘긴 공연이 그 시간만큼 목록에 남아 있을 수 있습니다.
+          지난 공연의 `ON_SALE`은 약 1분 주기 스케줄러가 `CLOSED`로 바꾸며, 전환 즉시 캐시를 비워 다음 조회부터 반영됩니다.
+          지난 공연은 상세 조회로는 계속 볼 수 있습니다.
+
           **커서 페이징(무한 스크롤):** 최신 등록순(performanceId 내림차순) 고정 정렬입니다.
           첫 요청은 cursorId 없이 호출하고, 응답 `paginationInfo.nextCursor`를
           다음 요청의 cursorId로 전달합니다. `hasNext=false`면 마지막 페이지입니다.
@@ -82,7 +88,15 @@ public class PerformanceController {
         SuccessStatus.OK, performances, PerformanceListResponse::performanceId);
   }
 
-  @Operation(summary = "공연 상세 조회", description = "공연 ID로 상세 정보를 조회합니다. 인증 없이 누구나 접근 가능합니다.")
+  @Operation(
+      summary = "공연 상세 조회",
+      description =
+          """
+          공연 ID로 상세 정보를 조회합니다. 인증 없이 누구나 접근 가능합니다.
+
+          공연 시작 시각(`showDate` + `showTime`, Asia/Seoul 기준)이 지난 공연도 조회됩니다 —
+          예매 내역·티켓에서 지난 공연으로 들어오는 경로를 막지 않기 위해서입니다. 목록에서만 제외됩니다.
+          """)
   @GetMapping("/{id}")
   public ResponseEntity<ApiResponse<PerformanceDetailResponse>> getPerformanceDetail(
       @Parameter(description = "공연 ID") @Positive @PathVariable Long id) {

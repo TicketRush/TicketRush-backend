@@ -8,6 +8,8 @@ import static org.mockito.BDDMockito.given;
 import com.ticketrush.boundedcontext.performance.app.dto.response.PerformanceListResponse;
 import com.ticketrush.boundedcontext.performance.app.usecase.PerformanceGetListUseCase;
 import com.ticketrush.boundedcontext.performance.domain.entity.Performance;
+import com.ticketrush.boundedcontext.performance.domain.policy.PerformanceShowTimePolicy;
+import com.ticketrush.boundedcontext.performance.domain.policy.ShowTimeCutoff;
 import com.ticketrush.boundedcontext.performance.domain.types.Genre;
 import com.ticketrush.boundedcontext.performance.domain.types.PerformanceStatus;
 import com.ticketrush.boundedcontext.performance.out.apiclient.SeatRestClient;
@@ -53,12 +55,22 @@ class PerformanceGetListTest {
    */
   @MockitoBean private SeatRestClient seatRestClient;
 
+  /**
+   * 기준 시각을 고정한다 (#651). 정책을 그대로 두면 시드의 showDate·showTime이 실행 시각과 비교돼, KST 19시 이후나 자정 근처에 돌릴 때 결과가
+   * 달라진다. {@code Clock} 빈을 통째로 바꾸지 않고 정책만 대체하는 이유는 auditing 등 다른 Clock 사용처를 건드리지 않기 위해서다.
+   */
+  @MockitoBean private PerformanceShowTimePolicy showTimePolicy;
+
+  private static final ShowTimeCutoff CUTOFF =
+      new ShowTimeCutoff(LocalDate.of(2026, 9, 15), LocalTime.of(19, 0));
+
   @Autowired private PerformanceGetListUseCase performanceGetListUseCase;
   @Autowired private PerformanceRepository performanceRepository;
 
   @BeforeEach
   void setUp() {
     given(seatRestClient.getSeatCounts(anyList())).willReturn(Map.of());
+    given(showTimePolicy.cutoff()).willReturn(CUTOFF);
     performanceRepository.saveAll(
         List.of(
             buildPerformance(Genre.CONCERT, 30000L, null),
@@ -225,14 +237,92 @@ class PerformanceGetListTest {
         .hasFieldOrPropertyWithValue("errorStatus", ErrorStatus.PERFORMANCE_INVALID_PRICE_RANGE);
   }
 
+  // ---- 시작 시각이 지난 공연 제외 (#651) ----
+
+  @Test
+  @DisplayName("시작 날짜가 지난 공연은 상태가 ON_SALE이어도 목록에 실리지 않는다")
+  void pastShowDate_excluded() {
+    Performance past =
+        saveShowAt(CUTOFF.date().minusDays(1), LocalTime.of(23, 59), PerformanceStatus.ON_SALE);
+
+    List<Long> ids = idsOf(execute(null, null, null, null, firstPage(10)));
+
+    assertThat(ids).hasSize(4).doesNotContain(past.getId());
+  }
+
+  @Test
+  @DisplayName("같은 날 시작 시각이 지난 공연은 제외되고, 아직 오지 않은 공연은 실린다")
+  void sameDay_excludedOnlyWhenTimePassed() {
+    Performance before = saveShowAt(CUTOFF.date(), LocalTime.of(18, 59), PerformanceStatus.ON_SALE);
+    Performance after = saveShowAt(CUTOFF.date(), LocalTime.of(19, 1), PerformanceStatus.ON_SALE);
+
+    List<Long> ids = idsOf(execute(null, null, null, null, firstPage(10)));
+
+    assertThat(ids).contains(after.getId()).doesNotContain(before.getId());
+  }
+
+  /** 정각은 "지남"이다. 벌크 전환 JPQL이 {@code <=}로 정각을 가져가므로, 여기서 정각을 실으면 두 조건이 겹친다. */
+  @Test
+  @DisplayName("시작 시각 정각인 공연은 지난 것으로 보아 제외된다")
+  void exactStartTime_excluded() {
+    Performance exact = saveShowAt(CUTOFF.date(), CUTOFF.time(), PerformanceStatus.ON_SALE);
+
+    List<Long> ids = idsOf(execute(null, null, null, null, firstPage(10)));
+
+    assertThat(ids).doesNotContain(exact.getId());
+  }
+
+  @Test
+  @DisplayName("status 필터를 걸어도 시작 시각이 지난 공연은 제외된다")
+  void pastShow_excludedEvenWithStatusFilter() {
+    Performance past =
+        saveShowAt(CUTOFF.date().minusDays(1), LocalTime.of(19, 0), PerformanceStatus.ON_SALE);
+
+    List<Long> ids = idsOf(execute(null, null, null, PerformanceStatus.ON_SALE, firstPage(10)));
+
+    assertThat(ids).hasSize(2).doesNotContain(past.getId());
+  }
+
+  @Test
+  @DisplayName("hasNext는 지난 공연을 뺀 뒤의 건수로 판단한다")
+  void hasNext_countsOnlyUpcomingShows() {
+    // 4건(미래) + 1건(지난) = 5건이지만 목록 기준으로는 4건이라, size 4의 첫 페이지에 다음 페이지가 없어야 한다
+    saveShowAt(CUTOFF.date().minusDays(1), LocalTime.of(19, 0), PerformanceStatus.ON_SALE);
+
+    Slice<PerformanceListResponse> page = execute(null, null, null, null, firstPage(4));
+
+    assertThat(page.getContent()).hasSize(4);
+    assertThat(page.hasNext()).isFalse();
+  }
+
+  private Performance saveShowAt(LocalDate showDate, LocalTime showTime, PerformanceStatus status) {
+    return performanceRepository.save(
+        buildPerformance(Genre.CONCERT, 50000L, status, showDate, showTime));
+  }
+
+  private List<Long> idsOf(Slice<PerformanceListResponse> slice) {
+    return slice.getContent().stream().map(PerformanceListResponse::performanceId).toList();
+  }
+
+  /** 기본 시드는 기준 시각보다 한 달 뒤라 제외 조건에 걸리지 않는다. */
   private Performance buildPerformance(Genre genre, Long price, PerformanceStatus targetStatus) {
+    return buildPerformance(
+        genre, price, targetStatus, CUTOFF.date().plusDays(30), LocalTime.of(19, 0));
+  }
+
+  private Performance buildPerformance(
+      Genre genre,
+      Long price,
+      PerformanceStatus targetStatus,
+      LocalDate showDate,
+      LocalTime showTime) {
     Performance performance =
         Performance.builder()
             .title("공연명")
             .performer("가수")
             .genre(genre)
-            .showDate(LocalDate.now())
-            .showTime(LocalTime.of(19, 0))
+            .showDate(showDate)
+            .showTime(showTime)
             .durationMinutes(120)
             .price(price)
             .totalSeats(100)

@@ -13,6 +13,8 @@ import com.ticketrush.boundedcontext.performance.app.dto.response.PerformanceLis
 import com.ticketrush.boundedcontext.performance.app.mapper.PerformanceMapper;
 import com.ticketrush.boundedcontext.performance.app.mapper.PerformanceMapperImpl;
 import com.ticketrush.boundedcontext.performance.domain.entity.Performance;
+import com.ticketrush.boundedcontext.performance.domain.policy.PerformanceShowTimePolicy;
+import com.ticketrush.boundedcontext.performance.domain.policy.ShowTimeCutoff;
 import com.ticketrush.boundedcontext.performance.domain.types.Genre;
 import com.ticketrush.boundedcontext.performance.domain.types.PerformanceStatus;
 import com.ticketrush.boundedcontext.performance.out.apiclient.SeatRestClient;
@@ -43,6 +45,9 @@ class PerformanceGetListSeatCountsTest {
   @Mock private PerformanceRepository performanceRepository;
   @Mock private SeatRestClient seatRestClient;
 
+  /** 리포지토리가 mock이라 컷오프 값은 결과에 영향이 없다. 유스케이스가 null을 넘기지 않게 고정값만 준다. */
+  @Mock private PerformanceShowTimePolicy showTimePolicy;
+
   /**
    * 매퍼는 <b>실제 구현체</b>다. mock으로 두면 매퍼의 {@code ignore} 방어가 풀려도 이 테스트들이 전부 통과한다.
    *
@@ -59,8 +64,11 @@ class PerformanceGetListSeatCountsTest {
 
   @BeforeEach
   void setUp() {
+    given(showTimePolicy.cutoff())
+        .willReturn(new ShowTimeCutoff(LocalDate.of(2026, 8, 1), LocalTime.NOON));
     useCase =
-        new PerformanceGetListUseCase(performanceRepository, performanceMapper, seatRestClient);
+        new PerformanceGetListUseCase(
+            performanceRepository, performanceMapper, seatRestClient, showTimePolicy);
   }
 
   @Test
@@ -196,7 +204,7 @@ class PerformanceGetListSeatCountsTest {
   }
 
   private void givenPage(Performance... performances) {
-    given(performanceRepository.findByFilters(any(), any(), any(), any(), any(), anyInt()))
+    given(performanceRepository.findByFilters(any(), any(), any(), any(), any(), anyInt(), any()))
         .willReturn(new SliceImpl<>(List.of(performances), PageRequest.of(0, PAGE.size()), false));
   }
 

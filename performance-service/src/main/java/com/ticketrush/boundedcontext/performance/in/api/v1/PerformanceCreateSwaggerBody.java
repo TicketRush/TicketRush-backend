@@ -14,7 +14,11 @@ public class PerformanceCreateSwaggerBody {
   @Schema(type = "string", format = "binary", description = "메인 이미지 파일")
   public MultipartFile mainImage;
 
-  @Schema(type = "string", format = "binary", description = "3D 모델 파일")
+  @Schema(
+      type = "string",
+      format = "binary",
+      description = "3D 모델 파일 (선택 — 캐릭터는 request 파트의 characterConfig로 등록)",
+      nullable = true)
   public MultipartFile model3d;
 
   @Schema(

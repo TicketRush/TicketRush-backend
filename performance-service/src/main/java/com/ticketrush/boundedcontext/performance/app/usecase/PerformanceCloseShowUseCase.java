@@ -1,6 +1,7 @@
 package com.ticketrush.boundedcontext.performance.app.usecase;
 
 import com.ticketrush.boundedcontext.performance.domain.policy.PerformanceShowTimePolicy;
+import com.ticketrush.boundedcontext.performance.domain.policy.ShowTimeCutoff;
 import com.ticketrush.boundedcontext.performance.domain.types.PerformanceStatus;
 import com.ticketrush.boundedcontext.performance.out.repository.PerformanceRepository;
 import com.ticketrush.global.constants.CacheConstants;
@@ -16,17 +17,22 @@ import org.springframework.transaction.support.TransactionSynchronization;
 import org.springframework.transaction.support.TransactionSynchronizationManager;
 
 /**
- * 예매 오픈 시각이 도래한 UPCOMING 공연을 ON_SALE로 벌크 전환한다 (#298).
+ * 공연 시작 시각이 지난 ON_SALE 공연을 CLOSED로 벌크 전환한다 (#651).
  *
- * <p>비교용 시각(Asia/Seoul 벽시계, {@link PerformanceShowTimePolicy#bookingOpenCutoff()})과 기록용 시각(UTC,
- * auditing과 동일)을 따로 만든다 (#653). 예전에는 JVM 기본 존의 {@code now()} 하나를 양쪽에 썼는데, 운영 컨테이너가 UTC라 어드민이 KST로
- * 넣은 오픈 시각이 9시간 늦게 열렸다. 로컬(KST JVM)에서는 드러나지 않는 버그였다. 자세한 이유는 {@code
- * PerformanceRepository.bulkTransitionStatusByBookingOpenAtDue} 문서 참고.
+ * <p>이전에는 CLOSED가 어드민 수동 전환으로만 생겨, 공연이 끝나도 상태는 ON_SALE로 남았다. 사용자 목록은 같은 이슈에서 시작 시각 조건으로 지난 공연을
+ * 걸러내므로 이 전환은 노출을 막는 수단이 아니라 <b>상태를 사실과 맞추는</b> 수단이다. 그래서 오픈 스케줄러(10초)처럼 급할 이유가 없다.
+ *
+ * <p>{@link PerformanceOpenBookingUseCase}와 같은 구조다 — 벌크 UPDATE 한 문장, 전환 건수가 있을 때만 커밋 이후에 목록 캐시를
+ * 비우고, 무효화 실패는 삼킨다. 캐시 무효화 코드를 공용으로 뽑지 않고 복제한 이유는 사용처가 둘뿐이고, 뽑으려면 오픈 유스케이스를 함께 고쳐야 하기 때문이다. 셋째 사용처가
+ * 생기면 그때 공용화한다.
+ *
+ * <p>비교용 시각(Asia/Seoul 벽시계)과 기록용 시각(UTC, auditing과 동일)을 따로 만든다. 자세한 이유는 {@code
+ * PerformanceRepository.bulkTransitionStatusByShowTimePassed} 문서 참고.
  */
 @Slf4j
 @Service
 @RequiredArgsConstructor
-public class PerformanceOpenBookingUseCase {
+public class PerformanceCloseShowUseCase {
 
   private final PerformanceRepository performanceRepository;
   private final PerformanceShowTimePolicy showTimePolicy;
@@ -35,18 +41,21 @@ public class PerformanceOpenBookingUseCase {
 
   @Transactional
   public int execute() {
-    int openedCount =
-        performanceRepository.bulkTransitionStatusByBookingOpenAtDue(
-            PerformanceStatus.UPCOMING,
+    ShowTimeCutoff cutoff = showTimePolicy.cutoff();
+
+    int closedCount =
+        performanceRepository.bulkTransitionStatusByShowTimePassed(
             PerformanceStatus.ON_SALE,
-            showTimePolicy.bookingOpenCutoff(),
+            PerformanceStatus.CLOSED,
+            cutoff.date(),
+            cutoff.time(),
             LocalDateTime.now(clock));
 
-    if (openedCount > 0) {
-      log.info("예매 오픈 시각 도래 공연 {}건을 ON_SALE 상태로 전환했습니다.", openedCount);
+    if (closedCount > 0) {
+      log.info("공연 시작 시각이 지난 공연 {}건을 CLOSED 상태로 전환했습니다.", closedCount);
       registerCacheEvictionAfterCommit();
     }
-    return openedCount;
+    return closedCount;
   }
 
   /**

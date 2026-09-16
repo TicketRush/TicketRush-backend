@@ -32,6 +32,7 @@ import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.multipart.MultipartFile;
+import tools.jackson.databind.json.JsonMapper;
 
 @SpringBootTest
 @ActiveProfiles("test")
@@ -201,6 +202,10 @@ class PerformanceCreateTest {
   }
 
   private PerformanceCreateRequest validRequest() {
+    return validRequestBuilder().build();
+  }
+
+  private PerformanceCreateRequest.PerformanceCreateRequestBuilder validRequestBuilder() {
     return PerformanceCreateRequest.builder()
         .title("콘서트")
         .performer("가수")
@@ -212,7 +217,83 @@ class PerformanceCreateTest {
         .price(50000L)
         .totalSeats(100)
         .address("서울")
-        .bookingOpenAt(LocalDateTime.of(2025, 8, 1, 20, 0))
-        .build();
+        .bookingOpenAt(LocalDateTime.of(2025, 8, 1, 20, 0));
+  }
+
+  /*
+   * #650 — model3d 파트 선택화와 캐릭터 필드 저장.
+   */
+  private static final JsonMapper JSON = JsonMapper.builder().build();
+
+  @Test
+  @DisplayName("model3d 없이 등록하면 성공하고 image3dUrl은 null이며 3D 모델 업로드는 일어나지 않는다")
+  void createWithoutModel3d_success() {
+    MockMultipartFile mainImage =
+        new MockMultipartFile("mainImage", "poster.png", "image/png", "content".getBytes());
+    given(s3UploadUtils.uploadFile(mainImage, FileKind.MAIN_IMAGE))
+        .willReturn("https://s3/main.png");
+
+    PerformanceCreateResponse response =
+        performanceCreateUseCase.execute(validRequest(), mainImage, null, null);
+
+    var saved = performanceRepository.findById(response.performanceId()).orElseThrow();
+    assertThat(saved.getImageMainUrl()).isEqualTo("https://s3/main.png");
+    assertThat(saved.getImage3dUrl()).isNull();
+    then(s3UploadUtils)
+        .should(BDDMockito.never())
+        .uploadFile(BDDMockito.any(), BDDMockito.eq(FileKind.MODEL_3D));
+  }
+
+  @Test
+  @DisplayName("0바이트 model3d 파트는 보내지 않은 것으로 처리한다 (브라우저 미선택 input)")
+  void createWithEmptyModel3dPart_treatedAsAbsent() {
+    MockMultipartFile mainImage =
+        new MockMultipartFile("mainImage", "poster.png", "image/png", "content".getBytes());
+    MockMultipartFile emptyModel3d =
+        new MockMultipartFile("model3d", "", "application/octet-stream", new byte[0]);
+    given(s3UploadUtils.uploadFile(mainImage, FileKind.MAIN_IMAGE))
+        .willReturn("https://s3/main.png");
+
+    PerformanceCreateResponse response =
+        performanceCreateUseCase.execute(validRequest(), mainImage, emptyModel3d, null);
+
+    var saved = performanceRepository.findById(response.performanceId()).orElseThrow();
+    assertThat(saved.getImage3dUrl()).isNull();
+    then(s3UploadUtils)
+        .should(BDDMockito.never())
+        .uploadFile(BDDMockito.any(), BDDMockito.eq(FileKind.MODEL_3D));
+  }
+
+  @Test
+  @DisplayName("characterConfig는 compact JSON으로, characterMessage는 그대로 저장되고 빈 한마디는 null로 정규화된다")
+  void createWithCharacter_persisted() {
+    String config =
+        "{\"schemaVersion\": 1, \"outfitModelId\": \"festival\", "
+            + "\"nested\": {\"hairColor\": \"#151515\"}}";
+    PerformanceCreateRequest withCharacter =
+        validRequestBuilder()
+            .characterConfig(JSON.readTree(config))
+            .characterMessage("공연장에서 만나요! 🎵")
+            .build();
+    MockMultipartFile mainImage =
+        new MockMultipartFile("mainImage", "poster.png", "image/png", "content".getBytes());
+    given(s3UploadUtils.uploadFile(mainImage, FileKind.MAIN_IMAGE))
+        .willReturn("https://s3/main.png");
+
+    PerformanceCreateResponse response =
+        performanceCreateUseCase.execute(withCharacter, mainImage, null, null);
+
+    var saved = performanceRepository.findById(response.performanceId()).orElseThrow();
+    // 저장 문자열은 공백 없는 compact 직렬화다(크기 상한과 같은 기준). 값은 보낸 것과 같다.
+    assertThat(saved.getCharacterConfig()).doesNotContain(": ");
+    assertThat(JSON.readTree(saved.getCharacterConfig())).isEqualTo(JSON.readTree(config));
+    assertThat(saved.getCharacterMessage()).isEqualTo("공연장에서 만나요! 🎵");
+
+    PerformanceCreateResponse blankMessage =
+        performanceCreateUseCase.execute(
+            validRequestBuilder().characterMessage("   ").build(), mainImage, null, null);
+    var savedBlank = performanceRepository.findById(blankMessage.performanceId()).orElseThrow();
+    assertThat(savedBlank.getCharacterMessage()).isNull();
+    assertThat(savedBlank.getCharacterConfig()).isNull();
   }
 }
