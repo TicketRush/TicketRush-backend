@@ -10,7 +10,6 @@ import static org.springframework.test.web.client.response.MockRestResponseCreat
 import static org.springframework.test.web.client.response.MockRestResponseCreators.withStatus;
 import static org.springframework.test.web.client.response.MockRestResponseCreators.withSuccess;
 
-import com.fasterxml.jackson.databind.ObjectMapper;
 import com.ticketrush.boundedcontext.payment.app.dto.response.PaymentConfirmResponse;
 import com.ticketrush.boundedcontext.payment.domain.types.PaymentProvider;
 import com.ticketrush.global.config.JacksonConfig;
@@ -47,7 +46,7 @@ class TossPaymentApprovalClientTest {
   void setUp() {
     RestClient.Builder builder = RestClient.builder().baseUrl(BASE_URL);
     mockServer = MockRestServiceServer.bindTo(builder).build();
-    client = new TossPaymentApprovalClient(builder.build(), new ObjectMapper());
+    client = new TossPaymentApprovalClient(builder.build());
   }
 
   @Test
@@ -246,6 +245,57 @@ class TossPaymentApprovalClientTest {
     mockServer.verify();
   }
 
+  /*
+   * 아래 두 건은 에러 body 파싱이 실패하는 경로를 고정한다(#657).
+   *
+   * 단언을 BusinessException이 아니라 PgRejectionException으로 좁히는 것이 핵심이다. 파싱 예외가 onStatus
+   * 핸들러 밖으로 새면 Spring이 RestClientException으로 감싸고, 그것을 approve의 catch가 잡아
+   * BusinessException(PAYMENT_PG_COMMUNICATION_FAILED)로 바꿔 던진다 — 상위 타입만 단언하면 그 회귀를
+   * 그대로 통과시킨다. 즉 "4xx 거절이 거절로 남는가"를 타입으로 확인하는 테스트다.
+   */
+  @Test
+  @DisplayName("4xx 에러 body가 깨진 JSON이어도 예외가 새지 않고 UNKNOWN 폴백으로 거절 처리한다")
+  void approve_falls_back_to_unknown_when_error_body_is_unparsable() {
+    mockServer
+        .expect(requestTo(CONFIRM_URL))
+        .andRespond(
+            withStatus(org.springframework.http.HttpStatus.BAD_REQUEST)
+                .contentType(MediaType.APPLICATION_JSON)
+                .body("not-a-json"));
+
+    assertThatThrownBy(
+            () ->
+                client.approve(
+                    new PaymentApprovalRequest(
+                        PaymentProvider.TOSS, "pgKey_xyz", "BKG-0000100", 100L, 55_000L)))
+        .isInstanceOf(PgRejectionException.class)
+        .extracting("errorStatus", "rawCode", "rawMessage")
+        .containsExactly(ErrorStatus.PAYMENT_APPROVAL_FAILED, null, null);
+
+    mockServer.verify();
+  }
+
+  @Test
+  @DisplayName("4xx 에러 body가 비어 있어도 예외가 새지 않고 UNKNOWN 폴백으로 거절 처리한다")
+  void approve_falls_back_to_unknown_when_error_body_is_empty() {
+    mockServer
+        .expect(requestTo(CONFIRM_URL))
+        .andRespond(
+            withStatus(org.springframework.http.HttpStatus.BAD_REQUEST)
+                .contentType(MediaType.APPLICATION_JSON));
+
+    assertThatThrownBy(
+            () ->
+                client.approve(
+                    new PaymentApprovalRequest(
+                        PaymentProvider.TOSS, "pgKey_xyz", "BKG-0000100", 100L, 55_000L)))
+        .isInstanceOf(PgRejectionException.class)
+        .extracting("errorStatus", "rawCode", "rawMessage")
+        .containsExactly(ErrorStatus.PAYMENT_APPROVAL_FAILED, null, null);
+
+    mockServer.verify();
+  }
+
   private void expect4xxWithCode(String tossCode) {
     mockServer
         .expect(requestTo(CONFIRM_URL))
@@ -255,13 +305,17 @@ class TossPaymentApprovalClientTest {
                 .body("{\"code\":\"" + tossCode + "\",\"message\":\"테스트 거절 메시지\"}"));
   }
 
+  /*
+   * 단언을 PgRejectionException까지 좁힌다. 이 헬퍼를 쓰는 곳은 전부 4xx 거절 경로라, 상위 타입인
+   * BusinessException으로 두면 에러 body 파싱이 깨져 통신 실패나 500으로 오분류되는 회귀를 그대로 통과시킨다.
+   */
   private void assertApproveThrows(ErrorStatus expected) {
     assertThatThrownBy(
             () ->
                 client.approve(
                     new PaymentApprovalRequest(
                         PaymentProvider.TOSS, "pgKey_xyz", "BKG-0000100", 100L, 55_000L)))
-        .isInstanceOf(BusinessException.class)
+        .isInstanceOf(PgRejectionException.class)
         .extracting("errorStatus")
         .isEqualTo(expected);
   }
