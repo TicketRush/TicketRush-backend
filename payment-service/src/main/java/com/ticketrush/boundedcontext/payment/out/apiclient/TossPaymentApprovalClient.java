@@ -1,11 +1,9 @@
 package com.ticketrush.boundedcontext.payment.out.apiclient;
 
-import com.fasterxml.jackson.databind.ObjectMapper;
 import com.ticketrush.boundedcontext.payment.domain.entity.Payment;
 import com.ticketrush.boundedcontext.payment.domain.types.PaymentProvider;
 import com.ticketrush.global.exception.BusinessException;
 import com.ticketrush.global.status.ErrorStatus;
-import java.io.IOException;
 import java.time.LocalDateTime;
 import java.time.ZoneOffset;
 import lombok.extern.slf4j.Slf4j;
@@ -19,6 +17,7 @@ import org.springframework.util.StringUtils;
 import org.springframework.web.client.ResourceAccessException;
 import org.springframework.web.client.RestClient;
 import org.springframework.web.client.RestClientException;
+import tools.jackson.databind.json.JsonMapper;
 
 /**
  * Toss Payments 결제 승인 API 연동 구현체.
@@ -34,12 +33,22 @@ public class TossPaymentApprovalClient implements PaymentApprovalClient {
   private static final String CONFIRM_PATH = "/v1/payments/confirm";
 
   private final RestClient restClient;
-  private final ObjectMapper objectMapper;
 
-  public TossPaymentApprovalClient(
-      @Qualifier("tossPaymentRestClient") RestClient restClient, ObjectMapper objectMapper) {
+  /**
+   * Toss가 보내는 camelCase 에러 body 전용 매퍼다.
+   *
+   * <p><b>주입받지 않는 것이 요점이다.</b> Jackson 2 {@code ObjectMapper}를 주입받던 시절, Spring Boot 4가 그 타입 빈을 등록하지
+   * 않아 {@code toss.enabled=true}로 켜는 순간 기동이 통째로 실패했다(#657). 프레임워크가 제공하는 매퍼 타입에 결합하지 않으면 그 사고가 되풀이될
+   * 수 없다.
+   *
+   * <p>전역 매퍼를 쓰지 않는 이유는 따로 있다. 전역은 snake_case인데 Toss는 camelCase로 보낸다. 지금 {@link TossErrorResponse}는
+   * {@code code}·{@code message} 둘 다 단어 하나라 어느 정책으로 읽어도 결과가 같지만, 그건 이 DTO가 우연히 안전한 것이지 설계가 안전한 것이
+   * 아니다. 필드가 하나라도 늘면 조용히 null이 된다. {@code PaymentWebhookUseCase}가 같은 판단으로 전용 매퍼를 둔다.
+   */
+  private final JsonMapper jsonMapper = JsonMapper.builder().build();
+
+  public TossPaymentApprovalClient(@Qualifier("tossPaymentRestClient") RestClient restClient) {
     this.restClient = restClient;
-    this.objectMapper = objectMapper;
   }
 
   @Override
@@ -175,11 +184,28 @@ public class TossPaymentApprovalClient implements PaymentApprovalClient {
     }
   }
 
+  /**
+   * body를 읽지 못하면 null을 돌려 {@code TossErrorCode.from(null)}의 폴백 매핑으로 진행한다.
+   *
+   * <p><b>catch가 {@code Exception}인 것은 의도한 것이다.</b> Jackson 3의 파싱 실패({@code JacksonException})는
+   * unchecked라 {@code catch(IOException)}으로 잡히지 않는데, {@code response.getBody()}가 {@code
+   * IOException}을 선언하는 탓에 그 catch가 <b>그대로 컴파일된다</b> — 예외 처리가 무력화된 것을 컴파일러가 알려주지 않는다(#657).
+   *
+   * <p>여기서 놓친 예외는 {@code RestClientException}으로 감싸이지도 않아 {@code approve}의 catch 체인을 그대로 통과한다. 결말은
+   * <b>4xx 거절이 raw 예외로 새어 500이 되는 것</b> 하나다 — 거절인데 서버 장애로 표시되고 Toss 원본 code/message 로그도 함께 잃는다. 넓게
+   * 잡고 null로 닫는 편이 실패 비용이 작다.
+   *
+   * <p>예외 타입을 열거하는 멀티캐치를 쓰지 않는 이유는 오늘 동작하지 않아서가 아니라, Jackson이 던지는 타입이 늘었을 때 <b>컴파일 에러 없이</b> 목록 밖
+   * 예외를 놓치게 되기 때문이다.
+   */
   private TossErrorResponse readErrorBody(ClientHttpResponse response) {
     try {
-      return objectMapper.readValue(response.getBody(), TossErrorResponse.class);
-    } catch (IOException e) {
-      log.warn("[PG-TOSS] 에러 응답 body 파싱 실패. message={}", e.getMessage());
+      return jsonMapper.readValue(response.getBody(), TossErrorResponse.class);
+    } catch (Exception e) {
+      log.warn(
+          "[PG-TOSS] 에러 응답 body 파싱 실패. exception={}, message={}",
+          e.getClass().getSimpleName(),
+          e.getMessage());
       return null;
     }
   }

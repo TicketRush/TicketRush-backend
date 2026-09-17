@@ -11,7 +11,6 @@ import static org.springframework.test.web.client.response.MockRestResponseCreat
 import static org.springframework.test.web.client.response.MockRestResponseCreators.withStatus;
 import static org.springframework.test.web.client.response.MockRestResponseCreators.withSuccess;
 
-import com.fasterxml.jackson.databind.ObjectMapper;
 import com.ticketrush.boundedcontext.payment.app.dto.response.PaymentCancelResponse;
 import com.ticketrush.boundedcontext.payment.domain.types.PaymentProvider;
 import com.ticketrush.global.config.JacksonConfig;
@@ -318,6 +317,37 @@ class TossPaymentCancelClientTest {
     mockServer.verify();
   }
 
+  /*
+   * 기존 파싱 실패 두 건은 1차 시도에서만 body가 깨지는 경우라 attemptCancel이 한 번만 불린다. 재시도 경로의
+   * 2차 응답에서 깨지는 경우는 결말이 다르다 — retryOnce의 catch(RuntimeException)를 타서 outcome이
+   * exhausted가 아니라 failed로 집계된다. 그 구분이 #573의 사후 판정 근거라 값이 뒤바뀌면 안 된다.
+   *
+   * 예외가 밖으로 새지 않는지도 여기서 함께 고정한다. 파싱 예외가 raw로 빠져나가면 ErrorStatus 없는 예외가 되어
+   * FailedRefundRecorder가 결정적 거절을 판정하지 못한다(#334 불변식).
+   */
+  @Test
+  @DisplayName("재시도 2차 응답의 body를 읽지 못하면 결정적 거절로 확정하고 outcome=failed로 센다")
+  void cancel_treats_unparsable_retry_error_body_as_deterministic() {
+    expect4xxWithCode(HttpStatus.CONFLICT, "IDEMPOTENT_REQUEST_PROCESSING");
+    mockServer
+        .expect(requestTo(CANCEL_URL))
+        .andRespond(
+            withStatus(HttpStatus.BAD_REQUEST)
+                .contentType(MediaType.APPLICATION_JSON)
+                .body("not-a-json"));
+
+    assertThatThrownBy(() -> client.cancel(command()))
+        .isInstanceOf(BusinessException.class)
+        .extracting("errorStatus")
+        .isEqualTo(ErrorStatus.PAYMENT_REFUND_FAILED);
+
+    assertThat(retryCount("IDEMPOTENT_REQUEST_PROCESSING", "failed")).isEqualTo(1.0);
+    // 합이 1이므로 exhausted를 비롯한 다른 outcome은 하나도 세지 않았다는 뜻이다. retryCount로 직접
+    // 단언하지 않는 이유는 그 헬퍼가 없는 카운터를 조회하면 MeterNotFoundException을 던지기 때문이다.
+    assertThat(totalRetryCount()).isEqualTo(1.0);
+    mockServer.verify();
+  }
+
   @Test
   @DisplayName("대기 값이 0 이하면 킬 스위치로 동작해 재시도 없이 환불 실패로 확정한다")
   void cancel_skips_retry_when_delay_is_disabled() {
@@ -450,8 +480,7 @@ class TossPaymentCancelClientTest {
   }
 
   private TossPaymentCancelClient clientWithRetryDelay(long retryDelayMs) {
-    return new TossPaymentCancelClient(
-        builder.build(), new ObjectMapper(), meterRegistry, retryDelayMs);
+    return new TossPaymentCancelClient(builder.build(), meterRegistry, retryDelayMs);
   }
 
   /** 성공 응답 기대. 멱등 키·body를 함께 단언해 재시도가 동일 요청임을 고정한다. */

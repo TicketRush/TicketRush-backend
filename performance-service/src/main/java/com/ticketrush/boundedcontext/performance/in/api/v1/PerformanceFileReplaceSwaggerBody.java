@@ -15,7 +15,12 @@ import org.springframework.web.multipart.MultipartFile;
 @Schema(description = "공연 파일 교체 multipart/form-data 요청 — 보낸 파트만 교체됩니다")
 public class PerformanceFileReplaceSwaggerBody {
 
+  /*
+   * name 을 직접 적는 이유는 등록 쪽 PerformanceCreateSwaggerBody 와 같다 — 파트명은 스키마 네이밍
+   * 전략(#658)의 대상이 아니다.
+   */
   @Schema(
+      name = "mainImage",
       type = "string",
       format = "binary",
       description = "새 메인 이미지 파일 (선택) — jpg, jpeg, png / 최대 5MB",
