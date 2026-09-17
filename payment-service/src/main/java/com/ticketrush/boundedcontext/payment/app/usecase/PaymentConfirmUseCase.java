@@ -59,6 +59,11 @@ import org.springframework.stereotype.Service;
  * <p><b>3번은 상태를 보기 전에 소유자를 먼저 대조한다 (#572).</b> 같은 왕복의 응답에 소유자가 이미 실려 오므로 비용이 늘지 않는다. 순서가 뒤집히면 남의
  * EXPIRED 예매에 "만료된 예매"라고 답하게 되어 그 예매의 존재와 상태가 함께 새므로, 순서 자체가 계약이다({@link #assertBookingOwnedBy}).
  *
+ * <p><b>3번의 응답은 PG 주문번호의 출처이기도 하다 (#662).</b> 승인 요청의 {@code orderId}는 booking이 발급한 예매번호이며, 프론트가 PG
+ * 결제창에 넣는 주문번호도 같은 값이다 — PG는 두 값이 일치할 때만 승인하므로 이 일치가 곧 계약이다. 예매번호 확보 실패는 <b>소유자 대조와 상태 판정을 모두 통과한
+ * 뒤</b>에 막는다({@link #assertBookingNumberPresent}). 앞에 두면 어차피 차단될 요청이 상태별 사유 대신 503을 받아 위 순서 계약이
+ * 무너진다.
+ *
  * <p><b>다만 1·2번이 남기는 누출까지 닫지는 못한다.</b> 둘은 로컬 DB만 보고 {@code bookingId}만으로 판정하므로, 남의 예매라도 이미 결제됐으면
  * {@code PAYMENT_ALREADY_COMPLETED}가, 만료 기록이 있으면 {@code BOOKING_EXPIRED}가 그대로 나간다. 소유자 대조를 이 둘보다
  * 앞으로 올리면 닫히지만, 그러면 중복·만료 요청에도 booking 왕복이 붙고 booking이 죽어 있을 때 로컬로 끝나던 경로까지 503이 된다(위 "싼 것부터" 순서와
@@ -142,6 +147,18 @@ public class PaymentConfirmUseCase {
    */
   private static final String REASON_OWNER_UNKNOWN = "owner_unknown";
 
+  /**
+   * 예매 응답에 예매번호가 없어 PG 주문번호를 만들 수 없었던 건의 사유 태그 (#662).
+   *
+   * <p>{@code owner_unknown}과 같은 성격의 계약 결함이다. booking의 {@code booking_number}는 {@code nullable =
+   * false} + unique라 정상 경로에서 비어 올 수 없고, 비었다면 booking이 필드명을 바꿨거나 예매번호를 내려주기 전 버전으로 롤백된 것이다. 그 순간 결제
+   * 승인이 전건 실패하므로 사용자 오류 시계열에 묻히지 않게 따로 센다.
+   *
+   * <p>값 자체는 취소(#608)·자동 환불(#607)이 쓰는 문자열과 같다. 셋은 카운터 이름이 각각 달라 한 시계열로 합쳐지지는 않지만, 태그를 맞춰 두면 같은
+   * 원인(booking이 예매번호를 안 준다)을 {@code reason} 기준으로 한 번에 질의할 수 있다.
+   */
+  private static final String REASON_BOOKING_NUMBER_UNKNOWN = "booking_number_unknown";
+
   private final PaymentRepository paymentRepository;
   private final PaymentApprovalClientRouter paymentApprovalClientRouter;
   private final PaymentEventPublisher paymentEventPublisher;
@@ -164,9 +181,10 @@ public class PaymentConfirmUseCase {
 
     // 이벤트 도착과 무관하게 '지금'의 예매 상태를 확인한다(결정적 방어선, #490).
     // 위 fast-path는 이벤트가 늦으면 통과시키는데, 대량 만료 구간에서 그 창이 분 단위임이 실측됐다(#345).
-    assertBookingIsPayable(request.bookingId(), userId);
+    BookingInfoResponse booking = assertBookingIsPayable(request.bookingId(), userId);
 
-    String orderId = generateOrderId(request.bookingId());
+    // PG 주문번호는 booking이 발급한 예매번호다(#662). 같은 왕복의 응답에서 꺼내므로 조회가 늘지 않는다.
+    String orderId = booking.bookingNumber();
 
     // PG 승인·금액 검증 단계에서 결제 실패가 확정되면(PG 거절/금액 불일치) 예외만 던지지 않고 FAILED 이력을 남긴다(#297).
     PaymentApprovalResponse approval;
@@ -271,8 +289,16 @@ public class PaymentConfirmUseCase {
    *
    * <p>같은 응답으로 <b>소유자 대조를 먼저</b> 수행한다({@link #assertBookingOwnedBy}, #572). 상태 판정은 그 대조를 통과한 요청에만
    * 도달하므로, 아래의 상태별 사유 코드는 "본인 예매"에 대해서만 노출된다.
+   *
+   * <p><b>통과한 예매 정보를 그대로 돌려준다 — 이 응답이 PG 주문번호의 출처다</b> (#662). 승인 요청의 {@code orderId}는 여기 실린 {@code
+   * bookingNumber}이며, 그래서 예매번호 확보 실패도 이 메서드가 함께 막는다({@link #assertBookingNumberPresent}). {@code
+   * assert}로 시작하는 이름이 값을 반환하는 것은 어색하지만, 값만 따로 얻으려고 조회를 한 번 더 하면 상태 판정과 주문번호가 <b>서로 다른 스냅샷</b>을 보게
+   * 되고 왕복 비용도 두 배가 된다. 이 메서드가 이미 받아 둔 응답을 넘기는 편이 정확하고 싸다.
+   *
+   * <p>예매번호 검사는 <b>상태 판정을 통과한 뒤</b>에만 한다. 앞에 두면 남의 예매·만료된 예매가 상태별 사유 대신 503을 받게 되어 #572가 닫은 정보 누출
+   * 축이 다시 열리고, 애초에 차단될 요청에 대해 예매번호를 따질 이유도 없다.
    */
-  private void assertBookingIsPayable(Long bookingId, Long userId) {
+  private BookingInfoResponse assertBookingIsPayable(Long bookingId, Long userId) {
     BookingInfoResponse booking;
     try {
       booking = bookingRestClient.getBooking(bookingId);
@@ -294,7 +320,8 @@ public class PaymentConfirmUseCase {
 
     String bookingStatus = booking.bookingStatus();
     if (BOOKING_STATUS_PENDING.equals(bookingStatus)) {
-      return;
+      assertBookingNumberPresent(bookingId, booking);
+      return booking;
     }
 
     ErrorStatus errorStatus =
@@ -350,6 +377,44 @@ public class PaymentConfirmUseCase {
           requesterId,
           ownerId);
       throw new BusinessException(ErrorStatus.BOOKING_NOT_FOUND);
+    }
+  }
+
+  /**
+   * PG 승인에 쓸 예매번호가 실제로 실려 왔는지 확인한다 (#662).
+   *
+   * <p>승인 요청의 {@code orderId}는 booking이 발급한 예매번호이며, 프론트가 PG 결제창을 띄울 때 넣는 주문번호도 같은 값이다. PG는 결제창 생성
+   * 시점의 주문번호와 승인 요청의 주문번호가 <b>일치할 때만</b> 승인하므로, 이 값이 비면 승인은 반드시 실패한다. 빈 값을 그대로 보내면 PG가 사유를 밝히지 않는
+   * 거절로 끊어 원인 파악이 어려워지므로, 과금이 시작되기 전인 여기서 막는다.
+   *
+   * <p><b>404가 아니라 503으로 접는다.</b> booking의 {@code booking_number}는 {@code nullable = false} +
+   * unique라 정상 경로에서 비어 올 수 없다. 비었다면 booking이 필드명을 바꿨거나({@code @JsonIgnoreProperties(ignoreUnknown =
+   * true)}라 조용히 null이 된다) 예매번호를 내려주기 전 버전으로 롤백된 것이고, 그 순간 결제 승인은 전건 실패한다. 사용자 요청의 문제가 아니라 우리 쪽 계약
+   * 결함이므로 판정 불가는 판정 불가대로 보이게 한다 — 취소(#608)·자동 환불(#607)이 같은 조건에서 내린 <b>판정</b>과 같다(ADR 0011 원칙 3). 다만
+   * 로그는 그 둘의 {@code [CRITICAL]} 접두어 대신 confirm 안의 {@link #assertBookingOwnedBy}와 같은 형태를 쓴다 — 같은
+   * 메서드가 내는 계약 결함 로그 둘이 서로 다른 모양이면 이 유스케이스의 로그를 읽는 쪽이 먼저 헷갈린다.
+   *
+   * <p><b>형식은 검사하지 않는다.</b> PG 공통 {@code orderId} 규격은 6-64자에 영문·숫자·{@code _}·{@code -}인데(현재 Toss
+   * 기준), {@code BookingNumberGenerator}가 만드는 예매번호는 {@code XXXXX-XXXXX} 11자에 문자셋이 {@code
+   * 23456789ABCDEFGHJKMNPQRSTUVWXYZ}라 <b>구조적으로 그 규격 안</b>이다. 그래서 여기서 걸러야 할 것은 "형식이 틀린 값"이 아니라 "값이
+   * 아예 없는 것"뿐이다. booking이 발급 규칙을 규격 밖으로 바꾸면 이 가드는 통과시키고 PG가 거절하게 되므로, 그 변경은 booking 쪽에서 막아야 한다.
+   *
+   * <p>응답 전체를 받는 이유는 {@code bookingNumber}와 {@code bookingStatus}가 둘 다 {@code String}이라, 값을 꺼내 넘기는
+   * 형태로 두면 호출부가 상태를 잘못 넘겨도 컴파일이 통과하기 때문이다. 그 오전달은 PENDING 분기에서 상태가 항상 non-blank라 <b>가드를 조용히
+   * 무효화</b>한다. #607이 같은 이유로 가드를 실행 메서드 안에 둔 선례를 따른다(ADR 0015).
+   *
+   * <p>그럼에도 {@code bookingId}는 응답의 에코가 아니라 호출부가 가진 값을 따로 받는다. 응답에 같은 이름의 필드가 있어 인자가 중복처럼 보이지만, 이
+   * 유스케이스는 응답의 {@code bookingId}를 신뢰 대상에서 빼 두었다({@link #assertBookingOwnedBy}와 같은 규율). 로그가 가리키는 대상은
+   * "우리가 조회를 요청한 예매"여야 한다.
+   */
+  private void assertBookingNumberPresent(Long bookingId, BookingInfoResponse booking) {
+    String bookingNumber = booking.bookingNumber();
+    if (bookingNumber == null || bookingNumber.isBlank()) {
+      incrementGuardBlocked(REASON_BOOKING_NUMBER_UNKNOWN);
+      // owner_unknown과 같은 이유로 error를 유지한다 — 배포 직후 전건이 무너진 상태라 즉시 판단이 필요하고,
+      // 로그가 쌓이는 것 자체가 그 신호다.
+      log.error("예매 응답에 예매번호가 없어 결제 확정을 차단합니다. booking 응답 계약 확인이 필요합니다. bookingId={}", bookingId);
+      throw new BusinessException(ErrorStatus.PAYMENT_BOOKING_COMMUNICATION_FAILED);
     }
   }
 
@@ -437,10 +502,5 @@ public class PaymentConfirmUseCase {
           e.getErrorStatus().getCode(),
           ex);
     }
-  }
-
-  /* PG 공통 orderId 규격(6~64자, 영문/숫자/_/-, 현재 Toss 기준)을 만족하기 위해 zero-padding 한다. */
-  private String generateOrderId(Long bookingId) {
-    return "BKG-%07d".formatted(bookingId);
   }
 }
