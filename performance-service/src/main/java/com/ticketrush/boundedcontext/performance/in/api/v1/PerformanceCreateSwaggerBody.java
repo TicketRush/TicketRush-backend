@@ -11,7 +11,13 @@ public class PerformanceCreateSwaggerBody {
   @Schema(description = "공연 정보 JSON")
   public PerformanceCreateRequest request;
 
-  @Schema(type = "string", format = "binary", description = "메인 이미지 파일")
+  /*
+   * name 을 직접 적는다. 이 클래스의 필드명은 JSON 프로퍼티가 아니라 @RequestPart 의 파트명이라 스키마
+   * 네이밍 전략(#658)이 닿으면 안 된다. 닿으면 문서가 main_image 로 나가고, 그 문서를 믿은 클라이언트는
+   * 메인 이미지만 조용히 교체에 실패한다(#637 에서 실제로 난 사고다).
+   * model3d · gallery · request 는 소문자 한 덩어리라 변환 자체가 일어나지 않는다.
+   */
+  @Schema(name = "mainImage", type = "string", format = "binary", description = "메인 이미지 파일")
   public MultipartFile mainImage;
 
   @Schema(
