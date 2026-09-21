@@ -134,12 +134,26 @@ public class BookingRestClient {
    *     그리고 서킷이 열려 차단된 호출
    */
   public BookingInfoResponse getBooking(Long bookingId) {
+    return getBooking(bookingId, false);
+  }
+
+  /**
+   * {@code withRefundDeadline} 이 {@code true} 면 응답의 {@code refundAllowed} 에 환불 마감(D-7) 판정이 실려 온다
+   * (#668).
+   *
+   * <p>기본값을 {@code false} 로 둔 것은 판정에 booking → performance 왕복이 한 번 더 들기 때문이다. 결제 확정(confirm)과 만료
+   * 보상(recover) 경로는 마감이 필요 없고 지연에 민감하므로 그 비용을 지우지 않는다. 마감을 판정하지 못하면 booking 이 503 으로 끝으므로, 여기서도 같은
+   * fail-closed 가 그대로 전파된다.
+   */
+  public BookingInfoResponse getBooking(Long bookingId, boolean withRefundDeadline) {
     if (!circuitBreakerEnabled) {
-      return measured(bookingId);
+      return measured(bookingId, withRefundDeadline);
     }
     return circuitBreakerFactory
         .create(BookingCircuitBreakerConfig.BOOKING_CIRCUIT_BREAKER)
-        .run(() -> measured(bookingId), throwable -> fallback(bookingId, throwable));
+        .run(
+            () -> measured(bookingId, withRefundDeadline),
+            throwable -> fallback(bookingId, throwable));
   }
 
   /**
@@ -147,12 +161,12 @@ public class BookingRestClient {
    * 진입~반환</b>으로 잡은 것은 서킷이 판정하는 구간과 같은 범위를 재기 위해서다 — 서킷은 호출 전체를 보고 판정하므로, 예외 변환까지 포함한 이 구간이 임계값이 실제로
    * 걸리는 지점이다.
    */
-  private BookingInfoResponse measured(Long bookingId) {
+  private BookingInfoResponse measured(Long bookingId, boolean withRefundDeadline) {
     Timer.Sample sample = Timer.start(meterRegistry);
     // 초기값을 failed로 둔다. BusinessException이 아닌 예외가 새어 나가도 성공으로 집계되지 않아야 한다.
     String outcome = LOOKUP_OUTCOME_FAILED;
     try {
-      BookingInfoResponse result = doGetBooking(bookingId);
+      BookingInfoResponse result = doGetBooking(bookingId, withRefundDeadline);
       outcome = LOOKUP_OUTCOME_SUCCESS;
       return result;
     } catch (BusinessException e) {
@@ -209,13 +223,22 @@ public class BookingRestClient {
     throw new BusinessException(ErrorStatus.PAYMENT_BOOKING_COMMUNICATION_FAILED);
   }
 
-  private BookingInfoResponse doGetBooking(Long bookingId) {
+  private BookingInfoResponse doGetBooking(Long bookingId, boolean withRefundDeadline) {
     BookingApiResponse response;
     try {
       response =
           bookingServiceRestClient
               .get()
-              .uri("/api/v1/internal/booking/{bookingId}", bookingId)
+              .uri(
+                  uriBuilder -> {
+                    uriBuilder.path("/api/v1/internal/booking/{bookingId}");
+                    // true 일 때만 붙인다. 기존 호출(confirm·recover)의 요청 URI 를 그대로 두어
+                    // booking 쪽 기본값 false 와 한 곳에서만 어긋나지 않게 한다.
+                    if (withRefundDeadline) {
+                      uriBuilder.queryParam("withRefundDeadline", true);
+                    }
+                    return uriBuilder.build(bookingId);
+                  })
               .header(INTERNAL_TOKEN_HEADER, customSecurityProperties.getInternalToken())
               .retrieve()
               .onStatus(

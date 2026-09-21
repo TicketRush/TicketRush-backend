@@ -34,7 +34,13 @@ public class PerformanceRestClient {
     this.bulkBudgetMs = bulkBudgetMs;
   }
 
-  /** 단건 조회. 4xx·5xx·타임아웃·본문 결손 등 모든 실패는 {@code Optional.empty()}로 수렴한다. */
+  /**
+   * 단건 조회. 4xx·5xx·타임아웃·본문 결손 등 모든 실패는 {@code Optional.empty()}로 수렴한다.
+   *
+   * <p><b>빈 결과의 의미는 호출자가 정한다.</b> 조회 보강(#560)은 부분 응답으로 계속 가지만, 환불 마감 판정(#668, {@code
+   * BookingValidateRefundDeadlineUseCase})은 빈 결과를 <b>차단</b>으로 읽는다(fail-closed). 즉 이 메서드가 예외를 던지지
+   * 않는다고 해서 "실패해도 안전"은 아니다 — 새 호출자를 추가할 때 빈 결과를 어느 쪽으로 해석할지 명시할 것.
+   */
   public Optional<PerformanceInfoResponse> getPerformance(Long performanceId) {
     try {
       return Optional.ofNullable(fetch(performanceId));
