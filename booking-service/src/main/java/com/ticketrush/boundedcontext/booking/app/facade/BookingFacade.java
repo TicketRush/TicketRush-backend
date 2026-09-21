@@ -172,17 +172,22 @@ public class BookingFacade {
    * <p>세 보강이 직렬이라 최악 벽시계는 공연 3s + 좌석 2s + 예매자 2s다. 관리자 전용 저빈도 경로라 병렬화하지 않았고, 실측상 문제가 되면 순차 N 호출을
    * 없애는 performance-service 벌크 조회가 가장 큰 레버다.
    *
+   * <p><b>{@code status}로 상태 하나만 좁혀 볼 수 있다 (#667).</b> null이면 상태 무관 전체로, 파라미터가 없던 시절과 같다.
+   *
    * <p><b>조회 사실을 감사 로그로 남긴다.</b> 이 응답은 예매자 이름·이메일을 담고 페이지 상한이 없어 순차 호출로 고객 명부를 통째로 훑을 수 있는데, 환불 1건은
    * 추적되면서 개인정보 전량 열람은 흔적이 없는 비대칭이 된다. <b>남기는 것은 건수뿐이다</b> — 행 내용을 찍으면 로그가 두 번째 개인정보 저장소가 된다.
    */
   public Page<BookingAdminSummaryResponse> getAdminBookings(
-      Long adminId, OffsetPageRequest pageRequest) {
-    Page<Booking> page = bookingGetAdminBookingsUseCase.execute(pageRequest);
+      Long adminId, BookingStatus status, OffsetPageRequest pageRequest) {
+    Page<Booking> page = bookingGetAdminBookingsUseCase.execute(status, pageRequest);
     List<Booking> content = page.getContent();
 
+    // status도 함께 남긴다 — 어떤 조건으로 명부를 훑었는지가 건수만큼 감사 정보다.
     log.info(
-        "[ADMIN-AUDIT] 관리자 예매 목록 조회(예매자 개인정보 포함). adminId: {}, page: {}, size: {}, returned: {}",
+        "[ADMIN-AUDIT] 관리자 예매 목록 조회(예매자 개인정보 포함). "
+            + "adminId: {}, status: {}, page: {}, size: {}, returned: {}",
         adminId,
+        status,
         pageRequest.page(),
         pageRequest.size(),
         content.size());

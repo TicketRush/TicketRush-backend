@@ -4,6 +4,7 @@ import com.ticketrush.boundedcontext.booking.app.dto.response.BookingAdminStatsR
 import com.ticketrush.boundedcontext.booking.app.dto.response.BookingAdminSummaryResponse;
 import com.ticketrush.boundedcontext.booking.app.dto.response.BookingSummaryResponse;
 import com.ticketrush.boundedcontext.booking.app.facade.BookingFacade;
+import com.ticketrush.boundedcontext.booking.domain.types.BookingStatus;
 import com.ticketrush.global.dto.request.OffsetPageRequest;
 import com.ticketrush.global.dto.response.ApiResponse;
 import com.ticketrush.global.security.CustomUserDetails;
@@ -23,6 +24,7 @@ import org.springframework.web.bind.annotation.ModelAttribute;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 @Tag(name = "Booking Admin", description = "예매 관리자 API")
@@ -39,7 +41,13 @@ public class BookingAdminController {
       summary = "전체 예매 목록 조회",
       description =
           """
-          상태 무관 전체 예매를 최신순으로 페이징 조회합니다. 검색·다중조건 필터는 제공하지 않습니다.
+          전체 예매를 최신순으로 페이징 조회합니다. 검색·다중조건 필터는 제공하지 않습니다.
+
+          `status`로 예매 상태 하나를 지정하면 그 상태만 필터링해 페이징합니다. **미지정 시 상태 무관 전체를 조회합니다**
+          — 필터가 페이징보다 앞에 걸리므로 해당 상태의 오래된 건이 뒷페이지에 묻히지 않습니다.
+
+          **값은 대소문자를 구분합니다**(`REFUNDED` O, `refunded` X). 정의되지 않은 값은 400으로 거절하지만,
+          `status=`처럼 **빈 값은 400이 아니라 미지정과 동일하게 전체 조회**로 처리됩니다.
 
           공연 이름·날짜, 예매자 이름·이메일, 좌석 번호는 각각 performance·user·seat-service에서 보강합니다.
           **해당 서비스 장애 시 그 필드만 null로 내려가고 목록 자체는 성공합니다** — 프론트는 `performance_id`·`user_id`·`seat_id`로
@@ -56,9 +64,11 @@ public class BookingAdminController {
   @GetMapping("/bookings")
   public ResponseEntity<ApiResponse<List<BookingAdminSummaryResponse>>> getBookings(
       @AuthenticationPrincipal CustomUserDetails admin,
+      @Parameter(description = "예매 상태 필터(미지정 시 전체)") @RequestParam(required = false)
+          BookingStatus status,
       @ModelAttribute OffsetPageRequest pageRequest) {
     Page<BookingAdminSummaryResponse> response =
-        bookingFacade.getAdminBookings(admin.getUserId(), pageRequest);
+        bookingFacade.getAdminBookings(admin.getUserId(), status, pageRequest);
 
     return ApiResponse.onSuccess(SuccessStatus.OK, response);
   }
