@@ -26,6 +26,24 @@ public interface BookingRepository extends JpaRepository<Booking, Long> {
 
   Optional<Booking> findByBookingNumber(String bookingNumber);
 
+  /*
+   * 관리자 상태별 예매 목록 (#667). status를 WHERE로 내려 필터가 페이징 앞에 걸리게 한다 — 클라이언트가
+   * 잘려 온 한 페이지 안에서 거르면 해당 상태의 오래된 건이 뒷페이지에 묻힌다.
+   *
+   * 행을 좁히는 것은 idx_booking_status_updated_at의 선두 컬럼(booking_status)이지만, 정렬은 그 인덱스로
+   * 해소되지 않는다 — 리프 순서가 (booking_status, updated_at, id)라 id DESC는 별도 정렬이 된다. 즉 이 조회의
+   * 비용은 "해당 상태 행 수만큼의 filesort"이지, 아래 aggregateDailyRevenue처럼 정렬 없는 집계가 아니다.
+   * 그 주석의 수치를 이 쿼리의 근거로 읽지 말 것.
+   *
+   * 그럼에도 인덱스를 더 두지 않는 이유는 이 파일의 다른 관리자 조회와 같다 — 저빈도 관리자 경로 하나를 위해
+   * 오픈런 쓰기 핫패스인 예매 INSERT/UPDATE에 유지 비용을 상시 얹는 교환이 맞지 않는다. (booking_status, id)를
+   * 더하면 정렬까지 인덱스로 덮이므로, 느려지면 그때가 후보다.
+   *
+   * 아직 EXPLAIN 실측을 붙이지 못했다. 이 파일의 다른 쿼리들과 달리 수치가 없는 이유이며, 관리자 화면이
+   * 느려지면 추정이 아니라 측정으로 위 문단을 교체한다.
+   */
+  Page<Booking> findByBookingStatus(BookingStatus bookingStatus, Pageable pageable);
+
   /* 환불에 실패해 아직 해결되지 않은 예매(CONFIRMED로 복원됐고 실패 이력이 남은 건)를 관리자가 조회한다 (#391). */
   Page<Booking> findByBookingStatusAndRefundFailedAtIsNotNull(
       BookingStatus bookingStatus, Pageable pageable);

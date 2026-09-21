@@ -22,6 +22,7 @@ import org.springframework.boot.jpa.test.autoconfigure.TestEntityManager;
 import org.springframework.context.annotation.Import;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Sort;
 import org.springframework.orm.ObjectOptimisticLockingFailureException;
 
 /**
@@ -79,6 +80,49 @@ class BookingRepositoryTest {
 
     // then
     assertThat(found).map(Booking::getId).contains(saved.getId());
+  }
+
+  @Test
+  @DisplayName("관리자 상태별 목록: 지정한 상태의 예매만 조회한다 (#667)")
+  void findByBookingStatus_ReturnsOnlyGivenStatus() {
+    // given
+    bookingRepository.save(booking("BK-REFUNDED-1", BookingStatus.REFUNDED));
+    bookingRepository.save(booking("BK-CONFIRMED", BookingStatus.CONFIRMED));
+    bookingRepository.save(booking("BK-REFUNDED-2", BookingStatus.REFUNDED));
+
+    // when
+    Page<Booking> found =
+        bookingRepository.findByBookingStatus(BookingStatus.REFUNDED, PageRequest.of(0, 10));
+
+    // then
+    assertThat(found.getContent())
+        .extracting(Booking::getBookingNumber)
+        .containsExactlyInAnyOrder("BK-REFUNDED-1", "BK-REFUNDED-2");
+  }
+
+  @Test
+  @DisplayName("관리자 상태별 목록: id desc 정렬과 페이징이 필터와 함께 적용된다 (#667)")
+  void findByBookingStatus_AppliesIdDescPagingOnTopOfFilter() {
+    // given: 필터 대상 3건 사이에 다른 상태를 끼워, 페이징이 필터 뒤에 걸리는지까지 본다
+    bookingRepository.save(booking("BK-R1", BookingStatus.REFUNDED));
+    bookingRepository.save(booking("BK-OTHER", BookingStatus.CONFIRMED));
+    bookingRepository.save(booking("BK-R2", BookingStatus.REFUNDED));
+    bookingRepository.save(booking("BK-R3", BookingStatus.REFUNDED));
+
+    Sort idDesc = Sort.by(Sort.Order.desc("id"));
+
+    // when: 유스케이스가 넘기는 것과 같은 Pageable로 첫 페이지 2건
+    Page<Booking> first =
+        bookingRepository.findByBookingStatus(BookingStatus.REFUNDED, PageRequest.of(0, 2, idDesc));
+    Page<Booking> second =
+        bookingRepository.findByBookingStatus(BookingStatus.REFUNDED, PageRequest.of(1, 2, idDesc));
+
+    // then: 최신 예매부터, 총 건수는 필터 적용 후 기준이다
+    assertThat(first.getContent())
+        .extracting(Booking::getBookingNumber)
+        .containsExactly("BK-R3", "BK-R2");
+    assertThat(second.getContent()).extracting(Booking::getBookingNumber).containsExactly("BK-R1");
+    assertThat(first.getTotalElements()).isEqualTo(3);
   }
 
   @Test
