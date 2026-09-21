@@ -44,7 +44,10 @@ import org.springframework.transaction.annotation.Transactional;
  * 그 좌석은 수동 DML 외에 풀 수 없다. 반면 PG 앞에서 거부하면 과금·예매·좌석이 전부 그대로 남아 사용자가 재시도하는 것만으로 회복된다 — <b>되돌릴 수 있는 실패를
  * 고른다</b>는 것이 이 순서의 이유다(ADR 0011 원칙 3과 같은 판단).
  *
- * <p>환불 기한 검증(공연 시작 시간 기준)과 환불 실패 시 보상 트랜잭션(#91)은 본 UseCase 범위 밖이다.
+ * <p><b>환불 마감(D-7) 검증은 이 경로에도 걸린다 (#668).</b> booking 의 취소 API 를 거치지 않고 PG 를 직접 치므로, 멉으면 사용자가 이
+ * 엔드포인트를 부르는 것만으로 마감이 통째로 우회된다. 판정은 booking 이 하고 여기는 결과만 쓴다.
+ *
+ * <p>환불 실패 시 보상 트랜잭션(#91)은 여전히 본 UseCase 범위 밖이다.
  */
 @Slf4j
 @Service
@@ -59,6 +62,12 @@ public class PaymentCancelUseCase {
 
   /** 200 을 받았는데 예매번호가 비어 있음 — booking 이 필드를 내려주지 않는다는 뜻이라 배포 사고다. */
   private static final String BLOCKED_BOOKING_NUMBER_UNKNOWN = "booking_number_unknown";
+
+  /** 환불 마감(D-7) 이 지났음 (#668). 정책상 차단이라 장애가 아니다. */
+  private static final String BLOCKED_REFUND_DEADLINE_PASSED = "refund_deadline_passed";
+
+  /** 마감 판정을 요청했는데 비어 왔음 — booking 이 필드를 내려주지 않는다는 뜻이라 배포 사고다. */
+  private static final String BLOCKED_REFUND_DEADLINE_UNKNOWN = "refund_deadline_unknown";
 
   private final PaymentRepository paymentRepository;
   private final RefundRepository refundRepository;
@@ -92,9 +101,11 @@ public class PaymentCancelUseCase {
       throw new BusinessException(ErrorStatus.PAYMENT_CANCEL_NOT_ALLOWED_TICKET_USED);
     }
 
-    // 좌석 소유 교차검증에 쓸 예매번호를 확보한다 (#608). payment 는 예매번호를 자신의 테이블에 갖고 있지
-    // 않아 이 조회로만 얻는다. 얻지 못하면 아래 PG 취소로 넘어가지 않고 여기서 끊는다.
-    String bookingNumber = lookupBookingNumber(payment.getBookingId());
+    // 좌석 소유 교차검증에 쓸 예매번호와 환불 마감 판정을 한 번의 왕복으로 함께 확보한다 (#608, #668).
+    // 둘 중 하나라도 판정하지 못하면 아래 PG 취소로 넘어가지 않고 여기서 끕는다.
+    BookingInfoResponse booking = lookupBooking(payment.getBookingId());
+    String bookingNumber = requireBookingNumber(booking, payment.getBookingId());
+    rejectIfRefundDeadlinePassed(booking, payment.getBookingId());
 
     // PG 취소는 트랜잭션 밖에서 호출한다(외부 왕복 동안 DB 커넥션을 점유하지 않기 위함).
     PaymentCancelResult result;
@@ -169,7 +180,7 @@ public class PaymentCancelUseCase {
   }
 
   /**
-   * 좌석 소유 교차검증(ABA 방지)에 쓸 예매번호를 booking 에서 조회한다 (#608).
+   * PG 취소 앞에 필요한 booking 정보를 한 번에 조회한다 — 좌석 소유 교차검증(ABA 방지)용 예매번호(#608)와 환불 마감(D-7) 판정(#668).
    *
    * <p><b>얻지 못하면 취소를 진행시키지 않는다.</b> 값 없이 발행하면 {@code PaymentCanceledEvent} 의 {@code bookingNumber}
    * 가 비고, seat 의 좌석 소유 교차검증이 통째로 꺼져 그 사이 다른 사용자에게 팔린 SOLD 좌석을 AVAILABLE 로 되돌린다. 이 호출이 PG 취소
@@ -179,10 +190,9 @@ public class PaymentCancelUseCase {
    * <p>차단 사유를 태그로 가르는 이유는 사용자 응답이 전부 "취소 실패"로 동일화되기 때문이다. {@code lookup_failed} 는 booking 장애지만
    * {@code booking_number_unknown} 은 booking 이 필드를 내려주지 않는다는 뜻이라 배포 사고이고, 그 구간에는 취소가 전건 막힌다.
    */
-  private String lookupBookingNumber(Long bookingId) {
-    BookingInfoResponse booking;
+  private BookingInfoResponse lookupBooking(Long bookingId) {
     try {
-      booking = bookingRestClient.getBooking(bookingId);
+      return bookingRestClient.getBooking(bookingId, true);
     } catch (BusinessException e) {
       boolean notFound = e.getErrorStatus() == ErrorStatus.BOOKING_NOT_FOUND;
       countBlocked(notFound ? BLOCKED_NOT_FOUND : BLOCKED_LOOKUP_FAILED);
@@ -202,7 +212,10 @@ public class PaymentCancelUseCase {
       log.error("결제 취소 차단: 예매 조회에서 예기치 못한 오류가 발생했습니다. bookingId={}", bookingId, e);
       throw new BusinessException(ErrorStatus.PAYMENT_BOOKING_COMMUNICATION_FAILED, e);
     }
+  }
 
+  /** 예매번호가 없으면 취소를 진행시키지 않는다 (#608). */
+  private String requireBookingNumber(BookingInfoResponse booking, Long bookingId) {
     String bookingNumber = booking.bookingNumber();
     if (bookingNumber == null || bookingNumber.isBlank()) {
       // 배포 순서가 역전돼 booking 이 아직 이 필드를 내려주지 않을 때도 같은 경로로 비어 오므로, 이 가드가
@@ -213,6 +226,42 @@ public class PaymentCancelUseCase {
       throw new BusinessException(ErrorStatus.PAYMENT_BOOKING_COMMUNICATION_FAILED);
     }
     return bookingNumber;
+  }
+
+  /**
+   * 환불 마감(D-7)을 지난 결제 취소를 막는다 (#668).
+   *
+   * <p>이 경로는 booking 의 취소 API 를 거치지 않고 PG 를 직접 치므로, {@code BookingValidateRefundDeadlineUseCase} 가
+   * 사용자 취소 경로에 건 가드가 여기에는 닿지 않는다. 멉으면 사용자가 {@code DELETE /api/v1/booking/{bookingNumber}} 대신 이
+   * 엔드포인트를 부르는 것만으로 정책이 통째로 우회된다 — #416 이 같은 이유로 입장 가드를 이 경로에 복제한 것과 같은 판단이다.
+   *
+   * <p><b>판정 주체는 booking 이다.</b> 여기서 공연을 직접 조회해 계산하면 7일이 세 번째로 하드코딩되어 프론트·booking·payment 가 가지각각
+   * 움직일 수 있다.
+   *
+   * <p><b>null 은 통과가 아니라 차단이다.</b> {@code withRefundDeadline=true} 로 요청했으므로 값이 비었다면 배포 순서 역전이나 필드명
+   * 변경이라는 뜻이다({@code @JsonIgnoreProperties} 라 조용히 null 이 된다). 그 구간에 통과시키면 정책이 사일런트로 무력화된다 — 예매번호에
+   * 같은 규율을 적용한 것과 같다.
+   *
+   * <p>⚠ <b>배포 직후 짧게 터지는 것은 정상이다.</b> CD 가 전 서비스를 한 번의 {@code docker compose up} 으로 올려 서비스별 배포 순서를
+   * 제어할 수 없으므로, 재기동 중 신버전 payment 가 구버전 booking 을 치는 수 초짜리 창이 생긴다. booking 이 뜨면 자동 복구된다. 그 구간의 버스트는
+   * 무시해도 되지만, <b>배포와 무관하게 계속 나면</b> booking 응답 계약이 깨졌다는 뜻이다 — 그때는 결제 취소가 전건 막힌다.
+   */
+  private void rejectIfRefundDeadlinePassed(BookingInfoResponse booking, Long bookingId) {
+    Boolean refundAllowed = booking.refundAllowed();
+
+    if (refundAllowed == null) {
+      countBlocked(BLOCKED_REFUND_DEADLINE_UNKNOWN);
+      log.error(
+          "[CRITICAL] 환불 마감 판정을 얻지 못해 결제 취소를 차단했습니다! booking 응답 계약을 확인해야 합니다. bookingId={}",
+          bookingId);
+      throw new BusinessException(ErrorStatus.PAYMENT_BOOKING_COMMUNICATION_FAILED);
+    }
+
+    if (!refundAllowed) {
+      countBlocked(BLOCKED_REFUND_DEADLINE_PASSED);
+      log.warn("결제 취소 차단: 환불 마감이 지났습니다. bookingId={}", bookingId);
+      throw new BusinessException(ErrorStatus.PAYMENT_CANCEL_NOT_ALLOWED_REFUND_DEADLINE);
+    }
   }
 
   private void countBlocked(String reason) {

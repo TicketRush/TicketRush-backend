@@ -1,6 +1,7 @@
 package com.ticketrush.boundedcontext.booking.app.facade;
 
 import static com.ticketrush.global.status.ErrorStatus.BOOKING_CANCEL_NOT_ALLOWED_TICKET_USED;
+import static com.ticketrush.global.status.ErrorStatus.BOOKING_REFUND_DEADLINE_PASSED;
 import static com.ticketrush.global.status.ErrorStatus.SEAT_ALREADY_LOCKED;
 import static com.ticketrush.global.status.ErrorStatus.USER_NOT_FOUND;
 import static org.assertj.core.api.Assertions.assertThat;
@@ -32,6 +33,7 @@ import com.ticketrush.boundedcontext.booking.app.usecase.BookingGetMyBookingsUse
 import com.ticketrush.boundedcontext.booking.app.usecase.BookingGetRefundingStuckBookingsUseCase;
 import com.ticketrush.boundedcontext.booking.app.usecase.BookingIssueNumberUseCase;
 import com.ticketrush.boundedcontext.booking.app.usecase.BookingValidateReferencesUseCase;
+import com.ticketrush.boundedcontext.booking.app.usecase.BookingValidateRefundDeadlineUseCase;
 import com.ticketrush.boundedcontext.booking.app.usecase.BookingValidateSeatAvailableUseCase;
 import com.ticketrush.boundedcontext.booking.app.usecase.BookingValidateTicketNotUsedUseCase;
 import com.ticketrush.boundedcontext.booking.domain.entity.Booking;
@@ -76,6 +78,7 @@ class BookingFacadeTest {
   @Mock private BookingValidateSeatAvailableUseCase bookingValidateSeatAvailableUseCase;
   @Mock private BookingGetRefundingStuckBookingsUseCase bookingGetRefundingStuckBookingsUseCase;
   @Mock private BookingValidateTicketNotUsedUseCase bookingValidateTicketNotUsedUseCase;
+  @Mock private BookingValidateRefundDeadlineUseCase bookingValidateRefundDeadlineUseCase;
   @Mock private BookingAdminRetryRefundUseCase bookingAdminRetryRefundUseCase;
   @Mock private SeatRestClient seatRestClient;
   @Mock private BookingGetAdminBookingsUseCase bookingGetAdminBookingsUseCase;
@@ -398,8 +401,13 @@ class BookingFacadeTest {
     bookingFacade.cancelMyBooking(userId, bookingNumber);
 
     // then: 검증이 취소보다 먼저 수행돼야 한다 (#399). 소유권도 함께 검증하도록 userId를 넘긴다.
-    InOrder inOrder = inOrder(bookingValidateTicketNotUsedUseCase, bookingCancelMyBookingUseCase);
+    InOrder inOrder =
+        inOrder(
+            bookingValidateTicketNotUsedUseCase,
+            bookingValidateRefundDeadlineUseCase,
+            bookingCancelMyBookingUseCase);
     inOrder.verify(bookingValidateTicketNotUsedUseCase).execute(userId, bookingNumber);
+    inOrder.verify(bookingValidateRefundDeadlineUseCase).execute(userId, bookingNumber);
     inOrder.verify(bookingCancelMyBookingUseCase).execute(userId, bookingNumber);
 
     // PENDING이 아니었으므로 좌석 즉시 반납은 일어나지 않는다 (#559).
@@ -445,6 +453,25 @@ class BookingFacadeTest {
   }
 
   @Test
+  @DisplayName("실패: 환불 마감이 지난 예매면 취소 유스케이스를 호출하지 않는다 (#668)")
+  void cancelMyBooking_rejects_after_refund_deadline() {
+    // given
+    Long userId = 1L;
+    String bookingNumber = "BOOK-1234";
+    doThrow(new BusinessException(BOOKING_REFUND_DEADLINE_PASSED))
+        .when(bookingValidateRefundDeadlineUseCase)
+        .execute(userId, bookingNumber);
+
+    // when & then
+    assertThatThrownBy(() -> bookingFacade.cancelMyBooking(userId, bookingNumber))
+        .isInstanceOf(BusinessException.class)
+        .hasFieldOrPropertyWithValue("errorStatus", BOOKING_REFUND_DEADLINE_PASSED);
+
+    // 가드가 막았으면 상태 전이도 좌석 반납도 일어나선 안 된다.
+    verifyNoInteractions(bookingCancelMyBookingUseCase, seatRestClient);
+  }
+
+  @Test
   @DisplayName("성공: 입장권 사용 여부를 검증한 뒤 관리자 재환불을 위임한다")
   void retryRefund_success() {
     // given
@@ -458,6 +485,10 @@ class BookingFacadeTest {
     InOrder inOrder = inOrder(bookingValidateTicketNotUsedUseCase, bookingAdminRetryRefundUseCase);
     inOrder.verify(bookingValidateTicketNotUsedUseCase).executeForAdmin(bookingNumber);
     inOrder.verify(bookingAdminRetryRefundUseCase).execute(adminId, bookingNumber);
+
+    // D-7은 절대 걸지 않는다 (#668). 이 경로는 REFUNDING 고착(#397) 복구를 겸하고, 고착은 공연이 지난 뒤
+    // 발견되는 경우가 주 대상이라 마감을 걸면 정확히 그 건들이 복구 불가가 된다.
+    verifyNoInteractions(bookingValidateRefundDeadlineUseCase);
   }
 
   @Test
@@ -691,6 +722,9 @@ class BookingFacadeTest {
     InOrder inOrder = inOrder(bookingValidateTicketNotUsedUseCase, bookingAdminRefundUseCase);
     inOrder.verify(bookingValidateTicketNotUsedUseCase).executeForAdmin(bookingNumber);
     inOrder.verify(bookingAdminRefundUseCase).execute(adminId, bookingNumber);
+
+    // D-7은 걸지 않는다 (#668). 정책 예외를 처리하려고 있는 CS 창구라 막으면 대응 수단이 사라진다.
+    verifyNoInteractions(bookingValidateRefundDeadlineUseCase);
   }
 
   @Test

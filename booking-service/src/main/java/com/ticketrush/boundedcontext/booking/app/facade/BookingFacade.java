@@ -22,6 +22,7 @@ import com.ticketrush.boundedcontext.booking.app.usecase.BookingGetRefundFailedB
 import com.ticketrush.boundedcontext.booking.app.usecase.BookingGetRefundingStuckBookingsUseCase;
 import com.ticketrush.boundedcontext.booking.app.usecase.BookingIssueNumberUseCase;
 import com.ticketrush.boundedcontext.booking.app.usecase.BookingValidateReferencesUseCase;
+import com.ticketrush.boundedcontext.booking.app.usecase.BookingValidateRefundDeadlineUseCase;
 import com.ticketrush.boundedcontext.booking.app.usecase.BookingValidateSeatAvailableUseCase;
 import com.ticketrush.boundedcontext.booking.app.usecase.BookingValidateTicketNotUsedUseCase;
 import com.ticketrush.boundedcontext.booking.domain.entity.Booking;
@@ -57,6 +58,7 @@ public class BookingFacade {
   private final BookingValidateReferencesUseCase bookingValidateReferencesUseCase;
   private final BookingValidateSeatAvailableUseCase bookingValidateSeatAvailableUseCase;
   private final BookingValidateTicketNotUsedUseCase bookingValidateTicketNotUsedUseCase;
+  private final BookingValidateRefundDeadlineUseCase bookingValidateRefundDeadlineUseCase;
   private final BookingGetRefundFailedBookingsUseCase bookingGetRefundFailedBookingsUseCase;
   private final BookingGetRefundingStuckBookingsUseCase bookingGetRefundingStuckBookingsUseCase;
   private final BookingAdminRetryRefundUseCase bookingAdminRetryRefundUseCase;
@@ -150,6 +152,10 @@ public class BookingFacade {
     // 입장 완료 예매의 환불 차단 (#399). 소유권을 함께 검증해 비소유자에게 타인 예매의 입장 여부가 새지 않게 한다.
     // PENDING은 환불이 성사될 수 없어 isRefundable()에서 제외되므로 ticket-service 왕복이 일어나지 않는다.
     bookingValidateTicketNotUsedUseCase.execute(userId, bookingNumber);
+
+    // 공연 7일 전을 지난 환불 차단 (#668). 프론트에만 있던 제한이라 API 직접 호출로 우회됐다.
+    // PENDING 즉시취소는 환불이 아니므로 가드 안에서 CONFIRMED만 검사해 통과시킨다.
+    bookingValidateRefundDeadlineUseCase.execute(userId, bookingNumber);
 
     bookingCancelMyBookingUseCase
         .execute(userId, bookingNumber)

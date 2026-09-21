@@ -13,6 +13,7 @@ import com.ticketrush.boundedcontext.booking.app.dto.response.BookingInternalSta
 import com.ticketrush.boundedcontext.booking.app.dto.response.BookingPerformanceStatsRow;
 import com.ticketrush.boundedcontext.booking.app.usecase.BookingGetInternalStatsUseCase;
 import com.ticketrush.boundedcontext.booking.app.usecase.BookingGetInternalUseCase;
+import com.ticketrush.boundedcontext.booking.app.usecase.BookingValidateRefundDeadlineUseCase;
 import com.ticketrush.boundedcontext.booking.domain.types.BookingStatus;
 import com.ticketrush.global.config.CustomSecurityProperties;
 import com.ticketrush.global.config.JacksonConfig;
@@ -52,6 +53,8 @@ class BookingInternalControllerTest {
   @MockitoBean private BookingGetInternalUseCase bookingGetInternalUseCase;
 
   @MockitoBean private BookingGetInternalStatsUseCase bookingGetInternalStatsUseCase;
+
+  @MockitoBean private BookingValidateRefundDeadlineUseCase bookingValidateRefundDeadlineUseCase;
 
   /**
    * 이 테스트가 고정하는 것은 값이 아니라 <b>JSON 키 이름</b>이다. performance-service의 클라이언트가 이 키로 매핑하는데, 그쪽은 앱의
@@ -151,7 +154,8 @@ class BookingInternalControllerTest {
     // given
     Long bookingId = 100L;
     given(bookingGetInternalUseCase.execute(bookingId))
-        .willReturn(new BookingInternalResponse(bookingId, 10L, BookingStatus.CONFIRMED, "BOOK-1"));
+        .willReturn(
+            new BookingInternalResponse(bookingId, 10L, BookingStatus.CONFIRMED, "BOOK-1", null));
 
     // when & then
     mockMvc
