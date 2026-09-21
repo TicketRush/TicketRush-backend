@@ -183,7 +183,7 @@ class BookingAdminControllerTest {
             1,
             150000L);
 
-    given(bookingFacade.getAdminBookings(1L, new OffsetPageRequest(0, 10)))
+    given(bookingFacade.getAdminBookings(1L, null, new OffsetPageRequest(0, 10)))
         .willReturn(new PageImpl<>(List.of(response), PageRequest.of(0, 10), 1));
 
     // when & then
@@ -206,7 +206,84 @@ class BookingAdminControllerTest {
         .andExpect(jsonPath("$.result[0].payment_amount").value(150000))
         .andExpect(jsonPath("$.pagination_info.total_elements").value(1));
 
-    verify(bookingFacade).getAdminBookings(1L, new OffsetPageRequest(0, 10));
+    verify(bookingFacade).getAdminBookings(1L, null, new OffsetPageRequest(0, 10));
+  }
+
+  @Test
+  @DisplayName("ADMIN이 status를 지정하면 그 상태로 필터링된 목록이 응답된다 (#667)")
+  void getBookings_passes_status_filter() throws Exception {
+    // given
+    given(bookingFacade.getAdminBookings(1L, BookingStatus.REFUNDED, new OffsetPageRequest(0, 10)))
+        .willReturn(new PageImpl<>(List.of(), PageRequest.of(0, 10), 0));
+
+    // when & then
+    mockMvc
+        .perform(
+            get("/api/v1/booking/admin/bookings")
+                .param("status", "REFUNDED")
+                .header("X-Gateway-Token", INTERNAL_TOKEN)
+                .header("X-User-Id", 1L)
+                .header("X-User-Role", "ADMIN"))
+        .andExpect(status().isOk());
+
+    verify(bookingFacade)
+        .getAdminBookings(1L, BookingStatus.REFUNDED, new OffsetPageRequest(0, 10));
+  }
+
+  @Test
+  @DisplayName("정의되지 않은 status 값은 400으로 거절한다 (#667)")
+  void getBookings_rejects_unknown_status() throws Exception {
+    // when & then: 상태코드만 보면 전역 핸들러가 빠져도 Spring 기본 resolver가 400을 내 통과한다.
+    // 핸들러를 실제로 경유했는지는 ApiResponse 엔벨로프로만 구분되므로 code까지 고정한다.
+    mockMvc
+        .perform(
+            get("/api/v1/booking/admin/bookings")
+                .param("status", "NOPE")
+                .header("X-Gateway-Token", INTERNAL_TOKEN)
+                .header("X-User-Id", 1L)
+                .header("X-User-Role", "ADMIN"))
+        .andExpect(status().isBadRequest())
+        .andExpect(jsonPath("$.is_success").value(false))
+        .andExpect(jsonPath("$.code").value(ErrorStatus.BAD_REQUEST.getCode()));
+
+    verifyNoInteractions(bookingFacade);
+  }
+
+  @Test
+  @DisplayName("status를 빈 값으로 보내면 400이 아니라 전체 조회로 떨어진다 (#667)")
+  void getBookings_treats_blank_status_as_no_filter() throws Exception {
+    // given: 빈 문자열은 Spring의 enum 컨버터가 null로 바꾼다 — 미지정과 같은 경로다.
+    // 400을 기대하기 쉬운 지점이라 계약으로 고정해 둔다.
+    given(bookingFacade.getAdminBookings(1L, null, new OffsetPageRequest(0, 10)))
+        .willReturn(new PageImpl<>(List.of(), PageRequest.of(0, 10), 0));
+
+    // when & then
+    mockMvc
+        .perform(
+            get("/api/v1/booking/admin/bookings")
+                .param("status", "")
+                .header("X-Gateway-Token", INTERNAL_TOKEN)
+                .header("X-User-Id", 1L)
+                .header("X-User-Role", "ADMIN"))
+        .andExpect(status().isOk());
+
+    verify(bookingFacade).getAdminBookings(1L, null, new OffsetPageRequest(0, 10));
+  }
+
+  @Test
+  @DisplayName("status는 대소문자를 구분해 소문자 값은 400이다 (#667)")
+  void getBookings_rejects_lowercase_status() throws Exception {
+    // when & then: 프론트가 소문자로 보내면 배포 후에야 드러나므로 계약으로 고정한다
+    mockMvc
+        .perform(
+            get("/api/v1/booking/admin/bookings")
+                .param("status", "refunded")
+                .header("X-Gateway-Token", INTERNAL_TOKEN)
+                .header("X-User-Id", 1L)
+                .header("X-User-Role", "ADMIN"))
+        .andExpect(status().isBadRequest());
+
+    verifyNoInteractions(bookingFacade);
   }
 
   @Test
