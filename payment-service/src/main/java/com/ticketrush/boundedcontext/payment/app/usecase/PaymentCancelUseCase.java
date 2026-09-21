@@ -235,12 +235,16 @@ public class PaymentCancelUseCase {
    * 사용자 취소 경로에 건 가드가 여기에는 닿지 않는다. 멉으면 사용자가 {@code DELETE /api/v1/booking/{bookingNumber}} 대신 이
    * 엔드포인트를 부르는 것만으로 정책이 통째로 우회된다 — #416 이 같은 이유로 입장 가드를 이 경로에 복제한 것과 같은 판단이다.
    *
-   * <p><b>판정 주체는 booking 이다.</b> 여기서 공연을 직접 조회해 계산하면 7일이 세 번째로 하드코딩되어 프론트·booking·payment 가 가직가직
+   * <p><b>판정 주체는 booking 이다.</b> 여기서 공연을 직접 조회해 계산하면 7일이 세 번째로 하드코딩되어 프론트·booking·payment 가 가지각각
    * 움직일 수 있다.
    *
    * <p><b>null 은 통과가 아니라 차단이다.</b> {@code withRefundDeadline=true} 로 요청했으므로 값이 비었다면 배포 순서 역전이나 필드명
    * 변경이라는 뜻이다({@code @JsonIgnoreProperties} 라 조용히 null 이 된다). 그 구간에 통과시키면 정책이 사일런트로 무력화된다 — 예매번호에
    * 같은 규율을 적용한 것과 같다.
+   *
+   * <p>⚠ <b>배포 직후 짧게 터지는 것은 정상이다.</b> CD 가 전 서비스를 한 번의 {@code docker compose up} 으로 올려 서비스별 배포 순서를
+   * 제어할 수 없으므로, 재기동 중 신버전 payment 가 구버전 booking 을 치는 수 초짜리 창이 생긴다. booking 이 뜨면 자동 복구된다. 그 구간의 버스트는
+   * 무시해도 되지만, <b>배포와 무관하게 계속 나면</b> booking 응답 계약이 깨졌다는 뜻이다 — 그때는 결제 취소가 전건 막힌다.
    */
   private void rejectIfRefundDeadlinePassed(BookingInfoResponse booking, Long bookingId) {
     Boolean refundAllowed = booking.refundAllowed();
