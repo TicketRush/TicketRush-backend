@@ -117,7 +117,8 @@ class PaymentConfirmUseCaseTest {
     given(paymentRepository.existsByBookingIdAndStatus(bookingId, PaymentStatus.COMPLETED))
         .willReturn(false);
     given(bookingRestClient.getBooking(bookingId))
-        .willReturn(new BookingInfoResponse(bookingId, ownerUserId, bookingStatus, bookingNumber));
+        .willReturn(
+            new BookingInfoResponse(bookingId, ownerUserId, bookingStatus, bookingNumber, null));
   }
 
   private double guardBlockedCount(String reason) {
