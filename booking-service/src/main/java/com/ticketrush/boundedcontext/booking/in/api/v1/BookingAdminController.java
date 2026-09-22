@@ -1,10 +1,13 @@
 package com.ticketrush.boundedcontext.booking.in.api.v1;
 
+import com.ticketrush.boundedcontext.booking.app.dto.response.BookingAdminRefundSummaryResponse;
 import com.ticketrush.boundedcontext.booking.app.dto.response.BookingAdminStatsResponse;
 import com.ticketrush.boundedcontext.booking.app.dto.response.BookingAdminSummaryResponse;
+import com.ticketrush.boundedcontext.booking.app.dto.response.BookingRefundStatsResponse;
 import com.ticketrush.boundedcontext.booking.app.dto.response.BookingSummaryResponse;
 import com.ticketrush.boundedcontext.booking.app.facade.BookingFacade;
 import com.ticketrush.boundedcontext.booking.domain.types.BookingStatus;
+import com.ticketrush.boundedcontext.booking.domain.types.RefundProcessStatus;
 import com.ticketrush.global.dto.request.OffsetPageRequest;
 import com.ticketrush.global.dto.response.ApiResponse;
 import com.ticketrush.global.security.CustomUserDetails;
@@ -139,6 +142,83 @@ public class BookingAdminController {
   @GetMapping("/bookings/stats")
   public ResponseEntity<ApiResponse<BookingAdminStatsResponse>> getBookingStats() {
     BookingAdminStatsResponse response = bookingFacade.getAdminBookingStats();
+
+    return ApiResponse.onSuccess(SuccessStatus.OK, response);
+  }
+
+  @Operation(
+      summary = "관리자 환불 통합 목록 조회",
+      description =
+          """
+          환불 진행 중·환불 완료·미해결 환불 실패 예매를 하나의 목록으로 최신순 페이징 조회합니다.
+
+          **환불 대상은 세 조건의 합집합입니다.** 예매 상태가 `REFUNDING`이면 진행 중, `REFUNDED`면 완료,
+          `CONFIRMED`이면서 환불 실패 이력이 있으면 미해결 실패입니다. 정상 확정 예매, 결제 전 취소(`CANCELED`),
+          미결제 만료(`EXPIRED`)는 환불이 아니므로 제외됩니다.
+
+          진행 중에는 **정상 진행 건과 고착 건이 모두 포함됩니다** — 30분 이상 멈춘 건만 보려면
+          `GET /bookings/refunding-stuck`을 그대로 쓰세요. 이 API는 그 조회를 대체하지 않습니다.
+
+          `refund_status`로 처리 상태 하나를 지정하면 그 상태만 필터링해 페이징합니다.
+          **미지정 시 세 상태 전체를 조회합니다** — 필터가 페이징보다 앞에 걸리므로 상태별 페이지를 합칠 때
+          생기는 누락이 없고, 목록과 `pagination_info`가 같은 모집단을 씁니다. 값은 대소문자를 구분하며
+          정의되지 않은 값은 400으로 거절합니다.
+
+          **`refund_status`가 행 분류의 유일한 기준입니다.** `refund_failed_at`은 재환불 시 지워지지 않는
+          이력이라 진행 중·완료 행에도 값이 남아 있을 수 있습니다. 그 값으로 분류하면 재시도 중인 예매가
+          실패로 잡힙니다. 반대로 한 예매는 예매 상태로 갈리는 한 분기에만 걸리므로 재시도 건이 중복되지 않습니다.
+
+          **기준은 환불 결과 이벤트가 예매에 반영된 시점입니다.** 환불은 비동기라 PG에서 이미 환불이 끝났어도
+          완료 이벤트가 도착하기 전이면 아직 진행 중으로 보입니다. 잠시 후 다시 조회하면 상태가 넘어갑니다.
+
+          공연 이름·날짜·시각과 예매자 이름은 performance·user-service에서 보강합니다.
+          **해당 서비스 장애 시 그 필드만 null로 내려가고 목록 자체는 성공합니다** — 프론트는 `performance_id`·`user_id`로
+          재조회할 수 있습니다. 좌석 번호는 이 화면에서 쓰지 않으므로 내리지 않습니다.
+
+          `payment_amount`는 예매가 확정 시점에 보유한 **실제 결제 금액**이며 **PG에서 확정된 실제 환불액이 아닙니다.**
+          결제 금액이 기록되지 않은 예매는 null이고, 그 경우에도 행은 그대로 내려갑니다.
+
+          **시각 규약이 두 가지입니다.** `booked_at`·`refund_failed_at`은 UTC이고,
+          `performance_date`·`performance_time`은 Asia/Seoul 벽시계입니다.
+
+          예매자 개인정보가 포함되므로 조회 사실이 ADMIN-AUDIT 로그에 남습니다(조회자·조건·건수만 기록하며 응답 내용은 남기지 않습니다).
+          """)
+  @GetMapping("/refunds")
+  public ResponseEntity<ApiResponse<List<BookingAdminRefundSummaryResponse>>> getRefunds(
+      @AuthenticationPrincipal CustomUserDetails admin,
+      @Parameter(description = "환불 처리 상태 필터(IN_PROGRESS·COMPLETED·FAILED; 미지정 시 전체)")
+          @RequestParam(name = "refund_status", required = false)
+          RefundProcessStatus refundStatus,
+      @ModelAttribute OffsetPageRequest pageRequest) {
+    Page<BookingAdminRefundSummaryResponse> response =
+        bookingFacade.getAdminRefunds(admin.getUserId(), refundStatus, pageRequest);
+
+    return ApiResponse.onSuccess(SuccessStatus.OK, response);
+  }
+
+  @Operation(
+      summary = "관리자 환불 요약 통계 조회",
+      description =
+          """
+          전체 환불 건수와 처리 상태별 건수(진행 중·완료·미해결 실패)를 조회합니다.
+
+          **모집단은 환불 목록과 같습니다** — 환불 진행 중(`REFUNDING`) + 환불 완료(`REFUNDED`) +
+          미해결 실패(`CONFIRMED`이면서 환불 실패 이력 보유). 결제 전 취소(`CANCELED`)와 미결제 만료(`EXPIRED`)는
+          환불이 아니므로 세지 않습니다. 예매 요약 통계(`GET /bookings/stats`)의 `canceled_bookings`는
+          `CANCELED + REFUNDED`라 환불 집계가 아니므로 이 값과 다릅니다.
+
+          **네 지표는 서로 배타적이며 `total_refunds`는 나머지 셋의 합입니다.** 같은 모집단을 예매 상태로 나눈
+          것이라 합이 어긋날 수 없습니다. 예매 요약 통계의 네 지표가 배타적 분할이 아닌 것과 다릅니다.
+
+          **목록의 `refund_status` 필터는 이 집계에 적용되지 않습니다.** 카드는 필터와 무관하게 항상 전체 모집단을
+          기준으로 하며, `refund_status`로 거른 목록의 `pagination_info.total_elements`는 여기의 해당 지표와 같은 값입니다.
+
+          다른 서비스를 호출하지 않으며, 예매가 환불 결과를 이미 보유하므로 네 값 모두 DB 집계 한 번에서 나옵니다.
+          환불 결과 이벤트가 반영되기 전의 건은 아직 진행 중으로 잡힙니다.
+          """)
+  @GetMapping("/refunds/stats")
+  public ResponseEntity<ApiResponse<BookingRefundStatsResponse>> getRefundStats() {
+    BookingRefundStatsResponse response = bookingFacade.getAdminRefundStats();
 
     return ApiResponse.onSuccess(SuccessStatus.OK, response);
   }

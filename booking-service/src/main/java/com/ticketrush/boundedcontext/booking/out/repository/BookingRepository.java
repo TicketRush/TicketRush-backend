@@ -2,6 +2,7 @@ package com.ticketrush.boundedcontext.booking.out.repository;
 
 import com.ticketrush.boundedcontext.booking.app.dto.response.BookingDailyRevenueRow;
 import com.ticketrush.boundedcontext.booking.app.dto.response.BookingPerformanceStatsRow;
+import com.ticketrush.boundedcontext.booking.app.dto.response.BookingRefundStatsResponse;
 import com.ticketrush.boundedcontext.booking.app.dto.response.BookingStatsCounts;
 import com.ticketrush.boundedcontext.booking.domain.entity.Booking;
 import com.ticketrush.boundedcontext.booking.domain.types.BookingStatus;
@@ -49,6 +50,67 @@ public interface BookingRepository extends JpaRepository<Booking, Long> {
   /* 환불에 실패해 아직 해결되지 않은 예매(CONFIRMED로 복원됐고 실패 이력이 남은 건)를 관리자가 조회한다 (#391). */
   Page<Booking> findByBookingStatusAndRefundFailedAtIsNotNull(
       BookingStatus bookingStatus, Pageable pageable);
+
+  /*
+   * 관리자 환불 통합 목록의 모집단 (#675). 환불 진행·완료·미해결 실패를 한 번에 뽑는다. 상태별로 따로 조회해 클라이언트가
+   * 합치면 한쪽에 최신 행이 치우쳤을 때 뒷페이지가 통째로 누락되므로, 세 조건을 OR로 DB에 내려 목록과 count가 같은
+   * 모집단을 보게 한다.
+   *
+   * 세 분기가 booking_status로 갈려 한 예매는 정확히 하나에만 걸린다. refund_failed_at은 재환불 시 지워지지 않지만
+   * (ADR 0005) 실패 이력이 있는 REFUNDING·REFUNDED 행은 앞의 두 분기에서 이미 잡히므로 세 번째 분기가 같은 행을
+   * 다시 세지 않는다 — 중복도, 과거 실패로 인한 오분류도 없다.
+   *
+   * 비용을 낙관하지 말 것. 세 번째 분기가 CONFIRMED를 후보로 넣는 순간 후보 집합이 정상 확정 예매 전체가 되는데,
+   * 그게 booking에서 가장 큰 버킷이다. 실제로 걸러지는 것은 refund_failed_at IS NOT NULL이라 결과는 몇 건이어도
+   * 읽는 행은 그렇지 않다. idx_booking_status_updated_at의 선두 컬럼으로 range는 잡히지만 전역 id DESC는 그
+   * 인덱스(리프 순서 booking_status, updated_at, id)가 덮지 못해 filesort가 남고, Page 반환이라 content와
+   * 파생 count가 같은 스캔을 두 번 한다.
+   *
+   * 그럼에도 인덱스를 얹지 않는 이유는 이 파일의 다른 관리자 조회와 같다 — 저빈도 관리자 경로 하나를 위해 오픈런
+   * 쓰기 핫패스인 예매 INSERT/UPDATE에 유지 비용을 상시 부담시키는 교환이 맞지 않는다.
+   *
+   * EXPLAIN 실측은 아직 없다. 다만 이 쿼리는 순수 관리자 전용 비용이 아니라 쓰기 핫패스와 같은 테이블을 훑으므로,
+   * CONFIRMED가 수십만 행으로 커진 뒤에는 이 파일의 다른 쿼리들보다 실측 우선순위가 높다. 느려지면 추정이 아니라
+   * 측정으로 위 문단을 교체한다.
+   */
+  @Query(
+      "SELECT b FROM Booking b "
+          + "WHERE b.bookingStatus = :refunding "
+          + "OR b.bookingStatus = :refunded "
+          + "OR (b.bookingStatus = :confirmed AND b.refundFailedAt IS NOT NULL)")
+  Page<Booking> findRefundTargets(
+      @Param("refunding") BookingStatus refunding,
+      @Param("refunded") BookingStatus refunded,
+      @Param("confirmed") BookingStatus confirmed,
+      Pageable pageable);
+
+  /*
+   * 관리자 환불 요약 통계 (#675). 위 findRefundTargets와 같은 모집단을 세야 목록의 전체 건수와 카드가 어긋나지 않으므로
+   * 세 조건을 그대로 옮겨 적는다.
+   *
+   * 전체 다음의 셋은 그 모집단을 예매 상태로 나눈 것이라 배타적이고 합이 전체와 같다. 상태별 카드를 목록의
+   * total_elements로 대신 얻는 방법도 있었지만, 그러면 카드 4개에 조회가 4번 나간다 — 같은 스캔 한 번에서
+   * CASE로 갈라 내는 편이 싸고, 네 값이 같은 스냅샷에서 나와 합이 어긋나는 순간도 없앤다.
+   *
+   * aggregateStats와 같은 이유로 COALESCE를 건다 — SUM은 대상 행이 없으면 0이 아니라 NULL을 내고, record의 long
+   * 파라미터에 들어가 예매가 하나도 없는 DB에서 NPE가 된다.
+   */
+  @Query(
+      "SELECT new com.ticketrush.boundedcontext.booking.app.dto.response"
+          + ".BookingRefundStatsResponse("
+          + "COALESCE(SUM(CASE WHEN b.bookingStatus = :refunding "
+          + "OR b.bookingStatus = :refunded "
+          + "OR (b.bookingStatus = :confirmed AND b.refundFailedAt IS NOT NULL) "
+          + "THEN 1 ELSE 0 END), 0), "
+          + "COALESCE(SUM(CASE WHEN b.bookingStatus = :refunding THEN 1 ELSE 0 END), 0), "
+          + "COALESCE(SUM(CASE WHEN b.bookingStatus = :refunded THEN 1 ELSE 0 END), 0), "
+          + "COALESCE(SUM(CASE WHEN b.bookingStatus = :confirmed "
+          + "AND b.refundFailedAt IS NOT NULL THEN 1 ELSE 0 END), 0)) "
+          + "FROM Booking b")
+  BookingRefundStatsResponse aggregateRefundStats(
+      @Param("refunding") BookingStatus refunding,
+      @Param("refunded") BookingStatus refunded,
+      @Param("confirmed") BookingStatus confirmed);
 
   /*
    * REFUNDING에서 cutoff 이전부터 멈춰 있는(종결 이벤트가 오지 않는) 고착 예매를 관리자가 조회한다 (#397).

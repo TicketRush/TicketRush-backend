@@ -6,6 +6,7 @@ import static com.ticketrush.global.status.ErrorStatus.SEAT_ALREADY_LOCKED;
 import static com.ticketrush.global.status.ErrorStatus.USER_NOT_FOUND;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.assertj.core.api.Assertions.tuple;
 import static org.mockito.BDDMockito.given;
 import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.inOrder;
@@ -13,12 +14,14 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 
 import com.ticketrush.boundedcontext.booking.app.dto.request.BookingCreateRequest;
+import com.ticketrush.boundedcontext.booking.app.dto.response.BookingAdminRefundSummaryResponse;
 import com.ticketrush.boundedcontext.booking.app.dto.response.BookingAdminStatsResponse;
 import com.ticketrush.boundedcontext.booking.app.dto.response.BookingAdminSummaryResponse;
 import com.ticketrush.boundedcontext.booking.app.dto.response.BookingCountResponse;
 import com.ticketrush.boundedcontext.booking.app.dto.response.BookingDetailResponse;
 import com.ticketrush.boundedcontext.booking.app.dto.response.BookingMySummaryResponse;
 import com.ticketrush.boundedcontext.booking.app.dto.response.BookingPendingResponse;
+import com.ticketrush.boundedcontext.booking.app.dto.response.BookingRefundStatsResponse;
 import com.ticketrush.boundedcontext.booking.app.dto.response.BookingSummaryResponse;
 import com.ticketrush.boundedcontext.booking.app.usecase.BookingAdminRefundUseCase;
 import com.ticketrush.boundedcontext.booking.app.usecase.BookingAdminRetryRefundUseCase;
@@ -27,6 +30,8 @@ import com.ticketrush.boundedcontext.booking.app.usecase.BookingCountUseCase;
 import com.ticketrush.boundedcontext.booking.app.usecase.BookingCreateUseCase;
 import com.ticketrush.boundedcontext.booking.app.usecase.BookingGetAdminBookingUseCase;
 import com.ticketrush.boundedcontext.booking.app.usecase.BookingGetAdminBookingsUseCase;
+import com.ticketrush.boundedcontext.booking.app.usecase.BookingGetAdminRefundStatsUseCase;
+import com.ticketrush.boundedcontext.booking.app.usecase.BookingGetAdminRefundsUseCase;
 import com.ticketrush.boundedcontext.booking.app.usecase.BookingGetAdminStatsUseCase;
 import com.ticketrush.boundedcontext.booking.app.usecase.BookingGetMyBookingDetailUseCase;
 import com.ticketrush.boundedcontext.booking.app.usecase.BookingGetMyBookingsUseCase;
@@ -38,6 +43,7 @@ import com.ticketrush.boundedcontext.booking.app.usecase.BookingValidateSeatAvai
 import com.ticketrush.boundedcontext.booking.app.usecase.BookingValidateTicketNotUsedUseCase;
 import com.ticketrush.boundedcontext.booking.domain.entity.Booking;
 import com.ticketrush.boundedcontext.booking.domain.types.BookingStatus;
+import com.ticketrush.boundedcontext.booking.domain.types.RefundProcessStatus;
 import com.ticketrush.boundedcontext.booking.out.apiclient.PerformanceRestClient;
 import com.ticketrush.boundedcontext.booking.out.apiclient.SeatRestClient;
 import com.ticketrush.boundedcontext.booking.out.apiclient.UserRestClient;
@@ -84,6 +90,8 @@ class BookingFacadeTest {
   @Mock private BookingGetAdminBookingsUseCase bookingGetAdminBookingsUseCase;
   @Mock private BookingGetAdminBookingUseCase bookingGetAdminBookingUseCase;
   @Mock private BookingGetAdminStatsUseCase bookingGetAdminStatsUseCase;
+  @Mock private BookingGetAdminRefundsUseCase bookingGetAdminRefundsUseCase;
+  @Mock private BookingGetAdminRefundStatsUseCase bookingGetAdminRefundStatsUseCase;
   @Mock private BookingAdminRefundUseCase bookingAdminRefundUseCase;
   @Mock private UserRestClient userRestClient;
 
@@ -705,6 +713,159 @@ class BookingFacadeTest {
     BookingAdminStatsResponse response = bookingFacade.getAdminBookingStats();
 
     // then: 공연 조회가 없으므로 performance-service 장애가 통계를 흔들지 못한다
+    assertThat(response).isEqualTo(stats);
+    verifyNoInteractions(performanceRestClient, seatRestClient, userRestClient);
+  }
+
+  /** 환불 진행 중이면서 실패 이력이 남은 재시도 건을 만든다 (#675). */
+  private static Booking retryingRefundBooking(Long userId, Long performanceId, Long seatId) {
+    Booking booking = confirmedAdminBooking(userId, performanceId, seatId);
+    booking.requestRefund();
+    booking.recordRefundFailure(LocalDateTime.of(2026, 7, 10, 12, 0));
+    booking.requestRefund();
+    return booking;
+  }
+
+  @Test
+  @DisplayName("성공: 관리자 환불 목록은 공연과 예매자만 보강한다 — 좌석은 호출하지 않는다 (#675)")
+  void getAdminRefunds_enriches_performance_and_user_without_seat() {
+    // given: 환불 화면은 좌석 번호를 그리지 않는다. 좌석까지 부르면 쓰지도 않는 왕복이 한 번 더 든다.
+    OffsetPageRequest pageRequest = new OffsetPageRequest(0, 10);
+    given(bookingGetAdminRefundsUseCase.execute(null, pageRequest))
+        .willReturn(new PageImpl<>(List.of(retryingRefundBooking(5L, 2L, 3L))));
+    given(performanceRestClient.getPerformances(Set.of(2L)))
+        .willReturn(Map.of(2L, performanceInfo()));
+    given(userRestClient.getUsers(List.of(5L)))
+        .willReturn(Map.of(5L, new UserSummaryInfoResponse(5L, "김소희", "user@example.com")));
+
+    // when
+    Page<BookingAdminRefundSummaryResponse> page =
+        bookingFacade.getAdminRefunds(ADMIN_ID, null, pageRequest);
+
+    // then
+    BookingAdminRefundSummaryResponse response = page.getContent().get(0);
+    assertThat(response.performanceTitle()).isEqualTo("오페라의 유령");
+    assertThat(response.performanceDate()).isEqualTo(LocalDate.of(2026, 5, 22));
+    assertThat(response.performanceTime()).isEqualTo(LocalTime.of(19, 30));
+    assertThat(response.bookerName()).isEqualTo("김소희");
+    assertThat(response.paymentAmount()).isEqualTo(150000L);
+    verifyNoInteractions(seatRestClient);
+  }
+
+  @Test
+  @DisplayName("성공: 실패 이력이 남은 재시도 건은 실패가 아니라 진행 중으로 응답된다 (#675)")
+  void getAdminRefunds_classifies_retried_booking_as_in_progress() {
+    // given: refundFailedAt은 재환불 시 지워지지 않는다(ADR 0005). 그 값으로 분류하면 재시도 중인
+    // 예매가 실패 탭에 남아 CS가 이미 걸어 둔 환불을 다시 건다.
+    OffsetPageRequest pageRequest = new OffsetPageRequest(0, 10);
+    given(bookingGetAdminRefundsUseCase.execute(null, pageRequest))
+        .willReturn(new PageImpl<>(List.of(retryingRefundBooking(5L, 2L, 3L))));
+    given(performanceRestClient.getPerformances(Set.of(2L))).willReturn(Map.of());
+    given(userRestClient.getUsers(List.of(5L))).willReturn(Map.of());
+
+    // when
+    Page<BookingAdminRefundSummaryResponse> page =
+        bookingFacade.getAdminRefunds(ADMIN_ID, null, pageRequest);
+
+    // then: 예매 상태와 환불 처리 상태가 다른 축으로 내려가고, 실패 시각은 이력으로만 남는다
+    BookingAdminRefundSummaryResponse response = page.getContent().get(0);
+    assertThat(response.bookingStatus()).isEqualTo(BookingStatus.REFUNDING);
+    assertThat(response.refundStatus()).isEqualTo(RefundProcessStatus.IN_PROGRESS);
+    assertThat(response.refundFailedAt()).isEqualTo(LocalDateTime.of(2026, 7, 10, 12, 0));
+  }
+
+  @Test
+  @DisplayName("성공: 진행·완료·실패가 섞인 페이지가 행마다 다른 환불 처리 상태로 매핑된다 (#675)")
+  void getAdminRefunds_maps_every_refund_kind_in_one_page() {
+    // given: 세 종류를 한 페이지에 섞는다. 한 종류만 쓰면 DTO 매핑이 세 분기 중 하나만 지나가서,
+    // 나머지 두 분기가 틀려도 전부 그린이 된다.
+    Booking completed = confirmedAdminBooking(6L, 2L, 4L);
+    completed.requestRefund();
+    completed.markRefunded();
+
+    Booking failed = confirmedAdminBooking(7L, 2L, 5L);
+    failed.requestRefund();
+    failed.recordRefundFailure(LocalDateTime.of(2026, 7, 10, 12, 0));
+
+    OffsetPageRequest pageRequest = new OffsetPageRequest(0, 10);
+    given(bookingGetAdminRefundsUseCase.execute(null, pageRequest))
+        .willReturn(new PageImpl<>(List.of(retryingRefundBooking(5L, 2L, 3L), completed, failed)));
+    given(performanceRestClient.getPerformances(Set.of(2L))).willReturn(Map.of());
+    given(userRestClient.getUsers(List.of(5L, 6L, 7L))).willReturn(Map.of());
+
+    // when
+    Page<BookingAdminRefundSummaryResponse> page =
+        bookingFacade.getAdminRefunds(ADMIN_ID, null, pageRequest);
+
+    // then: 예매 상태와 환불 처리 상태가 행마다 짝을 이룬다
+    assertThat(page.getContent())
+        .extracting(
+            BookingAdminRefundSummaryResponse::bookingStatus,
+            BookingAdminRefundSummaryResponse::refundStatus)
+        .containsExactly(
+            tuple(BookingStatus.REFUNDING, RefundProcessStatus.IN_PROGRESS),
+            tuple(BookingStatus.REFUNDED, RefundProcessStatus.COMPLETED),
+            tuple(BookingStatus.CONFIRMED, RefundProcessStatus.FAILED));
+
+    // 실패 시각은 실패 건과 재시도 건 모두에 실리고, 환불 완료 건에는 이력이 없다
+    assertThat(page.getContent())
+        .extracting(BookingAdminRefundSummaryResponse::refundFailedAt)
+        .containsExactly(
+            LocalDateTime.of(2026, 7, 10, 12, 0), null, LocalDateTime.of(2026, 7, 10, 12, 0));
+  }
+
+  @Test
+  @DisplayName("성공: 환불 목록에서 공연 조회가 실패해도 결제 금액과 재조회 키는 살아남는다 (#675)")
+  void getAdminRefunds_keeps_amount_when_performance_lookup_fails() {
+    // given: performance-service가 죽어 공연 필드를 못 채우는 상황 (부분 응답)
+    OffsetPageRequest pageRequest = new OffsetPageRequest(0, 10);
+    given(bookingGetAdminRefundsUseCase.execute(null, pageRequest))
+        .willReturn(new PageImpl<>(List.of(retryingRefundBooking(5L, 2L, 3L))));
+    given(performanceRestClient.getPerformances(Set.of(2L))).willReturn(Map.of());
+    given(userRestClient.getUsers(List.of(5L))).willReturn(Map.of());
+
+    // when
+    Page<BookingAdminRefundSummaryResponse> page =
+        bookingFacade.getAdminRefunds(ADMIN_ID, null, pageRequest);
+
+    // then: 금액은 예매가 보유하므로 다른 서비스 장애와 무관하다
+    BookingAdminRefundSummaryResponse response = page.getContent().get(0);
+    assertThat(response.performanceTitle()).isNull();
+    assertThat(response.performanceTime()).isNull();
+    assertThat(response.bookerName()).isNull();
+    assertThat(response.performanceId()).isEqualTo(2L);
+    assertThat(response.userId()).isEqualTo(5L);
+    assertThat(response.paymentAmount()).isEqualTo(150000L);
+  }
+
+  @Test
+  @DisplayName("성공: 환불 목록은 refundStatus 필터를 그대로 유스케이스에 넘긴다 (#675)")
+  void getAdminRefunds_delegates_refund_status() {
+    // given
+    OffsetPageRequest pageRequest = new OffsetPageRequest(0, 10);
+    given(bookingGetAdminRefundsUseCase.execute(RefundProcessStatus.FAILED, pageRequest))
+        .willReturn(new PageImpl<>(List.of()));
+    given(performanceRestClient.getPerformances(Set.of())).willReturn(Map.of());
+    given(userRestClient.getUsers(List.of())).willReturn(Map.of());
+
+    // when
+    bookingFacade.getAdminRefunds(ADMIN_ID, RefundProcessStatus.FAILED, pageRequest);
+
+    // then
+    verify(bookingGetAdminRefundsUseCase).execute(RefundProcessStatus.FAILED, pageRequest);
+  }
+
+  @Test
+  @DisplayName("성공: 환불 요약 통계는 다른 서비스를 호출하지 않는다 (#675)")
+  void getAdminRefundStats_does_not_call_remote_services() {
+    // given: 예매가 환불 결과를 이미 보유하므로 DB 집계 한 번으로 끝난다
+    BookingRefundStatsResponse stats = new BookingRefundStatsResponse(312, 12, 280, 20);
+    given(bookingGetAdminRefundStatsUseCase.execute()).willReturn(stats);
+
+    // when
+    BookingRefundStatsResponse response = bookingFacade.getAdminRefundStats();
+
+    // then
     assertThat(response).isEqualTo(stats);
     verifyNoInteractions(performanceRestClient, seatRestClient, userRestClient);
   }
