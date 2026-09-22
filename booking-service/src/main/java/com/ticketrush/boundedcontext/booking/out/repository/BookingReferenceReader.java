@@ -7,7 +7,7 @@ public interface BookingReferenceReader {
   boolean existsUserById(Long userId);
 
   /**
-   * 공연의 판매 상태. 값이 없으면 그 공연이 없다는 뜻이다 (#671).
+   * 공연의 판매 상태. 값이 없으면 그 공연이 없거나 삭제됐다는 뜻이다 (#671).
    *
    * <p><b>존재 여부와 상태를 한 번에 답한다.</b> 예매 생성은 둘 다 필요한데, 따로 물으면 같은 행을 두 번 읽는다.
    *
