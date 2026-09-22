@@ -22,6 +22,7 @@
 | user | `UserMeResponse` | `created_at` |
 | seat | `SeatMapItemResponse`, `SeatStatusChangedResponse`(SSE 포함), `SeatAdminMonitoringResponse.seats[]` | `hold_expired_at` |
 | seat | `SeatAdminSeatDetailResponse` | `hold_started_at`, `hold_expired_at` |
+| performance | `PerformanceDetailResponse` | `booking_open_at` (#671) |
 
 예: 기존 `"expires_at": "2026-05-22 10:35:00"` → `"expires_at": "2026-05-22T10:35:00Z"`.
 운영 앱 컨테이너는 이미 UTC로 동작해 왔으므로(`docs/load-test-guide.md` "배포본 앱은 UTC") 운영 응답은 숫자가 그대로이고 `Z`만 붙는다.
@@ -30,12 +31,19 @@
 적용 방식: 지정 필드에만 `@JsonSerialize(using = UtcLocalDateTimeSerializer.class)`를 붙인다
 (`common/src/main/java/com/ticketrush/global/json/UtcLocalDateTimeSerializer.java`).
 
+예외가 하나 있다. 위 필드들은 **저장값이 이미 UTC**라 그 직렬화기가 `Z`를 리터럴로 붙이기만 하면 되지만,
+`booking_open_at`은 어드민이 오프셋 없이 입력한 **Asia/Seoul 벽시계**다(ADR 0020). 그래서 `Z`를 붙이기 전에
+`PerformanceShowTimePolicy.SHOW_ZONE`으로 해석해 UTC로 환산하는
+`performance-service/src/main/java/com/ticketrush/global/json/SeoulWallClockUtcSerializer.java`를 쓴다.
+이 필드에 `UtcLocalDateTimeSerializer`를 그대로 붙이면 형식은 정상으로 보이면서 9시간 어긋난 순간을 가리킨다.
+저장·비교 축은 그대로 Asia/Seoul이고 **응답 축만** UTC다.
+
 ### 바뀌지 않는 계약 (불변 조건)
 
 - 전역 Jackson 포맷(`JacksonConfig`: `yyyy-MM-dd HH:mm:ss`, snake_case, NON_NULL)
 - 요청 DTO의 날짜·시각 입력 형식
 - Kafka 이벤트 페이로드·Outbox 페이로드 형식, 서비스 간 내부 DTO
-- 공연 `show_date`, `show_time`, `booking_open_at`의 형식과 값
+- 공연 `show_date`, `show_time`의 형식과 값
 
 ### 시계 기준
 
@@ -63,7 +71,7 @@
 3. **Kafka 미처리 메시지**: 컨슈머 lag에 남은 이벤트의 시각 출처 시간대.
 4. **DLT 재처리 데이터**: 재처리 대상 페이로드·외피의 시각 출처 시간대.
 5. **소비자 준비**: 프런트엔드·관리자 화면이 `Z` 포함 ISO-8601과 기존 무시간대 형식(`yyyy-MM-dd HH:mm:ss`, UTC로 해석)을 **둘 다** 파싱할 수 있는지. 롤백 시 무시간대 형식이 돌아오기 때문이다.
-6. **`booking_open_at` 업무 의미**: KST 벽시계로 확정했다(ADR 0020·#653). 오픈 전환은 UTC 런타임에서도 Asia/Seoul 벽시계와 비교하므로 충돌은 해소됐다. #653 배포 전에는 기존 `booking_open_at` 값이 KST 의도인지 확인한다 — UTC 의도로 넣은 값은 배포 첫 주기에 KST 기준 이미 도래한 것이 한꺼번에 열리고, 그 뒤로도 건마다 9시간 일찍 열린다. `ON_SALE → UPCOMING` 전이가 없어 코드 롤백으로 되돌릴 수 없으므로 첫 주기 대상 id를 배포 전에 스냅샷한다.
+6. **`booking_open_at` 업무 의미**: KST 벽시계로 확정했다(ADR 0020·#653). 응답 축은 #671에서 UTC(`Z`)로 옮겼고 저장값·비교 축은 그대로다. 오픈 전환은 UTC 런타임에서도 Asia/Seoul 벽시계와 비교하므로 충돌은 해소됐다. #653 배포 전에는 기존 `booking_open_at` 값이 KST 의도인지 확인한다 — UTC 의도로 넣은 값은 배포 첫 주기에 KST 기준 이미 도래한 것이 한꺼번에 열리고, 그 뒤로도 건마다 9시간 일찍 열린다. `ON_SALE → UPCOMING` 전이가 없어 코드 롤백으로 되돌릴 수 없으므로 첫 주기 대상 id를 배포 전에 스냅샷한다.
 
 금지: 추측에 따른 +9/-9시간 보정, 시각 재표기, 메시지 폐기·유실로 대기열 비우기. UTC임이 확인된 기존 페이로드는 원문 바이트와 이벤트 ID를 유지한 채 재처리한다.
 
