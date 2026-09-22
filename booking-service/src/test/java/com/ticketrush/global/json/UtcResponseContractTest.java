@@ -67,12 +67,15 @@ class UtcResponseContractTest {
 
   @ParameterizedTest
   @ValueSource(strings = {"UTC", "Asia/Seoul"})
-  @DisplayName("기존 요청·전역 날짜·UTC 출처의 무시간대 이벤트 페이로드 계약을 유지한다")
+  @DisplayName("요청 DTO·전역 날짜·UTC 출처 이벤트 페이로드의 무시간대 계약을 유지한다 (응답 축 아님)")
   void legacy_requests_and_events_remain_naive(String zone) {
     TimeZone original = TimeZone.getDefault();
     try {
       TimeZone.setDefault(TimeZone.getTimeZone(zone));
       JsonConverter converter = new JsonConverter(mapper());
+      // booking_open_at 은 여기서 요청 축만 고정한다 — 어드민 입력 형식(무시간대 Asia/Seoul 벽시계)은
+      // #671에서도 바뀌지 않는다. 응답 축은 UTC(Z)로 옮겼고 그 계약은
+      // performance-service 의 PerformanceUtcResponseContractTest 가 소유한다.
       String request =
           "{\"booking_open_at\":\"2026-09-14 05:00:00\",\"show_date\":\"2026-09-14\","
               + "\"show_time\":\"14:00:00\"}";
