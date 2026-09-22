@@ -2,12 +2,14 @@ package com.ticketrush.boundedcontext.performance.app.dto.response;
 
 import com.ticketrush.boundedcontext.performance.domain.types.Genre;
 import com.ticketrush.boundedcontext.performance.domain.types.PerformanceStatus;
+import com.ticketrush.global.json.SeoulWallClockUtcSerializer;
 import io.swagger.v3.oas.annotations.media.Schema;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.LocalTime;
 import java.util.List;
 import tools.jackson.databind.JsonNode;
+import tools.jackson.databind.annotation.JsonSerialize;
 
 /**
  * 공연 상세 응답. 관리자 수정 화면도 별도 관리자 상세 API 없이 이 응답을 재사용한다(#650 프론트 결정).
@@ -28,7 +30,16 @@ public record PerformanceDetailResponse(
     Integer totalSeats,
     String address,
     PerformanceStatus performanceStatus,
-    LocalDateTime bookingOpenAt,
+    // 저장값은 KST 벽시계인데 응답은 UTC(Z)다 (#671). 맨 LocalDateTime으로 두면 전역 JacksonConfig 포맷을 타고
+    // 존 없이 나가, 같은 응답의 다른 시각 필드(...Z)와 해석 규칙이 갈린다.
+    @Schema(
+            description =
+                "예매 오픈 시각 (UTC, yyyy-MM-dd'T'HH:mm:ss'Z'). 어드민은 Asia/Seoul 기준으로 입력하고 응답은 UTC로 환산된다."
+                    + " 오픈 시각이 없으면 키가 빠짐",
+            example = "2027-08-01T11:00:00Z",
+            nullable = true)
+        @JsonSerialize(using = SeoulWallClockUtcSerializer.class)
+        LocalDateTime bookingOpenAt,
     String imageMainUrl,
     String image3dUrl,
     List<String> imageGalleryUrls,
