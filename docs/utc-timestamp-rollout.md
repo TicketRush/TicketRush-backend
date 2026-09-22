@@ -36,7 +36,8 @@
 
 | 서비스 | 응답 DTO | 필드 |
 |---|---|---|
-| performance | `PerformanceDetailResponse` | `booking_open_at` |
+| performance | `PerformanceDetailResponse` | `booking_open_at`, `show_at` |
+| performance | `PerformanceListResponse`, `PerformanceAdminSummaryResponse` | `show_at` |
 
 예: 기존 `"booking_open_at": "2027-08-01 20:00:00"` → `"booking_open_at": "2027-08-01T20:00:00+09:00"`.
 **숫자는 어드민 입력과 같고 오프셋만 붙는다** — 위 UTC 그룹처럼 UTC로 환산하지 않는다.
@@ -51,9 +52,14 @@
 별도 관리자 상세 API 없이 이 응답을 재사용하고(#650) 요청 DTO는 오프셋 없는 KST를 받으므로, `Z`로 내면 폼이
 그 값을 되돌려 저장하는 순간 오픈 시각이 조용히 9시간 앞당겨진다. 저장·비교 축과 요청 형식은 그대로다.
 
-**알려진 한계:** 같은 응답의 `show_date`·`show_time`은 ADR 0020이 같은 축으로 묶은 값인데도 아직 존 표시가
-없다. 프론트는 한 응답 안에서 두 규칙을 쓰게 된다. 함께 옮기지 않은 이유는 이번 증상이 `booking_open_at`
-하나에서만 보고됐고, 두 필드는 `DATE`·`TIME` 컬럼이라 형식 결정이 별개이기 때문이다 — 별도 이슈 후보다.
+`show_at`은 `show_date`·`show_time`을 합친 **추가** 필드다(ADR 0020 결정 7). 두 컬럼이 `DATE`·`TIME`로 쪼개져
+있어 오프셋을 직접 붙일 자리가 없으므로, 기존 두 필드를 그대로 두고 합쳐진 값을 함께 내린다. 필드 추가는 하위 호환이라
+프론트 동시 배포가 필요 없고, 시간 계산이 필요한 소비자는 `show_at` 하나만 보면 된다. 저장하지 않고 매 응답마다
+합성하므로 세 필드가 어긋날 수 없다.
+
+**캐시:** `PerformanceListResponse`는 `PerformanceListSlice`로 Redis에 캐시된다(TTL 30초). 구 캐시 항목에는
+`show_at`이 없어 배포 직후 최대 30초간 그 키가 빠진 응답이 나올 수 있다. 필드 추가는 역직렬화를 깨지 않으므로
+네임스페이스 교체는 필요 없다 — 좌석맵(v2)과 달리 캐시 정리 절차가 없다.
 
 ### 바뀌지 않는 계약 (불변 조건)
 
