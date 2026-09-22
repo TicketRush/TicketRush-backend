@@ -1,8 +1,8 @@
 package com.ticketrush.boundedcontext.performance.app.dto.response;
 
+import com.ticketrush.boundedcontext.performance.app.support.SeoulWallClockSerializer;
 import com.ticketrush.boundedcontext.performance.domain.types.Genre;
 import com.ticketrush.boundedcontext.performance.domain.types.PerformanceStatus;
-import com.ticketrush.global.json.SeoulWallClockUtcSerializer;
 import io.swagger.v3.oas.annotations.media.Schema;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
@@ -30,15 +30,16 @@ public record PerformanceDetailResponse(
     Integer totalSeats,
     String address,
     PerformanceStatus performanceStatus,
-    // 저장값은 KST 벽시계인데 응답은 UTC(Z)다 (#671). 맨 LocalDateTime으로 두면 전역 JacksonConfig 포맷을 타고
-    // 존 없이 나가, 같은 응답의 다른 시각 필드(...Z)와 해석 규칙이 갈린다.
+    // 맨 LocalDateTime으로 두면 전역 JacksonConfig 포맷을 타고 존 없이 나가, 클라이언트가 KST 로 읽을지 UTC 로
+    // 읽을지 정할 근거가 응답 안에 없다 (#671). 표기를 Z 가 아니라 +09:00 으로 고른 이유는 직렬화기 Javadoc 참고 —
+    // 이 필드는 어드민 수정 화면이 상세 응답을 그대로 폼에 되돌려 저장하는 왕복을 탄다(#650).
     @Schema(
             description =
-                "예매 오픈 시각 (UTC, yyyy-MM-dd'T'HH:mm:ss'Z'). 어드민은 Asia/Seoul 기준으로 입력하고 응답은 UTC로 환산된다."
+                "예매 오픈 시각 (yyyy-MM-dd'T'HH:mm:ss+09:00, Asia/Seoul). 요청과 같은 벽시계 값에 오프셋만 붙는다."
                     + " 오픈 시각이 없으면 키가 빠짐",
-            example = "2027-08-01T11:00:00Z",
+            example = "2027-08-01T20:00:00+09:00",
             nullable = true)
-        @JsonSerialize(using = SeoulWallClockUtcSerializer.class)
+        @JsonSerialize(using = SeoulWallClockSerializer.class)
         LocalDateTime bookingOpenAt,
     String imageMainUrl,
     String image3dUrl,

@@ -8,15 +8,14 @@ import com.ticketrush.boundedcontext.performance.domain.types.PerformanceStatus;
 import com.ticketrush.global.config.JacksonConfig;
 import com.ticketrush.global.dto.response.ApiResponse;
 import com.ticketrush.global.status.SuccessStatus;
-import java.time.Instant;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.LocalTime;
+import java.time.OffsetDateTime;
 import java.time.ZonedDateTime;
 import java.time.temporal.ChronoUnit;
 import java.util.List;
 import java.util.TimeZone;
-import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.parallel.ResourceLock;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.Arguments;
@@ -25,24 +24,31 @@ import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.json.JsonMapper;
 
 /**
- * {@code booking_open_at}의 UTC 전송 계약 (#671).
+ * {@code booking_open_at}의 전송 계약 (#671).
  *
- * <p>형제 테스트({@code PaymentUtcResponseContractTest} 등)와 같은 꼴이지만 <b>기대 순간을 만드는 방식이 다르다</b>. 다른 서비스의
- * 시각은 저장값이 이미 UTC라 {@code toInstant(UTC)}로 비교하지만, 이 필드는 저장값이 Asia/Seoul 벽시계라(ADR 0020) 어드민이 입력한 그
- * 순간은 {@code ZonedDateTime.of(value, SHOW_ZONE)}로만 나온다. 이 테스트가 잡는 회귀가 정확히 그 혼동이다 — 값에 {@code Z}만
- * 붙이면 9시간 어긋난 순간을 가리키면서도 형식은 정상으로 보인다.
+ * <p>형제 테스트({@code PaymentUtcResponseContractTest} 등)와 같은 꼴이지만 <b>고정하는 계약이 다르다</b>. 다른 서비스의 시각은
+ * 저장값이 이미 UTC 라 {@code ...Z}로 나가지만, 이 필드는 저장값이 Asia/Seoul 벽시계라(ADR 0020) 숫자를 그대로 두고 오프셋만 붙인다({@code
+ * +09:00}) — 어드민 수정 화면이 이 응답을 폼에 되돌려 저장하는 왕복을 타기 때문이다(#650).
+ *
+ * <p>이 테스트가 잡는 회귀는 세 가지다. 애노테이션이 빠지면 존 표시가 사라지고({@code 2026-09-22 19:00:00}), common의 {@code
+ * UtcLocalDateTimeSerializer}를 붙이면 존 표시는 생기지만 9시간 어긋난 순간을 가리키며({@code 2026-09-22T19:00:00Z}), 존 상수가
+ * 갈리면 오프셋이 달라진다. 그래서 문자열과 순간을 따로 단언한다 — 형식만 보면 두 번째 사고를 놓친다.
  */
 @ResourceLock("java.util.TimeZone.default")
 class PerformanceUtcResponseContractTest {
 
+  /** JVM 기본 존을 바꿔도 결과가 같아야 한다 — 운영은 {@code TZ=UTC}, 로컬은 KST 다. */
+  private static final List<String> JVM_ZONES = List.of("UTC", "Asia/Seoul");
+
   static List<Arguments> bookingOpenAtCases() {
     return List.of(
-        // 이슈 #671의 재현 값. KST 19:00 정각이 UTC 같은 날 10:00 이다.
-        Arguments.of(LocalDateTime.parse("2026-09-22T19:00:00"), "2026-09-22T10:00:00Z"),
-        // 자정 이전 KST 는 UTC 로 전날이 된다 — 날짜까지 바뀌는 자리를 고정한다.
-        Arguments.of(LocalDateTime.parse("2027-01-01T00:00:00"), "2026-12-31T15:00:00Z"),
-        // 초 미만 정밀도는 절삭한다(부모 직렬화기의 규칙).
-        Arguments.of(LocalDateTime.parse("2026-12-31T23:59:59.987654321"), "2026-12-31T14:59:59Z"));
+        // 이슈 #671의 재현 값. 어드민이 입력한 19:00 이 응답에서도 19:00 이어야 한다.
+        Arguments.of(LocalDateTime.parse("2026-09-22T19:00:00"), "2026-09-22T19:00:00+09:00"),
+        // UTC 로 환산하면 전날이 되는 자리. Z 로 냈다면 날짜까지 달라져 폼 왕복이 깨진다.
+        Arguments.of(LocalDateTime.parse("2027-01-01T00:00:00"), "2027-01-01T00:00:00+09:00"),
+        // 초 미만 정밀도는 절삭한다. 초가 0인 값도 초를 생략하지 않는다(길이 고정).
+        Arguments.of(
+            LocalDateTime.parse("2026-12-31T23:59:59.987654321"), "2026-12-31T23:59:59+09:00"));
   }
 
   private static PerformanceDetailResponse response(LocalDateTime bookingOpenAt) {
@@ -74,59 +80,51 @@ class PerformanceUtcResponseContractTest {
     return builder.build();
   }
 
-  @ParameterizedTest(name = "KST {0} → {1}")
-  @MethodSource("bookingOpenAtCases")
-  @DisplayName("성공: booking_open_at 은 JVM 기본 존과 무관하게 같은 UTC 문자열로 나간다 (#671)")
-  void bookingOpenAtKeepsSeoulInstantAsUtc(LocalDateTime bookingOpenAt, String expected) {
-    TimeZone original = TimeZone.getDefault();
-    try {
-      for (String zone : List.of("UTC", "Asia/Seoul")) {
-        TimeZone.setDefault(TimeZone.getTimeZone(zone));
-        assertThat(TimeZone.getDefault().getID()).isEqualTo(zone);
-
-        JsonMapper mapper = mapper();
-        JsonNode envelope =
-            mapper.readTree(
-                mapper.writeValueAsString(
-                    ApiResponse.onSuccess(SuccessStatus.OK, response(bookingOpenAt)).getBody()));
-
-        assertThat(envelope.get("is_success").asBoolean()).isTrue();
-        String actual = envelope.at("/result/booking_open_at").asString();
-
-        // 형식 — 존 표시가 붙고, JVM 기본 존을 바꿔도 문자열이 같다.
-        assertThat(actual).as("%s 존에서의 응답 문자열", zone).isEqualTo(expected);
-
-        // 의미 — 그 문자열이 어드민이 Asia/Seoul 로 입력한 바로 그 순간을 가리킨다.
-        assertThat(Instant.parse(actual))
-            .as("%s 존에서의 순간", zone)
-            .isEqualTo(
-                ZonedDateTime.of(bookingOpenAt, PerformanceShowTimePolicy.SHOW_ZONE)
-                    .toInstant()
-                    .truncatedTo(ChronoUnit.SECONDS));
-      }
-    } finally {
-      TimeZone.setDefault(original);
-    }
+  static List<Arguments> cases() {
+    return JVM_ZONES.stream()
+        .flatMap(
+            zone ->
+                bookingOpenAtCases().stream().map(c -> Arguments.of(zone, c.get()[0], c.get()[1])))
+        .toList();
   }
 
-  @ParameterizedTest(name = "JVM 기본 존 {0}")
-  @MethodSource("zones")
-  @DisplayName("성공: 오픈 시각이 없으면 booking_open_at 키가 빠진다 (#671)")
-  void bookingOpenAtIsOmittedWhenNull(String zone) {
+  @ParameterizedTest(name = "JVM {0} · KST {1} → {2}")
+  @MethodSource("cases")
+  void bookingOpenAtCarriesSeoulOffset(String zone, LocalDateTime bookingOpenAt, String expected) {
     TimeZone original = TimeZone.getDefault();
     try {
       TimeZone.setDefault(TimeZone.getTimeZone(zone));
+      assertThat(TimeZone.getDefault().getID()).isEqualTo(zone);
       JsonMapper mapper = mapper();
 
-      JsonNode json = mapper.readTree(mapper.writeValueAsString(response(null)));
+      JsonNode envelope =
+          mapper.readTree(
+              mapper.writeValueAsString(
+                  ApiResponse.onSuccess(SuccessStatus.OK, response(bookingOpenAt)).getBody()));
 
-      assertThat(json.at("/booking_open_at").isMissingNode()).isTrue();
+      assertThat(envelope.get("is_success").asBoolean()).isTrue();
+      String actual = envelope.at("/result/booking_open_at").asString();
+
+      // 형식 — 오프셋이 붙고, 숫자는 어드민이 입력한 벽시계 그대로다(폼 왕복이 이 동일성에 기댄다).
+      assertThat(actual).isEqualTo(expected);
+
+      // 의미 — 그 문자열이 Asia/Seoul 로 해석한 바로 그 순간을 가리킨다. 형식이 맞아도 존 상수가
+      // 갈리면(예: 부모 직렬화기의 리터럴 Z) 이 단언만 깨진다.
+      assertThat(OffsetDateTime.parse(actual).toInstant())
+          .isEqualTo(
+              ZonedDateTime.of(bookingOpenAt, PerformanceShowTimePolicy.SHOW_ZONE)
+                  .toInstant()
+                  .truncatedTo(ChronoUnit.SECONDS));
+
+      // 값이 없으면 전역 NON_NULL 로 키가 빠진다 — @Schema 가 약속한 동작이다.
+      assertThat(
+              mapper
+                  .readTree(mapper.writeValueAsString(response(null)))
+                  .at("/booking_open_at")
+                  .isMissingNode())
+          .isTrue();
     } finally {
       TimeZone.setDefault(original);
     }
-  }
-
-  static List<Arguments> zones() {
-    return List.of(Arguments.of("UTC"), Arguments.of("Asia/Seoul"));
   }
 }
