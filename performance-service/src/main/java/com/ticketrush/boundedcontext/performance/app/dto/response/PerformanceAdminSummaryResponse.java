@@ -1,5 +1,6 @@
 package com.ticketrush.boundedcontext.performance.app.dto.response;
 
+import com.ticketrush.boundedcontext.performance.app.support.SeoulWallClockDeserializer;
 import com.ticketrush.boundedcontext.performance.app.support.SeoulWallClockSerializer;
 import com.ticketrush.boundedcontext.performance.domain.types.Genre;
 import com.ticketrush.global.types.PerformanceStatus;
@@ -7,6 +8,7 @@ import io.swagger.v3.oas.annotations.media.Schema;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.LocalTime;
+import tools.jackson.databind.annotation.JsonDeserialize;
 import tools.jackson.databind.annotation.JsonSerialize;
 
 /**
@@ -31,6 +33,7 @@ public record PerformanceAdminSummaryResponse(
                     + " 시간 계산은 이 필드 하나로 하면 된다",
             example = "2026-09-01T19:30:00+09:00")
         @JsonSerialize(using = SeoulWallClockSerializer.class)
+        @JsonDeserialize(using = SeoulWallClockDeserializer.class)
         LocalDateTime showAt,
     @Schema(description = "공연 상태", example = "ON_SALE") PerformanceStatus performanceStatus,
     @Schema(

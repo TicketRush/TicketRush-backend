@@ -1,5 +1,6 @@
 package com.ticketrush.boundedcontext.performance.app.dto.response;
 
+import com.ticketrush.boundedcontext.performance.app.support.SeoulWallClockDeserializer;
 import com.ticketrush.boundedcontext.performance.app.support.SeoulWallClockSerializer;
 import com.ticketrush.boundedcontext.performance.domain.types.Genre;
 import com.ticketrush.global.types.PerformanceStatus;
@@ -9,6 +10,7 @@ import java.time.LocalDateTime;
 import java.time.LocalTime;
 import java.util.List;
 import tools.jackson.databind.JsonNode;
+import tools.jackson.databind.annotation.JsonDeserialize;
 import tools.jackson.databind.annotation.JsonSerialize;
 
 /**
@@ -31,6 +33,7 @@ public record PerformanceDetailResponse(
                     + " 시간 계산은 이 필드 하나로 하면 된다",
             example = "2027-01-10T19:00:00+09:00")
         @JsonSerialize(using = SeoulWallClockSerializer.class)
+        @JsonDeserialize(using = SeoulWallClockDeserializer.class)
         LocalDateTime showAt,
     Integer durationMinutes,
     Long price,
@@ -47,6 +50,7 @@ public record PerformanceDetailResponse(
             example = "2027-08-01T20:00:00+09:00",
             nullable = true)
         @JsonSerialize(using = SeoulWallClockSerializer.class)
+        @JsonDeserialize(using = SeoulWallClockDeserializer.class)
         LocalDateTime bookingOpenAt,
     String imageMainUrl,
     String image3dUrl,
