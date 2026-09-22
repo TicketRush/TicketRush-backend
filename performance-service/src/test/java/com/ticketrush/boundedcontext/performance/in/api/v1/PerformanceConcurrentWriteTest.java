@@ -12,9 +12,9 @@ import com.ticketrush.boundedcontext.performance.app.usecase.PerformancePatchUse
 import com.ticketrush.boundedcontext.performance.domain.entity.Performance;
 import com.ticketrush.boundedcontext.performance.domain.policy.PerformanceShowTimePolicy;
 import com.ticketrush.boundedcontext.performance.domain.types.Genre;
-import com.ticketrush.boundedcontext.performance.domain.types.PerformanceStatus;
 import com.ticketrush.boundedcontext.performance.out.repository.PerformanceRepository;
 import com.ticketrush.global.eventpublisher.EventPublisher;
+import com.ticketrush.global.types.PerformanceStatus;
 import com.ticketrush.global.util.S3UploadUtils;
 import java.sql.Timestamp;
 import java.time.LocalDate;

@@ -7,11 +7,11 @@ import com.ticketrush.boundedcontext.performance.app.dto.request.PerformanceChan
 import com.ticketrush.boundedcontext.performance.app.usecase.PerformanceChangeStatusUseCase;
 import com.ticketrush.boundedcontext.performance.domain.entity.Performance;
 import com.ticketrush.boundedcontext.performance.domain.types.Genre;
-import com.ticketrush.boundedcontext.performance.domain.types.PerformanceStatus;
 import com.ticketrush.boundedcontext.performance.out.repository.PerformanceRepository;
 import com.ticketrush.global.eventpublisher.EventPublisher;
 import com.ticketrush.global.exception.BusinessException;
 import com.ticketrush.global.status.ErrorStatus;
+import com.ticketrush.global.types.PerformanceStatus;
 import com.ticketrush.global.util.S3UploadUtils;
 import java.time.LocalDate;
 import java.time.LocalTime;

@@ -8,6 +8,7 @@ import static org.springframework.test.web.client.response.MockRestResponseCreat
 
 import com.ticketrush.boundedcontext.performance.out.apiclient.dto.BookingStatsInfo;
 import com.ticketrush.global.config.CustomSecurityProperties;
+import java.time.Clock;
 import java.time.LocalDate;
 import java.util.Optional;
 import org.junit.jupiter.api.BeforeEach;
@@ -38,7 +39,7 @@ class BookingRestClientTest {
     CustomSecurityProperties properties = new CustomSecurityProperties();
     properties.setInternalToken("test-internal-token");
 
-    client = new BookingRestClient(builder.build(), properties, BASE_URL);
+    client = new BookingRestClient(builder.build(), properties, Clock.systemUTC(), BASE_URL);
   }
 
   @Test
@@ -116,7 +117,10 @@ class BookingRestClientTest {
     MockRestServiceServer strictServer = MockRestServiceServer.bindTo(builder).build();
     BookingRestClient misconfigured =
         new BookingRestClient(
-            builder.build(), new CustomSecurityProperties(), "booking-service:8084");
+            builder.build(),
+            new CustomSecurityProperties(),
+            Clock.systemUTC(),
+            "booking-service:8084");
 
     // when
     Optional<BookingStatsInfo> result = misconfigured.getStats(FROM, TO);
@@ -133,7 +137,8 @@ class BookingRestClientTest {
     RestClient.Builder builder = RestClient.builder();
     MockRestServiceServer strictServer = MockRestServiceServer.bindTo(builder).build();
     BookingRestClient unconfigured =
-        new BookingRestClient(builder.build(), new CustomSecurityProperties(), "");
+        new BookingRestClient(
+            builder.build(), new CustomSecurityProperties(), Clock.systemUTC(), "");
 
     // when
     Optional<BookingStatsInfo> result = unconfigured.getStats(FROM, TO);

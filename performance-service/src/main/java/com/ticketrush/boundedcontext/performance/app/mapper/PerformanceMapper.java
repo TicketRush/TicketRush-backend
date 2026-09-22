@@ -5,6 +5,8 @@ import com.ticketrush.boundedcontext.performance.app.dto.response.PerformanceCre
 import com.ticketrush.boundedcontext.performance.app.dto.response.PerformanceDetailResponse;
 import com.ticketrush.boundedcontext.performance.app.dto.response.PerformanceListResponse;
 import com.ticketrush.boundedcontext.performance.domain.entity.Performance;
+import com.ticketrush.boundedcontext.performance.domain.policy.PerformanceShowTimePolicy;
+import java.time.LocalDateTime;
 import org.mapstruct.Mapper;
 import org.mapstruct.Mapping;
 import org.mapstruct.Named;
@@ -53,6 +55,16 @@ public interface PerformanceMapper {
     return json == null ? null : CHARACTER_CONFIG_MAPPER.readTree(json);
   }
 
+  /**
+   * 쪼개 저장된 공연 시작 일시를 응답용 {@code showAt}으로 합친다 (#671). 합치는 규칙은 {@link
+   * PerformanceShowTimePolicy#showAt}이 소유하고, 여기서는 MapStruct 가 두 소스 필드를 하나의 타깃에 넣지 못하므로 엔티티 전체를 받아
+   * 위임만 한다.
+   */
+  @Named("toShowAt")
+  default LocalDateTime toShowAt(Performance performance) {
+    return PerformanceShowTimePolicy.showAt(performance.getShowDate(), performance.getShowTime());
+  }
+
   @Named("blankToNull")
   default String blankToNull(String value) {
     return (value == null || value.isBlank()) ? null : value;
@@ -77,9 +89,11 @@ public interface PerformanceMapper {
   @Mapping(source = "id", target = "performanceId")
   @Mapping(target = "totalSeats", ignore = true)
   @Mapping(target = "remainingSeats", ignore = true)
+  @Mapping(target = "showAt", source = ".", qualifiedByName = "toShowAt")
   PerformanceListResponse toListResponse(Performance performance);
 
   @Mapping(source = "id", target = "performanceId")
   @Mapping(target = "characterConfig", source = "characterConfig", qualifiedByName = "toJsonNode")
+  @Mapping(target = "showAt", source = ".", qualifiedByName = "toShowAt")
   PerformanceDetailResponse toDetailResponse(Performance performance);
 }

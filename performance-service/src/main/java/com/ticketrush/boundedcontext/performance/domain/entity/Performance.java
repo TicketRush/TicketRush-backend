@@ -1,10 +1,10 @@
 package com.ticketrush.boundedcontext.performance.domain.entity;
 
 import com.ticketrush.boundedcontext.performance.domain.types.Genre;
-import com.ticketrush.boundedcontext.performance.domain.types.PerformanceStatus;
 import com.ticketrush.global.exception.BusinessException;
 import com.ticketrush.global.jpa.entity.AutoIdBaseEntity;
 import com.ticketrush.global.status.ErrorStatus;
+import com.ticketrush.global.types.PerformanceStatus;
 import jakarta.persistence.AttributeOverride;
 import jakarta.persistence.CollectionTable;
 import jakarta.persistence.Column;
@@ -327,8 +327,15 @@ public class Performance extends AutoIdBaseEntity {
     }
   }
 
-  public void softDelete() {
-    this.deletedAt = LocalDateTime.now();
+  /**
+   * 삭제 시각을 <b>받아서</b> 채운다 (#671).
+   *
+   * <p>{@code LocalDateTime.now()}는 JVM 기본 시간대를 따라 운영(UTC)과 로컬(KST)에서 다른 값을 만든다. 이 값은 사람이 입력하는 공연
+   * 시각이 아니라 시스템이 기록하는 시각이므로 auditing 과 같은 축(common {@code ClockConfig}의 UTC Clock)이어야 한다 — 벌크 JPQL이
+   * {@code updatedAt}을 파라미터로 받는 것과 같은 이유다(ADR 0020).
+   */
+  public void softDelete(LocalDateTime deletedAt) {
+    this.deletedAt = deletedAt;
   }
 
   public boolean canTransitionTo(PerformanceStatus target) {

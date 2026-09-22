@@ -30,12 +30,43 @@
 적용 방식: 지정 필드에만 `@JsonSerialize(using = UtcLocalDateTimeSerializer.class)`를 붙인다
 (`common/src/main/java/com/ticketrush/global/json/UtcLocalDateTimeSerializer.java`).
 
+### Asia/Seoul 오프셋을 붙이는 필드 (#671) — 위 UTC 그룹과 규칙이 다르다
+
+응답 형식: `yyyy-MM-dd'T'HH:mm:ss+09:00` (Asia/Seoul, 초 단위 절삭). null 필드는 기존대로 생략한다.
+
+| 서비스 | 응답 DTO | 필드 |
+|---|---|---|
+| performance | `PerformanceDetailResponse` | `booking_open_at`, `show_at` |
+| performance | `PerformanceListResponse`, `PerformanceAdminSummaryResponse` | `show_at` |
+
+예: 기존 `"booking_open_at": "2027-08-01 20:00:00"` → `"booking_open_at": "2027-08-01T20:00:00+09:00"`.
+**숫자는 어드민 입력과 같고 오프셋만 붙는다** — 위 UTC 그룹처럼 UTC로 환산하지 않는다.
+
+이 필드는 저장값이 어드민이 오프셋 없이 입력한 **Asia/Seoul 벽시계**라(ADR 0020) `UtcLocalDateTimeSerializer`를
+쓸 수 없다. 그 직렬화기는 값이 이미 UTC라고 전제하고 `Z`를 리터럴로 붙이기만 해서, 형식은 정상으로 보이면서
+9시간 어긋난 순간을 가리킨다. 대신
+`performance-service/src/main/java/com/ticketrush/boundedcontext/performance/app/support/SeoulWallClockSerializer.java`가
+`PerformanceShowTimePolicy.SHOW_ZONE`으로 오프셋을 계산한다.
+
+`Z`가 아니라 `+09:00`인 이유는 **이 필드만 읽기와 쓰기가 같은 화면을 왕복**하기 때문이다. 어드민 수정 화면이
+별도 관리자 상세 API 없이 이 응답을 재사용하고(#650) 요청 DTO는 오프셋 없는 KST를 받으므로, `Z`로 내면 폼이
+그 값을 되돌려 저장하는 순간 오픈 시각이 조용히 9시간 앞당겨진다. 저장·비교 축과 요청 형식은 그대로다.
+
+`show_at`은 `show_date`·`show_time`을 합친 **추가** 필드다(ADR 0020 결정 7). 두 컬럼이 `DATE`·`TIME`로 쪼개져
+있어 오프셋을 직접 붙일 자리가 없으므로, 기존 두 필드를 그대로 두고 합쳐진 값을 함께 내린다. 필드 추가는 하위 호환이라
+프론트 동시 배포가 필요 없고, 시간 계산이 필요한 소비자는 `show_at` 하나만 보면 된다. 저장하지 않고 매 응답마다
+합성하므로 세 필드가 어긋날 수 없다.
+
+**캐시:** `PerformanceListResponse`는 `PerformanceListSlice`로 Redis에 캐시된다(TTL 30초). 구 캐시 항목에는
+`show_at`이 없어 배포 직후 최대 30초간 그 키가 빠진 응답이 나올 수 있다. 필드 추가는 역직렬화를 깨지 않으므로
+네임스페이스 교체는 필요 없다 — 좌석맵(v2)과 달리 캐시 정리 절차가 없다.
+
 ### 바뀌지 않는 계약 (불변 조건)
 
 - 전역 Jackson 포맷(`JacksonConfig`: `yyyy-MM-dd HH:mm:ss`, snake_case, NON_NULL)
 - 요청 DTO의 날짜·시각 입력 형식
 - Kafka 이벤트 페이로드·Outbox 페이로드 형식, 서비스 간 내부 DTO
-- 공연 `show_date`, `show_time`, `booking_open_at`의 형식과 값
+- 공연 `show_date`, `show_time`의 형식과 값
 
 ### 시계 기준
 
@@ -63,7 +94,7 @@
 3. **Kafka 미처리 메시지**: 컨슈머 lag에 남은 이벤트의 시각 출처 시간대.
 4. **DLT 재처리 데이터**: 재처리 대상 페이로드·외피의 시각 출처 시간대.
 5. **소비자 준비**: 프런트엔드·관리자 화면이 `Z` 포함 ISO-8601과 기존 무시간대 형식(`yyyy-MM-dd HH:mm:ss`, UTC로 해석)을 **둘 다** 파싱할 수 있는지. 롤백 시 무시간대 형식이 돌아오기 때문이다.
-6. **`booking_open_at` 업무 의미**: KST 벽시계로 확정했다(ADR 0020·#653). 오픈 전환은 UTC 런타임에서도 Asia/Seoul 벽시계와 비교하므로 충돌은 해소됐다. #653 배포 전에는 기존 `booking_open_at` 값이 KST 의도인지 확인한다 — UTC 의도로 넣은 값은 배포 첫 주기에 KST 기준 이미 도래한 것이 한꺼번에 열리고, 그 뒤로도 건마다 9시간 일찍 열린다. `ON_SALE → UPCOMING` 전이가 없어 코드 롤백으로 되돌릴 수 없으므로 첫 주기 대상 id를 배포 전에 스냅샷한다.
+6. **`booking_open_at` 업무 의미**: KST 벽시계로 확정했다(ADR 0020·#653). 응답 축은 #671에서 오프셋 표기(`+09:00`)로 옮겼고 저장값·비교 축과 요청 형식은 그대로다. 오픈 전환은 UTC 런타임에서도 Asia/Seoul 벽시계와 비교하므로 충돌은 해소됐다. #653 배포 전에는 기존 `booking_open_at` 값이 KST 의도인지 확인한다 — UTC 의도로 넣은 값은 배포 첫 주기에 KST 기준 이미 도래한 것이 한꺼번에 열리고, 그 뒤로도 건마다 9시간 일찍 열린다. `ON_SALE → UPCOMING` 전이가 없어 코드 롤백으로 되돌릴 수 없으므로 첫 주기 대상 id를 배포 전에 스냅샷한다.
 
 금지: 추측에 따른 +9/-9시간 보정, 시각 재표기, 메시지 폐기·유실로 대기열 비우기. UTC임이 확인된 기존 페이로드는 원문 바이트와 이벤트 ID를 유지한 채 재처리한다.
 

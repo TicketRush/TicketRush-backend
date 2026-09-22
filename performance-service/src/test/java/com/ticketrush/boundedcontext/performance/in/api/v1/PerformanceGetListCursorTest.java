@@ -12,12 +12,13 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import com.ticketrush.boundedcontext.performance.app.dto.response.PerformanceListResponse;
 import com.ticketrush.boundedcontext.performance.app.facade.PerformanceFacade;
 import com.ticketrush.boundedcontext.performance.domain.types.Genre;
-import com.ticketrush.boundedcontext.performance.domain.types.PerformanceStatus;
 import com.ticketrush.global.config.CustomSecurityProperties;
 import com.ticketrush.global.config.SecurityConfig;
 import com.ticketrush.global.dto.request.CursorPageRequest;
+import com.ticketrush.global.types.PerformanceStatus;
 import com.ticketrush.support.WebMvcSliceTest;
 import java.time.LocalDate;
+import java.time.LocalDateTime;
 import java.time.LocalTime;
 import java.util.List;
 import org.junit.jupiter.api.DisplayName;
@@ -52,6 +53,7 @@ class PerformanceGetListCursorTest {
         Genre.CONCERT,
         LocalDate.of(2026, 9, 1),
         LocalTime.of(19, 0),
+        LocalDateTime.of(2026, 9, 1, 19, 0),
         "서울",
         "https://s3.example.com/main.jpg",
         PerformanceStatus.ON_SALE,

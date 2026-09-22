@@ -1,13 +1,17 @@
 package com.ticketrush.boundedcontext.performance.app.dto.response;
 
+import com.ticketrush.boundedcontext.performance.app.support.SeoulWallClockDeserializer;
+import com.ticketrush.boundedcontext.performance.app.support.SeoulWallClockSerializer;
 import com.ticketrush.boundedcontext.performance.domain.types.Genre;
-import com.ticketrush.boundedcontext.performance.domain.types.PerformanceStatus;
+import com.ticketrush.global.types.PerformanceStatus;
 import io.swagger.v3.oas.annotations.media.Schema;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.LocalTime;
 import java.util.List;
 import tools.jackson.databind.JsonNode;
+import tools.jackson.databind.annotation.JsonDeserialize;
+import tools.jackson.databind.annotation.JsonSerialize;
 
 /**
  * 공연 상세 응답. 관리자 수정 화면도 별도 관리자 상세 API 없이 이 응답을 재사용한다(#650 프론트 결정).
@@ -23,12 +27,31 @@ public record PerformanceDetailResponse(
     String description,
     LocalDate showDate,
     LocalTime showTime,
+    @Schema(
+            description =
+                "공연 시작 일시 (yyyy-MM-dd'T'HH:mm:ss+09:00, Asia/Seoul). show_date·show_time 을 합친 값으로,"
+                    + " 시간 계산은 이 필드 하나로 하면 된다",
+            example = "2027-01-10T19:00:00+09:00")
+        @JsonSerialize(using = SeoulWallClockSerializer.class)
+        @JsonDeserialize(using = SeoulWallClockDeserializer.class)
+        LocalDateTime showAt,
     Integer durationMinutes,
     Long price,
     Integer totalSeats,
     String address,
     PerformanceStatus performanceStatus,
-    LocalDateTime bookingOpenAt,
+    // 맨 LocalDateTime으로 두면 전역 JacksonConfig 포맷을 타고 존 없이 나가, 클라이언트가 KST 로 읽을지 UTC 로
+    // 읽을지 정할 근거가 응답 안에 없다 (#671). 표기를 Z 가 아니라 +09:00 으로 고른 이유는 직렬화기 Javadoc 참고 —
+    // 이 필드는 어드민 수정 화면이 상세 응답을 그대로 폼에 되돌려 저장하는 왕복을 탄다(#650).
+    @Schema(
+            description =
+                "예매 오픈 시각 (yyyy-MM-dd'T'HH:mm:ss+09:00, Asia/Seoul). 요청과 같은 벽시계 값에 오프셋만 붙는다."
+                    + " 오픈 시각이 없으면 키가 빠짐",
+            example = "2027-08-01T20:00:00+09:00",
+            nullable = true)
+        @JsonSerialize(using = SeoulWallClockSerializer.class)
+        @JsonDeserialize(using = SeoulWallClockDeserializer.class)
+        LocalDateTime bookingOpenAt,
     String imageMainUrl,
     String image3dUrl,
     List<String> imageGalleryUrls,

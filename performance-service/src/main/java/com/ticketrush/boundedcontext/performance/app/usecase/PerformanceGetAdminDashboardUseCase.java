@@ -3,7 +3,6 @@ package com.ticketrush.boundedcontext.performance.app.usecase;
 import com.ticketrush.boundedcontext.performance.app.dto.response.PerformanceAdminDashboardResponse;
 import com.ticketrush.boundedcontext.performance.app.dto.response.PerformanceAggregateRow;
 import com.ticketrush.boundedcontext.performance.domain.types.Genre;
-import com.ticketrush.boundedcontext.performance.domain.types.PerformanceStatus;
 import com.ticketrush.boundedcontext.performance.out.apiclient.BookingRestClient;
 import com.ticketrush.boundedcontext.performance.out.apiclient.SeatRestClient;
 import com.ticketrush.boundedcontext.performance.out.apiclient.dto.BookingStatsInfo;
@@ -11,8 +10,10 @@ import com.ticketrush.boundedcontext.performance.out.apiclient.dto.SeatCountsInf
 import com.ticketrush.boundedcontext.performance.out.repository.PerformanceRepository;
 import com.ticketrush.global.exception.BusinessException;
 import com.ticketrush.global.status.ErrorStatus;
+import com.ticketrush.global.types.PerformanceStatus;
 import java.math.BigDecimal;
 import java.math.RoundingMode;
+import java.time.Clock;
 import java.time.LocalDate;
 import java.time.temporal.ChronoUnit;
 import java.util.ArrayList;
@@ -54,11 +55,22 @@ public class PerformanceGetAdminDashboardUseCase {
   private static final int OCCUPANCY_SCALE = 4;
 
   private final PerformanceRepository performanceRepository;
+
+  /**
+   * 기본 기간의 "오늘"을 만드는 시계 (#671). {@code LocalDateTime.now()}·{@code LocalDate.now()}는 JVM 기본 시간대를 따라
+   * 운영(UTC)과 로컬(KST)에서 다른 기간을 만들어, 같은 요청이 환경마다 다른 매출을 돌려줬다.
+   *
+   * <p><b>이 값은 UTC 다.</b> 매출 집계의 일자 경계를 booking 이 {@code cast(confirmedAt as LocalDate)}로 만들고
+   * {@code confirmedAt}이 UTC 이므로, 조회 기간도 같은 축이어야 버킷과 맞는다. 여기만 KST 로 바꾸면 요청 날짜와 버킷 날짜가 9시간 어긋난다.
+   * "업무일을 KST 로 볼 것인가"는 집계 경계까지 함께 옮겨야 하는 별개 결정이다.
+   */
+  private final Clock clock;
+
   private final BookingRestClient bookingRestClient;
   private final SeatRestClient seatRestClient;
 
   public PerformanceAdminDashboardResponse execute(LocalDate from, LocalDate to) {
-    LocalDate resolvedTo = (to == null) ? LocalDate.now() : to;
+    LocalDate resolvedTo = (to == null) ? LocalDate.now(clock) : to;
     LocalDate resolvedFrom = (from == null) ? resolvedTo.minusDays(DEFAULT_PERIOD_DAYS - 1L) : from;
     validatePeriod(resolvedFrom, resolvedTo);
 

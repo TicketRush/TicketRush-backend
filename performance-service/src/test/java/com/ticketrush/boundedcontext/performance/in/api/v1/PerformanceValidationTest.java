@@ -10,8 +10,8 @@ import com.ticketrush.boundedcontext.performance.app.dto.request.PerformanceChan
 import com.ticketrush.boundedcontext.performance.app.dto.request.PerformanceCreateRequest;
 import com.ticketrush.boundedcontext.performance.app.facade.PerformanceFacade;
 import com.ticketrush.boundedcontext.performance.domain.types.Genre;
-import com.ticketrush.boundedcontext.performance.domain.types.PerformanceStatus;
 import com.ticketrush.global.config.CustomSecurityProperties;
+import com.ticketrush.global.types.PerformanceStatus;
 import com.ticketrush.shared.performance.event.PerformanceCreatedEvent;
 import java.nio.charset.StandardCharsets;
 import java.time.LocalDate;

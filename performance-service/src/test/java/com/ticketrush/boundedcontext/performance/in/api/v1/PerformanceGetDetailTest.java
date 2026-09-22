@@ -11,12 +11,12 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import com.ticketrush.boundedcontext.performance.app.dto.response.PerformanceDetailResponse;
 import com.ticketrush.boundedcontext.performance.app.facade.PerformanceFacade;
 import com.ticketrush.boundedcontext.performance.domain.types.Genre;
-import com.ticketrush.boundedcontext.performance.domain.types.PerformanceStatus;
 import com.ticketrush.global.config.CustomSecurityProperties;
 import com.ticketrush.global.config.JacksonConfig;
 import com.ticketrush.global.config.SecurityConfig;
 import com.ticketrush.global.exception.BusinessException;
 import com.ticketrush.global.status.ErrorStatus;
+import com.ticketrush.global.types.PerformanceStatus;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.LocalTime;
@@ -57,6 +57,7 @@ class PerformanceGetDetailTest {
         "공연 안내 내용",
         LocalDate.of(2025, 9, 1),
         LocalTime.of(19, 0),
+        LocalDateTime.of(2025, 9, 1, 19, 0),
         150,
         80000L,
         500,

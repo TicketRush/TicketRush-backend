@@ -1,7 +1,7 @@
 package com.ticketrush.boundedcontext.performance.app.dto.response;
 
 import com.ticketrush.boundedcontext.performance.domain.types.Genre;
-import com.ticketrush.boundedcontext.performance.domain.types.PerformanceStatus;
+import com.ticketrush.global.types.PerformanceStatus;
 
 /**
  * 대시보드 집계에 필요한 공연 최소 정보 (#563). 내부 산출물이며 API로 노출되지 않는다.

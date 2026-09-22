@@ -2,6 +2,7 @@ package com.ticketrush.boundedcontext.performance.app.usecase;
 
 import com.ticketrush.boundedcontext.performance.app.dto.response.PerformanceAdminSummaryResponse;
 import com.ticketrush.boundedcontext.performance.domain.entity.Performance;
+import com.ticketrush.boundedcontext.performance.domain.policy.PerformanceShowTimePolicy;
 import com.ticketrush.boundedcontext.performance.out.apiclient.BookingRestClient;
 import com.ticketrush.boundedcontext.performance.out.apiclient.SeatRestClient;
 import com.ticketrush.boundedcontext.performance.out.apiclient.dto.BookingStatsInfo;
@@ -123,6 +124,7 @@ public class PerformanceGetAdminListUseCase {
         performance.getGenre() == null ? null : performance.getGenre().getDescription(),
         performance.getShowDate(),
         performance.getShowTime(),
+        PerformanceShowTimePolicy.showAt(performance.getShowDate(), performance.getShowTime()),
         performance.getPerformanceStatus(),
         soldSeats,
         totalSeats,

@@ -1,7 +1,9 @@
 package com.ticketrush.boundedcontext.performance.domain.policy;
 
 import java.time.Clock;
+import java.time.LocalDate;
 import java.time.LocalDateTime;
+import java.time.LocalTime;
 import java.time.ZoneId;
 import java.time.temporal.ChronoUnit;
 import org.springframework.stereotype.Component;
@@ -40,6 +42,20 @@ public class PerformanceShowTimePolicy {
    * {@code show_date}·{@code show_time}·{@code booking_open_at}을 해석하는 시간대. 근거는 클래스 문서와 ADR 0020.
    */
   public static final ZoneId SHOW_ZONE = ZoneId.of("Asia/Seoul");
+
+  /**
+   * 쪼개 저장된 공연 시작 일시를 하나로 합친다 (#671).
+   *
+   * <p>응답에 {@code show_at}을 실으려고 둔다. {@code show_date}·{@code show_time}은 {@code DATE}·{@code TIME}
+   * 별개 컬럼이라 오프셋을 붙일 자리가 없어서, 존 표시가 필요한 소비자는 합쳐진 값을 받아야 한다. 합치는 규칙이 두 곳에 생기지 않도록 해석의 주인인 여기에 둔다 —
+   * 결과값은 {@link #SHOW_ZONE} 벽시계이며, 직렬화 때 오프셋이 붙는다.
+   *
+   * <p>엔티티에서 두 컬럼은 {@code nullable = false}라 정상 경로에 null 이 없다. null 방어는 손으로 만든 DTO(테스트 픽스처 등)를 위한
+   * 것이다.
+   */
+  public static LocalDateTime showAt(LocalDate showDate, LocalTime showTime) {
+    return (showDate == null || showTime == null) ? null : LocalDateTime.of(showDate, showTime);
+  }
 
   private final Clock clock;
 

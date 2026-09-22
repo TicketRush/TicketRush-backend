@@ -21,9 +21,9 @@ import com.ticketrush.boundedcontext.performance.app.usecase.PerformancePatchUse
 import com.ticketrush.boundedcontext.performance.app.usecase.PerformanceReplaceFilesUseCase;
 import com.ticketrush.boundedcontext.performance.app.usecase.PerformanceValidateUseCase;
 import com.ticketrush.boundedcontext.performance.domain.types.Genre;
-import com.ticketrush.boundedcontext.performance.domain.types.PerformanceStatus;
 import com.ticketrush.global.dto.request.CursorPageRequest;
 import com.ticketrush.global.dto.request.OffsetPageRequest;
+import com.ticketrush.global.types.PerformanceStatus;
 import java.time.LocalDate;
 import java.util.List;
 import lombok.RequiredArgsConstructor;
