@@ -13,6 +13,10 @@ import org.springframework.util.StringUtils;
  * 그대로 뚫고 나가고, 결국 필드 하나가 아니라 <b>API 전체가 500</b>이 된다.
  *
  * <p>즉 이 검사는 스타일 문제가 아니라 fail-open이 성립하기 위한 전제다. 호출 전에 여기서 걸러야 "설정이 틀리면 그 필드만 빈다"는 성질이 유지된다.
+ *
+ * <p><b>판정만 하고 대응은 호출자가 정한다</b> (#678). performance-service의 보강 조회는 실패해도 부분 응답으로 계속 가는 경로라 경고만
+ * 남기지만, booking-service의 입장권 판정처럼 fail-closed인 경로는 같은 판정으로 <b>기동 자체를 막는다</b> — 그쪽은 값이 틀리면 환불이 전부
+ * 503이 되는데 기동은 성공해 조용히 깨지기 때문이다(ADR 5).
  */
 public final class ServiceUrlValidator {
 

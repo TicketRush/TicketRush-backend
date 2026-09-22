@@ -5,6 +5,8 @@ import static org.assertj.core.api.Assertions.assertThat;
 import com.ticketrush.boundedcontext.booking.out.apiclient.SeatRestClient;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
 import org.springframework.boot.test.context.runner.ApplicationContextRunner;
 import org.springframework.web.client.RestClient;
 
@@ -48,5 +50,32 @@ class RestClientConfigTest {
               assertThat(context.getBean("seatServiceRestClient", RestClient.class))
                   .isNotSameAs(context.getBean("seatQueryRestClient", RestClient.class));
             });
+  }
+
+  /**
+   * ticket 클라이언트만 기동을 막는 이유는 이 경로가 fail-closed이기 때문이다 (#678). 주소가 틀리면 {@code TicketRestClient}가 판정을
+   * 포기해 취소·환불이 전부 {@code BOOKING_503_001}이 되는데, 빈 생성은 성공하므로 애플리케이션은 멀쩡히 뜬다 — 사용자가 환불을 눌러야만 드러난다.
+   */
+  @ParameterizedTest
+  @ValueSource(
+      strings = {
+        "",
+        // 스킴 누락 — compose 서비스명을 그대로 넣는 흔한 오설정
+        "ticket-service:8087",
+        // 호스트 없음
+        "http://"
+      })
+  @DisplayName("실패: service.ticket.url 이 쓸 수 없는 값이면 기동에 실패한다")
+  void fails_fast_when_ticket_url_is_unusable(String url) {
+    contextRunner
+        .withPropertyValues("service.ticket.url=" + url)
+        .run(
+            context ->
+                assertThat(context)
+                    .hasFailed()
+                    .getFailure()
+                    .rootCause()
+                    .isInstanceOf(IllegalStateException.class)
+                    .hasMessageContaining("TICKET_SERVICE_URL"));
   }
 }

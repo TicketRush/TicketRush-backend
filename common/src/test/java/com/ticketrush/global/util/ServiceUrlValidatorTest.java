@@ -11,6 +11,9 @@ import org.junit.jupiter.params.provider.ValueSource;
  * 이 검증기는 "설정이 틀리면 그 필드만 빈다"는 fail-open 성질이 성립하기 위한 단일 관문이다. 여기서 통과시킨 값이 요청 시점에 {@code
  * IllegalArgumentException}이 되면 그 예외는 {@code RestClientException}이 아니라서 클라이언트의 catch를 뚫고 API 전체를
  * 500으로 만든다. 그래서 경계를 테스트로 못 박는다.
+ *
+ * <p>#678 이후로는 fail-closed 쪽도 같은 판정에 기댄다 — booking-service가 이 결과로 <b>기동 여부</b>를 가르므로, 경계가 흔들리면 정상
+ * 배포가 막히거나(과잉 거절) 환불이 전부 503인 배포가 통과한다(과소 거절). 두 방향 모두 여기서 고정한다.
  */
 class ServiceUrlValidatorTest {
 
