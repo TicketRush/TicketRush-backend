@@ -12,7 +12,11 @@ import com.ticketrush.global.status.SuccessStatus;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.tags.Tag;
+import java.util.LinkedHashSet;
 import java.util.List;
+import java.util.Objects;
+import java.util.Set;
+import java.util.stream.Collectors;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
 import org.springframework.http.ResponseEntity;
@@ -43,11 +47,15 @@ public class BookingAdminController {
           """
           전체 예매를 최신순으로 페이징 조회합니다. 검색·다중조건 필터는 제공하지 않습니다.
 
-          `status`로 예매 상태 하나를 지정하면 그 상태만 필터링해 페이징합니다. **미지정 시 상태 무관 전체를 조회합니다**
-          — 필터가 페이징보다 앞에 걸리므로 해당 상태의 오래된 건이 뒷페이지에 묻히지 않습니다.
+          `status`를 반복하면 선택한 상태의 합집합을 필터링해 페이징합니다. 예: 대기·환불 중은
+          `?status=PENDING&status=REFUNDING`, 운영 화면의 전체 탭은
+          `?status=CONFIRMED&status=PENDING&status=REFUNDING&status=REFUNDED`입니다.
+          단일 `?status=REFUNDED`도 그대로 지원하며, **미지정 시 상태 무관 전체를 조회합니다.**
+          필터를 DB 조회에 적용한 뒤 전역 `id DESC`로 정렬·페이징하므로 상태별 페이지를 합칠 때 생기는 누락이 없습니다.
 
-          **값은 대소문자를 구분합니다**(`REFUNDED` O, `refunded` X). 정의되지 않은 값은 400으로 거절하지만,
-          `status=`처럼 **빈 값은 400이 아니라 미지정과 동일하게 전체 조회**로 처리됩니다.
+          **값은 대소문자를 구분합니다**(`REFUNDED` O, `refunded` X). 여러 값 중 하나라도 정의되지 않은 값이면 400으로
+          거절합니다. 중복 값은 한 번만 적용합니다. `status=`처럼 빈 값은 무시하므로, 모든 값이 비면 미지정과 같은 전체 조회이고
+          `?status=&status=PENDING`이면 PENDING만 조회합니다.
 
           공연 이름·날짜, 예매자 이름·이메일, 좌석 번호는 각각 performance·user·seat-service에서 보강합니다.
           **해당 서비스 장애 시 그 필드만 null로 내려가고 목록 자체는 성공합니다** — 프론트는 `performance_id`·`user_id`·`seat_id`로
@@ -64,13 +72,24 @@ public class BookingAdminController {
   @GetMapping("/bookings")
   public ResponseEntity<ApiResponse<List<BookingAdminSummaryResponse>>> getBookings(
       @AuthenticationPrincipal CustomUserDetails admin,
-      @Parameter(description = "예매 상태 필터(미지정 시 전체)") @RequestParam(required = false)
-          BookingStatus status,
+      @Parameter(description = "예매 상태 필터(반복 가능: status=PENDING&status=REFUNDING; 미지정·빈 값은 전체)")
+          @RequestParam(name = "status", required = false)
+          List<BookingStatus> statuses,
       @ModelAttribute OffsetPageRequest pageRequest) {
     Page<BookingAdminSummaryResponse> response =
-        bookingFacade.getAdminBookings(admin.getUserId(), status, pageRequest);
+        bookingFacade.getAdminBookings(admin.getUserId(), normalizeStatuses(statuses), pageRequest);
 
     return ApiResponse.onSuccess(SuccessStatus.OK, response);
+  }
+
+  private Set<BookingStatus> normalizeStatuses(List<BookingStatus> statuses) {
+    if (statuses == null) {
+      return Set.of();
+    }
+
+    return statuses.stream()
+        .filter(Objects::nonNull)
+        .collect(Collectors.toCollection(LinkedHashSet::new));
   }
 
   @Operation(

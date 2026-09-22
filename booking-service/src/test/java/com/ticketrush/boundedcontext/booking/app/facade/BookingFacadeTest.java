@@ -541,7 +541,7 @@ class BookingFacadeTest {
     // given
     OffsetPageRequest pageRequest = new OffsetPageRequest(0, 10);
     Booking booking = confirmedAdminBooking(5L, 2L, 3L);
-    given(bookingGetAdminBookingsUseCase.execute(null, pageRequest))
+    given(bookingGetAdminBookingsUseCase.execute(Set.of(), pageRequest))
         .willReturn(new PageImpl<>(List.of(booking)));
     given(performanceRestClient.getPerformances(Set.of(2L)))
         .willReturn(Map.of(2L, performanceInfo()));
@@ -551,7 +551,7 @@ class BookingFacadeTest {
 
     // when
     Page<BookingAdminSummaryResponse> page =
-        bookingFacade.getAdminBookings(ADMIN_ID, null, pageRequest);
+        bookingFacade.getAdminBookings(ADMIN_ID, Set.of(), pageRequest);
 
     // then
     BookingAdminSummaryResponse response = page.getContent().get(0);
@@ -569,7 +569,7 @@ class BookingFacadeTest {
   void getAdminBookings_keeps_amount_when_performance_lookup_fails() {
     // given: performance-service가 죽어 공연 필드를 못 채우는 상황 (#561)
     OffsetPageRequest pageRequest = new OffsetPageRequest(0, 10);
-    given(bookingGetAdminBookingsUseCase.execute(null, pageRequest))
+    given(bookingGetAdminBookingsUseCase.execute(Set.of(), pageRequest))
         .willReturn(new PageImpl<>(List.of(confirmedAdminBooking(5L, 2L, 3L))));
     given(performanceRestClient.getPerformances(Set.of(2L))).willReturn(Map.of());
     given(seatRestClient.getSeatNumbers(List.of(3L))).willReturn(Map.of());
@@ -577,7 +577,7 @@ class BookingFacadeTest {
 
     // when
     Page<BookingAdminSummaryResponse> page =
-        bookingFacade.getAdminBookings(ADMIN_ID, null, pageRequest);
+        bookingFacade.getAdminBookings(ADMIN_ID, Set.of(), pageRequest);
 
     // then: 공연 가격을 빌려 쓰던 때는 이 경우 금액도 함께 사라졌다
     BookingAdminSummaryResponse response = page.getContent().get(0);
@@ -590,14 +590,14 @@ class BookingFacadeTest {
   void getAdminBookings_deduplicates_ids_per_service() {
     // given: 같은 회원이 같은 공연의 좌석 2개를 예매했다
     OffsetPageRequest pageRequest = new OffsetPageRequest(0, 10);
-    given(bookingGetAdminBookingsUseCase.execute(null, pageRequest))
+    given(bookingGetAdminBookingsUseCase.execute(Set.of(), pageRequest))
         .willReturn(new PageImpl<>(List.of(adminBooking(5L, 2L, 3L), adminBooking(5L, 2L, 4L))));
     given(performanceRestClient.getPerformances(Set.of(2L))).willReturn(Map.of());
     given(seatRestClient.getSeatNumbers(List.of(3L, 4L))).willReturn(Map.of());
     given(userRestClient.getUsers(List.of(5L))).willReturn(Map.of());
 
     // when
-    bookingFacade.getAdminBookings(ADMIN_ID, null, pageRequest);
+    bookingFacade.getAdminBookings(ADMIN_ID, Set.of(), pageRequest);
 
     // then: 공연 1회, 회원 1회 (좌석만 2건)
     verify(performanceRestClient).getPerformances(Set.of(2L));
@@ -609,7 +609,7 @@ class BookingFacadeTest {
   void getAdminBookings_isolates_user_failure() {
     // given: user-service만 실패해 빈 맵을 돌려준다
     OffsetPageRequest pageRequest = new OffsetPageRequest(0, 10);
-    given(bookingGetAdminBookingsUseCase.execute(null, pageRequest))
+    given(bookingGetAdminBookingsUseCase.execute(Set.of(), pageRequest))
         .willReturn(new PageImpl<>(List.of(adminBooking(5L, 2L, 3L))));
     given(performanceRestClient.getPerformances(Set.of(2L)))
         .willReturn(Map.of(2L, performanceInfo()));
@@ -618,7 +618,7 @@ class BookingFacadeTest {
 
     // when
     Page<BookingAdminSummaryResponse> page =
-        bookingFacade.getAdminBookings(ADMIN_ID, null, pageRequest);
+        bookingFacade.getAdminBookings(ADMIN_ID, Set.of(), pageRequest);
 
     // then
     BookingAdminSummaryResponse response = page.getContent().get(0);
@@ -630,11 +630,12 @@ class BookingFacadeTest {
   }
 
   @Test
-  @DisplayName("성공: 관리자 목록은 status를 그대로 유스케이스에 넘긴다 (#667)")
-  void getAdminBookings_delegates_status() {
+  @DisplayName("성공: 관리자 목록은 status 집합을 그대로 유스케이스에 넘긴다 (#674)")
+  void getAdminBookings_delegates_statuses() {
     // given
     OffsetPageRequest pageRequest = new OffsetPageRequest(0, 10);
-    given(bookingGetAdminBookingsUseCase.execute(BookingStatus.REFUNDED, pageRequest))
+    Set<BookingStatus> statuses = Set.of(BookingStatus.PENDING, BookingStatus.REFUNDING);
+    given(bookingGetAdminBookingsUseCase.execute(statuses, pageRequest))
         .willReturn(new PageImpl<>(List.of(adminBooking(5L, 2L, 3L))));
     given(performanceRestClient.getPerformances(Set.of(2L))).willReturn(Map.of());
     given(seatRestClient.getSeatNumbers(List.of(3L))).willReturn(Map.of());
@@ -642,12 +643,12 @@ class BookingFacadeTest {
 
     // when
     Page<BookingAdminSummaryResponse> page =
-        bookingFacade.getAdminBookings(ADMIN_ID, BookingStatus.REFUNDED, pageRequest);
+        bookingFacade.getAdminBookings(ADMIN_ID, statuses, pageRequest);
 
     // then: 보강 3축은 status 여부와 무관하게 같은 경로를 탄다
     // (감사 로그는 분기 이전 공통 경로라 코드로 보장되며, 여기서 단언하지는 않는다)
     assertThat(page.getContent()).hasSize(1);
-    verify(bookingGetAdminBookingsUseCase).execute(BookingStatus.REFUNDED, pageRequest);
+    verify(bookingGetAdminBookingsUseCase).execute(statuses, pageRequest);
     verify(userRestClient).getUsers(List.of(5L));
   }
 

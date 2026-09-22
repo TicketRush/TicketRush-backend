@@ -26,6 +26,7 @@ import com.ticketrush.global.status.ErrorStatus;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.List;
+import java.util.Set;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -183,7 +184,7 @@ class BookingAdminControllerTest {
             1,
             150000L);
 
-    given(bookingFacade.getAdminBookings(1L, null, new OffsetPageRequest(0, 10)))
+    given(bookingFacade.getAdminBookings(1L, Set.of(), new OffsetPageRequest(0, 10)))
         .willReturn(new PageImpl<>(List.of(response), PageRequest.of(0, 10), 1));
 
     // when & then
@@ -206,14 +207,16 @@ class BookingAdminControllerTest {
         .andExpect(jsonPath("$.result[0].payment_amount").value(150000))
         .andExpect(jsonPath("$.pagination_info.total_elements").value(1));
 
-    verify(bookingFacade).getAdminBookings(1L, null, new OffsetPageRequest(0, 10));
+    verify(bookingFacade).getAdminBookings(1L, Set.of(), new OffsetPageRequest(0, 10));
   }
 
   @Test
   @DisplayName("ADMIN이 status를 지정하면 그 상태로 필터링된 목록이 응답된다 (#667)")
   void getBookings_passes_status_filter() throws Exception {
     // given
-    given(bookingFacade.getAdminBookings(1L, BookingStatus.REFUNDED, new OffsetPageRequest(0, 10)))
+    given(
+            bookingFacade.getAdminBookings(
+                1L, Set.of(BookingStatus.REFUNDED), new OffsetPageRequest(0, 10)))
         .willReturn(new PageImpl<>(List.of(), PageRequest.of(0, 10), 0));
 
     // when & then
@@ -227,18 +230,39 @@ class BookingAdminControllerTest {
         .andExpect(status().isOk());
 
     verify(bookingFacade)
-        .getAdminBookings(1L, BookingStatus.REFUNDED, new OffsetPageRequest(0, 10));
+        .getAdminBookings(1L, Set.of(BookingStatus.REFUNDED), new OffsetPageRequest(0, 10));
   }
 
   @Test
-  @DisplayName("정의되지 않은 status 값은 400으로 거절한다 (#667)")
-  void getBookings_rejects_unknown_status() throws Exception {
+  @DisplayName("ADMIN이 status를 반복하면 중복을 제거한 상태 합집합을 전달한다 (#674)")
+  void getBookings_passes_distinct_status_union() throws Exception {
+    // given
+    Set<BookingStatus> statuses = Set.of(BookingStatus.PENDING, BookingStatus.REFUNDING);
+    given(bookingFacade.getAdminBookings(1L, statuses, new OffsetPageRequest(0, 10)))
+        .willReturn(new PageImpl<>(List.of(), PageRequest.of(0, 10), 0));
+
+    // when & then
+    mockMvc
+        .perform(
+            get("/api/v1/booking/admin/bookings")
+                .param("status", "PENDING", "REFUNDING", "PENDING")
+                .header("X-Gateway-Token", INTERNAL_TOKEN)
+                .header("X-User-Id", 1L)
+                .header("X-User-Role", "ADMIN"))
+        .andExpect(status().isOk());
+
+    verify(bookingFacade).getAdminBookings(1L, statuses, new OffsetPageRequest(0, 10));
+  }
+
+  @Test
+  @DisplayName("복수 status 중 하나라도 정의되지 않은 값이면 요청 전체를 400으로 거절한다 (#674)")
+  void getBookings_rejects_request_containing_unknown_status() throws Exception {
     // when & then: 상태코드만 보면 전역 핸들러가 빠져도 Spring 기본 resolver가 400을 내 통과한다.
     // 핸들러를 실제로 경유했는지는 ApiResponse 엔벨로프로만 구분되므로 code까지 고정한다.
     mockMvc
         .perform(
             get("/api/v1/booking/admin/bookings")
-                .param("status", "NOPE")
+                .param("status", "PENDING", "NOPE")
                 .header("X-Gateway-Token", INTERNAL_TOKEN)
                 .header("X-User-Id", 1L)
                 .header("X-User-Role", "ADMIN"))
@@ -254,7 +278,7 @@ class BookingAdminControllerTest {
   void getBookings_treats_blank_status_as_no_filter() throws Exception {
     // given: 빈 문자열은 Spring의 enum 컨버터가 null로 바꾼다 — 미지정과 같은 경로다.
     // 400을 기대하기 쉬운 지점이라 계약으로 고정해 둔다.
-    given(bookingFacade.getAdminBookings(1L, null, new OffsetPageRequest(0, 10)))
+    given(bookingFacade.getAdminBookings(1L, Set.of(), new OffsetPageRequest(0, 10)))
         .willReturn(new PageImpl<>(List.of(), PageRequest.of(0, 10), 0));
 
     // when & then
@@ -267,23 +291,69 @@ class BookingAdminControllerTest {
                 .header("X-User-Role", "ADMIN"))
         .andExpect(status().isOk());
 
-    verify(bookingFacade).getAdminBookings(1L, null, new OffsetPageRequest(0, 10));
+    verify(bookingFacade).getAdminBookings(1L, Set.of(), new OffsetPageRequest(0, 10));
   }
 
   @Test
-  @DisplayName("status는 대소문자를 구분해 소문자 값은 400이다 (#667)")
-  void getBookings_rejects_lowercase_status() throws Exception {
+  @DisplayName("빈 status가 유효값과 섞이면 빈 값만 무시한다 (#674)")
+  void getBookings_ignores_blank_status_mixed_with_valid_status() throws Exception {
+    // given
+    given(
+            bookingFacade.getAdminBookings(
+                1L, Set.of(BookingStatus.PENDING), new OffsetPageRequest(0, 10)))
+        .willReturn(new PageImpl<>(List.of(), PageRequest.of(0, 10), 0));
+
+    // when & then
+    mockMvc
+        .perform(
+            get("/api/v1/booking/admin/bookings")
+                .param("status", "", "PENDING", "")
+                .header("X-Gateway-Token", INTERNAL_TOKEN)
+                .header("X-User-Id", 1L)
+                .header("X-User-Role", "ADMIN"))
+        .andExpect(status().isOk());
+
+    verify(bookingFacade)
+        .getAdminBookings(1L, Set.of(BookingStatus.PENDING), new OffsetPageRequest(0, 10));
+  }
+
+  @Test
+  @DisplayName("status는 대소문자를 구분해 복수 값 중 소문자가 있으면 400이다 (#674)")
+  void getBookings_rejects_request_containing_lowercase_status() throws Exception {
     // when & then: 프론트가 소문자로 보내면 배포 후에야 드러나므로 계약으로 고정한다
     mockMvc
         .perform(
             get("/api/v1/booking/admin/bookings")
-                .param("status", "refunded")
+                .param("status", "PENDING", "refunded")
                 .header("X-Gateway-Token", INTERNAL_TOKEN)
                 .header("X-User-Id", 1L)
                 .header("X-User-Role", "ADMIN"))
         .andExpect(status().isBadRequest());
 
     verifyNoInteractions(bookingFacade);
+  }
+
+  @Test
+  @DisplayName("페이지 범위 보정은 복수 status에도 동일하게 적용된다 (#674)")
+  void getBookings_normalizes_page_range_with_multiple_statuses() throws Exception {
+    // given
+    Set<BookingStatus> statuses = Set.of(BookingStatus.PENDING, BookingStatus.REFUNDING);
+    given(bookingFacade.getAdminBookings(1L, statuses, new OffsetPageRequest(0, 50)))
+        .willReturn(new PageImpl<>(List.of(), PageRequest.of(0, 50), 0));
+
+    // when & then
+    mockMvc
+        .perform(
+            get("/api/v1/booking/admin/bookings")
+                .param("status", "PENDING", "REFUNDING")
+                .param("page", "-1")
+                .param("size", "100")
+                .header("X-Gateway-Token", INTERNAL_TOKEN)
+                .header("X-User-Id", 1L)
+                .header("X-User-Role", "ADMIN"))
+        .andExpect(status().isOk());
+
+    verify(bookingFacade).getAdminBookings(1L, statuses, new OffsetPageRequest(0, 50));
   }
 
   @Test

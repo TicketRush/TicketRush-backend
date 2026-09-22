@@ -83,46 +83,98 @@ class BookingRepositoryTest {
   }
 
   @Test
-  @DisplayName("관리자 상태별 목록: 지정한 상태의 예매만 조회한다 (#667)")
-  void findByBookingStatus_ReturnsOnlyGivenStatus() {
+  @DisplayName("관리자 복수 상태 목록: 상태가 치우쳐도 전역 id desc 연속 페이지에 누락·중복이 없다 (#674)")
+  void findByBookingStatusIn_AppliesGlobalIdDescPagingAndCount() {
+    // given: 오래된 REFUNDING 2건 뒤에 최신 PENDING 4건을 몰아 상태별 페이지 합치기의 오류를 드러낸다
+    bookingRepository.save(booking("BK-R1", BookingStatus.REFUNDING));
+    bookingRepository.save(booking("BK-R2", BookingStatus.REFUNDING));
+    bookingRepository.save(booking("BK-P1", BookingStatus.PENDING));
+    bookingRepository.save(booking("BK-P2", BookingStatus.PENDING));
+    bookingRepository.save(booking("BK-P3", BookingStatus.PENDING));
+    bookingRepository.save(booking("BK-P4", BookingStatus.PENDING));
+    bookingRepository.save(booking("BK-CANCELED", BookingStatus.CANCELED));
+    bookingRepository.save(booking("BK-EXPIRED", BookingStatus.EXPIRED));
+
+    List<BookingStatus> statuses =
+        List.of(BookingStatus.PENDING, BookingStatus.REFUNDING, BookingStatus.PENDING);
+    Sort idDesc = Sort.by(Sort.Order.desc("id"));
+
+    // when
+    Page<Booking> first =
+        bookingRepository.findByBookingStatusIn(statuses, PageRequest.of(0, 2, idDesc));
+    Page<Booking> second =
+        bookingRepository.findByBookingStatusIn(statuses, PageRequest.of(1, 2, idDesc));
+    Page<Booking> last =
+        bookingRepository.findByBookingStatusIn(statuses, PageRequest.of(2, 2, idDesc));
+    Page<Booking> outOfRange =
+        bookingRepository.findByBookingStatusIn(statuses, PageRequest.of(3, 2, idDesc));
+
+    // then: 중복 status가 있어도 행과 count는 중복되지 않고, 메타데이터도 같은 필터 모집단을 쓴다
+    assertThat(first.getContent())
+        .extracting(Booking::getBookingNumber)
+        .containsExactly("BK-P4", "BK-P3");
+    assertThat(second.getContent())
+        .extracting(Booking::getBookingNumber)
+        .containsExactly("BK-P2", "BK-P1");
+    assertThat(last.getContent())
+        .extracting(Booking::getBookingNumber)
+        .containsExactly("BK-R2", "BK-R1");
+    assertThat(first.getTotalElements()).isEqualTo(6);
+    assertThat(first.getTotalPages()).isEqualTo(3);
+    assertThat(first.hasNext()).isTrue();
+    assertThat(last.hasNext()).isFalse();
+    assertThat(outOfRange.getContent()).isEmpty();
+    assertThat(outOfRange.getTotalElements()).isEqualTo(6);
+    assertThat(outOfRange.getTotalPages()).isEqualTo(3);
+    assertThat(outOfRange.hasNext()).isFalse();
+  }
+
+  @Test
+  @DisplayName("관리자 복수 상태 목록: 네 상태를 지정하면 CANCELED와 EXPIRED를 목록·count에서 제외한다 (#674)")
+  void findByBookingStatusIn_ExcludesUnselectedStatusesFromContentAndCount() {
     // given
-    bookingRepository.save(booking("BK-REFUNDED-1", BookingStatus.REFUNDED));
     bookingRepository.save(booking("BK-CONFIRMED", BookingStatus.CONFIRMED));
-    bookingRepository.save(booking("BK-REFUNDED-2", BookingStatus.REFUNDED));
+    bookingRepository.save(booking("BK-PENDING", BookingStatus.PENDING));
+    bookingRepository.save(booking("BK-REFUNDING", BookingStatus.REFUNDING));
+    bookingRepository.save(booking("BK-REFUNDED", BookingStatus.REFUNDED));
+    bookingRepository.save(booking("BK-CANCELED", BookingStatus.CANCELED));
+    bookingRepository.save(booking("BK-EXPIRED", BookingStatus.EXPIRED));
 
     // when
     Page<Booking> found =
-        bookingRepository.findByBookingStatus(BookingStatus.REFUNDED, PageRequest.of(0, 10));
+        bookingRepository.findByBookingStatusIn(
+            List.of(
+                BookingStatus.CONFIRMED,
+                BookingStatus.PENDING,
+                BookingStatus.REFUNDING,
+                BookingStatus.REFUNDED),
+            PageRequest.of(0, 10, Sort.by(Sort.Order.desc("id"))));
 
     // then
     assertThat(found.getContent())
         .extracting(Booking::getBookingNumber)
-        .containsExactlyInAnyOrder("BK-REFUNDED-1", "BK-REFUNDED-2");
+        .containsExactly("BK-REFUNDED", "BK-REFUNDING", "BK-PENDING", "BK-CONFIRMED");
+    assertThat(found.getTotalElements()).isEqualTo(4);
+    assertThat(found.getTotalPages()).isEqualTo(1);
+    assertThat(found.hasNext()).isFalse();
   }
 
   @Test
-  @DisplayName("관리자 상태별 목록: id desc 정렬과 페이징이 필터와 함께 적용된다 (#667)")
-  void findByBookingStatus_AppliesIdDescPagingOnTopOfFilter() {
-    // given: 필터 대상 3건 사이에 다른 상태를 끼워, 페이징이 필터 뒤에 걸리는지까지 본다
-    bookingRepository.save(booking("BK-R1", BookingStatus.REFUNDED));
-    bookingRepository.save(booking("BK-OTHER", BookingStatus.CONFIRMED));
-    bookingRepository.save(booking("BK-R2", BookingStatus.REFUNDED));
-    bookingRepository.save(booking("BK-R3", BookingStatus.REFUNDED));
+  @DisplayName("관리자 복수 상태 목록: 필터 결과가 없으면 빈 페이지 메타데이터를 반환한다 (#674)")
+  void findByBookingStatusIn_WhenNoMatches_ReturnsEmptyPageMetadata() {
+    // given
+    bookingRepository.save(booking("BK-PENDING", BookingStatus.PENDING));
 
-    Sort idDesc = Sort.by(Sort.Order.desc("id"));
+    // when
+    Page<Booking> found =
+        bookingRepository.findByBookingStatusIn(
+            List.of(BookingStatus.REFUNDED), PageRequest.of(0, 10));
 
-    // when: 유스케이스가 넘기는 것과 같은 Pageable로 첫 페이지 2건
-    Page<Booking> first =
-        bookingRepository.findByBookingStatus(BookingStatus.REFUNDED, PageRequest.of(0, 2, idDesc));
-    Page<Booking> second =
-        bookingRepository.findByBookingStatus(BookingStatus.REFUNDED, PageRequest.of(1, 2, idDesc));
-
-    // then: 최신 예매부터, 총 건수는 필터 적용 후 기준이다
-    assertThat(first.getContent())
-        .extracting(Booking::getBookingNumber)
-        .containsExactly("BK-R3", "BK-R2");
-    assertThat(second.getContent()).extracting(Booking::getBookingNumber).containsExactly("BK-R1");
-    assertThat(first.getTotalElements()).isEqualTo(3);
+    // then
+    assertThat(found.getContent()).isEmpty();
+    assertThat(found.getTotalElements()).isZero();
+    assertThat(found.getTotalPages()).isZero();
+    assertThat(found.hasNext()).isFalse();
   }
 
   @Test
