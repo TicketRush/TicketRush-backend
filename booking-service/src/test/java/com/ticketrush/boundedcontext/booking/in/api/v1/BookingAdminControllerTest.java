@@ -1,5 +1,6 @@
 package com.ticketrush.boundedcontext.booking.in.api.v1;
 
+import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.BDDMockito.given;
@@ -11,11 +12,14 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
+import com.ticketrush.boundedcontext.booking.app.dto.response.BookingAdminRefundSummaryResponse;
 import com.ticketrush.boundedcontext.booking.app.dto.response.BookingAdminStatsResponse;
 import com.ticketrush.boundedcontext.booking.app.dto.response.BookingAdminSummaryResponse;
+import com.ticketrush.boundedcontext.booking.app.dto.response.BookingRefundStatsResponse;
 import com.ticketrush.boundedcontext.booking.app.dto.response.BookingSummaryResponse;
 import com.ticketrush.boundedcontext.booking.app.facade.BookingFacade;
 import com.ticketrush.boundedcontext.booking.domain.types.BookingStatus;
+import com.ticketrush.boundedcontext.booking.domain.types.RefundProcessStatus;
 import com.ticketrush.global.config.CustomSecurityProperties;
 import com.ticketrush.global.config.JacksonConfig;
 import com.ticketrush.global.config.SecurityConfig;
@@ -25,6 +29,7 @@ import com.ticketrush.global.filter.GatewayHeaderFilter;
 import com.ticketrush.global.status.ErrorStatus;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
+import java.time.LocalTime;
 import java.util.List;
 import java.util.Set;
 import org.junit.jupiter.api.DisplayName;
@@ -535,6 +540,205 @@ class BookingAdminControllerTest {
     mockMvc
         .perform(
             get("/api/v1/booking/admin/bookings/{bookingNumber}", BOOKING_NUMBER)
+                .header("X-Gateway-Token", INTERNAL_TOKEN)
+                .header("X-User-Id", 1L)
+                .header("X-User-Role", "USER"))
+        .andExpect(status().isForbidden());
+
+    verifyNoInteractions(bookingFacade);
+  }
+
+  @Test
+  @DisplayName("ADMIN이 환불 통합 목록을 조회하면 예매 상태와 파생 환불 처리 상태가 함께 응답된다 (#675)")
+  void getRefunds_returns_enriched_refunds() throws Exception {
+    // given: 재시도 중인 건이다 — 실패 이력이 남아 있어도 현재 상태(REFUNDING)로 분류돼야 한다.
+    // refund_failed_at으로 분류하면 이 행이 실패로 잡히는데, 그 회귀를 응답 계약으로 고정한다.
+    BookingAdminRefundSummaryResponse response =
+        new BookingAdminRefundSummaryResponse(
+            100L,
+            BOOKING_NUMBER,
+            5L,
+            2L,
+            BookingStatus.REFUNDING,
+            RefundProcessStatus.IN_PROGRESS,
+            LocalDateTime.of(2026, 5, 22, 10, 30),
+            FAILED_AT,
+            "오페라의 유령",
+            LocalDate.of(2026, 5, 22),
+            LocalTime.of(19, 30),
+            "김소희",
+            150000L);
+
+    given(bookingFacade.getAdminRefunds(1L, null, new OffsetPageRequest(0, 10)))
+        .willReturn(new PageImpl<>(List.of(response), PageRequest.of(0, 10), 1));
+
+    // when & then
+    mockMvc
+        .perform(
+            get("/api/v1/booking/admin/refunds")
+                .header("X-Gateway-Token", INTERNAL_TOKEN)
+                .header("X-User-Id", 1L)
+                .header("X-User-Role", "ADMIN"))
+        .andExpect(status().isOk())
+        .andExpect(jsonPath("$.is_success").value(true))
+        .andExpect(jsonPath("$.result[0].booking_number").value(BOOKING_NUMBER))
+        .andExpect(jsonPath("$.result[0].booking_status").value("REFUNDING"))
+        .andExpect(jsonPath("$.result[0].refund_status").value("IN_PROGRESS"))
+        .andExpect(jsonPath("$.result[0].refund_failed_at").value("2026-07-10T12:00:00Z"))
+        .andExpect(jsonPath("$.result[0].booked_at").value("2026-05-22T10:30:00Z"))
+        .andExpect(jsonPath("$.result[0].performance_title").value("오페라의 유령"))
+        .andExpect(jsonPath("$.result[0].performance_date").value("2026-05-22"))
+        .andExpect(jsonPath("$.result[0].performance_time").value("19:30:00"))
+        .andExpect(jsonPath("$.result[0].booker_name").value("김소희"))
+        .andExpect(jsonPath("$.result[0].payment_amount").value(150000L))
+        .andExpect(jsonPath("$.pagination_info.total_elements").value(1));
+
+    verify(bookingFacade).getAdminRefunds(1L, null, new OffsetPageRequest(0, 10));
+  }
+
+  @Test
+  @DisplayName("refund_status를 지정하면 그대로 파사드에 전달된다 (#675)")
+  void getRefunds_passes_refund_status_filter() throws Exception {
+    // given
+    given(
+            bookingFacade.getAdminRefunds(
+                1L, RefundProcessStatus.FAILED, new OffsetPageRequest(0, 10)))
+        .willReturn(new PageImpl<>(List.of(), PageRequest.of(0, 10), 0));
+
+    // when & then
+    mockMvc
+        .perform(
+            get("/api/v1/booking/admin/refunds")
+                .param("refund_status", "FAILED")
+                .header("X-Gateway-Token", INTERNAL_TOKEN)
+                .header("X-User-Id", 1L)
+                .header("X-User-Role", "ADMIN"))
+        .andExpect(status().isOk());
+
+    verify(bookingFacade)
+        .getAdminRefunds(1L, RefundProcessStatus.FAILED, new OffsetPageRequest(0, 10));
+  }
+
+  @Test
+  @DisplayName("refund_status가 빈 값이면 400이 아니라 전체 조회로 떨어진다 (#675)")
+  void getRefunds_treats_blank_refund_status_as_no_filter() throws Exception {
+    // given: 빈 문자열은 Spring의 enum 컨버터가 null로 바꾼다 — 미지정과 같은 경로다.
+    // 기존 status 파라미터와 같은 계약이라는 것을 여기서 고정한다.
+    given(bookingFacade.getAdminRefunds(1L, null, new OffsetPageRequest(0, 10)))
+        .willReturn(new PageImpl<>(List.of(), PageRequest.of(0, 10), 0));
+
+    // when & then
+    mockMvc
+        .perform(
+            get("/api/v1/booking/admin/refunds")
+                .param("refund_status", "")
+                .header("X-Gateway-Token", INTERNAL_TOKEN)
+                .header("X-User-Id", 1L)
+                .header("X-User-Role", "ADMIN"))
+        .andExpect(status().isOk());
+
+    verify(bookingFacade).getAdminRefunds(1L, null, new OffsetPageRequest(0, 10));
+  }
+
+  @Test
+  @DisplayName("정의되지 않은 refund_status는 400으로 거절한다 (#675)")
+  void getRefunds_rejects_unknown_refund_status() throws Exception {
+    // when & then: REFUNDING은 BookingStatus의 값이지 RefundProcessStatus의 값이 아니다.
+    // 두 enum을 혼동한 요청이 조용히 전체 조회로 떨어지지 않게 고정한다. 전역 핸들러를 실제로
+    // 경유했는지는 ApiResponse 엔벨로프로만 구분되므로 code까지 본다.
+    mockMvc
+        .perform(
+            get("/api/v1/booking/admin/refunds")
+                .param("refund_status", "REFUNDING")
+                .header("X-Gateway-Token", INTERNAL_TOKEN)
+                .header("X-User-Id", 1L)
+                .header("X-User-Role", "ADMIN"))
+        .andExpect(status().isBadRequest())
+        .andExpect(jsonPath("$.is_success").value(false))
+        .andExpect(jsonPath("$.code").value(ErrorStatus.BAD_REQUEST.getCode()));
+
+    verifyNoInteractions(bookingFacade);
+  }
+
+  @Test
+  @DisplayName("환불 목록도 page/size 범위를 보정한다 (#675)")
+  void getRefunds_normalizes_page_range() throws Exception {
+    // given
+    given(bookingFacade.getAdminRefunds(1L, null, new OffsetPageRequest(0, 50)))
+        .willReturn(new PageImpl<>(List.of(), PageRequest.of(0, 50), 0));
+
+    // when & then
+    mockMvc
+        .perform(
+            get("/api/v1/booking/admin/refunds")
+                .param("page", "-1")
+                .param("size", "100")
+                .header("X-Gateway-Token", INTERNAL_TOKEN)
+                .header("X-User-Id", 1L)
+                .header("X-User-Role", "ADMIN"))
+        .andExpect(status().isOk());
+
+    verify(bookingFacade).getAdminRefunds(1L, null, new OffsetPageRequest(0, 50));
+  }
+
+  @Test
+  @DisplayName("ADMIN이 환불 요약 통계를 조회하면 전체·완료 건수가 응답된다 (#675)")
+  void getRefundStats_returns_summary() throws Exception {
+    // given
+    given(bookingFacade.getAdminRefundStats()).willReturn(new BookingRefundStatsResponse(312, 280));
+
+    // when & then
+    mockMvc
+        .perform(
+            get("/api/v1/booking/admin/refunds/stats")
+                .header("X-Gateway-Token", INTERNAL_TOKEN)
+                .header("X-User-Id", 1L)
+                .header("X-User-Role", "ADMIN"))
+        .andExpect(status().isOk())
+        .andExpect(jsonPath("$.result.total_refunds").value(312))
+        .andExpect(jsonPath("$.result.completed_refunds").value(280));
+
+    verify(bookingFacade).getAdminRefundStats();
+  }
+
+  @Test
+  @DisplayName("환불 통계 경로가 환불 목록에 삼켜지지 않는다 (#675)")
+  void refundStatsPath_is_not_swallowed_by_refund_list() throws Exception {
+    // given: /refunds와 /refunds/stats는 한 세그먼트 차이라 매핑이 흔들리면 조용히 목록이 응답된다.
+    // 두 경로가 서로 다른 파사드 메서드로 간다는 것을 고정한다.
+    given(bookingFacade.getAdminRefunds(1L, null, new OffsetPageRequest(0, 10)))
+        .willReturn(new PageImpl<>(List.of(), PageRequest.of(0, 10), 0));
+    given(bookingFacade.getAdminRefundStats()).willReturn(new BookingRefundStatsResponse(0, 0));
+
+    // when & then
+    mockMvc
+        .perform(
+            get("/api/v1/booking/admin/refunds/stats")
+                .header("X-Gateway-Token", INTERNAL_TOKEN)
+                .header("X-User-Id", 1L)
+                .header("X-User-Role", "ADMIN"))
+        .andExpect(status().isOk())
+        .andExpect(jsonPath("$.result.total_refunds").value(0));
+
+    verify(bookingFacade).getAdminRefundStats();
+    verify(bookingFacade, never()).getAdminRefunds(anyLong(), any(), any());
+  }
+
+  @Test
+  @DisplayName("환불 조회 API는 ADMIN이 아니면 403이다 (#675)")
+  void refundApis_are_forbidden_for_non_admin() throws Exception {
+    // when & then
+    mockMvc
+        .perform(
+            get("/api/v1/booking/admin/refunds")
+                .header("X-Gateway-Token", INTERNAL_TOKEN)
+                .header("X-User-Id", 1L)
+                .header("X-User-Role", "USER"))
+        .andExpect(status().isForbidden());
+
+    mockMvc
+        .perform(
+            get("/api/v1/booking/admin/refunds/stats")
                 .header("X-Gateway-Token", INTERNAL_TOKEN)
                 .header("X-User-Id", 1L)
                 .header("X-User-Role", "USER"))
