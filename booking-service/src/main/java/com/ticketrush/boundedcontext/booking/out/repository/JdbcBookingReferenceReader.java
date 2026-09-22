@@ -1,5 +1,6 @@
 package com.ticketrush.boundedcontext.booking.out.repository;
 
+import com.ticketrush.global.types.PerformanceStatus;
 import java.util.Optional;
 import lombok.RequiredArgsConstructor;
 import org.springframework.jdbc.core.JdbcTemplate;
@@ -17,9 +18,8 @@ public class JdbcBookingReferenceReader implements BookingReferenceReader {
   }
 
   /**
-   * {@link JdbcBookingSeatStatusReader#findSeatStatus}와 같은 모양이지만 <b>타입이 없다</b> — 그쪽은 {@code
-   * SeatStatus.valueOf}로 값을 세우는데 {@code PerformanceStatus}는 여기서 import할 수 없어 원문 문자열을 올린다. 판정은
-   * {@link BookingReferenceReader#findPerformanceStatus} 참고.
+   * {@link JdbcBookingSeatStatusReader#findSeatStatus}와 같은 꼴이다 — {@code valueOf}로 타입을 세우므로, 컬럼에
+   * enum 에 없는 값이 들어 있으면 조용히 통과하지 않고 예외로 드러난다.
    *
    * <p><b>{@code deleted_at}을 함께 본다.</b> {@code Performance.softDelete()}는 {@code deletedAt}만 채우고
    * {@code performance_status}는 건드리지 않으므로, 이 조건이 없으면 삭제된 {@code ON_SALE} 공연이 예매를 통과한다.
@@ -28,12 +28,12 @@ public class JdbcBookingReferenceReader implements BookingReferenceReader {
    * 약한 판정이 된다.
    */
   @Override
-  public Optional<String> findPerformanceStatus(Long performanceId) {
+  public Optional<PerformanceStatus> findPerformanceStatus(Long performanceId) {
     return jdbcTemplate
         .query(
             "SELECT performance_status FROM performance"
                 + " WHERE performance_id = ? AND deleted_at IS NULL",
-            (rs, rowNum) -> rs.getString("performance_status"),
+            (rs, rowNum) -> PerformanceStatus.valueOf(rs.getString("performance_status")),
             performanceId)
         .stream()
         .findFirst();

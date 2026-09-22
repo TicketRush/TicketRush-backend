@@ -1,10 +1,13 @@
 package com.ticketrush.boundedcontext.performance.app.dto.response;
 
+import com.ticketrush.boundedcontext.performance.app.support.SeoulWallClockSerializer;
 import com.ticketrush.boundedcontext.performance.domain.types.Genre;
-import com.ticketrush.boundedcontext.performance.domain.types.PerformanceStatus;
+import com.ticketrush.global.types.PerformanceStatus;
 import io.swagger.v3.oas.annotations.media.Schema;
 import java.time.LocalDate;
+import java.time.LocalDateTime;
 import java.time.LocalTime;
+import tools.jackson.databind.annotation.JsonSerialize;
 
 /**
  * 관리자 공연 목록 한 행 (#563). 공개 목록과 달리 판매·점유율·매출 같은 관리 집계 필드를 함께 내린다.
@@ -22,6 +25,13 @@ public record PerformanceAdminSummaryResponse(
     @Schema(description = "장르 한글명", example = "뮤지컬") String genreName,
     @Schema(description = "공연 날짜", example = "2026-09-01") LocalDate showDate,
     @Schema(description = "공연 시각", example = "19:30:00") LocalTime showTime,
+    @Schema(
+            description =
+                "공연 시작 일시 (yyyy-MM-dd'T'HH:mm:ss+09:00, Asia/Seoul). show_date·show_time 을 합친 값으로,"
+                    + " 시간 계산은 이 필드 하나로 하면 된다",
+            example = "2026-09-01T19:30:00+09:00")
+        @JsonSerialize(using = SeoulWallClockSerializer.class)
+        LocalDateTime showAt,
     @Schema(description = "공연 상태", example = "ON_SALE") PerformanceStatus performanceStatus,
     @Schema(
             description =

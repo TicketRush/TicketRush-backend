@@ -12,12 +12,13 @@ import static org.mockito.Mockito.verifyNoMoreInteractions;
 import com.ticketrush.boundedcontext.booking.out.repository.BookingReferenceReader;
 import com.ticketrush.global.exception.BusinessException;
 import com.ticketrush.global.status.ErrorStatus;
+import com.ticketrush.global.types.PerformanceStatus;
 import java.util.Optional;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.junit.jupiter.params.ParameterizedTest;
-import org.junit.jupiter.params.provider.ValueSource;
+import org.junit.jupiter.params.provider.EnumSource;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
@@ -33,7 +34,7 @@ class BookingValidateReferencesUseCaseTest {
 
   @Mock private BookingReferenceReader bookingReferenceReader;
 
-  private void givenPerformanceStatus(String status) {
+  private void givenPerformanceStatus(PerformanceStatus status) {
     given(bookingReferenceReader.findPerformanceStatus(PERFORMANCE_ID))
         .willReturn(Optional.ofNullable(status));
   }
@@ -51,7 +52,7 @@ class BookingValidateReferencesUseCaseTest {
   void execute_success() {
     // given
     given(bookingReferenceReader.existsUserById(USER_ID)).willReturn(true);
-    givenPerformanceStatus("ON_SALE");
+    givenPerformanceStatus(PerformanceStatus.ON_SALE);
     given(bookingReferenceReader.existsSeatByIdAndPerformanceId(SEAT_ID, PERFORMANCE_ID))
         .willReturn(true);
 
@@ -93,11 +94,12 @@ class BookingValidateReferencesUseCaseTest {
   }
 
   @ParameterizedTest
-  @ValueSource(strings = {"UPCOMING", "CLOSED", "CANCELED", "on_sale", "SOMETHING_NEW"})
+  @EnumSource(value = PerformanceStatus.class, names = "ON_SALE", mode = EnumSource.Mode.EXCLUDE)
   @DisplayName("실패: ON_SALE 이 아닌 공연은 PERFORMANCE_400_005 로 차단한다 (#671)")
-  void execute_fail_when_performance_not_on_sale(String status) {
-    // given — 오픈 전(UPCOMING) 직접 호출 차단이 이 이슈의 본체고, 나머지 값은 fail-closed 확인이다.
-    // 통과는 "ON_SALE 을 확인했을 때"뿐이라 알 수 없는 상태 문자열과 대소문자가 다른 값도 막힌다.
+  void execute_fail_when_performance_not_on_sale(PerformanceStatus status) {
+    // given — 오픈 전(UPCOMING) 직접 호출 차단이 이 이슈의 본체다. ON_SALE 만 제외한 EnumSource 로 돌려서,
+    // 판매 상태가 새로 추가되면 "그것도 막힌다"가 자동으로 요구된다 — 통과는 ON_SALE 을 확인했을 때뿐이다.
+    // (컬럼에 enum 에 없는 값이 있는 경우는 리더의 valueOf 가 던져 여기까지 오지 않는다.)
     given(bookingReferenceReader.existsUserById(USER_ID)).willReturn(true);
     givenPerformanceStatus(status);
 
@@ -115,7 +117,7 @@ class BookingValidateReferencesUseCaseTest {
   void execute_fail_when_seat_not_found() {
     // given
     given(bookingReferenceReader.existsUserById(USER_ID)).willReturn(true);
-    givenPerformanceStatus("ON_SALE");
+    givenPerformanceStatus(PerformanceStatus.ON_SALE);
     given(bookingReferenceReader.existsSeatByIdAndPerformanceId(SEAT_ID, PERFORMANCE_ID))
         .willReturn(false);
 

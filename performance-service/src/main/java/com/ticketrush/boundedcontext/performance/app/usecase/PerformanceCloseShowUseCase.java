@@ -2,9 +2,9 @@ package com.ticketrush.boundedcontext.performance.app.usecase;
 
 import com.ticketrush.boundedcontext.performance.domain.policy.PerformanceShowTimePolicy;
 import com.ticketrush.boundedcontext.performance.domain.policy.ShowTimeCutoff;
-import com.ticketrush.boundedcontext.performance.domain.types.PerformanceStatus;
 import com.ticketrush.boundedcontext.performance.out.repository.PerformanceRepository;
 import com.ticketrush.global.constants.CacheConstants;
+import com.ticketrush.global.types.PerformanceStatus;
 import java.time.Clock;
 import java.time.LocalDateTime;
 import lombok.RequiredArgsConstructor;

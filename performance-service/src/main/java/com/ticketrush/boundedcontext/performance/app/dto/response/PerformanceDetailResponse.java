@@ -2,7 +2,7 @@ package com.ticketrush.boundedcontext.performance.app.dto.response;
 
 import com.ticketrush.boundedcontext.performance.app.support.SeoulWallClockSerializer;
 import com.ticketrush.boundedcontext.performance.domain.types.Genre;
-import com.ticketrush.boundedcontext.performance.domain.types.PerformanceStatus;
+import com.ticketrush.global.types.PerformanceStatus;
 import io.swagger.v3.oas.annotations.media.Schema;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
@@ -25,6 +25,13 @@ public record PerformanceDetailResponse(
     String description,
     LocalDate showDate,
     LocalTime showTime,
+    @Schema(
+            description =
+                "공연 시작 일시 (yyyy-MM-dd'T'HH:mm:ss+09:00, Asia/Seoul). show_date·show_time 을 합친 값으로,"
+                    + " 시간 계산은 이 필드 하나로 하면 된다",
+            example = "2027-01-10T19:00:00+09:00")
+        @JsonSerialize(using = SeoulWallClockSerializer.class)
+        LocalDateTime showAt,
     Integer durationMinutes,
     Long price,
     Integer totalSeats,

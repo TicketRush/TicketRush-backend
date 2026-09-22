@@ -4,10 +4,10 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 import com.ticketrush.boundedcontext.performance.domain.policy.PerformanceShowTimePolicy;
 import com.ticketrush.boundedcontext.performance.domain.types.Genre;
-import com.ticketrush.boundedcontext.performance.domain.types.PerformanceStatus;
 import com.ticketrush.global.config.JacksonConfig;
 import com.ticketrush.global.dto.response.ApiResponse;
 import com.ticketrush.global.status.SuccessStatus;
+import com.ticketrush.global.types.PerformanceStatus;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.LocalTime;
@@ -40,6 +40,9 @@ class PerformanceUtcResponseContractTest {
   /** JVM 기본 존을 바꿔도 결과가 같아야 한다 — 운영은 {@code TZ=UTC}, 로컬은 KST 다. */
   private static final List<String> JVM_ZONES = List.of("UTC", "Asia/Seoul");
 
+  private static final LocalDate SHOW_DATE = LocalDate.of(2027, 1, 10);
+  private static final LocalTime SHOW_TIME = LocalTime.of(19, 0);
+
   static List<Arguments> bookingOpenAtCases() {
     return List.of(
         // 이슈 #671의 재현 값. 어드민이 입력한 19:00 이 응답에서도 19:00 이어야 한다.
@@ -58,8 +61,9 @@ class PerformanceUtcResponseContractTest {
         "출연자",
         Genre.MUSICAL,
         "설명",
-        LocalDate.of(2027, 1, 10),
-        LocalTime.of(19, 0),
+        SHOW_DATE,
+        SHOW_TIME,
+        PerformanceShowTimePolicy.showAt(SHOW_DATE, SHOW_TIME),
         120,
         50000L,
         100,
@@ -115,6 +119,10 @@ class PerformanceUtcResponseContractTest {
               ZonedDateTime.of(bookingOpenAt, PerformanceShowTimePolicy.SHOW_ZONE)
                   .toInstant()
                   .truncatedTo(ChronoUnit.SECONDS));
+
+      // show_at 은 show_date·show_time 을 합친 값이며 같은 직렬화기를 쓴다 (#671). 한 응답 안에서
+      // 두 시각 필드의 존 표기가 갈리지 않는 것이 이 단언의 목적이다.
+      assertThat(envelope.at("/result/show_at").asString()).isEqualTo("2027-01-10T19:00:00+09:00");
 
       // 값이 없으면 전역 NON_NULL 로 키가 빠진다 — @Schema 가 약속한 동작이다.
       assertThat(

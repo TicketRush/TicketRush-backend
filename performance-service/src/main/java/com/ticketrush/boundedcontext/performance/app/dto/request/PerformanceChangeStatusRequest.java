@@ -1,6 +1,6 @@
 package com.ticketrush.boundedcontext.performance.app.dto.request;
 
-import com.ticketrush.boundedcontext.performance.domain.types.PerformanceStatus;
+import com.ticketrush.global.types.PerformanceStatus;
 import jakarta.validation.constraints.NotNull;
 
 public record PerformanceChangeStatusRequest(

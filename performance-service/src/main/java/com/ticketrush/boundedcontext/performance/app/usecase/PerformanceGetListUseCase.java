@@ -5,7 +5,6 @@ import com.ticketrush.boundedcontext.performance.app.dto.response.PerformanceLis
 import com.ticketrush.boundedcontext.performance.app.mapper.PerformanceMapper;
 import com.ticketrush.boundedcontext.performance.domain.policy.PerformanceShowTimePolicy;
 import com.ticketrush.boundedcontext.performance.domain.types.Genre;
-import com.ticketrush.boundedcontext.performance.domain.types.PerformanceStatus;
 import com.ticketrush.boundedcontext.performance.out.apiclient.SeatRestClient;
 import com.ticketrush.boundedcontext.performance.out.apiclient.dto.SeatCountsInfo;
 import com.ticketrush.boundedcontext.performance.out.repository.PerformanceRepository;
@@ -13,6 +12,7 @@ import com.ticketrush.global.constants.CacheConstants;
 import com.ticketrush.global.dto.request.CursorPageRequest;
 import com.ticketrush.global.exception.BusinessException;
 import com.ticketrush.global.status.ErrorStatus;
+import com.ticketrush.global.types.PerformanceStatus;
 import java.util.Map;
 import lombok.RequiredArgsConstructor;
 import org.springframework.cache.annotation.Cacheable;

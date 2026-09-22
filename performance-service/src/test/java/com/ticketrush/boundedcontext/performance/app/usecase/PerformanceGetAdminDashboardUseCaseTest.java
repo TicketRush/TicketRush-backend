@@ -7,7 +7,6 @@ import static org.mockito.BDDMockito.given;
 import com.ticketrush.boundedcontext.performance.app.dto.response.PerformanceAdminDashboardResponse;
 import com.ticketrush.boundedcontext.performance.app.dto.response.PerformanceAggregateRow;
 import com.ticketrush.boundedcontext.performance.domain.types.Genre;
-import com.ticketrush.boundedcontext.performance.domain.types.PerformanceStatus;
 import com.ticketrush.boundedcontext.performance.out.apiclient.BookingRestClient;
 import com.ticketrush.boundedcontext.performance.out.apiclient.SeatRestClient;
 import com.ticketrush.boundedcontext.performance.out.apiclient.dto.BookingStatsInfo;
@@ -15,7 +14,11 @@ import com.ticketrush.boundedcontext.performance.out.apiclient.dto.SeatCountsInf
 import com.ticketrush.boundedcontext.performance.out.repository.PerformanceRepository;
 import com.ticketrush.global.exception.BusinessException;
 import com.ticketrush.global.status.ErrorStatus;
+import com.ticketrush.global.types.PerformanceStatus;
+import java.time.Clock;
+import java.time.Instant;
 import java.time.LocalDate;
+import java.time.ZoneOffset;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -24,10 +27,19 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
+import org.mockito.Spy;
 import org.mockito.junit.jupiter.MockitoExtension;
 
 @ExtendWith(MockitoExtension.class)
 class PerformanceGetAdminDashboardUseCaseTest {
+
+  /**
+   * 기본 기간의 "오늘"을 고정한다 (#671). 유스케이스가 주입된 Clock 을 쓰므로 여기서 고정해야 같은 기간이 어느 환경에서도 나온다 — 예전처럼 {@code
+   * LocalDate.now()}에 기대면 이 테스트가 JVM 기본 존을 그대로 따라간다.
+   *
+   * <p>UTC 로 고정하는 이유는 매출 버킷(booking 의 {@code cast(confirmedAt as LocalDate)})이 UTC 축이라서다.
+   */
+  @Spy private Clock clock = Clock.fixed(Instant.parse("2026-09-22T02:00:00Z"), ZoneOffset.UTC);
 
   @Mock private PerformanceRepository performanceRepository;
   @Mock private BookingRestClient bookingRestClient;
@@ -318,7 +330,7 @@ class PerformanceGetAdminDashboardUseCaseTest {
   @DisplayName("기간을 지정하지 않으면 오늘을 포함한 최근 30일을 쓴다")
   void execute_WhenPeriodOmitted_UsesLast30Days() {
     // given
-    LocalDate today = LocalDate.now();
+    LocalDate today = LocalDate.of(2026, 9, 22);
     given(performanceRepository.findAllAggregateRows()).willReturn(List.of());
     given(bookingRestClient.getStats(today.minusDays(29), today)).willReturn(Optional.empty());
     given(seatRestClient.getSeatCounts()).willReturn(Map.of());

@@ -8,9 +8,9 @@ import com.ticketrush.boundedcontext.performance.app.usecase.PerformanceOpenBook
 import com.ticketrush.boundedcontext.performance.domain.entity.Performance;
 import com.ticketrush.boundedcontext.performance.domain.policy.PerformanceShowTimePolicy;
 import com.ticketrush.boundedcontext.performance.domain.types.Genre;
-import com.ticketrush.boundedcontext.performance.domain.types.PerformanceStatus;
 import com.ticketrush.boundedcontext.performance.out.repository.PerformanceRepository;
 import com.ticketrush.global.eventpublisher.EventPublisher;
+import com.ticketrush.global.types.PerformanceStatus;
 import com.ticketrush.global.util.S3UploadUtils;
 import jakarta.persistence.EntityManager;
 import java.time.LocalDateTime;
@@ -179,7 +179,7 @@ class PerformanceOpenBookingTest {
   @DisplayName("소프트 삭제된 공연은 오픈 시각이 도래해도 전환되지 않는다")
   void openBooking_softDeleted_notTransitioned() {
     Performance performance = savePerformance(CUTOFF.minusMinutes(1));
-    performance.softDelete();
+    performance.softDelete(LocalDateTime.now());
     em.flush();
 
     int openedCount = performanceOpenBookingUseCase.execute();

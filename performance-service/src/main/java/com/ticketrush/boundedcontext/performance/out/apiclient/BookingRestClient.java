@@ -4,6 +4,7 @@ import com.ticketrush.boundedcontext.performance.out.apiclient.dto.BookingStatsA
 import com.ticketrush.boundedcontext.performance.out.apiclient.dto.BookingStatsInfo;
 import com.ticketrush.global.config.CustomSecurityProperties;
 import com.ticketrush.global.util.ServiceUrlValidator;
+import java.time.Clock;
 import java.time.LocalDate;
 import java.util.List;
 import java.util.Objects;
@@ -37,12 +38,23 @@ public class BookingRestClient {
   private final CustomSecurityProperties securityProperties;
   private final boolean configured;
 
+  /**
+   * 공연별 집계의 "오늘"을 만드는 시계 (#671). {@code LocalDate.now()}는 JVM 기본 시간대를 따라 운영(UTC)과 로컬(KST)에서 다른 날짜를
+   * 돌려줬다.
+   *
+   * <p><b>이 값은 UTC 다.</b> booking 의 일별 버킷이 {@code cast(confirmedAt as LocalDate)}이고 {@code
+   * confirmedAt}이 UTC 이므로 조회 날짜도 같은 축이어야 한다. 여기만 KST 로 바꾸면 요청 날짜와 버킷 날짜가 9시간 어긋난다.
+   */
+  private final Clock clock;
+
   public BookingRestClient(
       RestClient bookingServiceRestClient,
       CustomSecurityProperties securityProperties,
+      Clock clock,
       @Value("${service.booking.url:}") String bookingServiceUrl) {
     this.bookingServiceRestClient = bookingServiceRestClient;
     this.securityProperties = securityProperties;
+    this.clock = clock;
     this.configured = ServiceUrlValidator.isUsable(bookingServiceUrl);
   }
 
@@ -108,7 +120,7 @@ public class BookingRestClient {
       return Optional.empty();
     }
 
-    LocalDate today = LocalDate.now();
+    LocalDate today = LocalDate.now(clock);
 
     try {
       BookingStatsApiResponse response =

@@ -6,7 +6,7 @@ import com.ticketrush.boundedcontext.performance.domain.entity.Performance;
 import com.ticketrush.boundedcontext.performance.domain.entity.QPerformance;
 import com.ticketrush.boundedcontext.performance.domain.policy.ShowTimeCutoff;
 import com.ticketrush.boundedcontext.performance.domain.types.Genre;
-import com.ticketrush.boundedcontext.performance.domain.types.PerformanceStatus;
+import com.ticketrush.global.types.PerformanceStatus;
 import java.util.List;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.PageRequest;

@@ -17,13 +17,13 @@ import com.ticketrush.boundedcontext.performance.app.usecase.PerformanceOpenBook
 import com.ticketrush.boundedcontext.performance.domain.entity.Performance;
 import com.ticketrush.boundedcontext.performance.domain.policy.PerformanceShowTimePolicy;
 import com.ticketrush.boundedcontext.performance.domain.types.Genre;
-import com.ticketrush.boundedcontext.performance.domain.types.PerformanceStatus;
 import com.ticketrush.boundedcontext.performance.out.apiclient.SeatRestClient;
 import com.ticketrush.boundedcontext.performance.out.apiclient.dto.SeatCountsInfo;
 import com.ticketrush.boundedcontext.performance.out.repository.PerformanceRepository;
 import com.ticketrush.global.constants.CacheConstants;
 import com.ticketrush.global.dto.request.CursorPageRequest;
 import com.ticketrush.global.eventpublisher.EventPublisher;
+import com.ticketrush.global.types.PerformanceStatus;
 import com.ticketrush.global.util.S3UploadUtils;
 import java.time.LocalDate;
 import java.time.LocalDateTime;

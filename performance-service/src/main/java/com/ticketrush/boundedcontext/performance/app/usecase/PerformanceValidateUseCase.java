@@ -1,10 +1,10 @@
 package com.ticketrush.boundedcontext.performance.app.usecase;
 
 import com.ticketrush.boundedcontext.performance.domain.entity.Performance;
-import com.ticketrush.boundedcontext.performance.domain.types.PerformanceStatus;
 import com.ticketrush.boundedcontext.performance.out.repository.PerformanceRepository;
 import com.ticketrush.global.exception.BusinessException;
 import com.ticketrush.global.status.ErrorStatus;
+import com.ticketrush.global.types.PerformanceStatus;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
