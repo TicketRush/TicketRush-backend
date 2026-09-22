@@ -29,14 +29,16 @@ class BookingGetAdminRefundStatsUseCaseTest {
     given(
             bookingRepository.aggregateRefundStats(
                 BookingStatus.REFUNDING, BookingStatus.REFUNDED, BookingStatus.CONFIRMED))
-        .willReturn(new BookingRefundStatsResponse(312, 280));
+        .willReturn(new BookingRefundStatsResponse(312, 12, 280, 20));
 
     // when
     BookingRefundStatsResponse result = bookingGetAdminRefundStatsUseCase.execute();
 
     // then
     assertThat(result.totalRefunds()).isEqualTo(312);
+    assertThat(result.inProgressRefunds()).isEqualTo(12);
     assertThat(result.completedRefunds()).isEqualTo(280);
+    assertThat(result.failedRefunds()).isEqualTo(20);
     verify(bookingRepository)
         .aggregateRefundStats(
             BookingStatus.REFUNDING, BookingStatus.REFUNDED, BookingStatus.CONFIRMED);

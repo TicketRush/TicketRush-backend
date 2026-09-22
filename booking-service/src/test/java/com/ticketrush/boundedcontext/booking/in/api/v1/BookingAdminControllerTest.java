@@ -685,7 +685,8 @@ class BookingAdminControllerTest {
   @DisplayName("ADMIN이 환불 요약 통계를 조회하면 전체·완료 건수가 응답된다 (#675)")
   void getRefundStats_returns_summary() throws Exception {
     // given
-    given(bookingFacade.getAdminRefundStats()).willReturn(new BookingRefundStatsResponse(312, 280));
+    given(bookingFacade.getAdminRefundStats())
+        .willReturn(new BookingRefundStatsResponse(312, 12, 280, 20));
 
     // when & then
     mockMvc
@@ -696,7 +697,9 @@ class BookingAdminControllerTest {
                 .header("X-User-Role", "ADMIN"))
         .andExpect(status().isOk())
         .andExpect(jsonPath("$.result.total_refunds").value(312))
-        .andExpect(jsonPath("$.result.completed_refunds").value(280));
+        .andExpect(jsonPath("$.result.in_progress_refunds").value(12))
+        .andExpect(jsonPath("$.result.completed_refunds").value(280))
+        .andExpect(jsonPath("$.result.failed_refunds").value(20));
 
     verify(bookingFacade).getAdminRefundStats();
   }
@@ -708,7 +711,8 @@ class BookingAdminControllerTest {
     // 두 경로가 서로 다른 파사드 메서드로 간다는 것을 고정한다.
     given(bookingFacade.getAdminRefunds(1L, null, new OffsetPageRequest(0, 10)))
         .willReturn(new PageImpl<>(List.of(), PageRequest.of(0, 10), 0));
-    given(bookingFacade.getAdminRefundStats()).willReturn(new BookingRefundStatsResponse(0, 0));
+    given(bookingFacade.getAdminRefundStats())
+        .willReturn(new BookingRefundStatsResponse(0, 0, 0, 0));
 
     // when & then
     mockMvc

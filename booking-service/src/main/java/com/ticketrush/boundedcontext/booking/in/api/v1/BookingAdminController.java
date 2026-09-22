@@ -200,17 +200,20 @@ public class BookingAdminController {
       summary = "관리자 환불 요약 통계 조회",
       description =
           """
-          전체 환불 건수와 환불 완료 건수를 조회합니다.
+          전체 환불 건수와 처리 상태별 건수(진행 중·완료·미해결 실패)를 조회합니다.
 
           **모집단은 환불 목록과 같습니다** — 환불 진행 중(`REFUNDING`) + 환불 완료(`REFUNDED`) +
           미해결 실패(`CONFIRMED`이면서 환불 실패 이력 보유). 결제 전 취소(`CANCELED`)와 미결제 만료(`EXPIRED`)는
           환불이 아니므로 세지 않습니다. 예매 요약 통계(`GET /bookings/stats`)의 `canceled_bookings`는
           `CANCELED + REFUNDED`라 환불 집계가 아니므로 이 값과 다릅니다.
 
-          **목록의 `refund_status` 필터는 이 집계에 적용되지 않습니다.** 카드는 필터와 무관하게 항상 전체 모집단을
-          보여줍니다. 진행 중·실패 건수가 필요하면 목록을 해당 필터로 호출해 `pagination_info.total_elements`를 쓰세요.
+          **네 지표는 서로 배타적이며 `total_refunds`는 나머지 셋의 합입니다.** 같은 모집단을 예매 상태로 나눈
+          것이라 합이 어긋날 수 없습니다. 예매 요약 통계의 네 지표가 배타적 분할이 아닌 것과 다릅니다.
 
-          다른 서비스를 호출하지 않으며, 예매가 환불 결과를 이미 보유하므로 DB 집계 한 번으로 끝납니다.
+          **목록의 `refund_status` 필터는 이 집계에 적용되지 않습니다.** 카드는 필터와 무관하게 항상 전체 모집단을
+          기준으로 하며, `refund_status`로 거른 목록의 `pagination_info.total_elements`는 여기의 해당 지표와 같은 값입니다.
+
+          다른 서비스를 호출하지 않으며, 예매가 환불 결과를 이미 보유하므로 네 값 모두 DB 집계 한 번에서 나옵니다.
           환불 결과 이벤트가 반영되기 전의 건은 아직 진행 중으로 잡힙니다.
           """)
   @GetMapping("/refunds/stats")

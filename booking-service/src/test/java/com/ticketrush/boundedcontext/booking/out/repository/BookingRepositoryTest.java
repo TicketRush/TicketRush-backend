@@ -621,7 +621,14 @@ class BookingRepositoryTest {
 
     // then: CANCELED를 환불로 세면 예매 통계의 canceled_bookings와 같은 값이 되어 카드가 거짓말을 한다
     assertThat(stats.totalRefunds()).isEqualTo(4);
+    assertThat(stats.inProgressRefunds()).isEqualTo(1);
     assertThat(stats.completedRefunds()).isEqualTo(2);
+    assertThat(stats.failedRefunds()).isEqualTo(1);
+
+    // 네 지표는 배타적 분할이라 전체가 나머지 셋의 합이다. 실패 이력이 남은 REFUNDED 건이
+    // 완료와 실패에 이중으로 세어지면 여기서 깨진다.
+    assertThat(stats.totalRefunds())
+        .isEqualTo(stats.inProgressRefunds() + stats.completedRefunds() + stats.failedRefunds());
   }
 
   @Test
@@ -658,6 +665,27 @@ class BookingRepositoryTest {
     assertThat(list.getContent()).hasSize(2);
     assertThat(stats.totalRefunds()).isEqualTo(list.getTotalElements());
     assertThat(stats.totalRefunds()).isEqualTo(3);
+
+    // 상태별 카드도 같은 필터를 건 목록의 전체 건수와 일치한다 — Swagger가 프론트에 약속한 계약이다.
+    Sort idDesc = Sort.by(Sort.Order.desc("id"));
+    assertThat(stats.inProgressRefunds())
+        .isEqualTo(
+            bookingRepository
+                .findByBookingStatusIn(
+                    List.of(BookingStatus.REFUNDING), PageRequest.of(0, 1, idDesc))
+                .getTotalElements());
+    assertThat(stats.completedRefunds())
+        .isEqualTo(
+            bookingRepository
+                .findByBookingStatusIn(
+                    List.of(BookingStatus.REFUNDED), PageRequest.of(0, 1, idDesc))
+                .getTotalElements());
+    assertThat(stats.failedRefunds())
+        .isEqualTo(
+            bookingRepository
+                .findByBookingStatusAndRefundFailedAtIsNotNull(
+                    BookingStatus.CONFIRMED, PageRequest.of(0, 1, idDesc))
+                .getTotalElements());
   }
 
   @Test
@@ -744,7 +772,9 @@ class BookingRepositoryTest {
 
     // then
     assertThat(stats.totalRefunds()).isZero();
+    assertThat(stats.inProgressRefunds()).isZero();
     assertThat(stats.completedRefunds()).isZero();
+    assertThat(stats.failedRefunds()).isZero();
   }
 
   private Booking booking(String bookingNumber, BookingStatus status) {

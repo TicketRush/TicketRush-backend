@@ -24,10 +24,12 @@ public class BookingGetAdminRefundStatsUseCase {
   private final BookingRepository bookingRepository;
 
   /**
-   * 전체 환불 건수와 환불 완료 건수를 반환한다.
+   * 전체 환불 건수와 처리 상태별 건수(진행 중·완료·미해결 실패)를 반환한다.
    *
-   * <p>전체는 환불 진행 중 + 환불 완료 + 미해결 실패다. 목록의 {@code refundStatus} 필터는 이 집계에 적용되지 않는다 — 카드는 필터와 무관하게 항상
-   * 전체 모집단을 보여준다.
+   * <p>네 지표가 한 쿼리에서 나온다. 상태별 카드를 목록의 {@code total_elements}로 대신 얻으면 조회가 네 번 나가고, 그 사이 환불이 진행되면 합이
+   * 전체와 어긋난 화면이 만들어진다.
+   *
+   * <p>목록의 {@code refundStatus} 필터는 이 집계에 적용되지 않는다 — 카드는 필터와 무관하게 항상 전체 모집단을 기준으로 한다.
    */
   public BookingRefundStatsResponse execute() {
     return bookingRepository.aggregateRefundStats(

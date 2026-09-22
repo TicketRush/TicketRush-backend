@@ -88,6 +88,10 @@ public interface BookingRepository extends JpaRepository<Booking, Long> {
    * 관리자 환불 요약 통계 (#675). 위 findRefundTargets와 같은 모집단을 세야 목록의 전체 건수와 카드가 어긋나지 않으므로
    * 세 조건을 그대로 옮겨 적는다.
    *
+   * 전체 다음의 셋은 그 모집단을 예매 상태로 나눈 것이라 배타적이고 합이 전체와 같다. 상태별 카드를 목록의
+   * total_elements로 대신 얻는 방법도 있었지만, 그러면 카드 4개에 조회가 4번 나간다 — 같은 스캔 한 번에서
+   * CASE로 갈라 내는 편이 싸고, 네 값이 같은 스냅샷에서 나와 합이 어긋나는 순간도 없앤다.
+   *
    * aggregateStats와 같은 이유로 COALESCE를 건다 — SUM은 대상 행이 없으면 0이 아니라 NULL을 내고, record의 long
    * 파라미터에 들어가 예매가 하나도 없는 DB에서 NPE가 된다.
    */
@@ -98,7 +102,10 @@ public interface BookingRepository extends JpaRepository<Booking, Long> {
           + "OR b.bookingStatus = :refunded "
           + "OR (b.bookingStatus = :confirmed AND b.refundFailedAt IS NOT NULL) "
           + "THEN 1 ELSE 0 END), 0), "
-          + "COALESCE(SUM(CASE WHEN b.bookingStatus = :refunded THEN 1 ELSE 0 END), 0)) "
+          + "COALESCE(SUM(CASE WHEN b.bookingStatus = :refunding THEN 1 ELSE 0 END), 0), "
+          + "COALESCE(SUM(CASE WHEN b.bookingStatus = :refunded THEN 1 ELSE 0 END), 0), "
+          + "COALESCE(SUM(CASE WHEN b.bookingStatus = :confirmed "
+          + "AND b.refundFailedAt IS NOT NULL THEN 1 ELSE 0 END), 0)) "
           + "FROM Booking b")
   BookingRefundStatsResponse aggregateRefundStats(
       @Param("refunding") BookingStatus refunding,

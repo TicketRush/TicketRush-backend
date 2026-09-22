@@ -859,7 +859,7 @@ class BookingFacadeTest {
   @DisplayName("성공: 환불 요약 통계는 다른 서비스를 호출하지 않는다 (#675)")
   void getAdminRefundStats_does_not_call_remote_services() {
     // given: 예매가 환불 결과를 이미 보유하므로 DB 집계 한 번으로 끝난다
-    BookingRefundStatsResponse stats = new BookingRefundStatsResponse(312, 280);
+    BookingRefundStatsResponse stats = new BookingRefundStatsResponse(312, 12, 280, 20);
     given(bookingGetAdminRefundStatsUseCase.execute()).willReturn(stats);
 
     // when
