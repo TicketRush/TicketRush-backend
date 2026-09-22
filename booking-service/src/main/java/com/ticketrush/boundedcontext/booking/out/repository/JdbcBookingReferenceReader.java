@@ -1,5 +1,6 @@
 package com.ticketrush.boundedcontext.booking.out.repository;
 
+import java.util.Optional;
 import lombok.RequiredArgsConstructor;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Repository;
@@ -15,9 +16,16 @@ public class JdbcBookingReferenceReader implements BookingReferenceReader {
     return exists("SELECT COUNT(*) FROM `user` WHERE id = ?", userId);
   }
 
+  /** {@link JdbcBookingSeatStatusReader#findSeatStatus}와 같은 꼴이다 — 없으면 빈 Optional. */
   @Override
-  public boolean existsPerformanceById(Long performanceId) {
-    return exists("SELECT COUNT(*) FROM performance WHERE performance_id = ?", performanceId);
+  public Optional<String> findPerformanceStatus(Long performanceId) {
+    return jdbcTemplate
+        .query(
+            "SELECT performance_status FROM performance WHERE performance_id = ?",
+            (rs, rowNum) -> rs.getString("performance_status"),
+            performanceId)
+        .stream()
+        .findFirst();
   }
 
   @Override
