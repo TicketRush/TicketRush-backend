@@ -1,17 +1,20 @@
 package com.ticketrush.boundedcontext.booking.app.usecase;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatNullPointerException;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.BDDMockito.given;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.verifyNoInteractions;
 
 import com.ticketrush.boundedcontext.booking.domain.entity.Booking;
 import com.ticketrush.boundedcontext.booking.domain.types.BookingStatus;
 import com.ticketrush.boundedcontext.booking.out.repository.BookingRepository;
 import com.ticketrush.global.dto.request.OffsetPageRequest;
 import java.util.List;
+import java.util.Set;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -53,11 +56,11 @@ class BookingGetAdminBookingsUseCaseTest {
         .willReturn(new PageImpl<>(List.of(booking)));
 
     // when
-    Page<Booking> result = bookingGetAdminBookingsUseCase.execute(null, PAGE_REQUEST);
+    Page<Booking> result = bookingGetAdminBookingsUseCase.execute(Set.of(), PAGE_REQUEST);
 
     // then
     assertThat(result.getContent()).containsExactly(booking);
-    verify(bookingRepository, never()).findByBookingStatus(any(), any());
+    verify(bookingRepository, never()).findByBookingStatusIn(any(), any());
 
     ArgumentCaptor<Pageable> captor = ArgumentCaptor.forClass(Pageable.class);
     verify(bookingRepository).findAll(captor.capture());
@@ -65,23 +68,33 @@ class BookingGetAdminBookingsUseCaseTest {
   }
 
   @Test
-  @DisplayName("성공: status를 주면 해당 상태만 조회하고 페이징·정렬 규약은 그대로다")
-  void execute_with_status_filters_by_status() {
+  @DisplayName("실패: null status 집합은 전체 조회로 확대하지 않고 즉시 거절한다")
+  void execute_with_null_statuses_fails_closed() {
+    assertThatNullPointerException()
+        .isThrownBy(() -> bookingGetAdminBookingsUseCase.execute(null, PAGE_REQUEST))
+        .withMessage("statuses must not be null");
+
+    verifyNoInteractions(bookingRepository);
+  }
+
+  @Test
+  @DisplayName("성공: status 집합을 주면 합집합을 조회하고 페이징·정렬 규약은 그대로다")
+  void execute_with_statuses_filters_by_status_union() {
     // given
+    Set<BookingStatus> statuses = Set.of(BookingStatus.PENDING, BookingStatus.REFUNDING);
     Booking booking = booking(BookingStatus.REFUNDED);
-    given(bookingRepository.findByBookingStatus(eq(BookingStatus.REFUNDED), any(Pageable.class)))
+    given(bookingRepository.findByBookingStatusIn(eq(statuses), any(Pageable.class)))
         .willReturn(new PageImpl<>(List.of(booking)));
 
     // when
-    Page<Booking> result =
-        bookingGetAdminBookingsUseCase.execute(BookingStatus.REFUNDED, PAGE_REQUEST);
+    Page<Booking> result = bookingGetAdminBookingsUseCase.execute(statuses, PAGE_REQUEST);
 
     // then
     assertThat(result.getContent()).containsExactly(booking);
     verify(bookingRepository, never()).findAll(any(Pageable.class));
 
     ArgumentCaptor<Pageable> captor = ArgumentCaptor.forClass(Pageable.class);
-    verify(bookingRepository).findByBookingStatus(eq(BookingStatus.REFUNDED), captor.capture());
+    verify(bookingRepository).findByBookingStatusIn(eq(statuses), captor.capture());
     assertThat(captor.getValue()).isEqualTo(PageRequest.of(1, 20, Sort.by(Sort.Order.desc("id"))));
   }
 }
