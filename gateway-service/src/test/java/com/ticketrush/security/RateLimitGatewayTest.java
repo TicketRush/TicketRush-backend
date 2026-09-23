@@ -17,6 +17,7 @@ import org.springframework.test.context.DynamicPropertyRegistry;
 import org.springframework.test.context.DynamicPropertySource;
 import org.springframework.test.web.reactive.server.WebTestClient;
 import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.RequestHeader;
 import org.springframework.web.bind.annotation.RestController;
 import org.testcontainers.containers.GenericContainer;
 import org.testcontainers.junit.jupiter.Container;
@@ -197,6 +198,22 @@ class RateLimitGatewayTest {
             "request_rate_limiter.{" + ROUTE_ID + ".ip:" + clientIp + "}.timestamp");
   }
 
+  @Test
+  @DisplayName("일반 예외는 기존 500 오류 응답으로 처리한다")
+  void 일반_예외는_500으로_처리된다() {
+    webTestClient
+        .get()
+        .uri("/__rate-limit-probe")
+        .header("X-Forwarded-For", "198.51.100.61")
+        .header("X-Error-Probe", "true")
+        .exchange()
+        .expectStatus()
+        .isEqualTo(HttpStatus.INTERNAL_SERVER_ERROR)
+        .expectBody()
+        .jsonPath("$.status")
+        .isEqualTo(500);
+  }
+
   private WebTestClient.ResponseSpec requestWithIp(String clientIp) {
     return webTestClient
         .get()
@@ -228,7 +245,10 @@ class RateLimitGatewayTest {
   static class RateLimitProbeController {
 
     @GetMapping("/__rate-limit-ok")
-    String ok() {
+    String ok(@RequestHeader(value = "X-Error-Probe", required = false) String errorProbe) {
+      if ("true".equals(errorProbe)) {
+        throw new IllegalStateException("unexpected error probe");
+      }
       return "ok";
     }
   }
