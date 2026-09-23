@@ -294,11 +294,18 @@ class PerformanceBannerIntegrationTest {
   @Test
   @DisplayName("중간 배너의 공연을 삭제하면 뒤 배너의 노출 순서를 앞으로 당긴다")
   void deletePerformance_middleBanner_compactsDisplayOrder() {
-    Long firstPerformanceId = createPerformance("첫 번째 삭제 연동 공연", true, "첫 번째 소제목");
+    final Long firstPerformanceId = createPerformance("첫 번째 삭제 연동 공연", true, "첫 번째 소제목");
 
-    Long secondPerformanceId = createPerformance("두 번째 삭제 연동 공연", true, "두 번째 소제목");
+    final Long secondPerformanceId = createPerformance("두 번째 삭제 연동 공연", true, "두 번째 소제목");
 
-    Long thirdPerformanceId = createPerformance("세 번째 삭제 연동 공연", true, "세 번째 소제목");
+    final Long thirdPerformanceId = createPerformance("세 번째 삭제 연동 공연", true, "세 번째 소제목");
+
+    assertThat(
+            bannerRepository
+                .findByPerformanceId(thirdPerformanceId)
+                .orElseThrow()
+                .getDisplayOrder())
+        .isEqualTo(3);
 
     performanceDeleteUseCase.execute(secondPerformanceId);
 
