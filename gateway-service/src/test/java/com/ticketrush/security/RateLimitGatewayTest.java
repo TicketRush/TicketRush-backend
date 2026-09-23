@@ -164,6 +164,23 @@ class RateLimitGatewayTest {
   }
 
   @Test
+  @DisplayName("잘못된 Bearer 토큰은 401과 공통 오류 응답을 반환한다")
+  void 잘못된_Bearer_토큰은_401을_반환한다() {
+    requestWithToken("198.51.100.60", "invalid")
+        .expectStatus()
+        .isEqualTo(HttpStatus.UNAUTHORIZED)
+        .expectHeader()
+        .contentType("application/json")
+        .expectBody()
+        .jsonPath("$.is_success")
+        .isEqualTo(false)
+        .jsonPath("$.code")
+        .isEqualTo("AUTH_401_003")
+        .jsonPath("$.message")
+        .isEqualTo("유효하지 않은 JWT 토큰입니다.");
+  }
+
+  @Test
   @DisplayName("Redis에 route와 key별 tokens, timestamp 키가 생성된다")
   void Redis에_RateLimit_key가_생성된다() {
     String clientIp = "198.51.100.50";
