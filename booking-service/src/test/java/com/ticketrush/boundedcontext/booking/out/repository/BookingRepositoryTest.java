@@ -5,9 +5,11 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import com.ticketrush.boundedcontext.booking.app.dto.response.BookingDailyRevenueRow;
 import com.ticketrush.boundedcontext.booking.app.dto.response.BookingPerformanceStatsRow;
+import com.ticketrush.boundedcontext.booking.app.dto.response.BookingRefundStatsResponse;
 import com.ticketrush.boundedcontext.booking.app.dto.response.BookingStatsCounts;
 import com.ticketrush.boundedcontext.booking.domain.entity.Booking;
 import com.ticketrush.boundedcontext.booking.domain.types.BookingStatus;
+import com.ticketrush.boundedcontext.booking.domain.types.RefundProcessStatus;
 import com.ticketrush.global.jpa.config.JpaConfig;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
@@ -22,6 +24,7 @@ import org.springframework.boot.jpa.test.autoconfigure.TestEntityManager;
 import org.springframework.context.annotation.Import;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Sort;
 import org.springframework.orm.ObjectOptimisticLockingFailureException;
 
 /**
@@ -79,6 +82,101 @@ class BookingRepositoryTest {
 
     // then
     assertThat(found).map(Booking::getId).contains(saved.getId());
+  }
+
+  @Test
+  @DisplayName("관리자 복수 상태 목록: 상태가 치우쳐도 전역 id desc 연속 페이지에 누락·중복이 없다 (#674)")
+  void findByBookingStatusIn_AppliesGlobalIdDescPagingAndCount() {
+    // given: 오래된 REFUNDING 2건 뒤에 최신 PENDING 4건을 몰아 상태별 페이지 합치기의 오류를 드러낸다
+    bookingRepository.save(booking("BK-R1", BookingStatus.REFUNDING));
+    bookingRepository.save(booking("BK-R2", BookingStatus.REFUNDING));
+    bookingRepository.save(booking("BK-P1", BookingStatus.PENDING));
+    bookingRepository.save(booking("BK-P2", BookingStatus.PENDING));
+    bookingRepository.save(booking("BK-P3", BookingStatus.PENDING));
+    bookingRepository.save(booking("BK-P4", BookingStatus.PENDING));
+    bookingRepository.save(booking("BK-CANCELED", BookingStatus.CANCELED));
+    bookingRepository.save(booking("BK-EXPIRED", BookingStatus.EXPIRED));
+
+    List<BookingStatus> statuses =
+        List.of(BookingStatus.PENDING, BookingStatus.REFUNDING, BookingStatus.PENDING);
+    Sort idDesc = Sort.by(Sort.Order.desc("id"));
+
+    // when
+    Page<Booking> first =
+        bookingRepository.findByBookingStatusIn(statuses, PageRequest.of(0, 2, idDesc));
+    Page<Booking> second =
+        bookingRepository.findByBookingStatusIn(statuses, PageRequest.of(1, 2, idDesc));
+    Page<Booking> last =
+        bookingRepository.findByBookingStatusIn(statuses, PageRequest.of(2, 2, idDesc));
+    Page<Booking> outOfRange =
+        bookingRepository.findByBookingStatusIn(statuses, PageRequest.of(3, 2, idDesc));
+
+    // then: 중복 status가 있어도 행과 count는 중복되지 않고, 메타데이터도 같은 필터 모집단을 쓴다
+    assertThat(first.getContent())
+        .extracting(Booking::getBookingNumber)
+        .containsExactly("BK-P4", "BK-P3");
+    assertThat(second.getContent())
+        .extracting(Booking::getBookingNumber)
+        .containsExactly("BK-P2", "BK-P1");
+    assertThat(last.getContent())
+        .extracting(Booking::getBookingNumber)
+        .containsExactly("BK-R2", "BK-R1");
+    assertThat(first.getTotalElements()).isEqualTo(6);
+    assertThat(first.getTotalPages()).isEqualTo(3);
+    assertThat(first.hasNext()).isTrue();
+    assertThat(last.hasNext()).isFalse();
+    assertThat(outOfRange.getContent()).isEmpty();
+    assertThat(outOfRange.getTotalElements()).isEqualTo(6);
+    assertThat(outOfRange.getTotalPages()).isEqualTo(3);
+    assertThat(outOfRange.hasNext()).isFalse();
+  }
+
+  @Test
+  @DisplayName("관리자 복수 상태 목록: 네 상태를 지정하면 CANCELED와 EXPIRED를 목록·count에서 제외한다 (#674)")
+  void findByBookingStatusIn_ExcludesUnselectedStatusesFromContentAndCount() {
+    // given
+    bookingRepository.save(booking("BK-CONFIRMED", BookingStatus.CONFIRMED));
+    bookingRepository.save(booking("BK-PENDING", BookingStatus.PENDING));
+    bookingRepository.save(booking("BK-REFUNDING", BookingStatus.REFUNDING));
+    bookingRepository.save(booking("BK-REFUNDED", BookingStatus.REFUNDED));
+    bookingRepository.save(booking("BK-CANCELED", BookingStatus.CANCELED));
+    bookingRepository.save(booking("BK-EXPIRED", BookingStatus.EXPIRED));
+
+    // when
+    Page<Booking> found =
+        bookingRepository.findByBookingStatusIn(
+            List.of(
+                BookingStatus.CONFIRMED,
+                BookingStatus.PENDING,
+                BookingStatus.REFUNDING,
+                BookingStatus.REFUNDED),
+            PageRequest.of(0, 10, Sort.by(Sort.Order.desc("id"))));
+
+    // then
+    assertThat(found.getContent())
+        .extracting(Booking::getBookingNumber)
+        .containsExactly("BK-REFUNDED", "BK-REFUNDING", "BK-PENDING", "BK-CONFIRMED");
+    assertThat(found.getTotalElements()).isEqualTo(4);
+    assertThat(found.getTotalPages()).isEqualTo(1);
+    assertThat(found.hasNext()).isFalse();
+  }
+
+  @Test
+  @DisplayName("관리자 복수 상태 목록: 필터 결과가 없으면 빈 페이지 메타데이터를 반환한다 (#674)")
+  void findByBookingStatusIn_WhenNoMatches_ReturnsEmptyPageMetadata() {
+    // given
+    bookingRepository.save(booking("BK-PENDING", BookingStatus.PENDING));
+
+    // when
+    Page<Booking> found =
+        bookingRepository.findByBookingStatusIn(
+            List.of(BookingStatus.REFUNDED), PageRequest.of(0, 10));
+
+    // then
+    assertThat(found.getContent()).isEmpty();
+    assertThat(found.getTotalElements()).isZero();
+    assertThat(found.getTotalPages()).isZero();
+    assertThat(found.hasNext()).isFalse();
   }
 
   @Test
@@ -360,6 +458,323 @@ class BookingRepositoryTest {
 
     // then: 돈이 나간 예매라 매출 추이에 남으면 안 된다
     assertThat(rows).isEmpty();
+  }
+
+  @Test
+  @DisplayName("환불 통합 조회는 진행·완료·미해결 실패만 담고 그 외 예매는 제외한다 (#675)")
+  void findRefundTargets_ReturnsThreeRefundKindsAndExcludesOthers() {
+    // given: 환불 대상 3종과, 환불이 아닌 4종
+    bookingRepository.save(booking("BK-REFUNDING", BookingStatus.REFUNDING));
+
+    Booking refunded = booking("BK-REFUNDED", BookingStatus.REFUNDING);
+    refunded.markRefunded();
+    bookingRepository.save(refunded);
+
+    Booking failed = booking("BK-FAILED", BookingStatus.REFUNDING);
+    failed.recordRefundFailure(FAILED_AT);
+    bookingRepository.save(failed);
+
+    bookingRepository.save(booking("BK-CLEAN", BookingStatus.CONFIRMED));
+    bookingRepository.save(booking("BK-PENDING", BookingStatus.PENDING));
+    bookingRepository.save(booking("BK-CANCELED", BookingStatus.CANCELED));
+    bookingRepository.save(booking("BK-EXPIRED", BookingStatus.EXPIRED));
+
+    // when
+    Page<Booking> found =
+        bookingRepository.findRefundTargets(
+            BookingStatus.REFUNDING,
+            BookingStatus.REFUNDED,
+            BookingStatus.CONFIRMED,
+            PageRequest.of(0, 10, Sort.by(Sort.Order.desc("id"))));
+
+    // then: 실패 이력이 없는 CONFIRMED가 섞이면 정상 확정 예매가 환불 화면에 쏟아진다.
+    // 결제 전 취소(CANCELED)와 미결제 만료(EXPIRED)는 애초에 환불이 아니다.
+    assertThat(found.getContent())
+        .extracting(Booking::getBookingNumber)
+        .containsExactlyInAnyOrder("BK-REFUNDING", "BK-REFUNDED", "BK-FAILED");
+    assertThat(found.getTotalElements()).isEqualTo(3);
+  }
+
+  @Test
+  @DisplayName("실패 이력이 남은 재시도 건도 한 행으로만 조회된다 (#675)")
+  void findRefundTargets_CountsRetriedBookingOnce() {
+    // given: refundFailedAt은 재환불 시 지워지지 않는다(ADR 0005). 실패 조건을 상태와 독립으로 걸면
+    // 재시도 중·완료 건이 실패 분기에도 걸려 같은 예매가 목록에 두 번 나온다.
+    Booking retrying = booking("BK-RETRYING", BookingStatus.REFUNDING);
+    retrying.recordRefundFailure(FAILED_AT);
+    retrying.requestRefund();
+    bookingRepository.save(retrying);
+
+    Booking resolved = booking("BK-RESOLVED", BookingStatus.REFUNDING);
+    resolved.recordRefundFailure(FAILED_AT);
+    resolved.markRefunded();
+    bookingRepository.save(resolved);
+
+    // when
+    Page<Booking> found =
+        bookingRepository.findRefundTargets(
+            BookingStatus.REFUNDING,
+            BookingStatus.REFUNDED,
+            BookingStatus.CONFIRMED,
+            PageRequest.of(0, 10, Sort.by(Sort.Order.desc("id"))));
+
+    // then: 둘 다 실패 시각을 들고 있지만 행은 각각 하나뿐이다
+    assertThat(found.getContent())
+        .extracting(Booking::getBookingNumber)
+        .containsExactlyInAnyOrder("BK-RETRYING", "BK-RESOLVED");
+    assertThat(found.getTotalElements()).isEqualTo(2);
+    assertThat(found.getContent())
+        .allSatisfy(booking -> assertThat(booking.getRefundFailedAt()).isEqualTo(FAILED_AT));
+  }
+
+  @Test
+  @DisplayName("환불 통합 조회는 전역 id DESC로 페이징하고 count가 같은 모집단을 본다 (#675)")
+  void findRefundTargets_AppliesGlobalIdDescPagingAndCount() {
+    // given: 종류가 치우쳐 저장된다 — 상태별로 따로 조회해 합치면 뒷페이지가 통째로 누락되는 배치다
+    bookingRepository.save(booking("BK-01", BookingStatus.REFUNDING));
+    bookingRepository.save(booking("BK-02", BookingStatus.REFUNDING));
+    bookingRepository.save(booking("BK-03", BookingStatus.CONFIRMED)); // 환불 아님
+    Booking failed = booking("BK-04", BookingStatus.REFUNDING);
+    failed.recordRefundFailure(FAILED_AT);
+    bookingRepository.save(failed);
+    Booking refunded = booking("BK-05", BookingStatus.REFUNDING);
+    refunded.markRefunded();
+    bookingRepository.save(refunded);
+
+    Sort idDesc = Sort.by(Sort.Order.desc("id"));
+
+    // when
+    Page<Booking> first =
+        bookingRepository.findRefundTargets(
+            BookingStatus.REFUNDING,
+            BookingStatus.REFUNDED,
+            BookingStatus.CONFIRMED,
+            PageRequest.of(0, 2, idDesc));
+    Page<Booking> second =
+        bookingRepository.findRefundTargets(
+            BookingStatus.REFUNDING,
+            BookingStatus.REFUNDED,
+            BookingStatus.CONFIRMED,
+            PageRequest.of(1, 2, idDesc));
+
+    // then: 연속 페이지에 누락·중복이 없고 메타데이터가 필터 결과와 일치한다
+    assertThat(first.getContent())
+        .extracting(Booking::getBookingNumber)
+        .containsExactly("BK-05", "BK-04");
+    assertThat(second.getContent())
+        .extracting(Booking::getBookingNumber)
+        .containsExactly("BK-02", "BK-01");
+    assertThat(first.getTotalElements()).isEqualTo(4);
+    assertThat(first.getTotalPages()).isEqualTo(2);
+    assertThat(second.hasNext()).isFalse();
+  }
+
+  @Test
+  @DisplayName("환불 대상이 없으면 빈 페이지 메타데이터를 낸다 (#675)")
+  void findRefundTargets_WhenNoMatches_ReturnsEmptyPageMetadata() {
+    // given: 환불과 무관한 예매만 있다
+    bookingRepository.save(booking("BK-CLEAN", BookingStatus.CONFIRMED));
+    bookingRepository.save(booking("BK-EXPIRED", BookingStatus.EXPIRED));
+
+    // when
+    Page<Booking> found =
+        bookingRepository.findRefundTargets(
+            BookingStatus.REFUNDING,
+            BookingStatus.REFUNDED,
+            BookingStatus.CONFIRMED,
+            PageRequest.of(0, 10, Sort.by(Sort.Order.desc("id"))));
+
+    // then
+    assertThat(found.getContent()).isEmpty();
+    assertThat(found.getTotalElements()).isZero();
+    assertThat(found.getTotalPages()).isZero();
+    assertThat(found.hasNext()).isFalse();
+  }
+
+  @Test
+  @DisplayName("환불 통계는 목록과 같은 모집단을 세고 완료만 따로 센다 (#675)")
+  void aggregateRefundStats_CountsPopulationAndCompleted() {
+    // given: 진행 1 + 완료 2 + 미해결 실패 1 = 전체 4. 환불이 아닌 3종은 세지 않는다.
+    bookingRepository.save(booking("BK-REFUNDING", BookingStatus.REFUNDING));
+
+    Booking refundedOne = booking("BK-REFUNDED-1", BookingStatus.REFUNDING);
+    refundedOne.markRefunded();
+    bookingRepository.save(refundedOne);
+
+    Booking refundedTwo = booking("BK-REFUNDED-2", BookingStatus.REFUNDING);
+    refundedTwo.recordRefundFailure(FAILED_AT);
+    refundedTwo.markRefunded();
+    bookingRepository.save(refundedTwo);
+
+    Booking failed = booking("BK-FAILED", BookingStatus.REFUNDING);
+    failed.recordRefundFailure(FAILED_AT);
+    bookingRepository.save(failed);
+
+    bookingRepository.save(booking("BK-CLEAN", BookingStatus.CONFIRMED));
+    bookingRepository.save(booking("BK-CANCELED", BookingStatus.CANCELED));
+    bookingRepository.save(booking("BK-EXPIRED", BookingStatus.EXPIRED));
+
+    // when
+    BookingRefundStatsResponse stats =
+        bookingRepository.aggregateRefundStats(
+            BookingStatus.REFUNDING, BookingStatus.REFUNDED, BookingStatus.CONFIRMED);
+
+    // then: CANCELED를 환불로 세면 예매 통계의 canceled_bookings와 같은 값이 되어 카드가 거짓말을 한다
+    assertThat(stats.totalRefunds()).isEqualTo(4);
+    assertThat(stats.inProgressRefunds()).isEqualTo(1);
+    assertThat(stats.completedRefunds()).isEqualTo(2);
+    assertThat(stats.failedRefunds()).isEqualTo(1);
+
+    // 네 지표는 배타적 분할이라 전체가 나머지 셋의 합이다. 실패 이력이 남은 REFUNDED 건이
+    // 완료와 실패에 이중으로 세어지면 여기서 깨진다.
+    assertThat(stats.totalRefunds())
+        .isEqualTo(stats.inProgressRefunds() + stats.completedRefunds() + stats.failedRefunds());
+  }
+
+  @Test
+  @DisplayName("환불 통계의 전체 건수와 목록의 전체 건수가 같은 모집단을 센다 (#675)")
+  void aggregateRefundStats_AgreesWithRefundTargetsTotal() {
+    // given: 두 쿼리가 술어를 각자 적어 두고 있어, 한쪽만 고치면 카드와 total_elements가 조용히 갈린다.
+    // 그 드리프트를 같은 데이터로 직접 맞대어 잠근다. 환불 3종 + 환불 아님 3종을 섞는다.
+    bookingRepository.save(booking("BK-REFUNDING", BookingStatus.REFUNDING));
+
+    Booking refunded = booking("BK-REFUNDED", BookingStatus.REFUNDING);
+    refunded.markRefunded();
+    bookingRepository.save(refunded);
+
+    Booking failed = booking("BK-FAILED", BookingStatus.REFUNDING);
+    failed.recordRefundFailure(FAILED_AT);
+    bookingRepository.save(failed);
+
+    bookingRepository.save(booking("BK-CLEAN", BookingStatus.CONFIRMED));
+    bookingRepository.save(booking("BK-CANCELED", BookingStatus.CANCELED));
+    bookingRepository.save(booking("BK-EXPIRED", BookingStatus.EXPIRED));
+
+    // when
+    Page<Booking> list =
+        bookingRepository.findRefundTargets(
+            BookingStatus.REFUNDING,
+            BookingStatus.REFUNDED,
+            BookingStatus.CONFIRMED,
+            PageRequest.of(0, 2, Sort.by(Sort.Order.desc("id"))));
+    BookingRefundStatsResponse stats =
+        bookingRepository.aggregateRefundStats(
+            BookingStatus.REFUNDING, BookingStatus.REFUNDED, BookingStatus.CONFIRMED);
+
+    // then: 페이지 크기를 모집단보다 작게 잡아도 전체 건수는 카드와 같아야 한다
+    assertThat(list.getContent()).hasSize(2);
+    assertThat(stats.totalRefunds()).isEqualTo(list.getTotalElements());
+    assertThat(stats.totalRefunds()).isEqualTo(3);
+
+    // 상태별 카드도 같은 필터를 건 목록의 전체 건수와 일치한다 — Swagger가 프론트에 약속한 계약이다.
+    Sort idDesc = Sort.by(Sort.Order.desc("id"));
+    assertThat(stats.inProgressRefunds())
+        .isEqualTo(
+            bookingRepository
+                .findByBookingStatusIn(
+                    List.of(BookingStatus.REFUNDING), PageRequest.of(0, 1, idDesc))
+                .getTotalElements());
+    assertThat(stats.completedRefunds())
+        .isEqualTo(
+            bookingRepository
+                .findByBookingStatusIn(
+                    List.of(BookingStatus.REFUNDED), PageRequest.of(0, 1, idDesc))
+                .getTotalElements());
+    assertThat(stats.failedRefunds())
+        .isEqualTo(
+            bookingRepository
+                .findByBookingStatusAndRefundFailedAtIsNotNull(
+                    BookingStatus.CONFIRMED, PageRequest.of(0, 1, idDesc))
+                .getTotalElements());
+  }
+
+  @Test
+  @DisplayName("환불 통합 조회가 반환한 모든 행은 환불 처리 상태로 파생된다 (#675)")
+  void findRefundTargets_EveryRowIsClassifiable() {
+    // given: 조회 조건(JPQL)과 파생 규칙(RefundProcessStatus.from)이 서로 다른 파일에 적혀 있다.
+    // 갈리면 분류에 실패한 행 하나가 페이지 전체를 500으로 만드는데, 그 화면은 CS가 장애 중
+    // 미해결 환불을 찾는 복구 도구다. 런타임이 아니라 여기서 먼저 빨개지게 잠근다.
+    bookingRepository.save(booking("BK-REFUNDING", BookingStatus.REFUNDING));
+
+    Booking refunded = booking("BK-REFUNDED", BookingStatus.REFUNDING);
+    refunded.markRefunded();
+    bookingRepository.save(refunded);
+
+    Booking failed = booking("BK-FAILED", BookingStatus.REFUNDING);
+    failed.recordRefundFailure(FAILED_AT);
+    bookingRepository.save(failed);
+
+    Booking retrying = booking("BK-RETRYING", BookingStatus.REFUNDING);
+    retrying.recordRefundFailure(FAILED_AT);
+    retrying.requestRefund();
+    bookingRepository.save(retrying);
+
+    bookingRepository.save(booking("BK-CLEAN", BookingStatus.CONFIRMED));
+    bookingRepository.save(booking("BK-CANCELED", BookingStatus.CANCELED));
+
+    // when
+    Page<Booking> found =
+        bookingRepository.findRefundTargets(
+            BookingStatus.REFUNDING,
+            BookingStatus.REFUNDED,
+            BookingStatus.CONFIRMED,
+            PageRequest.of(0, 50, Sort.by(Sort.Order.desc("id"))));
+
+    // then: 한 행이라도 파생에 실패하면 여기서 IllegalStateException으로 터진다
+    assertThat(found.getContent())
+        .isNotEmpty()
+        .allSatisfy(
+            b ->
+                assertThat(RefundProcessStatus.from(b.getBookingStatus(), b.getRefundFailedAt()))
+                    .isNotNull());
+  }
+
+  @Test
+  @DisplayName("진행 중 조회는 정상 진행 건과 고착 건을 모두 담는다 (#675)")
+  void findRefundTargets_IncludesBothFreshAndStuckRefunding() {
+    // given: 고착 조회(#397)는 임계 30분을 넘긴 건만 본다. 통합 목록의 진행 중이 그 조회로 대체되면
+    // 방금 환불을 건 예매가 화면에서 사라진다 — 이슈가 명시적으로 금지한 구현이다.
+    bookingRepository.save(booking("BK-FRESH", BookingStatus.REFUNDING));
+    Booking stuck = bookingRepository.save(booking("BK-STUCK", BookingStatus.REFUNDING));
+    em.flush();
+
+    // auditing이 updatedAt을 저장 시각으로 고정하므로 고착 시나리오는 벌크 UPDATE로 과거로 되돌린다
+    em.getEntityManager()
+        .createQuery("UPDATE Booking b SET b.updatedAt = :past WHERE b.id = :id")
+        .setParameter("past", LocalDateTime.now(ZoneOffset.UTC).minusHours(1))
+        .setParameter("id", stuck.getId())
+        .executeUpdate();
+    em.clear();
+
+    // when
+    Page<Booking> found =
+        bookingRepository.findRefundTargets(
+            BookingStatus.REFUNDING,
+            BookingStatus.REFUNDED,
+            BookingStatus.CONFIRMED,
+            PageRequest.of(0, 10, Sort.by(Sort.Order.desc("id"))));
+
+    // then: updatedAt은 이 조회의 조건이 아니다
+    assertThat(found.getContent())
+        .extracting(Booking::getBookingNumber)
+        .containsExactlyInAnyOrder("BK-FRESH", "BK-STUCK");
+  }
+
+  @Test
+  @DisplayName("예매가 하나도 없어도 환불 통계는 0을 낸다 (#675)")
+  void aggregateRefundStats_WhenNoBookings_ReturnsZeros() {
+    // given: SUM은 대상 행이 없으면 0이 아니라 NULL이라, COALESCE가 없으면 record의 long에서 NPE가 난다
+
+    // when
+    BookingRefundStatsResponse stats =
+        bookingRepository.aggregateRefundStats(
+            BookingStatus.REFUNDING, BookingStatus.REFUNDED, BookingStatus.CONFIRMED);
+
+    // then
+    assertThat(stats.totalRefunds()).isZero();
+    assertThat(stats.inProgressRefunds()).isZero();
+    assertThat(stats.completedRefunds()).isZero();
+    assertThat(stats.failedRefunds()).isZero();
   }
 
   private Booking booking(String bookingNumber, BookingStatus status) {

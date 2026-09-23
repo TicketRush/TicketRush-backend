@@ -92,6 +92,7 @@ public enum ErrorStatus {
       HttpStatus.CONFLICT, "BOOKING_409_005", "환불에 실패한 예매만 재환불할 수 있습니다."),
   BOOKING_CANCEL_NOT_ALLOWED_TICKET_USED(
       HttpStatus.CONFLICT, "BOOKING_409_006", "이미 입장한 예매는 환불할 수 없습니다."),
+  BOOKING_REFUND_DEADLINE_PASSED(HttpStatus.CONFLICT, "BOOKING_409_007", "공연 7일 전까지만 환불할 수 있습니다."),
 
   // Booking 500
   BOOKING_NUMBER_RETRY_EXCEEDED(
@@ -100,6 +101,8 @@ public enum ErrorStatus {
   // Booking 503
   BOOKING_TICKET_COMMUNICATION_FAILED(
       HttpStatus.SERVICE_UNAVAILABLE, "BOOKING_503_001", "입장권 정보 조회에 실패했습니다. 잠시 후 다시 시도해 주세요."),
+  BOOKING_PERFORMANCE_COMMUNICATION_FAILED(
+      HttpStatus.SERVICE_UNAVAILABLE, "BOOKING_503_002", "공연 정보 조회에 실패했습니다. 잠시 후 다시 시도해 주세요."),
 
   // Seat 400
   SEAT_HOLD_TIME_INVALID(HttpStatus.BAD_REQUEST, "SEAT_400_001", "선점 만료 시간은 현재 시간 이후여야 합니다."),
@@ -155,6 +158,15 @@ public enum ErrorStatus {
 
   // Performance 404
   PERFORMANCE_NOT_FOUND(HttpStatus.NOT_FOUND, "PERFORMANCE_404_001", "공연이 존재하지 않습니다."),
+
+  // Banner 400
+  BANNER_ESSENTIAL_ID(HttpStatus.BAD_REQUEST, "BANNER_400_001", "배너에 연결할 공연 ID는 필수입니다."),
+  BANNER_EXPOSURE_LIMIT(HttpStatus.BAD_REQUEST, "BANNER_400_002", "배너 노출 순서는 1부터 3까지만 가능합니다."),
+
+  // Banner 409
+  BANNER_LIMIT_EXCEEDED(HttpStatus.CONFLICT, "BANNER_409_001", "등록 가능한 배너 3개가 모두 사용 중입니다."),
+  BANNER_REGISTRATION_CONFLICT(
+      HttpStatus.CONFLICT, "BANNER_409_002", "배너 등록 중 충돌이 발생했습니다. 배너 목록을 다시 확인해 주세요."),
 
   // File 400
   FILE_EMPTY(HttpStatus.BAD_REQUEST, "FILE_400_001", "업로드할 파일이 비어있습니다."),
@@ -238,6 +250,8 @@ public enum ErrorStatus {
   PAYMENT_NOT_CANCELABLE(HttpStatus.CONFLICT, "PAYMENT_409_002", "환불 가능한 결제 상태가 아닙니다."),
   PAYMENT_CANCEL_NOT_ALLOWED_TICKET_USED(
       HttpStatus.CONFLICT, "PAYMENT_409_003", "이미 입장한 예매는 환불할 수 없습니다."),
+  PAYMENT_CANCEL_NOT_ALLOWED_REFUND_DEADLINE(
+      HttpStatus.CONFLICT, "PAYMENT_409_004", "공연 7일 전까지만 환불할 수 있습니다."),
 
   // Payment 500
   PAYMENT_REFUND_INCONSISTENT(

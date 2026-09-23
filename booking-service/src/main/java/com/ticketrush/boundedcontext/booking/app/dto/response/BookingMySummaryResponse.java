@@ -6,6 +6,7 @@ import com.ticketrush.global.json.UtcLocalDateTimeSerializer;
 import io.swagger.v3.oas.annotations.media.Schema;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
+import java.time.LocalTime;
 import tools.jackson.databind.annotation.JsonSerialize;
 
 /**
@@ -49,6 +50,8 @@ public record BookingMySummaryResponse(
             description = "공연 날짜. 예정/지난 공연 탭 분기 기준이다. performance-service 장애 시 null.",
             example = "2026-05-22")
         LocalDate performanceDate,
+    @Schema(description = "공연 시간. performance-service 장애 시 null.", example = "19:30:00")
+        LocalTime performanceTime,
     @Schema(description = "공연 장소. performance-service 장애 시 null.", example = "서울 예술의전당 오페라극장")
         String performanceAddress,
     @Schema(description = "좌석 번호. seat-service 장애 시 null.", example = "A-1") String seatNumber,
@@ -76,6 +79,7 @@ public record BookingMySummaryResponse(
         core.expiresAt(),
         (performance == null) ? null : performance.title(),
         (performance == null) ? null : performance.showDate(),
+        (performance == null) ? null : performance.showTime(),
         (performance == null) ? null : performance.address(),
         seatNumber,
         (performance == null) ? null : performance.price());

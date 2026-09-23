@@ -8,12 +8,13 @@ import com.ticketrush.boundedcontext.performance.domain.entity.Performance;
 import com.ticketrush.boundedcontext.performance.domain.policy.PerformanceShowTimePolicy;
 import com.ticketrush.boundedcontext.performance.domain.policy.ShowTimeCutoff;
 import com.ticketrush.boundedcontext.performance.domain.types.Genre;
-import com.ticketrush.boundedcontext.performance.domain.types.PerformanceStatus;
 import com.ticketrush.boundedcontext.performance.out.repository.PerformanceRepository;
 import com.ticketrush.global.eventpublisher.EventPublisher;
+import com.ticketrush.global.types.PerformanceStatus;
 import com.ticketrush.global.util.S3UploadUtils;
 import jakarta.persistence.EntityManager;
 import java.time.LocalDate;
+import java.time.LocalDateTime;
 import java.time.LocalTime;
 import java.util.List;
 import java.util.Set;
@@ -183,7 +184,7 @@ class PerformanceCloseShowTest {
   void closeShow_softDeleted_notTransitioned() {
     Performance deleted =
         saveShowAt(CUTOFF.date().minusDays(1), LocalTime.of(19, 0), PerformanceStatus.ON_SALE);
-    deleted.softDelete();
+    deleted.softDelete(LocalDateTime.now());
     em.flush();
 
     int closedCount = performanceCloseShowUseCase.execute();

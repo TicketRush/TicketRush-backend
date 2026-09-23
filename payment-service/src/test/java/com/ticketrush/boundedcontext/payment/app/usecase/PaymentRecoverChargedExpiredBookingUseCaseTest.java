@@ -135,7 +135,7 @@ class PaymentRecoverChargedExpiredBookingUseCaseTest {
 
   private void givenBooking(Long bookingId, String status, String bookingNumber) {
     given(bookingRestClient.getBooking(bookingId))
-        .willReturn(new BookingInfoResponse(bookingId, 10L, status, bookingNumber));
+        .willReturn(new BookingInfoResponse(bookingId, 10L, status, bookingNumber, null));
   }
 
   private double skipCount(String reason) {

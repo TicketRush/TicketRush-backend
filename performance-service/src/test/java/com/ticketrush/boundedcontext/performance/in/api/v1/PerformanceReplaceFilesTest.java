@@ -361,7 +361,7 @@ class PerformanceReplaceFilesTest {
     Long performanceId = savePerformance();
     Performance performance = performanceRepository.findById(performanceId).orElseThrow();
 
-    performance.softDelete();
+    performance.softDelete(LocalDateTime.now());
 
     em.flush();
     em.clear();

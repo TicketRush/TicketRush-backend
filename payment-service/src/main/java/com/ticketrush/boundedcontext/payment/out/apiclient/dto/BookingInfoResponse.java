@@ -21,10 +21,15 @@ import com.fasterxml.jackson.annotation.JsonProperty;
  * <p>네 필드 모두 박스 타입이라 null이 될 수 있다. 특히 {@code @JsonIgnoreProperties(ignoreUnknown = true)}라 booking이
  * 필드명을 바꾸면 예외 대신 조용히 null이 되므로, 판정하는 쪽이 null을 "통과"가 아니라 "판정 불가"로 다뤄야 한다. {@code bookingNumber}는 배포
  * 순서가 역전돼(payment 먼저 배포) 키가 아예 없을 때도 같은 경로로 null이 되므로, <b>호출자는 이 값이 비면 환불도 승인도 실행하지 않는다.</b>
+ *
+ * <p>{@code refundAllowed} 는 환불 마감(D-7) 판정이다 (#668). booking 이 정책을 소유하고 payment 는 결과만 쓴다 — payment
+ * 가 공연을 직접 보고 계산하면 7일이 또 하드코딩되어 두 서비스가 가직가직 움직일 수 있다. <b>{@code withRefundDeadline=true} 로 요청했을 때만
+ * 채워진다.</b> 요청하고도 null 이면 계약 결함이므로, 다른 필드와 같은 규율로 <b>통과가 아니라 차단</b>으로 다룬다.
  */
 @JsonIgnoreProperties(ignoreUnknown = true)
 public record BookingInfoResponse(
     @JsonProperty("booking_id") Long bookingId,
     @JsonProperty("user_id") Long userId,
     @JsonProperty("booking_status") String bookingStatus,
-    @JsonProperty("booking_number") String bookingNumber) {}
+    @JsonProperty("booking_number") String bookingNumber,
+    @JsonProperty("refund_allowed") Boolean refundAllowed) {}

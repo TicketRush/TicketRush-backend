@@ -4,6 +4,7 @@ import com.ticketrush.boundedcontext.booking.app.dto.response.BookingInternalRes
 import com.ticketrush.boundedcontext.booking.app.dto.response.BookingInternalStatsResponse;
 import com.ticketrush.boundedcontext.booking.app.usecase.BookingGetInternalStatsUseCase;
 import com.ticketrush.boundedcontext.booking.app.usecase.BookingGetInternalUseCase;
+import com.ticketrush.boundedcontext.booking.app.usecase.BookingValidateRefundDeadlineUseCase;
 import com.ticketrush.global.dto.response.ApiResponse;
 import com.ticketrush.global.status.SuccessStatus;
 import io.swagger.v3.oas.annotations.Hidden;
@@ -35,6 +36,7 @@ public class BookingInternalController {
 
   private final BookingGetInternalUseCase bookingGetInternalUseCase;
   private final BookingGetInternalStatsUseCase bookingGetInternalStatsUseCase;
+  private final BookingValidateRefundDeadlineUseCase bookingValidateRefundDeadlineUseCase;
 
   /**
    * 이 매핑은 {@code /{bookingId}}보다 먼저 평가된다 — Spring의 {@code PathPattern}이 리터럴 세그먼트를 변수 세그먼트보다 구체적으로
@@ -87,11 +89,27 @@ public class BookingInternalController {
           **`booking_number` 는 결제 취소 시 좌석 소유 교차검증에 쓰입니다 (#607).**
           payment 는 예매번호를 자신의 테이블에 갖고 있지 않아 이 필드로만 얻으며,
           값 없이 환불 이벤트가 나가면 seat 의 ABA 방지 대조가 꺼집니다.
+
+          **`withRefundDeadline=true` 를 붙이면 `refund_allowed` 에 환불 마감(D-7) 판정을 실어 줍니다 (#668).**
+          결제 취소 경로가 booking 을 거치지 않고 PG 환불을 집행하므로, 그쪽에도 같은 마감을 강제하려면 필요합니다.
+          기본값은 `false` 입니다 — 판정에 performance-service 왕복이 들어가서, 마감이 필요 없는
+          입장 검증·결제 확정 경로에 그 지연을 얹지 않기 위함입니다.
+          공연 일시를 확정할 수 없으면 `false` 가 아니라 503 `BOOKING_503_002` 로 끝냅니다(fail-closed).
           """)
   @GetMapping("/{bookingId}")
   public ResponseEntity<ApiResponse<BookingInternalResponse>> getBookingInternal(
-      @PathVariable Long bookingId) {
+      @PathVariable Long bookingId,
+      @RequestParam(defaultValue = "false") boolean withRefundDeadline) {
     BookingInternalResponse response = bookingGetInternalUseCase.execute(bookingId);
+
+    // 마감 판정은 조회 트랜잭션 밖에서 따로 한다 (#668). performance-service 왕복이
+    // @Transactional 안에 들어가면 다운스트림 지연이 booking 의 DB 커넥션 풀을 문다.
+    if (withRefundDeadline) {
+      response =
+          response.withRefundAllowed(
+              bookingValidateRefundDeadlineUseCase.isRefundAllowed(bookingId));
+    }
+
     return ApiResponse.onSuccess(SuccessStatus.OK, response);
   }
 }

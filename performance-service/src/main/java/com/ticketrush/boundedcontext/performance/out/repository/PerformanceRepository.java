@@ -2,7 +2,7 @@ package com.ticketrush.boundedcontext.performance.out.repository;
 
 import com.ticketrush.boundedcontext.performance.app.dto.response.PerformanceAggregateRow;
 import com.ticketrush.boundedcontext.performance.domain.entity.Performance;
-import com.ticketrush.boundedcontext.performance.domain.types.PerformanceStatus;
+import com.ticketrush.global.types.PerformanceStatus;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.LocalTime;

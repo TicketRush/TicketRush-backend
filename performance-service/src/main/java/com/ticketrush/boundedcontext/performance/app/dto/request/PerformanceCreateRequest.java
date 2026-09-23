@@ -51,7 +51,7 @@ public record PerformanceCreateRequest(
         Long price,
     @Schema(
             description =
-                "총 좌석 수 (기본 배치는 120석 = 10행 x 12열, 최대 10000). 등록 시점에만 정할 수 있고 수정은 지원하지 않습니다.",
+                "총 좌석 수 (기본 배치는 120석 = 10행 x 12열, 최대 10000). " + "등록 시점에만 정할 수 있고 수정은 지원하지 않습니다.",
             example = "500")
         @NotNull(message = "총 좌석 수는 필수입니다.")
         @Positive(message = "총 좌석 수는 1개 이상이어야 합니다.")
@@ -64,7 +64,7 @@ public record PerformanceCreateRequest(
         String address,
     @Schema(
             description =
-                "예매 오픈 시각 (yyyy-MM-dd HH:mm:ss, Asia/Seoul 기준, 선택 — 미설정 시 자동 오픈 없이 수동 전환만 가능)",
+                "예매 오픈 시각 (yyyy-MM-dd HH:mm:ss, Asia/Seoul 기준, 선택 — " + "미설정 시 자동 오픈 없이 수동 전환만 가능)",
             example = "2027-08-01 20:00:00",
             nullable = true)
         @JsonFormat(shape = JsonFormat.Shape.STRING, pattern = "yyyy-MM-dd HH:mm:ss")
@@ -88,10 +88,25 @@ public record PerformanceCreateRequest(
             message = "캐릭터 구성은 JSON 객체여야 하며 {max}바이트·중첩 {maxDepth}단을 넘을 수 없습니다.")
         JsonNode characterConfig,
     @Schema(
-            description = "캐릭터 한마디 (선택, 최대 50자). 빈 문자열(공백만 있는 문자열 포함)은 '없음'으로 저장한다.",
+            description = "캐릭터 한마디 (선택, 최대 50자). " + "빈 문자열(공백만 있는 문자열 포함)은 '없음'으로 저장한다.",
             example = "공연장에서 만나요!",
             nullable = true)
         @Size(
             max = CharacterConstraints.MESSAGE_MAX_LENGTH,
             message = "캐릭터 한마디는 {max}자를 초과할 수 없습니다.")
-        String characterMessage) {}
+        String characterMessage,
+    @Schema(
+            description = "메인 배너 등록 여부. 생략하거나 false이면 배너를 등록하지 않고, " + "true이면 공연 등록과 함께 배너를 등록한다.",
+            example = "true",
+            defaultValue = "false",
+            nullable = true)
+        Boolean displayOnBanner,
+    @Schema(
+            description =
+                "배너 전용 소제목 (선택, 최대 200자). "
+                    + "displayOnBanner가 true일 때만 사용하며, "
+                    + "빈 문자열 또는 공백 문자열은 소제목 없음으로 처리한다.",
+            example = "여름밤의 재즈 향연",
+            nullable = true)
+        @Size(max = 200, message = "배너 소제목은 200자를 초과할 수 없습니다.")
+        String bannerSubtitle) {}

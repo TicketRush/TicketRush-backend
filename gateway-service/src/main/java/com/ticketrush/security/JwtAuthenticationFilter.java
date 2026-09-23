@@ -55,13 +55,13 @@ public class JwtAuthenticationFilter implements GlobalFilter, Ordered {
     boolean validToken = jwtTokenProvider.validateToken(token);
 
     if (!validToken) {
-      throw new BusinessException(ErrorStatus.AUTH_INVALID_TOKEN);
+      return Mono.error(new BusinessException(ErrorStatus.AUTH_INVALID_TOKEN));
     }
 
     String type = jwtTokenProvider.getType(token);
 
     if (!"access".equals(type)) {
-      throw new BusinessException(ErrorStatus.AUTH_INVALID_TOKEN_TYPE);
+      return Mono.error(new BusinessException(ErrorStatus.AUTH_INVALID_TOKEN_TYPE));
     }
 
     Long userId = jwtTokenProvider.getUserId(token);

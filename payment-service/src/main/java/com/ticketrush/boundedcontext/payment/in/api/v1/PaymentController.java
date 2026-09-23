@@ -64,7 +64,9 @@ public class PaymentController {
       summary = "결제 취소(환불)",
       description =
           "본인의 완료된 결제를 취소하고 PG사 환불을 처리한다. "
-              + "성공 시 PaymentCanceledEvent를 발행하여 booking/seat 도메인이 후속 처리하도록 한다.")
+              + "성공 시 PaymentCanceledEvent를 발행하여 booking/seat 도메인이 후속 처리하도록 한다. "
+              + "공연 시작 7일 전까지만 환불할 수 있으며, 마감을 지난 요청은 409 PAYMENT_409_004 이다 (#668). "
+              + "마감을 판정하지 못하면 환불을 허용하지 않고 503 PAYMENT_503_003 으로 거절한다(fail-closed).")
   @PostMapping("/{paymentId}/cancel")
   public ResponseEntity<ApiResponse<PaymentCancelResponse>> cancel(
       @AuthenticationPrincipal CustomUserDetails user,

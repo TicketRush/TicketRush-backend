@@ -1,12 +1,14 @@
 package com.ticketrush.boundedcontext.booking.app.facade;
 
 import com.ticketrush.boundedcontext.booking.app.dto.request.BookingCreateRequest;
+import com.ticketrush.boundedcontext.booking.app.dto.response.BookingAdminRefundSummaryResponse;
 import com.ticketrush.boundedcontext.booking.app.dto.response.BookingAdminStatsResponse;
 import com.ticketrush.boundedcontext.booking.app.dto.response.BookingAdminSummaryResponse;
 import com.ticketrush.boundedcontext.booking.app.dto.response.BookingCountResponse;
 import com.ticketrush.boundedcontext.booking.app.dto.response.BookingDetailResponse;
 import com.ticketrush.boundedcontext.booking.app.dto.response.BookingMySummaryResponse;
 import com.ticketrush.boundedcontext.booking.app.dto.response.BookingPendingResponse;
+import com.ticketrush.boundedcontext.booking.app.dto.response.BookingRefundStatsResponse;
 import com.ticketrush.boundedcontext.booking.app.dto.response.BookingSummaryResponse;
 import com.ticketrush.boundedcontext.booking.app.usecase.BookingAdminRefundUseCase;
 import com.ticketrush.boundedcontext.booking.app.usecase.BookingAdminRetryRefundUseCase;
@@ -15,6 +17,8 @@ import com.ticketrush.boundedcontext.booking.app.usecase.BookingCountUseCase;
 import com.ticketrush.boundedcontext.booking.app.usecase.BookingCreateUseCase;
 import com.ticketrush.boundedcontext.booking.app.usecase.BookingGetAdminBookingUseCase;
 import com.ticketrush.boundedcontext.booking.app.usecase.BookingGetAdminBookingsUseCase;
+import com.ticketrush.boundedcontext.booking.app.usecase.BookingGetAdminRefundStatsUseCase;
+import com.ticketrush.boundedcontext.booking.app.usecase.BookingGetAdminRefundsUseCase;
 import com.ticketrush.boundedcontext.booking.app.usecase.BookingGetAdminStatsUseCase;
 import com.ticketrush.boundedcontext.booking.app.usecase.BookingGetMyBookingDetailUseCase;
 import com.ticketrush.boundedcontext.booking.app.usecase.BookingGetMyBookingsUseCase;
@@ -22,10 +26,12 @@ import com.ticketrush.boundedcontext.booking.app.usecase.BookingGetRefundFailedB
 import com.ticketrush.boundedcontext.booking.app.usecase.BookingGetRefundingStuckBookingsUseCase;
 import com.ticketrush.boundedcontext.booking.app.usecase.BookingIssueNumberUseCase;
 import com.ticketrush.boundedcontext.booking.app.usecase.BookingValidateReferencesUseCase;
+import com.ticketrush.boundedcontext.booking.app.usecase.BookingValidateRefundDeadlineUseCase;
 import com.ticketrush.boundedcontext.booking.app.usecase.BookingValidateSeatAvailableUseCase;
 import com.ticketrush.boundedcontext.booking.app.usecase.BookingValidateTicketNotUsedUseCase;
 import com.ticketrush.boundedcontext.booking.domain.entity.Booking;
 import com.ticketrush.boundedcontext.booking.domain.types.BookingStatus;
+import com.ticketrush.boundedcontext.booking.domain.types.RefundProcessStatus;
 import com.ticketrush.boundedcontext.booking.out.apiclient.PerformanceRestClient;
 import com.ticketrush.boundedcontext.booking.out.apiclient.SeatRestClient;
 import com.ticketrush.boundedcontext.booking.out.apiclient.UserRestClient;
@@ -35,6 +41,7 @@ import com.ticketrush.global.dto.request.OffsetPageRequest;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.stream.Collectors;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -57,12 +64,15 @@ public class BookingFacade {
   private final BookingValidateReferencesUseCase bookingValidateReferencesUseCase;
   private final BookingValidateSeatAvailableUseCase bookingValidateSeatAvailableUseCase;
   private final BookingValidateTicketNotUsedUseCase bookingValidateTicketNotUsedUseCase;
+  private final BookingValidateRefundDeadlineUseCase bookingValidateRefundDeadlineUseCase;
   private final BookingGetRefundFailedBookingsUseCase bookingGetRefundFailedBookingsUseCase;
   private final BookingGetRefundingStuckBookingsUseCase bookingGetRefundingStuckBookingsUseCase;
   private final BookingAdminRetryRefundUseCase bookingAdminRetryRefundUseCase;
   private final BookingGetAdminBookingsUseCase bookingGetAdminBookingsUseCase;
   private final BookingGetAdminBookingUseCase bookingGetAdminBookingUseCase;
   private final BookingGetAdminStatsUseCase bookingGetAdminStatsUseCase;
+  private final BookingGetAdminRefundsUseCase bookingGetAdminRefundsUseCase;
+  private final BookingGetAdminRefundStatsUseCase bookingGetAdminRefundStatsUseCase;
   private final BookingAdminRefundUseCase bookingAdminRefundUseCase;
   private final UserRestClient userRestClient;
 
@@ -151,6 +161,10 @@ public class BookingFacade {
     // PENDING은 환불이 성사될 수 없어 isRefundable()에서 제외되므로 ticket-service 왕복이 일어나지 않는다.
     bookingValidateTicketNotUsedUseCase.execute(userId, bookingNumber);
 
+    // 공연 7일 전을 지난 환불 차단 (#668). 프론트에만 있던 제한이라 API 직접 호출로 우회됐다.
+    // PENDING 즉시취소는 환불이 아니므로 가드 안에서 CONFIRMED만 검사해 통과시킨다.
+    bookingValidateRefundDeadlineUseCase.execute(userId, bookingNumber);
+
     bookingCancelMyBookingUseCase
         .execute(userId, bookingNumber)
         .ifPresent(seatId -> seatRestClient.releaseHold(bookingNumber, seatId));
@@ -172,17 +186,22 @@ public class BookingFacade {
    * <p>세 보강이 직렬이라 최악 벽시계는 공연 3s + 좌석 2s + 예매자 2s다. 관리자 전용 저빈도 경로라 병렬화하지 않았고, 실측상 문제가 되면 순차 N 호출을
    * 없애는 performance-service 벌크 조회가 가장 큰 레버다.
    *
+   * <p><b>{@code statuses}로 여러 상태의 합집합을 조회할 수 있다 (#674).</b> 빈 집합이면 상태 무관 전체로, 파라미터가 없던 시절과 같다.
+   *
    * <p><b>조회 사실을 감사 로그로 남긴다.</b> 이 응답은 예매자 이름·이메일을 담고 페이지 상한이 없어 순차 호출로 고객 명부를 통째로 훑을 수 있는데, 환불 1건은
    * 추적되면서 개인정보 전량 열람은 흔적이 없는 비대칭이 된다. <b>남기는 것은 건수뿐이다</b> — 행 내용을 찍으면 로그가 두 번째 개인정보 저장소가 된다.
    */
   public Page<BookingAdminSummaryResponse> getAdminBookings(
-      Long adminId, OffsetPageRequest pageRequest) {
-    Page<Booking> page = bookingGetAdminBookingsUseCase.execute(pageRequest);
+      Long adminId, Set<BookingStatus> statuses, OffsetPageRequest pageRequest) {
+    Page<Booking> page = bookingGetAdminBookingsUseCase.execute(statuses, pageRequest);
     List<Booking> content = page.getContent();
 
+    // 상태 집합도 함께 남긴다 — 어떤 조건으로 명부를 훑었는지가 건수만큼 감사 정보다.
     log.info(
-        "[ADMIN-AUDIT] 관리자 예매 목록 조회(예매자 개인정보 포함). adminId: {}, page: {}, size: {}, returned: {}",
+        "[ADMIN-AUDIT] 관리자 예매 목록 조회(예매자 개인정보 포함). "
+            + "adminId: {}, statuses: {}, page: {}, size: {}, returned: {}",
         adminId,
+        statuses,
         pageRequest.page(),
         pageRequest.size(),
         content.size());
@@ -235,6 +254,54 @@ public class BookingFacade {
         userRestClient.getUsers(List.of(booking.getUserId())).get(booking.getUserId());
 
     return BookingAdminSummaryResponse.of(booking, performance, seatNumber, user);
+  }
+
+  /**
+   * 관리자 환불 통합 목록 (#675). 환불 진행·완료·미해결 실패를 한 목록으로 내린다.
+   *
+   * <p><b>보강 축이 둘뿐이다</b> — 공연(순차 N)과 예매자(벌크 1). 환불 화면은 좌석 번호를 그리지 않으므로 seat-service를 호출하지 않는다. 관리자
+   * 예매 목록(#561)보다 왕복이 하나 적고, 최악 벽시계도 공연 3s + 예매자 2s다.
+   *
+   * <p>보강 실패는 각 클라이언트가 흡수하므로 여기에 catch가 없다(부분 응답). 한 도메인의 실패가 다른 도메인 필드에 닿는 경로도 없다.
+   *
+   * <p><b>조회 사실을 감사 로그로 남긴다.</b> 이 응답은 예매자 이름을 담으므로 관리자 예매 목록과 같은 기준선을 적용한다. <b>남기는 것은
+   * 조회자·조건·건수뿐</b> — 행 내용을 찍으면 로그가 두 번째 개인정보 저장소가 된다.
+   */
+  public Page<BookingAdminRefundSummaryResponse> getAdminRefunds(
+      Long adminId, RefundProcessStatus refundStatus, OffsetPageRequest pageRequest) {
+    Page<Booking> page = bookingGetAdminRefundsUseCase.execute(refundStatus, pageRequest);
+    List<Booking> content = page.getContent();
+
+    log.info(
+        "[ADMIN-AUDIT] 관리자 환불 목록 조회(예매자 개인정보 포함). "
+            + "adminId: {}, refundStatus: {}, page: {}, size: {}, returned: {}",
+        adminId,
+        refundStatus,
+        pageRequest.page(),
+        pageRequest.size(),
+        content.size());
+
+    // 순서를 페이지 순서로 고정한다(LinkedHashSet) — getAdminBookings와 같은 이유다. 보강이 예산·장애로
+    // 중간에 끊길 때 HashSet이면 어느 행이 채워질지가 매 요청 달라진다.
+    Map<Long, PerformanceInfoResponse> performances =
+        performanceRestClient.getPerformances(
+            content.stream()
+                .map(Booking::getPerformanceId)
+                .collect(Collectors.toCollection(LinkedHashSet::new)));
+    Map<Long, UserSummaryInfoResponse> users =
+        userRestClient.getUsers(content.stream().map(Booking::getUserId).distinct().toList());
+
+    return page.map(
+        booking ->
+            BookingAdminRefundSummaryResponse.of(
+                booking,
+                performances.get(booking.getPerformanceId()),
+                users.get(booking.getUserId())));
+  }
+
+  /** 관리자 환불 요약 통계 (#675). <b>원격 호출이 없다</b> — 예매가 환불 결과를 이미 보유해 DB 집계 한 번으로 끝난다. */
+  public BookingRefundStatsResponse getAdminRefundStats() {
+    return bookingGetAdminRefundStatsUseCase.execute();
   }
 
   /** 관리자 예매 요약 통계 (#561). <b>원격 호출이 없다</b> — 매출이 예매가 보유한 결제 금액의 합이라 DB 집계 한 번으로 끝난다. */

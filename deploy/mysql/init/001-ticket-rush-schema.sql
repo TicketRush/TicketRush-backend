@@ -16,16 +16,14 @@ CREATE TABLE `banner` (
   `banner_id` bigint NOT NULL AUTO_INCREMENT,
   `created_at` datetime(6) DEFAULT NULL,
   `updated_at` datetime(6) DEFAULT NULL,
-  `deactivated_at` datetime(6) DEFAULT NULL,
-  `description` varchar(500) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
-  `display_date` date DEFAULT NULL,
-  `display_order` int NOT NULL,
-  `icon_emoji` varchar(20) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
-  `link_performance_id` bigint DEFAULT NULL,
+  `performance_id` bigint NOT NULL,
   `subtitle` varchar(200) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
-  `tag_label` varchar(50) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
-  `title` varchar(200) COLLATE utf8mb4_unicode_ci NOT NULL,
-  PRIMARY KEY (`banner_id`)
+  `display_order` int NOT NULL,
+  PRIMARY KEY (`banner_id`),
+  UNIQUE KEY `uk_banner_performance` (`performance_id`),
+  UNIQUE KEY `uk_banner_display_order` (`display_order`),
+  CONSTRAINT `chk_banner_display_order`
+    CHECK (`display_order` BETWEEN 1 AND 3)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 /*!40101 SET character_set_client = @saved_cs_client */;
 DROP TABLE IF EXISTS `booking`;

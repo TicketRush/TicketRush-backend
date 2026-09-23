@@ -3,6 +3,7 @@ package com.ticketrush.boundedcontext.payment.app.usecase;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyBoolean;
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.BDDMockito.given;
@@ -86,7 +87,7 @@ class PaymentCancelUseCaseTest {
     Payment payment = completedPayment(paymentId, userId, bookingId, seatId, amount);
     given(paymentRepository.findByIdAndUserId(paymentId, userId)).willReturn(Optional.of(payment));
     given(ticketRestClient.isTicketUsed(bookingId)).willReturn(false);
-    given(bookingRestClient.getBooking(bookingId)).willReturn(bookingInfo(bookingId, userId));
+    given(bookingRestClient.getBooking(bookingId, true)).willReturn(bookingInfo(bookingId, userId));
     given(paymentCancelClientRouter.cancel(any()))
         .willReturn(new PaymentCancelResult("PG-REFUND-1", amount, canceledAt));
 
@@ -151,7 +152,7 @@ class PaymentCancelUseCaseTest {
             paymentCancelClientRouter,
             paymentCancelPersister,
             paymentEventPublisher);
-    inOrder.verify(bookingRestClient).getBooking(bookingId);
+    inOrder.verify(bookingRestClient).getBooking(bookingId, true);
     inOrder.verify(paymentCancelClientRouter).cancel(any());
     inOrder.verify(paymentCancelPersister).persist(eq(paymentId), any(Refund.class));
     inOrder
@@ -195,7 +196,7 @@ class PaymentCancelUseCaseTest {
         .publishCanceled(any(), any(), any(), any(), any(), any(), any(), any());
     // 이미 취소된 건은 가드 앞에서 조기 반환되므로 외부 왕복을 하지 않는다 (#416, #608).
     verify(ticketRestClient, never()).isTicketUsed(any());
-    verify(bookingRestClient, never()).getBooking(any());
+    verify(bookingRestClient, never()).getBooking(any(), anyBoolean());
   }
 
   @Test
@@ -222,6 +223,61 @@ class PaymentCancelUseCaseTest {
     verify(paymentCancelPersister, never()).persist(any(), any(Refund.class));
     verify(paymentEventPublisher, never())
         .publishCanceled(any(), any(), any(), any(), any(), any(), any(), any());
+  }
+
+  @Test
+  @DisplayName("환불 마감이 지난 예매는 PG 취소 없이 PAYMENT_409_004 로 거절한다 (#668)")
+  void execute_fail_when_refund_deadline_passed() throws Exception {
+    // given — 이 경로로 booking 의 D-7 가드를 우회할 수 있었다.
+    Long userId = 10L;
+    Long paymentId = 1L;
+    Long bookingId = 100L;
+    PaymentCancelRequest request = new PaymentCancelRequest("단순 변심");
+
+    Payment payment = completedPayment(paymentId, userId, bookingId, 200L, 55_000L);
+    given(paymentRepository.findByIdAndUserId(paymentId, userId)).willReturn(Optional.of(payment));
+    given(ticketRestClient.isTicketUsed(bookingId)).willReturn(false);
+    given(bookingRestClient.getBooking(bookingId, true))
+        .willReturn(new BookingInfoResponse(bookingId, userId, "CONFIRMED", BOOKING_NUMBER, false));
+
+    // when & then
+    assertThatThrownBy(() -> paymentCancelUseCase.execute(userId, paymentId, request))
+        .isInstanceOf(BusinessException.class)
+        .extracting("errorStatus")
+        .isEqualTo(ErrorStatus.PAYMENT_CANCEL_NOT_ALLOWED_REFUND_DEADLINE);
+
+    // 돈이 나가면 되돌릴 수 없으므로 차단은 반드시 PG 취소 앞이어야 한다.
+    verify(paymentCancelClientRouter, never()).cancel(any());
+    verify(paymentCancelPersister, never()).persist(any(), any(Refund.class));
+    verify(paymentEventPublisher, never())
+        .publishCanceled(any(), any(), any(), any(), any(), any(), any(), any());
+    assertThat(blockedCount("refund_deadline_passed")).isEqualTo(1);
+  }
+
+  @Test
+  @DisplayName("마감 판정이 비어 오면 통과시키지 않고 503 으로 막는다 (#668)")
+  void execute_fail_when_refund_deadline_unknown() throws Exception {
+    // given — 배포 순서 역전·필드명 변경이면 @JsonIgnoreProperties 때문에 조용히 null 이 된다.
+    // 그 구간을 통과시키면 정책이 사일런트로 무력화된다.
+    Long userId = 10L;
+    Long paymentId = 1L;
+    Long bookingId = 100L;
+    PaymentCancelRequest request = new PaymentCancelRequest("단순 변심");
+
+    Payment payment = completedPayment(paymentId, userId, bookingId, 200L, 55_000L);
+    given(paymentRepository.findByIdAndUserId(paymentId, userId)).willReturn(Optional.of(payment));
+    given(ticketRestClient.isTicketUsed(bookingId)).willReturn(false);
+    given(bookingRestClient.getBooking(bookingId, true))
+        .willReturn(new BookingInfoResponse(bookingId, userId, "CONFIRMED", BOOKING_NUMBER, null));
+
+    // when & then: 계약 결함이라 409 가 아니라 503 으로 접는다(ADR 0011 원칙 3).
+    assertThatThrownBy(() -> paymentCancelUseCase.execute(userId, paymentId, request))
+        .isInstanceOf(BusinessException.class)
+        .extracting("errorStatus")
+        .isEqualTo(ErrorStatus.PAYMENT_BOOKING_COMMUNICATION_FAILED);
+
+    verify(paymentCancelClientRouter, never()).cancel(any());
+    assertThat(blockedCount("refund_deadline_unknown")).isEqualTo(1);
   }
 
   @Test
@@ -335,7 +391,7 @@ class PaymentCancelUseCaseTest {
     Payment payment = completedPayment(paymentId, userId, 100L, 200L, 55_000L);
     given(paymentRepository.findByIdAndUserId(paymentId, userId)).willReturn(Optional.of(payment));
     given(ticketRestClient.isTicketUsed(anyLong())).willReturn(false);
-    given(bookingRestClient.getBooking(anyLong())).willReturn(bookingInfo(100L, userId));
+    given(bookingRestClient.getBooking(anyLong(), eq(true))).willReturn(bookingInfo(100L, userId));
     given(paymentCancelClientRouter.cancel(any()))
         .willThrow(new BusinessException(ErrorStatus.PAYMENT_REFUND_FAILED));
 
@@ -362,7 +418,7 @@ class PaymentCancelUseCaseTest {
     Payment payment = completedPayment(paymentId, userId, 100L, 200L, 55_000L);
     given(paymentRepository.findByIdAndUserId(paymentId, userId)).willReturn(Optional.of(payment));
     given(ticketRestClient.isTicketUsed(anyLong())).willReturn(false);
-    given(bookingRestClient.getBooking(anyLong())).willReturn(bookingInfo(100L, userId));
+    given(bookingRestClient.getBooking(anyLong(), eq(true))).willReturn(bookingInfo(100L, userId));
     given(paymentCancelClientRouter.cancel(any()))
         .willReturn(new PaymentCancelResult("PG-REFUND-1", 55_000L, LocalDateTime.now()));
     given(paymentCancelPersister.persist(eq(paymentId), any(Refund.class)))
@@ -418,7 +474,7 @@ class PaymentCancelUseCaseTest {
     Payment payment = completedPayment(paymentId, userId, 100L, 200L, 55_000L);
     given(paymentRepository.findByIdAndUserId(paymentId, userId)).willReturn(Optional.of(payment));
     given(ticketRestClient.isTicketUsed(anyLong())).willReturn(false);
-    given(bookingRestClient.getBooking(anyLong())).willReturn(bookingInfo(100L, userId));
+    given(bookingRestClient.getBooking(anyLong(), eq(true))).willReturn(bookingInfo(100L, userId));
     BusinessException rejected = new BusinessException(ErrorStatus.PAYMENT_REFUND_FAILED);
     given(paymentCancelClientRouter.cancel(any())).willThrow(rejected);
 
@@ -465,7 +521,7 @@ class PaymentCancelUseCaseTest {
     Payment payment = completedPayment(paymentId, userId, bookingId, 200L, 55_000L);
     given(paymentRepository.findByIdAndUserId(paymentId, userId)).willReturn(Optional.of(payment));
     given(ticketRestClient.isTicketUsed(bookingId)).willReturn(false);
-    given(bookingRestClient.getBooking(bookingId))
+    given(bookingRestClient.getBooking(bookingId, true))
         .willThrow(new BusinessException(ErrorStatus.PAYMENT_BOOKING_COMMUNICATION_FAILED));
 
     // when & then
@@ -494,7 +550,7 @@ class PaymentCancelUseCaseTest {
     Payment payment = completedPayment(paymentId, userId, bookingId, 200L, 55_000L);
     given(paymentRepository.findByIdAndUserId(paymentId, userId)).willReturn(Optional.of(payment));
     given(ticketRestClient.isTicketUsed(bookingId)).willReturn(false);
-    given(bookingRestClient.getBooking(bookingId))
+    given(bookingRestClient.getBooking(bookingId, true))
         .willThrow(new BusinessException(ErrorStatus.BOOKING_NOT_FOUND));
 
     // when & then
@@ -524,8 +580,9 @@ class PaymentCancelUseCaseTest {
     Payment payment = completedPayment(paymentId, userId, bookingId, 200L, 55_000L);
     given(paymentRepository.findByIdAndUserId(paymentId, userId)).willReturn(Optional.of(payment));
     given(ticketRestClient.isTicketUsed(bookingId)).willReturn(false);
-    given(bookingRestClient.getBooking(bookingId))
-        .willReturn(new BookingInfoResponse(bookingId, userId, "CONFIRMED", blankBookingNumber));
+    given(bookingRestClient.getBooking(bookingId, true))
+        .willReturn(
+            new BookingInfoResponse(bookingId, userId, "CONFIRMED", blankBookingNumber, true));
 
     // when & then: 도메인 오류(404)가 아니라 계약 결함(503)으로 접는다 (ADR 0011 원칙 3).
     assertThatThrownBy(() -> paymentCancelUseCase.execute(userId, paymentId, request))
@@ -540,7 +597,7 @@ class PaymentCancelUseCaseTest {
   }
 
   private BookingInfoResponse bookingInfo(Long bookingId, Long userId) {
-    return new BookingInfoResponse(bookingId, userId, "CONFIRMED", BOOKING_NUMBER);
+    return new BookingInfoResponse(bookingId, userId, "CONFIRMED", BOOKING_NUMBER, true);
   }
 
   private double blockedCount(String reason) {

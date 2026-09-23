@@ -31,7 +31,8 @@ service:
     query-read-timeout-ms: ${SEAT_QUERY_READ_TIMEOUT_MS:2000}
   performance:
     url: ${PERFORMANCE_SERVICE_URL:http://localhost:8083}
-    # 예매 조회 보강(공연 필드) 전용 (#560). 실패해도 부분 응답(null)으로 계속 가는 경로라 빨리 포기한다 —
+    # 예매 조회 보강(공연 필드, #560)과 취소 경로의 환불 마감 판정(#668)이 공유한다. 빨리 포기한다 —
+    # 조회 보강은 실패해도 부분 응답(null)으로 계속 가고, 마감 판정은 실패 시 503으로 막는다(fail-closed).
     # 목록 조회는 공연 수만큼 순차 호출이라 건당 예산이 그대로 곱해지므로 공용 예산(3s/10s)을 쓰지 않는다.
     connect-timeout-ms: ${PERFORMANCE_HTTP_CONNECT_TIMEOUT_MS:1000}
     read-timeout-ms: ${PERFORMANCE_HTTP_READ_TIMEOUT_MS:2000}

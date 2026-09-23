@@ -120,7 +120,10 @@ class PerformanceCharacterConfigMySqlRoundTripTest {
             null,
             null,
             JSON.readTree(UPDATED),
-            ""));
+            "",
+            null,
+            null));
+
     em.flush();
     em.clear();
 
@@ -132,6 +135,7 @@ class PerformanceCharacterConfigMySqlRoundTripTest {
         em.createNativeQuery("select character_config from performance where performance_id = ?")
             .setParameter(1, saved.getId())
             .getSingleResult();
+
     assertThat(JSON.readTree(raw.toString())).isEqualTo(JSON.readTree(UPDATED));
   }
 }

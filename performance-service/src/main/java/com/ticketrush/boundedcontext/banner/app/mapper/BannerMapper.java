@@ -2,15 +2,21 @@ package com.ticketrush.boundedcontext.banner.app.mapper;
 
 import com.ticketrush.boundedcontext.banner.app.dto.response.BannerResponse;
 import com.ticketrush.boundedcontext.banner.domain.entity.Banner;
+import java.time.LocalDate;
 import org.mapstruct.Mapper;
 import org.mapstruct.Mapping;
 
 @Mapper(componentModel = "spring")
 public interface BannerMapper {
 
-  /** 이름이 갈리는 세 필드의 근거는 {@link BannerResponse} javadoc에 있다. */
-  @Mapping(source = "displayDate", target = "date")
-  @Mapping(source = "linkPerformanceId", target = "linkConcertId")
-  @Mapping(source = "displayOrder", target = "order")
-  BannerResponse toResponse(Banner banner);
+  @Mapping(source = "banner.id", target = "id")
+  @Mapping(source = "banner.performanceId", target = "performanceId")
+  @Mapping(source = "title", target = "title")
+  @Mapping(source = "banner.subtitle", target = "subtitle")
+  @Mapping(source = "description", target = "description")
+  @Mapping(source = "date", target = "date")
+  @Mapping(source = "imageUrl", target = "imageUrl")
+  @Mapping(source = "banner.displayOrder", target = "order")
+  BannerResponse toResponse(
+      Banner banner, String title, String description, LocalDate date, String imageUrl);
 }
