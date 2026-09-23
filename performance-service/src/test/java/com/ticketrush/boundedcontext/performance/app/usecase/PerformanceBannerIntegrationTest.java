@@ -50,6 +50,7 @@ class PerformanceBannerIntegrationTest {
   @Autowired private PerformanceCreateUseCase performanceCreateUseCase;
   @Autowired private PerformancePatchUseCase performancePatchUseCase;
   @Autowired private PerformanceGetDetailUseCase performanceGetDetailUseCase;
+  @Autowired private PerformanceDeleteUseCase performanceDeleteUseCase;
   @Autowired private BannerGetListUseCase bannerGetListUseCase;
   @Autowired private BannerRepository bannerRepository;
 
@@ -214,12 +215,14 @@ class PerformanceBannerIntegrationTest {
                 .orElseThrow()
                 .getDisplayOrder())
         .isEqualTo(1);
+
     assertThat(
             bannerRepository
                 .findByPerformanceId(secondPerformanceId)
                 .orElseThrow()
                 .getDisplayOrder())
         .isEqualTo(2);
+
     assertThat(
             bannerRepository
                 .findByPerformanceId(thirdPerformanceId)
@@ -230,12 +233,14 @@ class PerformanceBannerIntegrationTest {
     performancePatchUseCase.execute(secondPerformanceId, bannerPatchRequest(false, null));
 
     assertThat(bannerRepository.findByPerformanceId(secondPerformanceId)).isEmpty();
+
     assertThat(
             bannerRepository
                 .findByPerformanceId(firstPerformanceId)
                 .orElseThrow()
                 .getDisplayOrder())
         .isEqualTo(1);
+
     assertThat(
             bannerRepository
                 .findByPerformanceId(thirdPerformanceId)
@@ -248,7 +253,9 @@ class PerformanceBannerIntegrationTest {
   @DisplayName("배너 삭제 후 새 배너를 등록하면 비어 있는 마지막 순서로 등록된다")
   void patchPerformance_deleteThenCreate_usesCompactedOrder() {
     createPerformance("첫 번째 공연", true, "첫 번째 소제목");
+
     Long secondPerformanceId = createPerformance("두 번째 공연", true, "두 번째 소제목");
+
     Long thirdPerformanceId = createPerformance("세 번째 공연", true, "세 번째 소제목");
 
     performancePatchUseCase.execute(secondPerformanceId, bannerPatchRequest(false, null));
@@ -261,12 +268,56 @@ class PerformanceBannerIntegrationTest {
                 .orElseThrow()
                 .getDisplayOrder())
         .isEqualTo(2);
+
     assertThat(
             bannerRepository
                 .findByPerformanceId(fourthPerformanceId)
                 .orElseThrow()
                 .getDisplayOrder())
         .isEqualTo(3);
+  }
+
+  @Test
+  @DisplayName("배너에 등록된 공연을 삭제하면 연결된 배너도 삭제한다")
+  void deletePerformance_bannerRegistered_removesBanner() {
+    Long performanceId = createPerformance("삭제할 배너 공연", true, "삭제할 배너 소제목");
+
+    assertThat(bannerRepository.findByPerformanceId(performanceId)).isPresent();
+    assertThat(bannerRepository.count()).isEqualTo(1);
+
+    performanceDeleteUseCase.execute(performanceId);
+
+    assertThat(bannerRepository.findByPerformanceId(performanceId)).isEmpty();
+    assertThat(bannerRepository.count()).isZero();
+  }
+
+  @Test
+  @DisplayName("중간 배너의 공연을 삭제하면 뒤 배너의 노출 순서를 앞으로 당긴다")
+  void deletePerformance_middleBanner_compactsDisplayOrder() {
+    Long firstPerformanceId = createPerformance("첫 번째 삭제 연동 공연", true, "첫 번째 소제목");
+
+    Long secondPerformanceId = createPerformance("두 번째 삭제 연동 공연", true, "두 번째 소제목");
+
+    Long thirdPerformanceId = createPerformance("세 번째 삭제 연동 공연", true, "세 번째 소제목");
+
+    performanceDeleteUseCase.execute(secondPerformanceId);
+
+    assertThat(bannerRepository.findByPerformanceId(secondPerformanceId)).isEmpty();
+    assertThat(bannerRepository.count()).isEqualTo(2);
+
+    assertThat(
+            bannerRepository
+                .findByPerformanceId(firstPerformanceId)
+                .orElseThrow()
+                .getDisplayOrder())
+        .isEqualTo(1);
+
+    assertThat(
+            bannerRepository
+                .findByPerformanceId(thirdPerformanceId)
+                .orElseThrow()
+                .getDisplayOrder())
+        .isEqualTo(2);
   }
 
   @Test
@@ -315,6 +366,7 @@ class PerformanceBannerIntegrationTest {
   @DisplayName("배너가 3개여도 기존 배너의 소제목은 수정할 수 있다")
   void patchPerformance_whenThreeBannersExist_updatesExistingBanner() {
     Long firstPerformanceId = createPerformance("첫 번째 공연", true, "기존 첫 번째 소제목");
+
     createPerformance("두 번째 공연", true, "두 번째 소제목");
     createPerformance("세 번째 공연", true, "세 번째 소제목");
 
@@ -371,7 +423,9 @@ class PerformanceBannerIntegrationTest {
   @DisplayName("배너 목록은 displayOrder 오름차순으로 반환된다")
   void getBannerList_returnsInDisplayOrder() {
     Long firstPerformanceId = createPerformance("첫 번째 공연", true, "첫 번째 소제목");
+
     Long secondPerformanceId = createPerformance("두 번째 공연", true, "두 번째 소제목");
+
     Long thirdPerformanceId = createPerformance("세 번째 공연", true, "세 번째 소제목");
 
     List<BannerResponse> responses = bannerGetListUseCase.execute();

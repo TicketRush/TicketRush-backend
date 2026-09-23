@@ -1,6 +1,8 @@
 package com.ticketrush.boundedcontext.banner.domain.entity;
 
+import com.ticketrush.global.exception.BusinessException;
 import com.ticketrush.global.jpa.entity.AutoIdBaseEntity;
+import com.ticketrush.global.status.ErrorStatus;
 import jakarta.persistence.AttributeOverride;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
@@ -65,13 +67,13 @@ public class Banner extends AutoIdBaseEntity {
 
   private static void validatePerformanceId(Long performanceId) {
     if (performanceId == null) {
-      throw new IllegalArgumentException("배너에 연결할 공연 ID는 필수입니다.");
+      throw new BusinessException(ErrorStatus.BANNER_ESSENTIAL_ID);
     }
   }
 
   private static void validateDisplayOrder(Integer displayOrder) {
     if (displayOrder == null || displayOrder < 1 || displayOrder > 3) {
-      throw new IllegalArgumentException("배너 노출 순서는 1부터 3까지만 가능합니다.");
+      throw new BusinessException(ErrorStatus.BANNER_EXPOSURE_LIMIT);
     }
   }
 
