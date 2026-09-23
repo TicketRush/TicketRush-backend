@@ -161,7 +161,7 @@ public enum ErrorStatus {
 
   // Banner 400
   BANNER_ESSENTIAL_ID(HttpStatus.BAD_REQUEST, "BANNER_400_001", "배너에 연결할 공연 ID는 필수입니다."),
-  BANNER_EXPOSURE_LIMIT(HttpStatus.BAD_REQUEST, "BANNER_400_001", "배너 노출 순서는 1부터 3까지만 가능합니다."),
+  BANNER_EXPOSURE_LIMIT(HttpStatus.BAD_REQUEST, "BANNER_400_002", "배너 노출 순서는 1부터 3까지만 가능합니다."),
 
   // Banner 409
   BANNER_LIMIT_EXCEEDED(HttpStatus.CONFLICT, "BANNER_409_001", "등록 가능한 배너 3개가 모두 사용 중입니다."),
