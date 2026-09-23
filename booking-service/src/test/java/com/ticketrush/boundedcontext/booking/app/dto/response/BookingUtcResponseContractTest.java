@@ -50,6 +50,7 @@ class BookingUtcResponseContractTest {
                         time,
                         "공연",
                         java.time.LocalDate.of(2026, 12, 31),
+                        java.time.LocalTime.of(19, 30),
                         "서울",
                         "A1",
                         1000L),

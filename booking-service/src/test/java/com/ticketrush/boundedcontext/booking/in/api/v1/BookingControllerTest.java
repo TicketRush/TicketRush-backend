@@ -110,6 +110,7 @@ class BookingControllerTest {
             null,
             "오페라의 유령",
             LocalDate.of(2026, 5, 22),
+            LocalTime.of(19, 30),
             "서울 예술의전당 오페라극장",
             "A-1",
             150000L);
@@ -136,6 +137,7 @@ class BookingControllerTest {
         .andExpect(jsonPath("$.result[0].confirmed_at").value("2026-05-22T10:30:00Z"))
         .andExpect(jsonPath("$.result[0].performance_title").value("오페라의 유령"))
         .andExpect(jsonPath("$.result[0].performance_date").value("2026-05-22"))
+        .andExpect(jsonPath("$.result[0].performance_time").value("19:30:00"))
         .andExpect(jsonPath("$.result[0].performance_address").value("서울 예술의전당 오페라극장"))
         .andExpect(jsonPath("$.result[0].seat_number").value("A-1"))
         .andExpect(jsonPath("$.result[0].payment_amount").value(150000))

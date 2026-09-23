@@ -317,6 +317,7 @@ class BookingFacadeTest {
     assertThat(result.getContent()).hasSize(3);
     assertThat(result.getContent().get(0).performanceTitle()).isEqualTo("오페라의 유령");
     assertThat(result.getContent().get(0).performanceDate()).isEqualTo(LocalDate.of(2026, 5, 22));
+    assertThat(result.getContent().get(0).performanceTime()).isEqualTo(LocalTime.of(19, 30));
     assertThat(result.getContent().get(0).performanceAddress()).isEqualTo("서울 예술의전당 오페라극장");
     assertThat(result.getContent().get(0).paymentAmount()).isEqualTo(150000L);
     assertThat(result.getContent().get(0).seatNumber()).isEqualTo("A-1");
@@ -349,6 +350,7 @@ class BookingFacadeTest {
     // then
     assertThat(result.getContent().get(0).performanceTitle()).isEqualTo("오페라의 유령");
     assertThat(result.getContent().get(1).performanceTitle()).isNull();
+    assertThat(result.getContent().get(1).performanceTime()).isNull();
     assertThat(result.getContent().get(1).performanceId()).isEqualTo(7L); // 프론트 재조회 키는 유지
     assertThat(result.getContent().get(1).seatNumber()).isEqualTo("A-2"); // 좌석은 실패 격리로 생존
   }
