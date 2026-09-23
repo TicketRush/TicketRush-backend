@@ -1,5 +1,6 @@
 package com.ticketrush.boundedcontext.performance.app.usecase;
 
+import com.ticketrush.boundedcontext.banner.out.repository.BannerRepository;
 import com.ticketrush.boundedcontext.performance.app.dto.response.PerformanceDetailResponse;
 import com.ticketrush.boundedcontext.performance.app.mapper.PerformanceMapper;
 import com.ticketrush.boundedcontext.performance.out.repository.PerformanceRepository;
@@ -14,13 +15,20 @@ import org.springframework.transaction.annotation.Transactional;
 public class PerformanceGetDetailUseCase {
 
   private final PerformanceRepository performanceRepository;
+  private final BannerRepository bannerRepository;
   private final PerformanceMapper performanceMapper;
 
   @Transactional(readOnly = true)
   public PerformanceDetailResponse execute(Long performanceId) {
-    return performanceRepository
-        .findDetailById(performanceId)
-        .map(performanceMapper::toDetailResponse)
-        .orElseThrow(() -> new BusinessException(ErrorStatus.PERFORMANCE_NOT_FOUND));
+    PerformanceDetailResponse response =
+        performanceRepository
+            .findDetailById(performanceId)
+            .map(performanceMapper::toDetailResponse)
+            .orElseThrow(() -> new BusinessException(ErrorStatus.PERFORMANCE_NOT_FOUND));
+
+    return bannerRepository
+        .findByPerformanceId(performanceId)
+        .map(banner -> response.withBannerInfo(true, banner.getSubtitle()))
+        .orElseGet(() -> response.withBannerInfo(false, null));
   }
 }

@@ -159,6 +159,11 @@ public enum ErrorStatus {
   // Performance 404
   PERFORMANCE_NOT_FOUND(HttpStatus.NOT_FOUND, "PERFORMANCE_404_001", "공연이 존재하지 않습니다."),
 
+  // Banner
+  BANNER_LIMIT_EXCEEDED(HttpStatus.CONFLICT, "BANNER_409_001", "등록 가능한 배너 3개가 모두 사용 중입니다."),
+  BANNER_REGISTRATION_CONFLICT(
+      HttpStatus.CONFLICT, "BANNER_409_002", "배너 등록 중 충돌이 발생했습니다. 배너 목록을 다시 확인해 주세요."),
+
   // File 400
   FILE_EMPTY(HttpStatus.BAD_REQUEST, "FILE_400_001", "업로드할 파일이 비어있습니다."),
   FILE_INVALID_EXTENSION(HttpStatus.BAD_REQUEST, "FILE_400_002", "파일 확장자가 올바르지 않습니다."),

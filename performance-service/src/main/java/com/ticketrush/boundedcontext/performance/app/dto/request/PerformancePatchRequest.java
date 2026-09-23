@@ -18,15 +18,23 @@ import tools.jackson.databind.JsonNode;
  *
  * <p><b>{@code characterMessage}만 예외로 빈 문자열(공백만 있는 문자열 포함)을 삭제 신호로 읽는다(#650).</b> 프론트가 한마디를 지우는 동작이
  * 필요한데 이 계약에서 null은 "수정 안 함"이라 삭제를 표현할 값이 없었다. 그래서 이 필드에는 {@code @NullOrNotBlank}를 붙이지 않는다 — 붙이면 삭제
- * 요청이 400이 된다. 캐릭터 구성({@code characterConfig})은 프론트가 제거 기능을 두지 않기로 해 삭제 규칙이 없다(덮어쓰기만).
+ * 요청이 400이 된다.
+ *
+ * <p><b>{@code displayOnBanner}는 배너 등록 상태를 변경한다.</b> null이면 기존 배너 상태를 유지하고, true이면 배너를 신규 등록하거나 기존
+ * 배너를 유지하며, false이면 기존 배너를 삭제한다.
+ *
+ * <p><b>{@code bannerSubtitle}은 배너 전용 소제목이다.</b> null이면 기존 소제목을 유지하고, 빈 문자열 또는 공백만 있는 문자열이면 기존 소제목을
+ * 삭제한다. 따라서 이 필드에도 {@code @NullOrNotBlank}를 붙이지 않는다.
+ *
+ * <p>캐릭터 구성({@code characterConfig})은 프론트가 제거 기능을 두지 않기로 해 삭제 규칙이 없다 (덮어쓰기만).
  *
  * <p><b>총 좌석 수는 이 요청에 없다(#590).</b> 좌석 수를 실제로 바꾸려면 이미 예매·선점된 좌석을 지우고 번호를 다시 매겨야 하는데 그건 좌석 도메인의 별개
  * 작업이다. 여기에 필드만 두면 DB의 총 좌석 수만 바뀌고 실제 좌석은 그대로여서 두 값이 조용히 갈린다. 총 좌석 수는 등록 시점에만 정한다.
  */
 @Schema(
     description =
-        "공연 정보 수정 요청 (null 필드는 수정하지 않음. 총 좌석 수는 등록 시점에만 정할 수 있어 이 요청에 없음. "
-            + "characterMessage는 빈 문자열(공백만 있는 문자열 포함)이면 삭제)")
+        "공연 정보 수정 요청 (null 필드는 수정하지 않음. 총 좌석 수는 등록 시점에만 정할 수 있어 "
+            + "이 요청에 없음. characterMessage와 bannerSubtitle은 빈 문자열이면 삭제)")
 public record PerformancePatchRequest(
     @Schema(description = "공연명", example = "BTS World Tour 2025")
         @NullOrNotBlank
@@ -57,17 +65,17 @@ public record PerformancePatchRequest(
         String address,
     @Schema(
             description =
-                "예매 오픈 시각 (yyyy-MM-dd HH:mm:ss, Asia/Seoul 기준, null=수정 안 함 — 해제하려면 "
-                    + "DELETE /api/v1/performance/admin/{id}/booking-open-at 사용)",
+                "예매 오픈 시각 (yyyy-MM-dd HH:mm:ss, Asia/Seoul 기준, null=수정 안 함 — "
+                    + "해제하려면 DELETE /api/v1/performance/admin/{id}/booking-open-at 사용)",
             example = "2027-08-01 20:00:00")
         @JsonFormat(shape = JsonFormat.Shape.STRING, pattern = "yyyy-MM-dd HH:mm:ss")
         LocalDateTime bookingOpenAt,
     @Schema(
             description =
-                "3D 캐릭터 구성 JSON 객체 (null=수정 안 함, 객체를 보내면 통째로 덮어씀. 삭제 규칙 없음). "
-                    + "백엔드는 내용을 해석하지 않으며"
-                    + " JSON 객체인지와 compact 직렬화 UTF-8 4,096바이트·중첩 32단 상한만 검증한다."
-                    + " 저장 시 키 순서는 보존되지 않는다.",
+                "3D 캐릭터 구성 JSON 객체 (null=수정 안 함, 객체를 보내면 통째로 덮어씀. "
+                    + "삭제 규칙 없음). 백엔드는 내용을 해석하지 않으며 JSON 객체인지와 compact "
+                    + "직렬화 UTF-8 4,096바이트·중첩 32단 상한만 검증한다. "
+                    + "저장 시 키 순서는 보존되지 않는다.",
             implementation = Object.class,
             example =
                 "{\"schemaVersion\": 1, \"outfitModelId\": \"festival\", "
@@ -85,4 +93,15 @@ public record PerformancePatchRequest(
         @Size(
             max = CharacterConstraints.MESSAGE_MAX_LENGTH,
             message = "캐릭터 한마디는 {max}자를 초과할 수 없습니다.")
-        String characterMessage) {}
+        String characterMessage,
+    @Schema(
+            description = "메인 배너 등록 여부. null=기존 배너 상태 유지, " + "true=배너 신규 등록 또는 유지, false=기존 배너 삭제",
+            example = "true",
+            nullable = true)
+        Boolean displayOnBanner,
+    @Schema(
+            description = "배너 전용 소제목 (최대 200자). " + "null=기존 소제목 유지, 빈 문자열 또는 공백 문자열=소제목 삭제",
+            example = "변경된 배너 소제목",
+            nullable = true)
+        @Size(max = 200, message = "배너 소제목은 200자를 초과할 수 없습니다.")
+        String bannerSubtitle) {}

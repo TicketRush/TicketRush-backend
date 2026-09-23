@@ -1,15 +1,17 @@
 package com.ticketrush.boundedcontext.banner.app.usecase;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.mockito.BDDMockito.given;
+import static org.mockito.Mockito.mock;
 
 import com.ticketrush.boundedcontext.banner.app.dto.response.BannerResponse;
 import com.ticketrush.boundedcontext.banner.domain.entity.Banner;
 import com.ticketrush.boundedcontext.banner.out.repository.BannerRepository;
+import com.ticketrush.boundedcontext.performance.domain.entity.Performance;
+import com.ticketrush.boundedcontext.performance.out.repository.PerformanceRepository;
 import com.ticketrush.global.eventpublisher.EventPublisher;
 import com.ticketrush.global.util.S3UploadUtils;
-import jakarta.persistence.EntityManager;
 import java.time.LocalDate;
-import java.time.LocalDateTime;
 import java.util.List;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -21,10 +23,10 @@ import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.transaction.annotation.Transactional;
 
 /**
- * 배너 목록 조회 (#564).
+ * 배너 목록 조회 테스트.
  *
- * <p>정렬과 필터가 전부 쿼리의 산물이라 Mockito 단위 테스트로는 아무것도 검증되지 않는다. 실제 DB(H2)로 돌린다 — {@code display_order}가
- * 예약어를 피했는지도 여기서 드러난다.
+ * <p>Banner Repository는 실제 H2 DB를 사용하여 노출 순서 정렬을 검증한다. 공연 Repository는 Mockito Bean으로 교체하여 배너에 연결된
+ * 공연 제목, 소개, 날짜, 대표 이미지의 조합을 검증한다.
  */
 @SpringBootTest
 @ActiveProfiles("test")
@@ -38,52 +40,58 @@ class BannerGetListUseCaseTest {
 
   @MockitoBean private S3UploadUtils s3UploadUtils;
   @MockitoBean private EventPublisher eventPublisher;
+  @MockitoBean private PerformanceRepository performanceRepository;
 
   @Autowired private BannerGetListUseCase bannerGetListUseCase;
   @Autowired private BannerRepository bannerRepository;
-  @Autowired private EntityManager entityManager;
 
   @Test
-  @DisplayName("노출 순서 오름차순으로 반환한다 — 저장 순서와 무관하다")
+  @DisplayName("노출 순서 오름차순으로 반환한다")
   void execute_sortsByDisplayOrder() {
-    bannerRepository.saveAll(List.of(banner("셋째", 3), banner("첫째", 1), banner("둘째", 2)));
+    Performance first =
+        performance(
+            101L, "첫째 공연", "첫째 소개", LocalDate.of(2026, 9, 1), "https://example.com/first.jpg");
+
+    Performance second =
+        performance(
+            102L, "둘째 공연", "둘째 소개", LocalDate.of(2026, 9, 2), "https://example.com/second.jpg");
+
+    Performance third =
+        performance(
+            103L, "셋째 공연", "셋째 소개", LocalDate.of(2026, 9, 3), "https://example.com/third.jpg");
+
+    bannerRepository.saveAll(
+        List.of(banner(103L, "셋째 소제목", 3), banner(101L, "첫째 소제목", 1), banner(102L, "둘째 소제목", 2)));
+
+    given(performanceRepository.findAllById(List.of(101L, 102L, 103L)))
+        .willReturn(List.of(first, second, third));
 
     List<BannerResponse> result = bannerGetListUseCase.execute();
 
-    assertThat(result).extracting(BannerResponse::title).containsExactly("첫째", "둘째", "셋째");
+    assertThat(result).extracting(BannerResponse::title).containsExactly("첫째 공연", "둘째 공연", "셋째 공연");
+
     assertThat(result).extracting(BannerResponse::order).containsExactly(1, 2, 3);
   }
 
   @Test
-  @DisplayName("노출 순서가 같으면 배너 ID 오름차순으로 갈린다")
-  void execute_tieBreaksById() {
-    /*
-     * 순서는 사람이 수동 UPDATE로 넣는 값이라 중복이 들어올 수 있다. tie-break가 없으면
-     * 이 둘의 순서가 실행 계획에 따라 흔들려 캐러셀 순서가 배포마다 달라진다.
-     *
-     * 이 테스트가 잡는 것과 못 잡는 것을 분명히 해 둔다. 정렬을 IdDesc로 뒤집으면 실패하지만,
-     * IdAsc를 통째로 지우면 통과한다(실측 확인). IDENTITY 채번이라 삽입 순서와 id 오름차순이
-     * 같고, H2가 정렬 없이 PK 인덱스 순으로 돌려주는 순서까지 그와 일치하기 때문이다.
-     * 즉 "정렬 방향"은 고정하지만 "정렬 키의 존재"는 고정하지 못한다. 그것까지 잡으려면
-     * 생성 SQL의 ORDER BY 절을 단언해야 하는데, 배너 하나 때문에 그 하네스를 들이는 것은
-     * 과하다고 판단했다. 리포지토리 메서드명을 고칠 때는 이 한계를 감안해야 한다.
-     */
-    Banner first = bannerRepository.save(banner("먼저 저장", 1));
-    Banner second = bannerRepository.save(banner("나중 저장", 1));
-
-    List<BannerResponse> result = bannerGetListUseCase.execute();
-
-    assertThat(result)
-        .extracting(BannerResponse::id)
-        .containsExactly(first.getId(), second.getId());
+  @DisplayName("배너가 하나도 없으면 빈 목록을 반환한다")
+  void execute_emptyWhenNoBanner() {
+    assertThat(bannerGetListUseCase.execute()).isEmpty();
   }
 
   @Test
-  @DisplayName("비활성 배너는 목록에서 빠진다")
-  void execute_excludesDeactivated() {
-    Banner visible = bannerRepository.save(banner("노출", 1));
-    Banner hidden = bannerRepository.save(banner("숨김", 2));
-    deactivate(hidden);
+  @DisplayName("연결된 공연이 존재하지 않으면 해당 배너를 제외한다")
+  void execute_excludesBannerWithoutPerformance() {
+    Performance existingPerformance =
+        performance(
+            101L, "존재하는 공연", "공연 소개", LocalDate.of(2026, 9, 1), "https://example.com/main.jpg");
+
+    Banner visible = bannerRepository.save(banner(101L, "노출 소제목", 1));
+
+    bannerRepository.save(banner(999L, "죽은 링크", 2));
+
+    given(performanceRepository.findAllById(List.of(101L, 999L)))
+        .willReturn(List.of(existingPerformance));
 
     List<BannerResponse> result = bannerGetListUseCase.execute();
 
@@ -91,71 +99,78 @@ class BannerGetListUseCaseTest {
   }
 
   @Test
-  @DisplayName("배너가 하나도 없으면 빈 목록이다")
-  void execute_emptyWhenNoBanner() {
-    assertThat(bannerGetListUseCase.execute()).isEmpty();
-  }
+  @DisplayName("배너 소제목과 공연 정보를 조합하여 응답한다")
+  void execute_combinesBannerAndPerformance() {
+    Performance performance =
+        performance(
+            42L,
+            "Summer Jazz Night",
+            "세계적인 재즈 뮤지션과 함께하는 특별한 밤",
+            LocalDate.of(2026, 9, 15),
+            "https://example.com/summer-jazz.jpg");
 
-  @Test
-  @DisplayName("모든 배너가 비활성이면 빈 목록이다")
-  void execute_emptyWhenAllDeactivated() {
-    // 프론트는 빈 목록이면 배너 영역 자체를 렌더하지 않는다. 예외가 아니라 빈 목록이어야 한다.
-    Banner only = bannerRepository.save(banner("숨김", 1));
-    deactivate(only);
+    Banner savedBanner = bannerRepository.save(banner(42L, "여름밤의 재즈 향연", 1));
 
-    assertThat(bannerGetListUseCase.execute()).isEmpty();
-  }
-
-  @Test
-  @DisplayName("옵셔널 필드가 비어도 조회된다")
-  void execute_allowsNullOptionalFields() {
-    bannerRepository.save(Banner.builder().title("제목만 있는 배너").displayOrder(1).build());
-
-    List<BannerResponse> result = bannerGetListUseCase.execute();
-
-    assertThat(result).hasSize(1);
-    BannerResponse response = result.getFirst();
-    assertThat(response.title()).isEqualTo("제목만 있는 배너");
-    assertThat(response.subtitle()).isNull();
-    assertThat(response.date()).isNull();
-    assertThat(response.linkConcertId()).isNull();
-  }
-
-  @Test
-  @DisplayName("엔티티와 이름이 갈리는 필드가 응답에 제대로 실린다")
-  void execute_mapsRenamedFields() {
-    bannerRepository.save(
-        Banner.builder()
-            .title("Summer Jazz Night")
-            .tagLabel("조기 예매 할인")
-            .iconEmoji("🎵")
-            .displayDate(LocalDate.of(2026, 9, 15))
-            .linkPerformanceId(42L)
-            .displayOrder(7)
-            .build());
+    given(performanceRepository.findAllById(List.of(42L))).willReturn(List.of(performance));
 
     BannerResponse response = bannerGetListUseCase.execute().getFirst();
 
+    assertThat(response.id()).isEqualTo(savedBanner.getId());
+
+    assertThat(response.performanceId()).isEqualTo(42L);
+
+    assertThat(response.title()).isEqualTo("Summer Jazz Night");
+
+    assertThat(response.subtitle()).isEqualTo("여름밤의 재즈 향연");
+
+    assertThat(response.description()).isEqualTo("세계적인 재즈 뮤지션과 함께하는 특별한 밤");
+
     assertThat(response.date()).isEqualTo(LocalDate.of(2026, 9, 15));
-    assertThat(response.linkConcertId()).isEqualTo(42L);
-    assertThat(response.order()).isEqualTo(7);
-    assertThat(response.tagLabel()).isEqualTo("조기 예매 할인");
-    // 이모지가 저장·조회를 왕복해도 깨지지 않아야 한다
-    assertThat(response.iconEmoji()).isEqualTo("🎵");
+
+    assertThat(response.imageUrl()).isEqualTo("https://example.com/summer-jazz.jpg");
+
+    assertThat(response.order()).isEqualTo(1);
   }
 
-  /** 운영에서 배너를 내리는 방법과 같다 — 관리자 API가 없어 UPDATE가 유일한 수단이다. */
-  private void deactivate(Banner banner) {
-    entityManager
-        .createQuery("UPDATE Banner b SET b.deactivatedAt = :now WHERE b.id = :id")
-        .setParameter("now", LocalDateTime.now())
-        .setParameter("id", banner.getId())
-        .executeUpdate();
-    entityManager.flush();
-    entityManager.clear();
+  @Test
+  @DisplayName("배너 소제목과 공연 선택 정보가 없어도 조회할 수 있다")
+  void execute_allowsNullOptionalFields() {
+    Performance performance = performance(42L, "제목만 있는 공연", null, LocalDate.of(2026, 9, 15), null);
+
+    bannerRepository.save(banner(42L, null, 1));
+
+    given(performanceRepository.findAllById(List.of(42L))).willReturn(List.of(performance));
+
+    BannerResponse response = bannerGetListUseCase.execute().getFirst();
+
+    assertThat(response.title()).isEqualTo("제목만 있는 공연");
+
+    assertThat(response.subtitle()).isNull();
+    assertThat(response.description()).isNull();
+
+    assertThat(response.date()).isEqualTo(LocalDate.of(2026, 9, 15));
+
+    assertThat(response.imageUrl()).isNull();
   }
 
-  private Banner banner(String title, int displayOrder) {
-    return Banner.builder().title(title).displayOrder(displayOrder).build();
+  private Banner banner(Long performanceId, String subtitle, int displayOrder) {
+    return Banner.builder()
+        .performanceId(performanceId)
+        .subtitle(subtitle)
+        .displayOrder(displayOrder)
+        .build();
+  }
+
+  private Performance performance(
+      Long id, String title, String description, LocalDate showDate, String imageMainUrl) {
+    Performance performance = mock(Performance.class);
+
+    given(performance.getId()).willReturn(id);
+    given(performance.getTitle()).willReturn(title);
+    given(performance.getDescription()).willReturn(description);
+    given(performance.getShowDate()).willReturn(showDate);
+    given(performance.getImageMainUrl()).willReturn(imageMainUrl);
+
+    return performance;
   }
 }

@@ -1,5 +1,6 @@
 package com.ticketrush.boundedcontext.performance.app.usecase;
 
+import com.ticketrush.boundedcontext.banner.app.usecase.BannerSyncUseCase;
 import com.ticketrush.boundedcontext.performance.app.dto.request.PerformanceCreateRequest;
 import com.ticketrush.boundedcontext.performance.app.dto.response.PerformanceCreateResponse;
 import com.ticketrush.boundedcontext.performance.app.mapper.PerformanceMapper;
@@ -27,13 +28,15 @@ public class PerformanceCreateUseCase {
   private final PerformanceRepository performanceRepository;
   private final PerformanceMapper performanceMapper;
   private final EventPublisher eventPublisher;
+  private final BannerSyncUseCase bannerSyncUseCase;
 
   /**
-   * 공연 정보와 파일들을 받아 S3 업로드 후 DB에 저장.
+   * 공연 정보와 파일들을 받아 S3 업로드 후 DB에 저장한다.
+   *
+   * <p>배너 등록을 요청한 경우 파일 업로드 전에 배너 등록 가능 여부를 확인한다. 공연 저장 후에는 생성된 공연 ID를 사용해 배너를 같은 트랜잭션 안에서 생성한다.
    *
    * <p>{@code model3d}는 #650부터 선택이다. 캐릭터는 완성 GLB 대신 {@code characterConfig} JSON으로 저장하므로 3D 모델 파일은
-   * 있을 때만 검증·업로드하고, 없으면 {@code image3dUrl}을 null로 둔다. 비어 있는 파트(0바이트)는 보내지 않은 것으로 본다 — 파일을 고르지 않은
-   * {@code <input type="file">}도 0바이트 파트로 전송되기 때문이며, 교체 유스케이스(#637)와 같은 정의다.
+   * 있을 때만 검증·업로드하고, 없으면 {@code image3dUrl}을 null로 둔다. 비어 있는 파트(0바이트)는 보내지 않은 것으로 본다.
    */
   @CacheEvict(cacheNames = CacheConstants.PERFORMANCE_LIST_CACHE, allEntries = true)
   @Transactional
@@ -42,14 +45,21 @@ public class PerformanceCreateUseCase {
       MultipartFile mainImage,
       MultipartFile model3d,
       List<MultipartFile> gallery) {
+    /*
+     * 배너가 이미 3개인 명백한 실패 요청은 S3 파일을 업로드하기 전에 거절한다.
+     * 실제 생성 시점에도 다시 검사한다.
+     */
+    bannerSyncUseCase.validateCreateRequest(request.displayOnBanner());
 
     validateFiles(mainImage, model3d, gallery);
 
     String mainImageUrl = s3UploadUtils.uploadFile(mainImage, FileKind.MAIN_IMAGE);
+
     String model3dUrl =
         hasFile(model3d) ? s3UploadUtils.uploadFile(model3d, FileKind.MODEL_3D) : null;
+
     List<String> galleryUrls =
-        (gallery != null)
+        gallery != null
             ? gallery.stream()
                 .map(file -> s3UploadUtils.uploadFile(file, FileKind.GALLERY))
                 .toList()
@@ -60,6 +70,13 @@ public class PerformanceCreateUseCase {
     performance.updateUrls(mainImageUrl, model3dUrl, galleryUrls);
 
     Performance savedPerformance = performanceRepository.save(performance);
+
+    /*
+     * 공연 저장과 배너 저장은 같은 DB 트랜잭션에 참여한다.
+     * 배너 저장이 실패하면 공연 저장도 롤백된다.
+     */
+    bannerSyncUseCase.createForPerformance(
+        savedPerformance.getId(), request.displayOnBanner(), request.bannerSubtitle());
 
     eventPublisher.publish(
         new PerformanceCreatedEvent(
@@ -75,7 +92,6 @@ public class PerformanceCreateUseCase {
 
   private void validateFiles(
       MultipartFile mainImage, MultipartFile model3d, List<MultipartFile> gallery) {
-
     if (mainImage == null || mainImage.isEmpty()) {
       throw new BusinessException(ErrorStatus.PERFORMANCE_MAIN_IMAGE_MISSING);
     }
@@ -84,16 +100,8 @@ public class PerformanceCreateUseCase {
       throw new BusinessException(ErrorStatus.PERFORMANCE_GALLERY_LIMIT_EXCEEDED);
     }
 
-    /*
-     * 파트별 확장자·크기 검사는 업로드를 시작하기 전에 전부 끝낸다(#636).
-     *
-     * 업로드 직전에 파트마다 검사하면, mainImage를 올린 뒤 model3d에서 거절되는 순서라 거절될 요청마다 S3에 정리해야 할
-     * 객체가 생긴다. 여기서 먼저 걸러내면 잘못된 요청은 업로드를 한 건도 시작하지 않는다.
-     *
-     * 위의 존재 여부 검사를 먼저 두는 이유는 "메인 이미지는 필수입니다" 같은 파트별 메시지를 유지하기 위해서다 —
-     * FileKind.validate는 빈 파일을 파트 구분 없이 FILE_EMPTY로 처리한다. model3d는 선택(#650)이라 있을 때만 검사한다.
-     */
     FileKind.MAIN_IMAGE.validate(mainImage);
+
     if (hasFile(model3d)) {
       FileKind.MODEL_3D.validate(model3d);
     }
@@ -103,7 +111,6 @@ public class PerformanceCreateUseCase {
     }
   }
 
-  /** 교체 유스케이스(#637)의 정의와 같다 — null과 0바이트 파트를 모두 "보내지 않음"으로 본다. */
   private static boolean hasFile(MultipartFile file) {
     return file != null && !file.isEmpty();
   }
