@@ -62,7 +62,9 @@ class PerformancePatchTest {
         null,
         null,
         configJson == null ? null : JSON.readTree(configJson),
-        message);
+        message,
+        null,
+        null);
   }
 
   private Performance savePerformance() {
@@ -106,6 +108,8 @@ class PerformancePatchTest {
             "부산",
             newBookingOpenAt,
             null,
+            null,
+            null,
             null));
 
     em.flush();
@@ -120,8 +124,10 @@ class PerformancePatchTest {
     assertThat(updated.getShowTime()).isEqualTo(newShowTime);
     assertThat(updated.getDurationMinutes()).isEqualTo(150);
     assertThat(updated.getPrice()).isEqualTo(80000L);
-    // 총 좌석 수는 PATCH 대상이 아니다(#590). 좌석 수의 원본은 좌석 서비스이고, 여기서 고쳐도 seat으로 나가지
-    // 않아(PerformancePatchUseCase에 EventPublisher가 없다) 두 값이 조용히 갈렸다. 등록 시점에만 정한다.
+
+    // 총 좌석 수는 PATCH 대상이 아니다(#590). 좌석 수의 원본은 좌석 서비스이고,
+    // 여기서 고쳐도 seat으로 나가지 않아(PerformancePatchUseCase에 EventPublisher가 없다)
+    // 두 값이 조용히 갈렸다. 등록 시점에만 정한다.
     assertThat(updated.getTotalSeats()).isEqualTo(100);
     assertThat(updated.getAddress()).isEqualTo("부산");
     assertThat(updated.getBookingOpenAt()).isEqualTo(newBookingOpenAt);
@@ -135,7 +141,8 @@ class PerformancePatchTest {
     performancePatchUseCase.execute(
         performance.getId(),
         new PerformancePatchRequest(
-            "새로운 공연명", null, null, null, null, null, null, null, null, null, null, null));
+            "새로운 공연명", null, null, null, null, null, null, null, null, null, null, null, null,
+            null));
 
     em.flush();
     em.clear();
@@ -154,7 +161,7 @@ class PerformancePatchTest {
   void patchPerformance_notFound() {
     PerformancePatchRequest request =
         new PerformancePatchRequest(
-            "새 제목", null, null, null, null, null, null, null, null, null, null, null);
+            "새 제목", null, null, null, null, null, null, null, null, null, null, null, null, null);
 
     assertThatThrownBy(() -> performancePatchUseCase.execute(999L, request))
         .isInstanceOf(BusinessException.class)
@@ -162,7 +169,8 @@ class PerformancePatchTest {
   }
 
   /*
-   * #650 — 캐릭터 필드의 PATCH 계약. characterMessage만 "빈 문자열=삭제"라는 규칙이 추가됐다(이 레포 PATCH 최초).
+   * #650 — 캐릭터 필드의 PATCH 계약.
+   * characterMessage만 "빈 문자열=삭제"라는 규칙이 추가됐다(이 레포 PATCH 최초).
    */
   @Test
   @DisplayName("characterMessage에 빈 문자열을 보내면 한마디가 삭제(null)되고 구성은 유지된다")
@@ -170,6 +178,7 @@ class PerformancePatchTest {
     Performance performance = savePerformance();
 
     performancePatchUseCase.execute(performance.getId(), characterOnly(null, ""));
+
     em.flush();
     em.clear();
 
@@ -185,6 +194,7 @@ class PerformancePatchTest {
     Performance performance = savePerformance();
 
     performancePatchUseCase.execute(performance.getId(), characterOnly(null, "   "));
+
     em.flush();
     em.clear();
 
@@ -199,6 +209,7 @@ class PerformancePatchTest {
     Performance performance = savePerformance();
 
     performancePatchUseCase.execute(performance.getId(), characterOnly(null, null));
+
     em.flush();
     em.clear();
 
@@ -215,6 +226,7 @@ class PerformancePatchTest {
     String newConfig = "{\"schemaVersion\":2,\"nested\":{\"hairColor\":\"#fff\"}}";
 
     performancePatchUseCase.execute(performance.getId(), characterOnly(newConfig, "새 한마디"));
+
     em.flush();
     em.clear();
 
@@ -223,6 +235,7 @@ class PerformancePatchTest {
     assertThat(updated.getCharacterMessage()).isEqualTo("새 한마디");
 
     performancePatchUseCase.execute(performance.getId(), characterOnly("{}", null));
+
     em.flush();
     em.clear();
 

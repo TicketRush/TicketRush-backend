@@ -1,5 +1,6 @@
 package com.ticketrush.boundedcontext.performance.app.usecase;
 
+import com.ticketrush.boundedcontext.banner.app.usecase.BannerSyncUseCase;
 import com.ticketrush.boundedcontext.performance.app.dto.request.PerformancePatchRequest;
 import com.ticketrush.boundedcontext.performance.app.mapper.PerformanceMapper;
 import com.ticketrush.boundedcontext.performance.domain.entity.Performance;
@@ -18,6 +19,7 @@ public class PerformancePatchUseCase {
 
   private final PerformanceRepository performanceRepository;
   private final PerformanceMapper performanceMapper;
+  private final BannerSyncUseCase bannerSyncUseCase;
 
   @CacheEvict(cacheNames = CacheConstants.PERFORMANCE_LIST_CACHE, allEntries = true)
   @Transactional
@@ -39,8 +41,17 @@ public class PerformancePatchUseCase {
         request.address(),
         request.bookingOpenAt());
 
-    // 캐릭터는 계약이 달라(빈 한마디=삭제) update()와 분리돼 있다(#650). JSON 직렬화는 등록과 같은 매퍼 메서드를 써 두 경로가 같은 문자열을 저장한다.
+    /*
+     * 캐릭터는 계약이 달라 빈 한마디를 삭제 신호로 사용한다(#650).
+     * JSON 직렬화는 등록과 같은 Mapper 메서드를 사용한다.
+     */
     performance.updateCharacter(
         performanceMapper.toJsonString(request.characterConfig()), request.characterMessage());
+
+    /*
+     * 배너 생성·소제목 수정·배너 삭제를 공연 수정과 같은 트랜잭션에서 처리한다.
+     */
+    bannerSyncUseCase.synchronizeForPatch(
+        performanceId, request.displayOnBanner(), request.bannerSubtitle());
   }
 }

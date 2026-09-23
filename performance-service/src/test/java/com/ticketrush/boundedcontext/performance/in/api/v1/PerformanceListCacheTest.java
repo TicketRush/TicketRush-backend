@@ -83,15 +83,12 @@ class PerformanceListCacheTest {
     registry.add("spring.cache.type", () -> "redis");
     registry.add("spring.data.redis.host", REDIS::getHost);
     registry.add("spring.data.redis.port", () -> REDIS.getMappedPort(6379));
-    // 다른 테스트 컨텍스트와 공유 mem DB(testdb)를 create-drop으로 서로 갈아엎지 않도록 이 컨텍스트만 분리
     registry.add(
         "spring.datasource.url", () -> "jdbc:h2:mem:cachetestdb;MODE=MySQL;DB_CLOSE_DELAY=-1");
   }
 
   @MockitoBean private S3UploadUtils s3UploadUtils;
   @MockitoBean private EventPublisher eventPublisher;
-
-  /** 좌석 클라이언트는 반드시 대체한다 — test 프로파일에 URL 재정의가 없어 실제 호출이 나간다(#176). */
   @MockitoBean private SeatRestClient seatRestClient;
 
   @Autowired private PerformanceFacade performanceFacade;
@@ -124,13 +121,11 @@ class PerformanceListCacheTest {
     assertThat(first.getContent()).hasSize(1);
     assertThat(redisTemplate.hasKey(FIRST_PAGE_KEY)).isTrue();
 
-    // 캐시 무효화 경로를 우회해 DB에만 새 공연을 넣는다 — 두 번째 응답이 DB가 아닌 캐시에서 왔음을 증명
     savePerformance(Genre.MUSICAL, null);
 
     Slice<PerformanceListResponse> second = getUnfilteredFirstPage();
 
     assertThat(second.getContent()).hasSize(1);
-    // record equals로 전 필드(LocalDate/LocalTime 포함) 직렬화 왕복 동등성까지 단언
     assertThat(second.getContent().getFirst()).isEqualTo(first.getContent().getFirst());
   }
 
@@ -146,7 +141,6 @@ class PerformanceListCacheTest {
         null, null, null, null, new CursorPageRequest(saved.getId() + 1, PAGE_SIZE));
 
     assertThat(redisTemplate.keys(CacheConstants.PERFORMANCE_LIST_CACHE + "*")).isEmpty();
-    // 캐시를 타지 않으므로 좌석도 매 요청 새로 조회한다 — 좌석 합성이 캐시 대상 요청만의 기능이 아니다.
     verify(seatRestClient, times(3)).getSeatCounts(anyList());
   }
 
@@ -175,7 +169,8 @@ class PerformanceListCacheTest {
     performanceFacade.patchPerformance(
         saved.getId(),
         new PerformancePatchRequest(
-            "수정된 제목", null, null, null, null, null, null, null, null, null, null, null));
+            "수정된 제목", null, null, null, null, null, null, null, null, null, null, null, null,
+            null));
 
     assertThat(redisTemplate.hasKey(FIRST_PAGE_KEY)).isFalse();
     assertThat(getUnfilteredFirstPage().getContent()).anyMatch(p -> p.title().equals("수정된 제목"));
@@ -223,13 +218,6 @@ class PerformanceListCacheTest {
         .isEqualTo(newMainUrl);
   }
 
-  /**
-   * 파일 교체가 트랜잭션 안에서 업로드함을 고정한다.
-   *
-   * <p>{@code S3UploadUtils}는 업로드 객체를 트랜잭션 동기화에 걸어 롤백 시 지우는데, 트랜잭션 밖 호출에 대해서는 예외가 아니라 {@code
-   * log.warn}만 남기고 통과한다. 즉 유스케이스에서 {@code @Transactional}이 사라져도 어떤 테스트도 실패하지 않고 실패한 요청마다 S3에 고아 객체가
-   * 쌓인다. 이 클래스는 {@code @Transactional}이 아니라 테스트 트랜잭션이 그 부재를 가려주지 않으므로, 여기서만 관찰할 수 있다.
-   */
   @Test
   @DisplayName("파일 교체는 트랜잭션 안에서 업로드한다")
   void replaceFiles_uploadsInsideTransaction() {
@@ -250,11 +238,6 @@ class PerformanceListCacheTest {
     assertThat(uploadedInsideTransaction).as("트랜잭션 밖에서 업로드하면 롤백돼도 S3 객체가 정리되지 않는다").isTrue();
   }
 
-  /**
-   * 오픈 전환의 캐시 무효화. CLOSED 케이스와 같이 정책을 대체하지 않고 정책의 존(Asia/Seoul)으로 상대값을 만든다 (#653) — JVM 기본 존의
-   * {@code now()}를 쓰면 정책이 KST로 판정하는 지금과 어긋나 JVM 존에 따라 결과가 갈린다. 시각 판정의 결정적 검증은 {@code
-   * PerformanceOpenBookingTest}가 맡는다.
-   */
   @Test
   @DisplayName("예매 오픈 스케줄러가 상태를 전환하면 캐시가 무효화된다")
   void openBooking_transitioned_evictsCache() {
@@ -283,10 +266,6 @@ class PerformanceListCacheTest {
     assertThat(redisTemplate.hasKey(FIRST_PAGE_KEY)).isTrue();
   }
 
-  /**
-   * CLOSED 전환의 캐시 무효화 (#651). 여기서는 정책을 대체하지 않는다 — 실제 Clock에 물린 정책이 "어제"를 지난 것으로 판정하는지까지 함께 본다. 어제
-   * 날짜는 하루 중 어느 시각에 돌려도 지난 것이라 자정 경계와 무관하다.
-   */
   @Test
   @DisplayName("CLOSED 전환 스케줄러가 상태를 전환하면 캐시가 무효화된다")
   void closeShow_transitioned_evictsCache() {
@@ -323,7 +302,6 @@ class PerformanceListCacheTest {
     Slice<PerformanceListResponse> first = getUnfilteredFirstPage();
     assertThat(first.getContent().getFirst().remainingSeats()).isEqualTo(200L);
 
-    // 그 사이 좌석이 더 팔렸더라도 캐시가 살아 있는 동안은 응답이 바뀌지 않는다
     givenSeatCounts(saved.getId(), 500L, 450L);
 
     Slice<PerformanceListResponse> second = getUnfilteredFirstPage();
@@ -343,18 +321,13 @@ class PerformanceListCacheTest {
     performanceFacade.patchPerformance(
         saved.getId(),
         new PerformancePatchRequest(
-            "수정된 제목", null, null, null, null, null, null, null, null, null, null, null));
+            "수정된 제목", null, null, null, null, null, null, null, null, null, null, null, null,
+            null));
 
     assertThat(getUnfilteredFirstPage().getContent().getFirst().remainingSeats()).isEqualTo(50L);
     verify(seatRestClient, times(2)).getSeatCounts(anyList());
   }
 
-  /**
-   * 좌석 수의 갱신 주기가 목록 캐시의 수명과 같음을 고정한다.
-   *
-   * <p>TTL이 실제로 만료되기를 기다리지 않는다 — TTL은 {@code CacheConfig}의 상수라 테스트에서 줄일 수 없고, 30초를 기다리는 테스트는 CI 비용이
-   * 크다. 대신 Redis에 남은 수명을 직접 물어 좌석이 실린 항목도 같은 TTL을 달고 저장됨을 확인한다.
-   */
   @Test
   @DisplayName("좌석 수가 실린 캐시 항목도 목록 캐시의 TTL을 그대로 따른다")
   void seatCounts_shareListCacheTtl() {
@@ -366,13 +339,6 @@ class PerformanceListCacheTest {
     assertThat(redisTemplate.getExpire(FIRST_PAGE_KEY)).isPositive().isLessThanOrEqualTo(30L);
   }
 
-  /**
-   * 좌석 필드를 박스 타입({@code Long})으로 둔 결정을 고정한다.
-   *
-   * <p>롤링 배포 중에는 좌석 필드가 없는 <b>구버전 캐시 항목</b>을 새 코드가 읽는다. 원시 타입이었다면 그 순간 역직렬화가 깨지고(Jackson의 {@code
-   * FAIL_ON_NULL_FOR_PRIMITIVES}가 기본 활성), 캐시 오류 핸들러가 그 예외를 삼켜 전 요청이 미스로 떨어진다 — 500은 나지 않지만 배포가 겹친
-   * 동안 캐시가 통째로 무력해진다. 실제 저장 포맷에서 좌석 키만 덜어내 그 상황을 만든다.
-   */
   @Test
   @DisplayName("좌석 필드가 없는 구버전 캐시 항목도 좌석만 비운 채 정상 복원된다")
   void legacyCacheEntryWithoutSeatFields_restoresWithNullSeats() {
@@ -389,7 +355,6 @@ class PerformanceListCacheTest {
 
     PerformanceListResponse row = getUnfilteredFirstPage().getContent().getFirst();
 
-    // 원시 타입이었다면 여기서 캐시가 미스로 떨어져 좌석 수가 다시 채워진다(= null이 아니게 된다).
     assertThat(row.totalSeats()).isNull();
     assertThat(row.remainingSeats()).isNull();
     assertThat(row.title()).isEqualTo("공연명");
@@ -431,7 +396,6 @@ class PerformanceListCacheTest {
             .build());
   }
 
-  /** 이 클래스는 {@code @Transactional}이 아니라 상태 변경을 save로 반영한다. */
   private Performance saveOnSaleShowOn(LocalDate showDate) {
     Performance performance =
         Performance.builder()
@@ -465,12 +429,6 @@ class PerformanceListCacheTest {
         .build();
   }
 
-  /**
-   * 파트에 맞는 확장자를 준다.
-   *
-   * <p>#636 이후 확장자 화이트리스트가 파트별로 갈려(FileKind) {@code .bin}은 어느 파트에서도 통과하지 않는다. 이 테스트의 관심사는 캐시 무효화라
-   * 업로드 자체는 mock 이지만, 검증은 업로드보다 앞이라 실제 규칙을 만족해야 등록이 진행된다.
-   */
   private MockMultipartFile mockFile(String name) {
     String extension = "model3d".equals(name) ? "glb" : "png";
 

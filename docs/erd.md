@@ -46,7 +46,7 @@ erDiagram
   %% ===== performance-service =====
   performance ||--o{ performance_images : "FK"
   performance ||--o{ performance_facilities : "FK"
-  performance ||..o{ banner : "논리 (link_performance_id, FK 아님)"
+  performance ||..o| banner : "논리 (performance_id, UNIQUE, FK 아님)"
 
   %% ===== seat-service =====
   performance ||..o| seat_layout : "논리 (performance_id, UNIQUE)"
@@ -103,10 +103,9 @@ erDiagram
   }
   banner {
     bigint banner_id PK
-    bigint link_performance_id "논리 참조"
-    varchar title
-    int display_order
-    datetime deactivated_at
+    bigint performance_id UK "필수 논리 참조"
+    varchar subtitle "선택"
+    int display_order UK "1~3"
   }
 
   seat_layout {
