@@ -17,6 +17,7 @@ import org.springframework.test.context.DynamicPropertyRegistry;
 import org.springframework.test.context.DynamicPropertySource;
 import org.springframework.test.web.reactive.server.WebTestClient;
 import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.RequestHeader;
 import org.springframework.web.bind.annotation.RestController;
 import org.testcontainers.containers.GenericContainer;
 import org.testcontainers.junit.jupiter.Container;
@@ -164,6 +165,42 @@ class RateLimitGatewayTest {
   }
 
   @Test
+  @DisplayName("잘못된 Bearer 토큰은 401과 공통 오류 응답을 반환한다")
+  void 잘못된_Bearer_토큰은_401을_반환한다() {
+    requestWithToken("198.51.100.60", "invalid")
+        .expectStatus()
+        .isEqualTo(HttpStatus.UNAUTHORIZED)
+        .expectHeader()
+        .contentType("application/json")
+        .expectBody()
+        .jsonPath("$.is_success")
+        .isEqualTo(false)
+        .jsonPath("$.code")
+        .isEqualTo("AUTH_401_003")
+        .jsonPath("$.message")
+        .isEqualTo("유효하지 않은 JWT 토큰입니다.");
+  }
+
+  @Test
+  @DisplayName("Refresh Token을 Bearer로 보내면 401과 토큰 타입 오류를 반환한다")
+  void Refresh_Token을_Bearer로_보내면_401을_반환한다() {
+    String refreshToken = jwtTokenProvider.createRefreshToken(103L);
+
+    requestWithToken("198.51.100.62", refreshToken)
+        .expectStatus()
+        .isEqualTo(HttpStatus.UNAUTHORIZED)
+        .expectHeader()
+        .contentType("application/json")
+        .expectBody()
+        .jsonPath("$.is_success")
+        .isEqualTo(false)
+        .jsonPath("$.code")
+        .isEqualTo("AUTH_401_005")
+        .jsonPath("$.message")
+        .isEqualTo("Access Token만 사용할 수 있습니다.");
+  }
+
+  @Test
   @DisplayName("Redis에 route와 key별 tokens, timestamp 키가 생성된다")
   void Redis에_RateLimit_key가_생성된다() {
     String clientIp = "198.51.100.50";
@@ -178,6 +215,22 @@ class RateLimitGatewayTest {
         .containsExactlyInAnyOrder(
             "request_rate_limiter.{" + ROUTE_ID + ".ip:" + clientIp + "}.tokens",
             "request_rate_limiter.{" + ROUTE_ID + ".ip:" + clientIp + "}.timestamp");
+  }
+
+  @Test
+  @DisplayName("일반 예외는 기존 500 오류 응답으로 처리한다")
+  void 일반_예외는_500으로_처리된다() {
+    webTestClient
+        .get()
+        .uri("/__rate-limit-probe")
+        .header("X-Forwarded-For", "198.51.100.61")
+        .header("X-Error-Probe", "true")
+        .exchange()
+        .expectStatus()
+        .isEqualTo(HttpStatus.INTERNAL_SERVER_ERROR)
+        .expectBody()
+        .jsonPath("$.status")
+        .isEqualTo(500);
   }
 
   private WebTestClient.ResponseSpec requestWithIp(String clientIp) {
@@ -211,7 +264,10 @@ class RateLimitGatewayTest {
   static class RateLimitProbeController {
 
     @GetMapping("/__rate-limit-ok")
-    String ok() {
+    String ok(@RequestHeader(value = "X-Error-Probe", required = false) String errorProbe) {
+      if ("true".equals(errorProbe)) {
+        throw new IllegalStateException("unexpected error probe");
+      }
       return "ok";
     }
   }
