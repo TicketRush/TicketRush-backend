@@ -182,6 +182,25 @@ class RateLimitGatewayTest {
   }
 
   @Test
+  @DisplayName("Refresh Token을 Bearer로 보내면 401과 토큰 타입 오류를 반환한다")
+  void Refresh_Token을_Bearer로_보내면_401을_반환한다() {
+    String refreshToken = jwtTokenProvider.createRefreshToken(103L);
+
+    requestWithToken("198.51.100.62", refreshToken)
+        .expectStatus()
+        .isEqualTo(HttpStatus.UNAUTHORIZED)
+        .expectHeader()
+        .contentType("application/json")
+        .expectBody()
+        .jsonPath("$.is_success")
+        .isEqualTo(false)
+        .jsonPath("$.code")
+        .isEqualTo("AUTH_401_005")
+        .jsonPath("$.message")
+        .isEqualTo("Access Token만 사용할 수 있습니다.");
+  }
+
+  @Test
   @DisplayName("Redis에 route와 key별 tokens, timestamp 키가 생성된다")
   void Redis에_RateLimit_key가_생성된다() {
     String clientIp = "198.51.100.50";
