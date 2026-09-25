@@ -49,6 +49,11 @@ class PerformanceGetDetailTest {
 
   private PerformanceDetailResponse sampleResponse(
       JsonNode characterConfig, String characterMessage) {
+    return sampleResponse("https://s3.example.com/model.glb", characterConfig, characterMessage);
+  }
+
+  private PerformanceDetailResponse sampleResponse(
+      String image3dUrl, JsonNode characterConfig, String characterMessage) {
     return new PerformanceDetailResponse(
         1L,
         "레미제라블",
@@ -65,7 +70,7 @@ class PerformanceGetDetailTest {
         PerformanceStatus.ON_SALE,
         LocalDateTime.of(2025, 8, 1, 20, 0),
         "https://s3.example.com/main.jpg",
-        "https://s3.example.com/model.glb",
+        image3dUrl,
         List.of("https://s3.example.com/gallery1.jpg"),
         List.of("주차장", "수유실"),
         characterConfig,
@@ -177,6 +182,19 @@ class PerformanceGetDetailTest {
         .andExpect(content().string(containsString("\"accessory\":null")))
         .andExpect(content().string(containsString("\"festivalTopColor\":null")))
         .andExpect(jsonPath("$.result.character_message").doesNotExist());
+  }
+
+  @Test
+  @DisplayName("3D 모델이 없는 공연(등록 때 생략 또는 #688 비우기)은 image3d_url 키가 응답에서 빠진다")
+  void getPerformanceDetail_noModel3d_keyAbsent() throws Exception {
+    when(performanceFacade.getPerformanceDetail(1L)).thenReturn(sampleResponse(null, null, null));
+
+    // 전역 NON_NULL 이 이 계약의 근거다. 프론트가 "키 없음"으로 비어 있음을 판단하므로 null 값으로 실리면 안 된다
+    mockMvc
+        .perform(get(baseUrl + "/1"))
+        .andExpect(status().isOk())
+        .andExpect(jsonPath("$.result.image_main_url").value("https://s3.example.com/main.jpg"))
+        .andExpect(jsonPath("$.result.image3d_url").doesNotExist());
   }
 
   @Test
