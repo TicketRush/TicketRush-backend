@@ -148,9 +148,23 @@ public enum ErrorStatus {
       HttpStatus.BAD_REQUEST, "PERFORMANCE_400_008", "조회 시작일은 종료일보다 늦을 수 없습니다."),
   PERFORMANCE_DASHBOARD_PERIOD_TOO_LONG(
       HttpStatus.BAD_REQUEST, "PERFORMANCE_400_009", "조회 기간은 최대 92일까지 지정할 수 있습니다."),
-  // 파일 교체 요청에 파트가 하나도 없는 경우다(#637). 거절 근거는 PerformanceReplaceFilesUseCase.validateFiles 참고
+  // 파일 교체 요청에 변경 지시가 하나도 없는 경우다(#637). #688부터는 파일 파트 외에 request 파트의 유지 목록·3D 비우기도
+  // 지시로 세므로, 파일이 없어도 request 파트가 있으면 이 코드가 아니다. 거절 근거는 PerformanceReplaceFilesUseCase.validate 참고
   PERFORMANCE_NO_FILE_TO_REPLACE(
-      HttpStatus.BAD_REQUEST, "PERFORMANCE_400_010", "교체할 파일을 하나 이상 보내야 합니다."),
+      HttpStatus.BAD_REQUEST, "PERFORMANCE_400_010", "교체할 파일이나 변경 지시(request)를 하나 이상 보내야 합니다."),
+  /*
+   * 파일 교체의 request 파트 검증 3종(#688). 셋을 하나로 뭉개지 않는 이유는 SEAT_409_004~006과 같다 — 화면이 안내할
+   * 다음 행동이 다르다. 유지 URL이 현재 갤러리에 없는 것은 다른 어드민이 먼저 바꾼 stale 화면이라 재조회 후 재시도가
+   * 유효하고, 중복·모순은 클라이언트 버그라 재시도해도 같다.
+   */
+  PERFORMANCE_KEEP_GALLERY_URL_NOT_FOUND(
+      HttpStatus.BAD_REQUEST,
+      "PERFORMANCE_400_011",
+      "유지하려는 갤러리 이미지가 현재 갤러리에 없습니다. 공연을 다시 조회한 뒤 시도해 주세요."),
+  PERFORMANCE_KEEP_GALLERY_URL_DUPLICATED(
+      HttpStatus.BAD_REQUEST, "PERFORMANCE_400_012", "유지할 갤러리 이미지 목록에 같은 URL이 중복되어 있습니다."),
+  PERFORMANCE_MODEL3D_CLEAR_CONFLICT(
+      HttpStatus.BAD_REQUEST, "PERFORMANCE_400_013", "3D 모델을 비우면서 동시에 새 3D 모델 파일을 보낼 수 없습니다."),
 
   // Performance 409
   PERFORMANCE_HAS_SOLD_SEATS(
