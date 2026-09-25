@@ -88,14 +88,13 @@
 
 ### 🖥️ 서비스 이용 흐름
 
-각 항목을 펼치면 해당 화면과 시연 GIF를 확인할 수 있습니다.
+단계별 설명과 화면·시연 GIF를 함께 확인할 수 있습니다.
 
 #### 사용자 흐름
 
 공연 탐색 → 좌석 선택 → 예매 및 결제 → QR 티켓 확인 → 예매 확인 및 환불
 
-<details>
-<summary><strong>1. 공연 탐색</strong></summary>
+##### 1. 공연 탐색
 
 공연 목록에서 원하는 공연을 찾고, 상세 정보와 갤러리를 확인합니다.
 
@@ -103,142 +102,84 @@
 
 <img src="docs/images/사용자/01_공연_탐색/홈화면.png" width="800" alt="사용자 홈 화면의 공연 목록">
 
-**공연 상세 정보**
+| 공연 상세 정보 | 공연 소개 및 갤러리 |
+| :---: | :---: |
+| <img src="docs/images/사용자/01_공연_탐색/공연화면1.png" width="400" alt="공연 일시, 장소, 가격 및 예매 현황"> | <img src="docs/images/사용자/01_공연_탐색/공연화면2.png" width="400" alt="공연 소개, 이미지 갤러리 및 3D 캐릭터"> |
 
-<img src="docs/images/사용자/01_공연_탐색/공연화면1.png" width="800" alt="공연 일시, 장소, 가격 및 예매 현황">
-
-<img src="docs/images/사용자/01_공연_탐색/공연화면2.png" width="800" alt="공연 소개, 이미지 갤러리 및 3D 캐릭터">
-
-</details>
-
-<details>
-<summary><strong>2. 좌석 선택</strong></summary>
+##### 2. 좌석 선택
 
 좌석 배치도에서 상태를 확인하고 예매할 좌석을 선택합니다.
 
 <img src="docs/images/사용자/02_좌석_선택/좌석선택.png" width="800" alt="상태별 좌석 배치도와 좌석 선택 화면">
 
-</details>
-
-<details>
-<summary><strong>3. 예매 및 결제</strong></summary>
+##### 3. 예매 및 결제
 
 선택한 좌석과 예매 정보를 확인한 뒤, 제한 시간 내 결제를 진행합니다.
 
-**예매 정보 확인**
+| 예매 정보 확인 | 결제 수단 선택 |
+| :---: | :---: |
+| <img src="docs/images/사용자/03_예매_결제/예매중.png" width="400" alt="선점한 좌석, 결제 금액 및 남은 결제 시간"> | <img src="docs/images/사용자/03_예매_결제/결제수단선택.png" width="400" alt="결제 수단 선택과 결제 금액 확인 화면"> |
 
-<img src="docs/images/사용자/03_예매_결제/예매중.png" width="800" alt="선점한 좌석, 결제 금액 및 남은 결제 시간">
-
-**결제 수단 선택**
-
-<img src="docs/images/사용자/03_예매_결제/결제수단선택.png" width="800" alt="결제 수단 선택과 결제 금액 확인 화면">
-
-</details>
-
-<details>
-<summary><strong>4. QR 티켓 확인</strong></summary>
+##### 4. QR 티켓 확인
 
 결제 완료 후 발급된 티켓과 공연장 입장용 QR 코드를 확인합니다.
 
-**결제 완료 및 티켓 발급**
+| 결제 완료 및 티켓 발급 | 입장 QR 코드 |
+| :---: | :---: |
+| <img src="docs/images/사용자/04_QR_티켓/티켓화면1.png" width="400" alt="결제 완료 후 발급된 공연 티켓"> | <img src="docs/images/사용자/04_QR_티켓/티켓화면2.png" width="400" alt="입장 QR 코드와 유효 시간 확인 화면"> |
 
-<img src="docs/images/사용자/04_QR_티켓/티켓화면1.png" width="500" alt="결제 완료 후 발급된 공연 티켓">
-
-**입장 QR 코드**
-
-<img src="docs/images/사용자/04_QR_티켓/티켓화면2.png" width="500" alt="입장 QR 코드와 유효 시간 확인 화면">
-
-</details>
-
-<details>
-<summary><strong>5. 예매 확인 및 환불</strong></summary>
+##### 5. 예매 확인 및 환불
 
 내 예매 내역에서 티켓을 확인하고 환불을 신청하거나 처리 상태를 확인합니다.
 
-**내 예매 내역**
+| 내 예매 내역 | 환불 완료 내역 |
+| :---: | :---: |
+| <img src="docs/images/사용자/05_예매확인_환불/예매확인.png" width="400" alt="내 예매 내역의 티켓 보기 및 환불 신청 화면"> | <img src="docs/images/사용자/05_예매확인_환불/환불신청완료.png" width="400" alt="환불 완료 상태가 표시된 예매 내역"> |
 
-<img src="docs/images/사용자/05_예매확인_환불/예매확인.png" width="800" alt="내 예매 내역의 티켓 보기 및 환불 신청 화면">
-
-**환불 완료 내역**
-
-<img src="docs/images/사용자/05_예매확인_환불/환불신청완료.png" width="800" alt="환불 완료 상태가 표시된 예매 내역">
-
-</details>
 
 #### 관리자 흐름
 
 관리자 대시보드 · 예매 내역 · 좌석 모니터링 · 공연 등록 · 환불 내역 관리
 
-<details>
-<summary><strong>1. 관리자 대시보드</strong></summary>
+##### 1. 관리자 대시보드
 
 주요 운영 지표와 매출, 공연별 판매 현황을 한곳에서 확인합니다.
 
-**운영 지표 및 기간별 매출**
+| 운영 지표 및 기간별 매출 | 장르별 매출 분포 |
+| :---: | :---: |
+| <img src="docs/images/관리자/01_관리자_대시보드/관리자_대시보드_1.png" width="400" alt="관리자 대시보드의 운영 지표와 기간별 매출 추이"> | <img src="docs/images/관리자/01_관리자_대시보드/관리자_대시보드_2.png" width="400" alt="장르별 매출 비율과 금액"> |
 
-<img src="docs/images/관리자/01_관리자_대시보드/관리자_대시보드_1.png" width="800" alt="관리자 대시보드의 운영 지표와 기간별 매출 추이">
+| 공연별 판매 현황 | 전체 공연 목록 |
+| :---: | :---: |
+| <img src="docs/images/관리자/01_관리자_대시보드/관리자_대시보드_3.png" width="400" alt="공연별 판매 좌석 수와 매출 현황"> | <img src="docs/images/관리자/01_관리자_대시보드/관리자_대시보드_4.png" width="400" alt="관리자 대시보드의 전체 공연 목록과 관리 메뉴"> |
 
-**장르별 매출 분포**
-
-<img src="docs/images/관리자/01_관리자_대시보드/관리자_대시보드_2.png" width="800" alt="장르별 매출 비율과 금액">
-
-**공연별 판매 현황**
-
-<img src="docs/images/관리자/01_관리자_대시보드/관리자_대시보드_3.png" width="800" alt="공연별 판매 좌석 수와 매출 현황">
-
-**전체 공연 목록**
-
-<img src="docs/images/관리자/01_관리자_대시보드/관리자_대시보드_4.png" width="800" alt="관리자 대시보드의 전체 공연 목록과 관리 메뉴">
-
-</details>
-
-<details>
-<summary><strong>2. 예매 내역</strong></summary>
+##### 2. 예매 내역
 
 전체 예매 현황을 확인하고 상태별로 예매 내역을 조회합니다.
 
 <img src="docs/images/관리자/02_예매_내역/예매_내역_관리.png" width="800" alt="전체 예매 지표와 상태별 예매 내역 관리 화면">
 
-</details>
-
-<details>
-<summary><strong>3. 좌석 모니터링</strong></summary>
+##### 3. 좌석 모니터링
 
 공연별 좌석 현황을 조회하고, 선택한 좌석의 예매 정보를 확인합니다.
 
-**모니터링할 공연 선택**
+| 모니터링할 공연 선택 | 좌석 상태 및 예매 정보 |
+| :---: | :---: |
+| <img src="docs/images/관리자/03_좌석_모니터링/좌석_모니터링_1.png" width="400" alt="좌석 모니터링 대상 공연 목록"> | <img src="docs/images/관리자/03_좌석_모니터링/좌석_모니터링_2.png" width="400" alt="공연별 좌석 배치도, 상태별 집계 및 선택한 좌석의 예매 정보"> |
 
-<img src="docs/images/관리자/03_좌석_모니터링/좌석_모니터링_1.png" width="800" alt="좌석 모니터링 대상 공연 목록">
-
-**좌석 상태 및 예매 정보**
-
-<img src="docs/images/관리자/03_좌석_모니터링/좌석_모니터링_2.png" width="800" alt="공연별 좌석 배치도, 상태별 집계 및 선택한 좌석의 예매 정보">
-
-</details>
-
-<details>
-<summary><strong>4. 공연 등록</strong></summary>
+##### 4. 공연 등록
 
 공연 정보를 입력하고, 공연에 사용할 3D 캐릭터를 제작합니다.
 
-**공연 등록**
+| 공연 등록 | 3D 캐릭터 제작 |
+| :---: | :---: |
+| <img src="docs/images/관리자/04_공연_등록/공연등록.gif" width="400" alt="공연 정보 입력 및 등록 과정 시연 GIF"> | <img src="docs/images/관리자/04_공연_등록/3D캐릭터제작.gif" width="400" alt="3D 캐릭터 외형 설정과 미리보기 시연 GIF"> |
 
-<img src="docs/images/관리자/04_공연_등록/공연등록.gif" width="800" alt="공연 정보 입력 및 등록 과정 시연 GIF">
-
-**3D 캐릭터 제작**
-
-<img src="docs/images/관리자/04_공연_등록/3D캐릭터제작.gif" width="800" alt="3D 캐릭터 외형 설정과 미리보기 시연 GIF">
-
-</details>
-
-<details>
-<summary><strong>5. 환불 내역 관리</strong></summary>
+##### 5. 환불 내역 관리
 
 환불 진행 상태별로 내역을 조회하고 처리 현황을 확인합니다.
 
 <img src="docs/images/관리자/05_환불내역관리/환불내역관리.png" width="800" alt="환불 상태별 집계와 환불 내역 관리 화면">
-
-</details>
 
 ## 🛠 TicketRush 기술 스택
 
