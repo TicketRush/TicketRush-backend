@@ -2,6 +2,7 @@ package com.ticketrush.boundedcontext.performance.app.facade;
 
 import com.ticketrush.boundedcontext.performance.app.dto.request.PerformanceChangeStatusRequest;
 import com.ticketrush.boundedcontext.performance.app.dto.request.PerformanceCreateRequest;
+import com.ticketrush.boundedcontext.performance.app.dto.request.PerformanceFileReplaceRequest;
 import com.ticketrush.boundedcontext.performance.app.dto.request.PerformancePatchRequest;
 import com.ticketrush.boundedcontext.performance.app.dto.response.PerformanceAdminDashboardResponse;
 import com.ticketrush.boundedcontext.performance.app.dto.response.PerformanceAdminSummaryResponse;
@@ -57,14 +58,19 @@ public class PerformanceFacade {
     return performanceCreateUseCase.execute(request, mainImage, model3d, gallery);
   }
 
-  /** 등록된 공연의 파일을 교체한다 (#637). 전달된 파트만 바뀌고 나머지는 유지된다. */
+  /**
+   * 등록된 공연의 파일을 교체한다 (#637). 전달된 파트만 바뀌고 나머지는 유지된다. {@code request}는 갤러리 유지 목록·3D 비우기 지시(#688)로,
+   * 파트를 보내지 않으면 null이다.
+   */
   public PerformanceFileReplaceResponse replacePerformanceFiles(
       Long performanceId,
       MultipartFile mainImage,
       MultipartFile model3d,
-      List<MultipartFile> gallery) {
+      List<MultipartFile> gallery,
+      PerformanceFileReplaceRequest request) {
 
-    return performanceReplaceFilesUseCase.execute(performanceId, mainImage, model3d, gallery);
+    return performanceReplaceFilesUseCase.execute(
+        performanceId, mainImage, model3d, gallery, request);
   }
 
   public Slice<PerformanceListResponse> getPerformances(

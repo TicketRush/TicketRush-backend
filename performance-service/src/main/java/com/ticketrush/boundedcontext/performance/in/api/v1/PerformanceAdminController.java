@@ -2,6 +2,7 @@ package com.ticketrush.boundedcontext.performance.in.api.v1;
 
 import com.ticketrush.boundedcontext.performance.app.dto.request.PerformanceChangeStatusRequest;
 import com.ticketrush.boundedcontext.performance.app.dto.request.PerformanceCreateRequest;
+import com.ticketrush.boundedcontext.performance.app.dto.request.PerformanceFileReplaceRequest;
 import com.ticketrush.boundedcontext.performance.app.dto.request.PerformancePatchRequest;
 import com.ticketrush.boundedcontext.performance.app.dto.response.PerformanceAdminSummaryResponse;
 import com.ticketrush.boundedcontext.performance.app.dto.response.PerformanceCreateResponse;
@@ -182,7 +183,9 @@ public class PerformanceAdminController {
           """
           등록된 공연의 파일을 교체합니다. **보낸 파트만 교체되고 보내지 않은 파트는 기존 파일이 그대로 유지됩니다.**
 
-          **요청 형식:** `multipart/form-data` — 세 파트 모두 선택이지만 **실제 파일이 하나 이상 있어야 합니다.**
+          **요청 형식:** `multipart/form-data` — 네 파트 모두 선택이지만 **변경 지시가 하나 이상 있어야 합니다**
+          (실제 파일이 있는 파트, `request`의 `keep_gallery_urls`, `request`의 `clear_model3d: true` 중 하나).
+          - `request` 파트 (선택, Content-Type: application/json): 변경 지시 JSON — 아래 참고
           - `mainImage` 파트: 새 메인 이미지 파일 — `jpg`, `jpeg`, `png` / 최대 5MB
           - `model3d` 파트: 새 3D 모델 파일 — `glb`, `obj` / 최대 10MB
           - `gallery` 파트: 새 갤러리 이미지 파일 (최대 3개) — `jpg`, `jpeg`, `png` / 각 최대 5MB
@@ -191,15 +194,29 @@ public class PerformanceAdminController {
           0바이트 파트로 전송되기 때문에, 이를 거절하면 "입력 여러 개 중 하나만 골랐다"는 흔한 폼이 전부 실패합니다.
           그래서 0바이트 파트는 조용히 무시되며, 그 파트의 기존 파일은 유지됩니다.
           내용이 빈 파일을 실수로 올리면 오류 없이 200이 오고 해당 URL이 그대로이므로,
-          **응답의 URL로 실제 교체 여부를 확인하세요.** 세 파트가 모두 비어 있으면 400으로 거절합니다.
+          **응답의 URL로 실제 교체 여부를 확인하세요.** 변경 지시가 하나도 없으면 400(`PERFORMANCE_400_010`)으로 거절합니다.
+          `request`가 `{}`이거나 `clear_model3d: false`뿐인 것은 지시가 아닙니다.
 
-          **갤러리는 전체 치환입니다.** `gallery`를 보내면 기존 갤러리 전체가 보낸 목록으로 대체됩니다.
-          일부만 바꾸거나 개별 삭제하는 방법은 없으며, 갤러리를 비우는 것도 지원하지 않습니다.
+          **갤러리 규칙은 `request` 파트의 `keep_gallery_urls` 유무로 갈립니다.**
+          - `keep_gallery_urls`를 **보내지 않으면** 기존 규칙 그대로입니다 — `gallery`를 보내면 기존 갤러리 전체가 보낸 목록으로
+            대체되고, 안 보내면 유지됩니다.
+          - `keep_gallery_urls`를 **보내면** 최종 갤러리 = **유지 목록(보낸 순서대로) + `gallery` 파트의 신규 파일(보낸 순서대로)**입니다.
+            유지 목록에 없는 기존 URL은 빠집니다. 순서를 바꿔 보내면 그 순서로 저장됩니다.
+            `[]`에 신규 파일이 없으면 갤러리가 비워집니다.
+          - 유지 URL이 현재 갤러리에 없으면 400(`PERFORMANCE_400_011`) — 다른 관리자가 먼저 바꾼 화면이니 다시 조회한 뒤 시도하세요.
+            유지 목록에 같은 URL이 중복되면 400(`PERFORMANCE_400_012`).
+            유지 + 신규 합이 3장을 넘으면 400(`PERFORMANCE_400_003`).
+
+          **3D 모델 비우기:** `request`의 `clear_model3d: true`면 `image3dUrl`이 비워져 응답과 상세 조회에서 키가 빠집니다.
+          새 `model3d` 파일과 함께 보내면 모순이라 400(`PERFORMANCE_400_013`).
+
+          위 검증에 걸리면 어떤 파일도 교체되지 않고 기존 URL이 그대로 남습니다.
+          같은 요청을 다시 보내도 결과가 같습니다 — 유지 목록은 삭제할 것을 고르는 게 아니라 남길 최종 상태를 선언하는 방식입니다.
 
           응답은 교체 후의 현재 URL 세 종입니다. 저장 키에 UUID를 쓰므로 교체하면 URL이 반드시 바뀌며,
           이 응답의 URL을 그대로 쓰면 상세를 다시 조회할 필요가 없습니다.
 
-          교체 전 파일은 스토리지에 그대로 남습니다 — 이전 URL을 캐싱하고 있던 클라이언트가 즉시 깨지지 않도록 한 선택입니다.
+          교체·비우기 전 파일은 스토리지에 그대로 남습니다 — 이전 URL을 캐싱하고 있던 클라이언트가 즉시 깨지지 않도록 한 선택입니다.
 
           **형식 판정은 파일명 확장자로만 합니다.** 확장자가 파트와 맞지 않으면 400, 크기 상한을 넘으면 413으로 거절하며,
           이 경우 어떤 파일도 교체되지 않고 기존 URL이 그대로 남습니다.
@@ -208,16 +225,20 @@ public class PerformanceAdminController {
       content =
           @Content(
               mediaType = MediaType.MULTIPART_FORM_DATA_VALUE,
-              schema = @Schema(implementation = PerformanceFileReplaceSwaggerBody.class)))
+              schema = @Schema(implementation = PerformanceFileReplaceSwaggerBody.class),
+              encoding =
+                  @Encoding(name = "request", contentType = MediaType.APPLICATION_JSON_VALUE)))
   @PatchMapping(value = "/{id}/files", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
   public ResponseEntity<ApiResponse<PerformanceFileReplaceResponse>> replacePerformanceFiles(
       @Parameter(description = "공연 ID") @Positive @PathVariable Long id,
+      // @Valid 를 붙이지 않는다 — 이 DTO 의 규칙은 전부 현재 갤러리 상태를 봐야 판정돼 유스케이스에 있다(DTO Javadoc)
+      @RequestPart(value = "request", required = false) PerformanceFileReplaceRequest request,
       @RequestPart(value = "mainImage", required = false) MultipartFile mainImage,
       @RequestPart(value = "model3d", required = false) MultipartFile model3d,
       @RequestPart(value = "gallery", required = false) List<MultipartFile> gallery) {
 
     PerformanceFileReplaceResponse response =
-        performanceFacade.replacePerformanceFiles(id, mainImage, model3d, gallery);
+        performanceFacade.replacePerformanceFiles(id, mainImage, model3d, gallery, request);
 
     return ApiResponse.onSuccess(SuccessStatus.OK, response);
   }

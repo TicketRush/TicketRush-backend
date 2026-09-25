@@ -211,7 +211,8 @@ class PerformanceListCacheTest {
     String newMainUrl = "https://example.com/replaced-main.png";
     given(s3UploadUtils.uploadFile(any(), any())).willReturn(newMainUrl);
 
-    performanceFacade.replacePerformanceFiles(saved.getId(), mockFile("mainImage"), null, null);
+    performanceFacade.replacePerformanceFiles(
+        saved.getId(), mockFile("mainImage"), null, null, null);
 
     assertThat(redisTemplate.hasKey(FIRST_PAGE_KEY)).isFalse();
     assertThat(getUnfilteredFirstPage().getContent().getFirst().imageMainUrl())
@@ -233,7 +234,8 @@ class PerformanceListCacheTest {
               return "https://example.com/replaced-main.png";
             });
 
-    performanceFacade.replacePerformanceFiles(saved.getId(), mockFile("mainImage"), null, null);
+    performanceFacade.replacePerformanceFiles(
+        saved.getId(), mockFile("mainImage"), null, null, null);
 
     assertThat(uploadedInsideTransaction).as("트랜잭션 밖에서 업로드하면 롤백돼도 S3 객체가 정리되지 않는다").isTrue();
   }

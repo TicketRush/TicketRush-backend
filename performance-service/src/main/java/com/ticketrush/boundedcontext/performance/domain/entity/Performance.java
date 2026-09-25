@@ -70,7 +70,13 @@ import org.hibernate.type.SqlTypes;
  * 이건 서로 무관한 수정이 조용히 덮이는 것이 아니라 같은 대상을 의도적으로 다투는 쓰기라, 아래 bookingOpenAt 명시 PATCH를 last-write-wins로
  * 수용한 것과 같은 판단이다. 파일 URL 두 컬럼(image_main_url·image3d_url)은 어느 경로와도 겹치지 않아 동적 UPDATE로 그대로 갈린다.
  *
- * <p>다만 갤러리를 <b>부분 교체</b>(개별 인덱스 교체·삭제)로 바꾸는 순간 이 수용 논리가 깨진다. {@code @OrderColumn} 기반 전량 재작성이라 어드민
+ * <p><b>유지 목록(#688, ADR 0023)도 이 수용 논리 안에 있다.</b> 유지 목록은 개별 인덱스를 고치는 부분 교체가 아니라 "화면에 남아 있는 것"을 최종
+ * 목록으로 선언하는 전체 치환이라, 어드민 둘이 각자 유지 목록을 보내면 여전히 나중 커밋의 목록이 통째로 이긴다. 다만 유지하려는 URL이 이미 다른 어드민에 의해 사라진
+ * 경우만은 stale 화면이 확실하므로 유스케이스가 400으로 드러낸다. <b>이 400은 한 방향으로만 확실하다</b> — 400이 왔으면 stale이 확실하지만, 200이
+ * 충돌 부재를 뜻하지는 않는다. 검사 근거(findById 스냅샷)를 읽은 뒤 커밋까지의 구간(대부분 S3 업로드)에서 다른 어드민이 지운 URL은 400 없이 되살아난다. 그
+ * 결과 역시 last-write-wins 안이라 수용한다.
+ *
+ * <p>갤러리를 진짜 <b>부분 교체</b>(개별 인덱스 교체·삭제)로 바꾸는 순간 이 수용 논리가 깨진다. {@code @OrderColumn} 기반 전량 재작성이라 어드민
  * 둘이 "각자 다른 한 장씩" 교체하면 서로의 변경을 지운다. 그때는 낙관적 락({@code @Version} + 벌크의 {@code UPDATE VERSIONED})이나
  * 컬렉션 전용 잠금을 검토해야 한다.
  *
@@ -241,9 +247,10 @@ public class Performance extends AutoIdBaseEntity {
    * 영속 상태인 엔티티에서 호출되므로, 새 List로 필드를 덮으면 Hibernate가 관리하던 {@code PersistentCollection} 래퍼가 떨어져 나간다.
    * 결과 행은 같아 보여도 더티 체킹이 컬렉션 변경을 추적하지 못한다.
    *
-   * <p><b>빈 목록은 무시한다.</b> 갤러리를 비우는 것은 이 API의 계약이 아니므로(보내면 전체 치환, 안 보내면 유지) 빈 목록이 여기까지 오면 호출부의 실수다.
-   * null만 걸러내면 빈 스트림이 만든 빈 List가 "치환하라"로 읽혀 갤러리가 통째로 지워진다 — 호출부 조건 한 줄에 데이터 삭제가 걸리지 않도록 도메인에서도 막는다.
-   * 비우기를 지원하게 되면 이 가드를 명시적으로 걷어내야 한다.
+   * <p><b>빈 목록은 비우기다(#688).</b> #637에서는 갤러리 비우기가 계약에 없어 빈 목록을 호출부 실수로 보고 무시했지만, 유지 목록({@code
+   * keep_gallery_urls: []})으로 비우기를 지원하면서 그 가드를 걷어냈다. 그래서 이제 갤러리에 관해 이 메서드가 아는 구분은 null(유지)과 목록(그
+   * 목록으로 치환, 빈 목록이면 비움) 둘뿐이다. 호출부(유스케이스)가 request 파트 없이 들어온 빈 갤러리 파트를 null로 바꿔 넘기는 것이 #637 계약을 지키는
+   * 유일한 방어이며, {@code PerformanceReplaceFilesTest.emptyGalleryWithOtherPart_keepsGallery}가 그것을 고정한다.
    */
   public void replaceFiles(String mainImageUrl, String model3dUrl, List<String> galleryUrls) {
     if (mainImageUrl != null) {
@@ -252,10 +259,23 @@ public class Performance extends AutoIdBaseEntity {
     if (model3dUrl != null) {
       this.image3dUrl = model3dUrl;
     }
-    if (galleryUrls != null && !galleryUrls.isEmpty()) {
+    if (galleryUrls != null) {
       this.imageGalleryUrls.clear();
       this.imageGalleryUrls.addAll(galleryUrls);
     }
+  }
+
+  /**
+   * 3D 모델 URL을 비운다(#688).
+   *
+   * <p>{@link #replaceFiles}의 파라미터로 넣지 않고 메서드를 따로 두는 이유는 그쪽 계약이 "null이면 유지"이기 때문이다. 같은 자리에 "비움"까지
+   * 실으면 하나의 인자가 유지·교체·비움 셋을 뜻하게 되어 {@code updateUrls}와 갈라 둔 이유가 무색해진다. 비우기와 새 파일 교체가 한 요청에 같이 오는
+   * 모순은 유스케이스가 400으로 거절하므로 여기서는 순서를 따지지 않는다.
+   *
+   * <p>3D 모델 컬럼은 #650부터 nullable이고 등록 시 null로 저장되는 경로가 이미 있어, 비운 공연은 등록 때 모델을 안 올린 공연과 같은 상태가 된다.
+   */
+  public void clearModel3d() {
+    this.image3dUrl = null;
   }
 
   /**
