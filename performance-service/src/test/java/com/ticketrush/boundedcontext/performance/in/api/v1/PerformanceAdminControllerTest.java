@@ -3,6 +3,7 @@ package com.ticketrush.boundedcontext.performance.in.api.v1;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.ArgumentMatchers.isNull;
 import static org.mockito.BDDMockito.given;
 import static org.mockito.Mockito.doNothing;
 import static org.mockito.Mockito.verify;
@@ -144,7 +145,7 @@ class PerformanceAdminControllerTest {
   @Test
   @DisplayName("관리자 권한으로 파일 교체를 요청하면 각 파트가 제 인자로 전달되고 새 URL이 응답된다")
   void replacePerformanceFiles_admin_success() throws Exception {
-    given(performanceFacade.replacePerformanceFiles(any(), any(), any(), any()))
+    given(performanceFacade.replacePerformanceFiles(any(), any(), any(), any(), any()))
         .willReturn(
             new PerformanceFileReplaceResponse(
                 "https://s3.example/main.png",
@@ -170,8 +171,10 @@ class PerformanceAdminControllerTest {
     ArgumentCaptor<MultipartFile> model3d = ArgumentCaptor.forClass(MultipartFile.class);
     ArgumentCaptor<List<MultipartFile>> gallery = ArgumentCaptor.forClass(List.class);
 
+    // request 파트를 보내지 않았으므로 null 이 전달된다 — #637 계약 그대로 동작하는 하위 호환 경로
     verify(performanceFacade)
-        .replacePerformanceFiles(eq(1L), mainImage.capture(), model3d.capture(), gallery.capture());
+        .replacePerformanceFiles(
+            eq(1L), mainImage.capture(), model3d.capture(), gallery.capture(), isNull());
 
     assertThat(mainImage.getValue().getOriginalFilename()).isEqualTo("main.png");
     assertThat(model3d.getValue().getOriginalFilename()).isEqualTo("model.glb");

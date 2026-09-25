@@ -27,6 +27,7 @@ TicketRush의 아키텍처 결정을 번호 매긴 Markdown으로 축적하는 �
 - [19. 결제 확정의 booking 동기 조회를 서킷브레이커로 격리하고, 열린 동안에도 fail-closed를 유지한다](0019-isolate-booking-lookup-with-a-circuit-breaker.md)
 - [20. 공연 시작 시각(show_date·show_time)은 Asia/Seoul 벽시계로 해석하고, 그 비교에 쓰는 현재 시각은 UTC Clock을 존 변환해 만든다](0020-interpret-show-datetime-as-seoul-wall-clock.md)
 - [21. 공연 캐릭터 구성은 해석하지 않는 JSON 컬럼에 문자열로 저장하고, 스키마는 프론트가 소유한다](0021-store-character-config-as-uninterpreted-json-string-column.md)
+- [23. 공연 갤러리 변경은 삭제 목록이 아니라 유지 목록으로 선언한다](0023-declare-gallery-changes-as-keep-list-not-delete-list.md)
 
 ## 사용법
 

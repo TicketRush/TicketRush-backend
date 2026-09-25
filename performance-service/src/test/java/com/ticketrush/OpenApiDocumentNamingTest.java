@@ -142,6 +142,21 @@ class OpenApiDocumentNamingTest {
   }
 
   @Test
+  @DisplayName("파일 교체의 request 파트는 문서에 실리고, 그 안의 JSON 키는 snake_case 로 나간다 (#688)")
+  void fileReplaceRequestPartIsDocumentedInSnakeCase() {
+    JsonNode schemas = document.path("components").path("schemas");
+
+    // 파트명 request 는 그대로, 안쪽 키는 실제 요청 계약(SNAKE_CASE)대로여야 프론트가 문서를 믿을 수 있다
+    assertThat(schemas.path("PerformanceFileReplaceSwaggerBody").path("properties").propertyNames())
+        .contains("request");
+    JsonNode requestSchema = schemas.path("PerformanceFileReplaceRequest");
+    assertThat(requestSchema.isObject()).as("request 파트의 참조 스키마를 찾지 못했다").isTrue();
+    assertThat(requestSchema.path("properties").propertyNames())
+        .contains("keep_gallery_urls", "clear_model3d")
+        .doesNotContain("keepGalleryUrls", "clearModel3d");
+  }
+
+  @Test
   @DisplayName("쿼리·경로 파라미터 이름은 바뀌지 않는다")
   void parameterNamesAreUntouched() {
     List<String> names = new ArrayList<>();
