@@ -1,4 +1,4 @@
-# TicketRush - 대규모 트래픽을 처리하는 MSA 기반 공연 티켓 예매 플랫폼
+# TicketRush - 대규모 트래픽을 제어하는 MSA 기반 공연 티켓 예매 플랫폼
 
 <!-- 배지에 ?branch= 를 붙이지 마세요. 두 워크플로 모두 pull_request 트리거뿐이라 브랜치 지정 시 "no status" 가 됩니다. -->
 [![CI](https://github.com/TicketRush/TicketRush-backend/actions/workflows/ci.yml/badge.svg)](https://github.com/TicketRush/TicketRush-backend/actions/workflows/ci.yml)
@@ -86,7 +86,7 @@
 - 결제 완료 이벤트 기반 티켓 자동 발급 (QR 토큰)
 - 입장권 QR 조회 및 검증(서명·만료), 입장(검표) 처리 및 중복 입장 방지
 
-### 서비스 시연 영상
+### 🎬 서비스 시연 영상
 
 [▶️ YouTube에서 서비스 시연 영상 보기](https://youtu.be/YwyYqNGjpws)
 
