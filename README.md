@@ -4,55 +4,48 @@
 [![CI](https://github.com/TicketRush/TicketRush-backend/actions/workflows/ci.yml/badge.svg)](https://github.com/TicketRush/TicketRush-backend/actions/workflows/ci.yml)
 [![Schema Validate](https://github.com/TicketRush/TicketRush-backend/actions/workflows/schema-validate.yml/badge.svg)](https://github.com/TicketRush/TicketRush-backend/actions/workflows/schema-validate.yml)
 
-## 🔥 프로젝트 소개
+## 🔥 프로젝트 개요
+
+**TicketRush**는 공연 티켓 예매 서비스입니다.
+좌석 선점 → 예매 → 결제 → 티켓 발급 흐름을 지원하며, 회원/인증·공연·좌석·예매·결제·티켓 도메인으로 구성됩니다.
+각 도메인을 독립적으로 배포·확장할 수 있는 **마이크로서비스 아키텍처(MSA)** 로 설계했습니다.
+서비스 간에는 **Kafka 이벤트**를 중심으로 통신합니다. 서비스 간 의존성과 장애 전파를 줄이기 위해 동기 호출을 최소화했습니다.
 
 ### 🗓️ 프로젝트 기간
 
-- 2026년 3월 ~ 진행중
+- 2026년 3월 ~ 9월
 
-### 👥 프로젝트 팀원 소개
+### 🎬 서비스 시연 영상
 
-|                            프로필                            | 이름  |                     GitHub                     | 담당 파트                                                              |
-|:---------------------------------------------------------:|:---:|:----------------------------------------------:|--------------------------------------------------------------------|
-|    <img src="https://github.com/50h33.png" width="80">    | 김소희 |       [@50h33](https://github.com/50h33)       | 공통 인프라 구축 · 좌석(seat) · 예매(booking) · 티켓(ticket) · 모니터링 · 부하/성능 테스트 |
-|  <img src="https://github.com/calla1102.png" width="80">  | 김민주 |   [@calla1102](https://github.com/calla1102)   | 디자인(Figma) · 공연(performance) · 결제(payment) · CI                    |
-| <img src="https://github.com/kimhyerim01.png" width="80"> | 김혜림 | [@kimhyerim01](https://github.com/kimhyerim01) | 인증(auth) · 회원(user) · 게이트웨이(gateway) · 배포(CD)                      |
+[▶️ YouTube에서 서비스 시연 영상 보기](https://youtu.be/YwyYqNGjpws)
 
 ---
 
-## 🎫 TicketRush 서비스 소개
+## 💡 개발 배경과 목표
 
-### 💡 개발 배경
+인기 공연의 예매가 시작되면 짧은 시간에 요청이 집중되고, 여러 사용자가 같은 좌석을 동시에 선택합니다.
+이때 다음 문제를 처리해야 합니다.
 
-인기 공연의 티켓 오픈은 짧은 시간에 트래픽이 폭증하고, 한정된 좌석에 다수의 사용자가 동시에 몰리는 대표적인 **고(高)동시성** 문제 영역입니다. 이 환경에서 발생하는 핵심
-난제는 다음과 같습니다.
+- **중복 예매(더블 부킹)** — 동일 좌석을 여러 사용자가 동시에 선택할 때 중복 예매가 발생
+- **실시간성** — 다른 사용자가 선택 중인 좌석의 상태를 즉시 반영하지 못하면 예매 실패·불편으로 이어짐
+- **분산 트랜잭션 정합성** — 예매 → 결제 → 티켓 발급 중 일부 단계만 성공해 결제 후 좌석·티켓이 누락되는 상황에 대응해야 함
 
-- **더블 부킹** — 동일 좌석을 여러 사용자가 동시에 선택할 때 중복 예매가 발생
-- **실시간성** — 다른 사용자가 선택 중인 좌석을 즉시 반영하지 못하면 예매 실패·불편으로 이어짐
-- **분산 트랜잭션 정합성** — 예매 → 결제 → 발권으로 이어지는 흐름에서 "결제는 됐는데 좌석·티켓이 누락"되는 부분 실패를 막아야 함
+TicketRush는 **인스턴스 수나 사양을 늘리지 않는 조건**에서 개발했습니다.
+단일 EC2(`m7i-flex.large`, 2 vCPU / 7.6 GiB)에서 애플리케이션 8개(게이트웨이 + 7개 도메인 서비스)와 MySQL·Redis·Kafka·관측 스택을 함께 실행합니다.
+이 환경에서 애플리케이션과 아키텍처를 개선해 처리 성능을 높이고, 요청이 집중되어도 **데이터 정합성을 유지하고 서버 중단을 방지하는 것**이 목표입니다.
 
-여기에 **TicketRush는 스케일아웃(인스턴스 증설)도 스케일업(사양 상향)도 하지 않는다**는 제약을 전제로 두었습니다.
-단일 EC2(`m7i-flex.large`, 2 vCPU / 7.6 GiB) **한 대** 위에서 애플리케이션 8개(게이트웨이 + 7개 도메인 서비스)와 MySQL·Redis·Kafka·관측 스택이 함께 돕니다.
-트래픽 폭증을 장비로 흡수할 수 없으니, 대규모 트래픽이 몰려도 **① 데이터 정합성이 깨지지 않고 ② 서버가 죽지 않는 것**을 오직 애플리케이션·아키텍처 설계로만 달성해야 합니다.
-**제한된 인프라에서 낼 수 있는 성능의 최대치를 끌어내는 것**, 그것이 이 프로젝트의 목표입니다.
+이를 위해 다음 방식을 적용했습니다.
 
-**TicketRush**는 이 문제들을 다음과 같이 풀어냅니다.
-
-- **Redis 기반 좌석 선점 락 + 멱등 처리**로 더블 부킹을 차단
+- **Redis 기반 좌석 선점 락 + 멱등 처리**로 중복 예매를 방지
 - **SSE(Server-Sent Events)** 로 좌석 상태를 실시간 스트리밍
-- **Kafka 이벤트(Outbox 패턴) + Saga 보상 트랜잭션**으로 서비스 간 최종 일관성을 보장하고, 중간 단계가 실패하면 앞선 작업을 자동으로 보상(취소)
-- **대기열 기반 유입 제어**로 무릎을 넘는 요청을 뒤로 미뤄, 포화 구간에서도 서버가 무너지지 않도록 방어
+- **Kafka 이벤트(Outbox 패턴) + Saga 보상 트랜잭션**으로 서비스 간 상태를 최종적으로 일치시키고, 중간 단계가 실패하면 앞선 작업을 자동으로 보상(취소)
+- **대기열 기반 유입 제어**로 서버의 처리 한도를 초과하는 요청을 대기시켜 유입량을 조절
 
-그리고 이 선택들이 실제로 효과가 있었는지는 추정하지 않고 **부하 테스트로 실측했습니다**.
+부하 테스트로 **주요 성능 지표를 측정하고 한계를 확인했습니다**.
 
-### 📖 개요
+---
 
-**TicketRush**는 공연 티켓 예매를 제공하는 서비스의 백엔드입니다.
-좌석 선점 → 예매 → 결제 → 티켓 발급으로 이어지는 예매 흐름을 회원/인증·공연·좌석·예매·결제·티켓 도메인으로 나누고, 각 도메인을 독립적으로 배포·확장 가능한 **MSA**
-구조로 설계했습니다.
-서비스 간 통신은 동기 호출을 최소화하고 **Kafka 이벤트**를 중심으로 느슨하게 결합하여, 특정 서비스의 장애가 전체로 전파되지 않도록 했습니다.
-
-### ✨ 주요 기능
+## ✨ 주요 기능
 
 **(1) 회원 · 인증**
 
@@ -63,42 +56,60 @@
 **(2) 공연**
 
 - 공연 목록 조회(장르·가격·상태 필터 + 페이징) 및 상세 조회
-- 공연 등록·수정·삭제 및 상태 관리 (관리자, 메인 이미지·3D 모델 업로드)
+- 공연 등록·수정·삭제, 예매 오픈 시각에 따른 판매 시작 및 공연 시작 후 자동 판매 마감
+- 메인 화면 배너 조회, 공연 등록·수정·삭제 시 배너 정보 함께 반영
+- 메인 이미지·갤러리·3D 모델 업로드 및 부분 교체, 유지할 갤러리 이미지 선택·3D 모델 제거
+- 3D 캐릭터 구성과 한마디 저장·수정
 
-**(3) 결제**
+**(3) 좌석**
 
-- Toss Payments 연동 결제 승인 · 취소 · 환불
-- PG Webhook 수신 (서명 검증 · 멱등 처리) 및 결제 내역 조회
-
-**(4) 좌석**
-
-- 좌석 배치 및 상태별 수(가능/판매완료/선점) 조회
+- 좌석별 행·열 좌표와 배치 크기를 포함한 좌석맵 및 상태별 좌석 수(가능/판매완료/선점) 조회
 - SSE 기반 좌석 상태 실시간 스트리밍
 - 좌석 선점(락)/해제 — Redis 기반 멱등 처리
 
-**(5) 예매**
+**(4) 예매**
 
 - 예매 생성(결제 대기) · 취소 · 만료 처리 및 내 예매 내역 조회
+- 서버에서 공연 판매 상태를 검증해 오픈 전 예매 차단
+- 사용자 환불은 공연 시작 7일 전까지 허용하며, 예매 환불·결제 취소 API 양쪽에서 마감 여부 확인
 - 좌석 선점 실패 시 예매 자동 취소 (Saga 보상 트랜잭션)
+
+**(5) 결제**
+
+- Toss Payments 연동 결제 승인 · 취소 · 환불
+- PG Webhook 수신 (paymentKey로 PG 결제 재조회 검증 · 멱등 처리) 및 결제 내역 조회
+- 환불 실패 결과 이벤트를 다시 발행해 예매 상태 복구
+- 결제됐지만 예매가 만료된 건을 찾아 자동 환불 (기본 비활성, 별도 활성화 필요)
 
 **(6) 티켓**
 
 - 결제 완료 이벤트 기반 티켓 자동 발급 (QR 토큰)
 - 입장권 QR 조회 및 검증(서명·만료), 입장(검표) 처리 및 중복 입장 방지
 
-### 🎬 서비스 시연 영상
+**(7) 관리자 운영**
 
-[▶️ YouTube에서 서비스 시연 영상 보기](https://youtu.be/YwyYqNGjpws)
+- 전체 예매 목록 조회(여러 상태로 필터링·페이징) 및 예매 건수·매출 요약 통계
+- 공연별 좌석 상태와 선택한 좌석의 예매 정보 조회
+- 환불 통합 목록과 진행 중·완료·미해결 실패 상태별 통계 조회
+- 관리자 환불 및 실패한 환불 재시도, 처리가 오래 멈춘 환불 조회·복구
 
-### 🖥️ 서비스 이용 흐름
+**(8) 유입 제어 · 장애 대응**
+
+- 공연별 대기열 순번·대기 상태 조회, 서버가 안내하는 주기로 폴링하고 입장 토큰으로 진입 제어
+- 사용자 또는 IP 기준 API 요청 횟수 제한(Rate Limit), 초과 요청에 HTTP 429 응답
+- 결제·티켓 서비스의 예매 조회에 서킷브레이커 적용 — 조회 불가 시 결제·입장 처리 차단
+
+---
+
+## 🖥️ 서비스 이용 흐름
 
 단계별 설명과 화면·시연 GIF를 함께 확인할 수 있습니다.
 
-#### 사용자 흐름
+### 사용자 흐름
 
 공연 탐색 → 좌석 선택 → 예매 및 결제 → QR 티켓 확인 → 예매 확인 및 환불
 
-##### 1. 공연 탐색
+#### 1. 공연 탐색
 
 공연 목록에서 원하는 공연을 찾고, 상세 정보와 갤러리를 확인합니다.
 
@@ -110,13 +121,13 @@
 | :---: | :---: |
 | <img src="docs/images/사용자/01_공연_탐색/공연화면1.png" width="400" alt="공연 일시, 장소, 가격 및 예매 현황"> | <img src="docs/images/사용자/01_공연_탐색/공연화면2.png" width="400" alt="공연 소개, 이미지 갤러리 및 3D 캐릭터"> |
 
-##### 2. 좌석 선택
+#### 2. 좌석 선택
 
 좌석 배치도에서 상태를 확인하고 예매할 좌석을 선택합니다.
 
 <img src="docs/images/사용자/02_좌석_선택/좌석선택.png" width="800" alt="상태별 좌석 배치도와 좌석 선택 화면">
 
-##### 3. 예매 및 결제
+#### 3. 예매 및 결제
 
 선택한 좌석과 예매 정보를 확인한 뒤, 제한 시간 내 결제를 진행합니다.
 
@@ -124,7 +135,7 @@
 | :---: | :---: |
 | <img src="docs/images/사용자/03_예매_결제/예매중.png" width="400" alt="선점한 좌석, 결제 금액 및 남은 결제 시간"> | <img src="docs/images/사용자/03_예매_결제/결제수단선택.png" width="400" alt="결제 수단 선택과 결제 금액 확인 화면"> |
 
-##### 4. QR 티켓 확인
+#### 4. QR 티켓 확인
 
 결제 완료 후 발급된 티켓과 공연장 입장용 QR 코드를 확인합니다.
 
@@ -132,7 +143,7 @@
 | :---: | :---: |
 | <img src="docs/images/사용자/04_QR_티켓/티켓화면1.png" width="400" alt="결제 완료 후 발급된 공연 티켓"> | <img src="docs/images/사용자/04_QR_티켓/티켓화면2.png" width="400" alt="입장 QR 코드와 유효 시간 확인 화면"> |
 
-##### 5. 예매 확인 및 환불
+#### 5. 예매 확인 및 환불
 
 내 예매 내역에서 티켓을 확인하고 환불을 신청하거나 처리 상태를 확인합니다.
 
@@ -141,11 +152,11 @@
 | <img src="docs/images/사용자/05_예매확인_환불/예매확인.png" width="400" alt="내 예매 내역의 티켓 보기 및 환불 신청 화면"> | <img src="docs/images/사용자/05_예매확인_환불/환불신청완료.png" width="400" alt="환불 완료 상태가 표시된 예매 내역"> |
 
 
-#### 관리자 흐름
+### 관리자 흐름
 
 관리자 대시보드 · 예매 내역 · 좌석 모니터링 · 공연 등록 · 환불 내역 관리
 
-##### 1. 관리자 대시보드
+#### 1. 관리자 대시보드
 
 주요 운영 지표와 매출, 공연별 판매 현황을 한곳에서 확인합니다.
 
@@ -157,13 +168,13 @@
 | :---: | :---: |
 | <img src="docs/images/관리자/01_관리자_대시보드/관리자_대시보드_3.png" width="400" alt="공연별 판매 좌석 수와 매출 현황"> | <img src="docs/images/관리자/01_관리자_대시보드/관리자_대시보드_4.png" width="400" alt="관리자 대시보드의 전체 공연 목록과 관리 메뉴"> |
 
-##### 2. 예매 내역
+#### 2. 예매 내역
 
 전체 예매 현황을 확인하고 상태별로 예매 내역을 조회합니다.
 
 <img src="docs/images/관리자/02_예매_내역/예매_내역_관리.png" width="800" alt="전체 예매 지표와 상태별 예매 내역 관리 화면">
 
-##### 3. 좌석 모니터링
+#### 3. 좌석 모니터링
 
 공연별 좌석 현황을 조회하고, 선택한 좌석의 예매 정보를 확인합니다.
 
@@ -171,7 +182,7 @@
 | :---: | :---: |
 | <img src="docs/images/관리자/03_좌석_모니터링/좌석_모니터링_1.png" width="400" alt="좌석 모니터링 대상 공연 목록"> | <img src="docs/images/관리자/03_좌석_모니터링/좌석_모니터링_2.png" width="400" alt="공연별 좌석 배치도, 상태별 집계 및 선택한 좌석의 예매 정보"> |
 
-##### 4. 공연 등록
+#### 4. 공연 등록
 
 공연 정보를 입력하고, 공연에 사용할 3D 캐릭터를 제작합니다.
 
@@ -179,13 +190,15 @@
 | :---: | :---: |
 | <img src="docs/images/관리자/04_공연_등록/공연등록.gif" width="400" alt="공연 정보 입력 및 등록 과정 시연 GIF"> | <img src="docs/images/관리자/04_공연_등록/3D캐릭터제작.gif" width="400" alt="3D 캐릭터 외형 설정과 미리보기 시연 GIF"> |
 
-##### 5. 환불 내역 관리
+#### 5. 환불 내역 관리
 
 환불 진행 상태별로 내역을 조회하고 처리 현황을 확인합니다.
 
 <img src="docs/images/관리자/05_환불내역관리/환불내역관리.png" width="800" alt="환불 상태별 집계와 환불 내역 관리 화면">
 
-## 🛠 TicketRush 기술 스택
+---
+
+## 🛠 기술 스택과 아키텍처
 
 ### 1️⃣ 개발 환경 및 사용 기술
 
@@ -197,6 +210,8 @@
 | Database     | MySQL · Spring Data JPA · QueryDSL                           |
 | Messaging    | Apache Kafka (KRaft, Outbox 패턴)                              |
 | Cache / Lock | Redis · Redisson · ShedLock                                  |
+| Resilience   | Resilience4j (서킷브레이커) · RedisRateLimiter                  |
+| Storage      | Amazon S3 · LocalStack (로컬 S3 대체)                          |
 | Auth         | Spring Security · JWT · OAuth2                               |
 | API Docs     | springdoc-openapi (Swagger)                                  |
 | Code Quality | Spotless (google-java-format) · Checkstyle                   |
@@ -214,6 +229,9 @@
 | `seat-service`        | 좌석 도메인 (SSE 실시간 스트림, 분산 락)                                      |
 | `ticket-service`      | 티켓 도메인 (QR 토큰)                                                  |
 | `common`              | 전 모듈 공통 코드 (ApiResponse, ErrorStatus, PageInfo, Kafka, Redis 등) |
+
+대기열과 API 요청 횟수 제한은 `gateway-service`에서 처리합니다.
+메인 화면 배너는 `performance-service`의 별도 도메인으로 관리합니다.
 
 ### 3️⃣ 아키텍처 다이어그램
 
@@ -314,76 +332,183 @@ flowchart TB
 * **이벤트 정합성** — Kafka 기반 비동기 이벤트와 Outbox/Inbox 패턴으로 이벤트 유실·중복 처리에 대응
 * **관측** — Prometheus가 애플리케이션·인프라 지표를 수집하고 Grafana에서 시각화
 
-> 현재 운영 환경은 **단일 EC2**의 Docker Compose에 애플리케이션 8개와 MySQL·Redis·Kafka·Prometheus·Grafana 등의 인프라를 함께 실행합니다.
-> DB·Redis·Kafka의 접속 정보는 환경변수로 외부화되어 있어 추후 RDS·ElastiCache·MSK 등 관리형 인프라로 이전할 수 있도록 구성되어 있습니다.
+> 현재 운영 환경은 **단일 EC2**이며, Docker Compose로 애플리케이션 8개와 MySQL·Redis·Kafka·Prometheus·Grafana 등의 인프라를 함께 실행합니다.
+> DB·Redis·Kafka의 접속 정보는 환경변수로 관리하며, 추후 RDS·ElastiCache·MSK 등 관리형 인프라로 이전할 수 있도록 구성했습니다.
 
+---
 
-### 4️⃣ CI/CD 파이프라인
+## 📈 성능 / 부하 테스트
 
-#### CI (지속적 통합)
+**24개 회차의 부하 테스트**를 진행했습니다. 인스턴스 타입이 기록된 15개 회차는 단일 EC2(`m7i-flex.large`, 2 vCPU / 7.6 GiB)에서 애플리케이션 8개와 MySQL·Redis·Kafka·관측 스택을 함께 실행하며 측정했습니다.
+이전 9개 회차는 인스턴스 타입이 기록되지 않아 동일 구성으로 단정하지 않습니다.
 
-`develop`으로 향하는 PR에서는 아래 워크플로 셋이 돕니다(이 밖에 `cd.yml`·`weekly-scrum.yml`이 있습니다).
+| 무엇을 | 전 → 후 | 회차 |
+|-----|-----|-----|
+| 좌석맵 응답 크기 (gzip) | 174,615 B → 8,405 B | #505 |
+| 좌석 집계 포화 구간 관측 처리량 (커버링 인덱스) | 254.84 → 396.75 rps | #529 |
+| 좌석맵 서버 응답, 80 계단 (JSON 캐싱) | 741.04 ms → 10.11 ms | #539 |
+| 예매 파이프라인 드레인율 (컨슈머 concurrency 3) | 43.0/s → 96.6/s | #598 |
 
-> 머지 조건과 branch protection 설정은 [`docs/backend-convention.md`](docs/backend-convention.md) §1 "검증 파이프라인"이 SSOT입니다. 여기서는 각 워크플로가 **무엇을 검사하는지**만 다룹니다.
+표의 '계단'은 초당 요청 도착률로 구분한 부하 구간이며, '드레인율'은 쌓인 이벤트의 초당 소비 건수입니다.
+좌석 집계의 396.75 rps는 부하 생성기의 가상 사용자(VU) 수 상한 내에서 관측한 값입니다. 실제 포화점은 이보다 높을 수 있습니다.
 
-| 워크플로              | 파일                     | 트리거                                       | 하는 일                    |
-|-------------------|------------------------|-------------------------------------------|-------------------------|
-| **CI**            | `ci.yml`               | PR → `develop` (opened·synchronize·reopened) | 정적 검사 → 테스트 → 빌드 → 설정 대조 |
-| **Schema Validate** | `schema-validate.yml`  | PR → `develop` (opened·synchronize·reopened) | 엔티티↔스키마 스냅샷 drift 감지    |
-| **PR Title Check**  | `pr-title.yml`         | 모든 PR (opened·edited·reopened)             | PR 제목 형식 검사             |
+표의 각 행은 **같은 회차에서 측정한 변경 전후 값**을 비교합니다. 서로 다른 회차의 측정값은 비교하지 않았습니다.
+회차별 통제 조건과 결과에 영향을 준 다른 요인은 리포트의 `대조 범위` 열에 정리했습니다.
+회선 → 컨테이너 메모리 → 호스트 CPU → 유입 제어 순으로 병목을 확인하고 대응한 과정은
+[performance-report.md](docs/performance-report.md)에 정리했습니다. 1만 명 동시 대기를 재현하지 못한 점과 수평 확장을 검증하지 않은 점도 함께 명시했습니다.
 
-앞의 두 워크플로는 `concurrency` 그룹을 두어, 같은 PR에 연속으로 push하면 진행 중이던 이전 run을 취소합니다.
+실측치를 바탕으로 계산한 **예상 트래픽·인프라 설계 기준**(일평균 사용자 수·피크 TPS·서버 사양)은
+[capacity-planning.md](docs/capacity-planning.md)에서 확인할 수 있습니다.
 
-**빌드 흐름** (`ci.yml`)
+---
 
-JDK 21(temurin) 설치와 Gradle 캐시 복원 후 아래 순서로 진행합니다.
+## 🚀 로컬 실행과 API 문서
+
+로컬에서 서비스를 실행하는 절차입니다.
+
+### 1️⃣ 사전 준비물
+
+| 항목 | 버전 | 비고 |
+|-----|-----|-----|
+| JDK | 21 | 각 모듈 `build.gradle`의 Gradle toolchain 설정 |
+| Docker | - | Redis · Kafka · 관측 스택 구동용 |
+| MySQL | 8.x | **호스트에 직접 설치**. `docker-compose.yml`에는 MySQL이 없습니다 |
+
+### 2️⃣ 데이터베이스 준비
+
+각 서비스는 `jdbc:mysql://localhost:3306/ticket_rush`로 접속합니다. 스키마를 미리 생성해 두면
+서비스 기동 시 `ddl-auto=update` 설정에 따라 테이블이 자동으로 생성됩니다.
+
+```sql
+CREATE DATABASE ticket_rush CHARACTER SET utf8mb4;
+```
+
+> 운영과 동일한 스키마(generated 컬럼·인덱스 포함)로 시작하려면
+> [`deploy/mysql/init/001-ticket-rush-schema.sql`](deploy/mysql/init/001-ticket-rush-schema.sql)을 적용하세요.
+> 데이터 모델은 [ERD 문서](docs/erd.md)를 참고하세요.
+
+### 3️⃣ 환경변수 설정
 
 ```bash
-./gradlew spotlessCheck                    # google-java-format 포맷 검사
-./gradlew checkstyleMain checkstyleTest    # 정적 검사 (테스트 코드 포함)
-./gradlew test                             # 전 모듈 테스트
-./gradlew build -x test                    # 빌드
+cp .env.local.example .env.local
 ```
 
-- **`checkstyleTest`도 함께 돌기 때문에 테스트 코드의 위반도 CI에서 걸립니다.** 로컬에서 `checkstyleMain`만 확인하고 올리면 여기서 떨어집니다.
-- 마지막으로 **Prometheus scrape 타깃을 정적 대조**합니다(#380). `monitoring/prometheus.aws.yml`과 `deploy/docker-compose.prod.yml`을 맞춰 보고, 배포되는데 스크랩하지 않거나 스크랩하는데 배포되지 않는 타깃이 있으면 실패합니다. CD는 `main`에서만 돌아 타깃이 틀렸다는 사실이 실배포 전에는 드러나지 않으므로 PR 단계에서 잡습니다.
-- 실패 시 `checkstyle-report`가, 결과와 무관하게 `test-report`가 아티팩트로 업로드됩니다.
+`.env.local`을 열어 `[필수]`로 표시된 값을 채웁니다. 서비스별 필수 환경변수는
+[`.env.local.example`](.env.local.example)의 주석에서 확인할 수 있습니다.
 
-**스키마 drift 감지** (`schema-validate.yml`, #408)
+Spring Boot는 `.env.local`을 자동으로 읽지 않습니다. 실행할 때 셸 환경변수나 IntelliJ EnvFile로 주입해야 합니다.
 
-local 프로파일은 `ddl-auto=update`이고 `./gradlew test`는 H2를 쓰기 때문에, 엔티티와 스키마 스냅샷이 어긋나도 로컬에서는 증상이 없습니다. prod(`validate`)에서 **부팅 실패**로만 드러나므로, 같은 조건을 CI에서 미리 재현합니다.
+- **`gateway-service`만 실행할 때** — `JWT_SECRET`만 있으면 됩니다 (DB를 사용하지 않습니다)
+- **`auth-service`를 실행할 때** — OAuth 3종 · `MAIL_*` · `INTERNAL_API_TOKEN` · `GATEWAY_INTERNAL_TOKEN`이
+  모두 필수이며 기본값이 없습니다. 하나라도 빠지면 기동에 실패합니다
+- `SPRING_PROFILES_ACTIVE`는 `local` 단독으로 둡니다
+- **소셜 로그인 콜백**은 프론트의 `http://localhost:5173/oauth/callback/{provider}`로 설정합니다.
+  `{provider}`는 `kakao`, `google`, `naver`이며, 각 공급자 콘솔에도 같은 Redirect URI를 등록해야 합니다.
+- **실제 PG 호출 없이 로컬 결제를 테스트할 때**는 `PAYMENT_PG_STUB_ENABLED=true`, `TOSS_PAYMENTS_ENABLED=false`로 설정합니다.
 
-1. 빈 MySQL 8.0에 `deploy/mysql/init/001-ticket-rush-schema.sql` 적재
-2. 릴레이 조회 스모크 — nativeQuery라 저장소 어디에서도 실행되지 않는 SQL과 그 인덱스 존재 여부를 실제 MySQL로 확인
-3. 엔티티를 가진 6개 서비스(`user`·`performance`·`seat`·`booking`·`payment`·`ticket`)를 `ddl-auto=validate`로 부팅
-
-gateway(DB 미사용)와 auth(`@Entity` 0개, 테이블은 user-service 소유)는 검증 대상이 아닙니다.
-
-> ⚠️ `validate`는 컬럼 존재·타입은 잡지만 **컬럼 길이·인덱스·유니크/FK·nullable 차이는 검출하지 않습니다.** 인덱스를 추가·변경할 때는 스냅샷 반영을 별도로 확인해야 합니다.
-
-**PR 제목 규칙** (`pr-title.yml`)
-
-`[Type] #이슈번호 설명` 형식이어야 하며, 허용 Type은 `Feat` `Fix` `Refactor` `Docs` `Test` `Chore` `Infra`입니다.
-
-```
-[Feat] #23 로그인 API 구현          # 단일 이슈
-[Chore] #1, 2, 4 설정 파일 업데이트   # 다중 이슈
-```
-
-**로컬에서 미리 통과시키기**
+### 4️⃣ 인프라 기동
 
 ```bash
-./gradlew spotlessApply                    # 포맷 자동 교정
-./gradlew checkstyleMain checkstyleTest
-./gradlew test
+# 최소 구성 (Redis + Kafka + LocalStack)
+docker compose up -d redis kafka localstack
+
+# 관측 스택까지 포함 (Prometheus + Grafana)
+docker compose up -d
 ```
 
-#### CD (지속적 배포)
+| 컨테이너 | 포트 | 비고 |
+|--------|-----|-----|
+| Redis | `127.0.0.1:6379` | 좌석 선점 락 · 대기열. keyspace 만료 이벤트(`Ex`) 활성화 |
+| Kafka | `127.0.0.1:29092` | KRaft 모드. 기본 파티션 3 |
+| LocalStack | `127.0.0.1:4566` | 공연 등록 파일 업로드용 S3 대체(#636). 기동 시 버킷 생성·퍼블릭 정책 자동 적용 |
+| Prometheus | `127.0.0.1:9090` | |
+| Grafana | `127.0.0.1:3000` | 기본 계정 `admin` / `admin` |
 
-운영 배포는 [`.github/workflows/cd.yml`](.github/workflows/cd.yml)에서 관리합니다.
+> **LocalStack을 실행하지 않으면 파일 업로드가 필요한 공연 등록·파일 교체 요청이 실패합니다.** 파일 업로드를 비활성화하는 설정이 없기 때문입니다.
+> 목록·상세 조회와 서비스 기동은 정상 동작하므로, 이 결과만으로 파일 업로드 환경을 확인할 수는 없습니다.
 
-`main` 브랜치에 변경 사항이 push되거나 GitHub Actions에서 `workflow_dispatch`로 수동 실행하면 CD 파이프라인이 시작됩니다.
-동일 운영 환경에 여러 배포가 동시에 실행되지 않도록 `concurrency` 그룹을 사용하며, 진행 중인 배포를 취소하지 않고 순차적으로 실행합니다.
+부하 테스트용 `k6`는 `loadtest` 프로파일로 분리되어 있어 위 명령으로는 실행되지 않습니다
+([load-test-guide.md](docs/load-test-guide.md) 참고).
+
+### 5️⃣ 애플리케이션 기동
+
+필요한 서비스를 모듈별로 실행합니다. 각 서비스는 별도 터미널에서 실행하세요.
+
+```bash
+# .env.local 을 환경변수로 주입한 뒤 실행
+set -a && . ./.env.local && set +a
+./gradlew :gateway-service:bootRun
+./gradlew :performance-service:bootRun
+```
+
+> IntelliJ에서 실행한다면 [EnvFile 플러그인](https://plugins.jetbrains.com/plugin/7861-envfile)으로
+> `.env.local`을 주입하도록 실행 구성을 만드세요. `.idea/`는 Git 추적 대상에서 제외되어 있으므로 실행 구성은 직접 만들어야 합니다.
+
+| 서비스 | 포트 | DB |
+|------|-----|-----|
+| `gateway-service` | 8080 | 미사용 (WebFlux + Redis) |
+| `user-service` | 8081 | ✅ |
+| `auth-service` | 8082 | ✅ |
+| `performance-service` | 8083 | ✅ |
+| `booking-service` | 8084 | ✅ |
+| `payment-service` | 8085 | ✅ |
+| `seat-service` | 8086 | ✅ |
+| `ticket-service` | 8087 | ✅ |
+
+API 요청은 게이트웨이의 **8080** 포트로 보냅니다. 나머지 서비스 포트는 게이트웨이가 내부 라우팅에 사용합니다.
+서비스를 직접 호출하면 게이트웨이가 주입하는 인증 헤더가 없어 동작이 달라집니다.
+
+운영 환경에서는 **Nginx의 HTTPS 443 포트만 외부 요청의 진입점으로 사용**하며, `gateway-service`의 8080과
+Actuator 관리 포트 8090은 EC2의 `127.0.0.1`에만 바인딩됩니다. 나머지 7개 도메인 서비스는 포트를 외부에 공개하지 않고
+Docker Compose 내부 네트워크에서만 통신합니다.
+
+
+`local` 프로파일에서는 공연·배너(`performance-service`)와 좌석(`seat-service`)의 더미 데이터를 자동으로 생성합니다.
+데이터가 이미 있으면 건너뜁니다.
+
+### 6️⃣ 동작 확인
+
+```bash
+curl http://localhost:8080/actuator/health
+# {"status":"UP"}
+```
+
+### 7️⃣ API 문서 (Swagger)
+
+게이트웨이가 7개 서비스의 OpenAPI 문서를 **하나의 Swagger UI로 통합**합니다.
+우측 상단 드롭다운에서 서비스를 전환합니다.
+
+| 환경 | 주소 |
+|-----|-----|
+| 로컬 | http://localhost:8080/swagger-ui.html |
+| 운영 | https://api.ticketrush.store/swagger-ui.html |
+
+- `/swagger-ui.html`은 `/swagger-ui/index.html`로 리다이렉트(302)됩니다
+- 인증 없이 접근할 수 있습니다 (`/swagger-ui/**`, `/v3/api-docs/**`가 게이트웨이 허용 목록에 등록되어 있습니다)
+- 서비스별 원본 명세는 `/v3/api-docs/{user|auth|performance|booking|payment|seat|ticket}`에서 직접 받을 수 있습니다
+- 게이트웨이가 각 서비스에서 문서를 가져오므로, 실행 중이 아닌 서비스의 문서는 불러올 수 없습니다. 나머지 서비스의 문서는 정상적으로 표시됩니다
+
+<img src="docs/images/swagger-ui.jpg" width="700" alt="게이트웨이 통합 Swagger UI — performance-service 선택 화면">
+
+---
+
+## ⚙️ CI/CD와 운영 환경
+
+### CI (지속적 통합)
+
+PR에서는 다음 항목을 검사합니다. 머지 조건과 브랜치 보호 설정은 [백엔드 컨벤션](docs/backend-convention.md)의 "검증 파이프라인"을 참고하세요.
+
+| 워크플로 | 대상 | 검사 항목 |
+| --- | --- | --- |
+| [CI](.github/workflows/ci.yml) | PR → `develop` | 포맷·정적 검사, 테스트·빌드, Prometheus 수집 대상과 배포 설정 대조 |
+| [Schema Validate](.github/workflows/schema-validate.yml) | PR → `develop` | MySQL 스키마 스냅샷과 엔티티 대조(`ddl-auto=validate`), 릴레이 조회·인덱스 확인 |
+| [PR Title Check](.github/workflows/pr-title.yml) | 모든 PR | PR 제목 형식 검사 |
+
+> `ddl-auto=validate`는 컬럼 길이·인덱스·유니크/FK·nullable 차이를 검출하지 않으므로, 스키마 스냅샷 반영 여부를 별도로 확인해야 합니다.
+
+### CD (지속적 배포)
+
+`main`에 push하거나 GitHub Actions에서 수동 실행하면 [CD 워크플로](.github/workflows/cd.yml)가 시작됩니다. 같은 운영 환경의 배포는 순차적으로 실행합니다.
 
 ```mermaid
 flowchart LR
@@ -412,238 +537,35 @@ flowchart LR
     VERIFY --> EXTERNAL
 ```
 
-**배포 흐름**
+- 배포 설정을 검증하고 전체 모듈 테스트를 실행합니다.
+- AWS OIDC로 인증한 뒤 8개 서비스 이미지를 Git 커밋 SHA로 태그해 ECR에 올리고, EC2의 Docker Compose로 배포합니다.
+- 애플리케이션·모니터링·이미지 버전을 검증한 뒤 릴리스 정보를 기록하고, 외부 HTTPS 상태를 확인합니다.
 
-1. **배포 파일 검증 및 테스트**
+> 배포 실패 시 **자동 롤백은 수행하지 않습니다.** `PREVIOUS_RELEASE`의 직전 릴리스 정보와 ECR의 기존 이미지로 복구할 수 있습니다.
 
-    * `Dockerfile`, `deploy/docker-compose.prod.yml`, `deploy/.env.prod.example` 및 배포 스크립트의 존재 여부를 확인합니다.
-    * `docker compose config`로 운영 Compose 설정을 검증합니다.
-    * `./gradlew test`로 전체 모듈 테스트를 수행합니다.
-    * 실제 운영 Secret이 담긴 `deploy/.env`가 저장소에 포함되어 있으면 배포를 중단합니다.
+### 운영 배포 환경
 
-2. **AWS 인증**
+운영 환경은 `SPRING_PROFILES_ACTIVE=prod`로 실행합니다. 환경변수 목록은 [운영 환경변수 템플릿](deploy/.env.prod.example)을 참고하세요.
 
-    * GitHub Actions의 OIDC를 통해 배포용 IAM Role을 Assume합니다.
-    * 고정 AWS Access Key를 저장하지 않고 임시 자격 증명으로 Amazon ECR에 접근합니다.
+- 실제 값은 EC2의 `deploy/.env`에 저장하고 Git에 커밋하지 않습니다. `__REQUIRED__` 항목은 실제 값으로 채워야 합니다.
+- `GATEWAY_INTERNAL_TOKEN`과 `INTERNAL_API_TOKEN`은 각 토큰을 사용하는 서비스 간에 값이 일치해야 합니다. 내부 API 토큰이 비어 있으면 기동에 실패합니다.
+- 서비스 간 호출 URL(`*_SERVICE_URL`)은 [운영 Compose 설정](deploy/docker-compose.prod.yml)의 `environment`에서 관리합니다. `deploy/.env`에 같은 키를 추가해도 덮어쓸 수 없습니다.
 
-3. **Docker 이미지 Build & Push**
-
-    * `gateway-service`와 7개 도메인 서비스까지 총 8개의 이미지를 빌드합니다.
-    * 이미지 태그에는 배포 대상 Git commit SHA(`github.sha`)를 사용합니다.
-    * 각 이미지를 서비스별 Amazon ECR Repository에 Push합니다.
-
-4. **배포 파일 전달**
-
-    * `deploy/`와 `monitoring/` 설정을 배포 번들로 패키징합니다.
-    * `.env`, `.env.local` 등 실제 환경변수 파일은 배포 번들에서 제외합니다.
-    * SSH/SCP를 통해 배포 번들을 EC2에 전달합니다.
-
-5. **EC2 배포**
-
-    * EC2에서 Amazon ECR에 로그인합니다.
-    * 현재 실행 중인 애플리케이션과 `CURRENT_RELEASE`, `.env`의 `IMAGE_TAG`가 일치하는지 먼저 검증합니다.
-    * 사용하지 않는 이전 Docker 이미지를 정리한 뒤 새 이미지를 Pull합니다.
-    * `docker compose up -d --remove-orphans`로 서비스를 갱신합니다.
-    * Prometheus·Grafana는 최신 모니터링 설정을 반영하도록 다시 생성합니다.
-
-6. **배포 상태 검증**
-
-    * 모든 컨테이너의 실행·Health 상태를 확인합니다.
-    * 배포 중 OOM Kill 또는 비정상 Restart가 발생하지 않았는지 검사합니다.
-    * 각 Spring Boot 애플리케이션이 정상 기동되었는지 로그를 통해 확인합니다.
-    * Gateway의 내부 Actuator(`127.0.0.1:8090`)가 `UP`인지 확인합니다.
-    * Prometheus의 기대 scrape target이 모두 `UP`인지 확인합니다.
-    * 컨테이너 메모리 시계열이 정상적으로 수집되는지 검사합니다.
-    * Nginx를 통한 로컬 HTTPS 경로가 정상인지 확인합니다.
-    * 실행 중인 8개 애플리케이션 이미지가 이번 배포의 Git commit SHA와 일치하는지 최종 검증합니다.
-
-7. **릴리스 확정 및 외부 Health Check**
-
-    * 모든 내부 검증이 성공한 경우에만 이번 Git commit SHA를 `CURRENT_RELEASE`와 `.env`의 `IMAGE_TAG`에 기록합니다.
-    * 기존 릴리스는 `PREVIOUS_RELEASE`에 기록하여 이전 이미지 버전을 추적할 수 있도록 합니다.
-    * 마지막으로 별도 Job에서 `https://api.ticketrush.store/actuator/health`를 호출하여 HTTP 200과 `"status":"UP"`을 확인합니다.
-
-> 현재 CD는 배포 실패 시 **자동 롤백을 수행하지 않습니다.** 직전 릴리스 정보를 `PREVIOUS_RELEASE`에 보존하고 ECR의 기존 이미지를 이용해 이전 버전으로 복구할 수 있는 구조입니다.
-
-#### 운영 배포 환경
-
-운영 애플리케이션은 Spring의 `prod` 프로파일로 실행합니다.
-
-```text
-SPRING_PROFILES_ACTIVE=prod
-```
-
-운영 환경변수 템플릿은 [`deploy/.env.prod.example`](deploy/.env.prod.example)에서 관리하고, 실제 운영 값은 EC2의 `deploy/.env`에 저장합니다.
-`deploy/.env`에는 Secret과 인프라 접속 정보가 포함되므로 Git에 커밋하지 않습니다.
-
-| 구분        | 주요 설정                                                               |
-| --------- | ------------------------------------------------------------------- |
-| Spring    | `SPRING_PROFILES_ACTIVE`, `SPRING_JPA_HIBERNATE_DDL_AUTO`           |
-| DB        | `DB_HOST`, `DB_PORT`, `DB_NAME`, `MYSQL_USERNAME`, `MYSQL_PASSWORD` |
-| Redis     | `REDIS_HOST`, `REDIS_PORT`, `REDIS_PASSWORD`                        |
-| Kafka     | `KAFKA_BOOTSTRAP_SERVERS`, `SPRING_KAFKA_LISTENER_CONCURRENCY`      |
-| AWS / ECR | `AWS_REGION`, `ECR_REGISTRY`, `IMAGE_TAG`                           |
-| Gateway   | `JWT_SECRET`, `CORS_ALLOWED_ORIGIN`, 각 서비스 Host                     |
-| 인증        | OAuth Client 정보, Mail 정보, 내부 API Token                              |
-| 외부 서비스    | S3, Toss Payments, Slack Webhook                                    |
-| 관측        | Grafana 관리자 계정                                                      |
-
-운영 접속 정보는 코드나 `application-prod.yml`에 고정하지 않고 환경변수로 주입합니다.
-DB·Redis·Kafka 또한 각각 `DB_HOST`, `REDIS_HOST`, `KAFKA_BOOTSTRAP_SERVERS`로 접속 대상을 분리하여 인프라 변경이 애플리케이션 코드 변경으로 이어지지 않도록 구성했습니다.
-
-현재 `docker-compose.prod.yml`에서는 **MySQL·Redis·Kafka를 애플리케이션과 동일한 EC2에서 컨테이너로 실행**합니다. 접속 정보가 외부화되어 있으므로 향후 RDS·ElastiCache·MSK 등 관리형 인프라로 이전할 수 있습니다.
-
-발생·만료 시각 응답의 UTC 전환(#646) 배포·롤백 전 확인 사항과 절차는 [`docs/utc-timestamp-rollout.md`](docs/utc-timestamp-rollout.md)를 따릅니다.
-
-
-## 🚀 시작하기 (Getting Started)
-
-로컬에서 서비스를 띄우는 절차입니다.
-
-### 1️⃣ 사전 준비물
-
-| 항목 | 버전 | 비고 |
-|-----|-----|-----|
-| JDK | 21 | 각 모듈 `build.gradle`의 Gradle toolchain 설정 |
-| Docker | - | Redis · Kafka · 관측 스택 구동용 |
-| MySQL | 8.x | **호스트에 직접 설치**. `docker-compose.yml`에는 MySQL이 없습니다 |
-
-### 2️⃣ 데이터베이스 준비
-
-각 서비스는 `jdbc:mysql://localhost:3306/ticket_rush`로 접속합니다. 스키마만 만들어 두면 테이블은
-`ddl-auto=update`가 자동 생성합니다.
-
-```sql
-CREATE DATABASE ticket_rush CHARACTER SET utf8mb4;
-```
-
-> 운영과 동일한 스키마(generated 컬럼·인덱스 포함)로 시작하려면
-> [`deploy/mysql/init/001-ticket-rush-schema.sql`](deploy/mysql/init/001-ticket-rush-schema.sql)을 적용하세요.
-> 데이터 모델은 [ERD 문서](docs/erd.md)를 참고하세요.
-
-### 3️⃣ 환경변수 설정
-
-```bash
-cp .env.example .env.local
-```
-
-`.env.local`을 열어 `[필수]` 표시된 값을 채웁니다. 각 키가 어떤 서비스에서 필수인지는
-[`.env.example`](.env.example) 주석에 정리돼 있습니다.
-
-- **`gateway-service`만 띄울 때** — `JWT_SECRET`만 있으면 됩니다 (DB를 쓰지 않습니다)
-- **`auth-service`를 띄울 때** — OAuth 3종 · `MAIL_*` · `INTERNAL_API_TOKEN` · `GATEWAY_INTERNAL_TOKEN`이
-  모두 기본값 없이 필수입니다. 하나라도 비면 부팅에 실패합니다
-- `SPRING_PROFILES_ACTIVE`는 `local` 단독으로 둡니다
-
-### 4️⃣ 인프라 기동
-
-```bash
-# 최소 구성 (Redis + Kafka + LocalStack)
-docker compose up -d redis kafka localstack
-
-# 관측 스택까지 포함 (Prometheus + Grafana)
-docker compose up -d
-```
-
-| 컨테이너 | 포트 | 비고 |
-|--------|-----|-----|
-| Redis | `127.0.0.1:6379` | 좌석 선점 락 · 대기열. keyspace 만료 이벤트(`Ex`) 활성화 |
-| Kafka | `127.0.0.1:29092` | KRaft 모드. 기본 파티션 3 |
-| LocalStack | `127.0.0.1:4566` | 공연 등록 파일 업로드용 S3 대체(#636). 기동 시 버킷 생성·퍼블릭 정책 자동 적용 |
-| Prometheus | `127.0.0.1:9090` | |
-| Grafana | `127.0.0.1:3000` | 기본 계정 `admin` / `admin` |
-
-> **LocalStack을 띄우지 않으면 공연 등록 API만 실패합니다.** 목록·상세 조회와 서비스 기동은 정상이라
-> 원인을 알아채기 어렵습니다. 업로드 경로에 킬 스위치를 두지 않았기 때문입니다.
-
-부하 테스트용 `k6`는 `loadtest` 프로파일로 분리돼 있어 위 명령으로는 뜨지 않습니다
-([load-test-guide.md](docs/load-test-guide.md) 참고).
-
-### 5️⃣ 애플리케이션 기동
-
-모듈별로 띄웁니다. 필요한 서비스만 골라 띄워도 됩니다.
-
-```bash
-# .env.local 을 환경변수로 주입한 뒤 실행
-set -a && . ./.env.local && set +a
-./gradlew :gateway-service:bootRun
-./gradlew :performance-service:bootRun
-```
-
-> IntelliJ에서 실행한다면 [EnvFile 플러그인](https://plugins.jetbrains.com/plugin/7861-envfile)으로
-> `.env.local`을 주입하도록 실행 구성을 만드세요. `.idea/`는 추적 대상이 아니라 실행 구성이 함께 받아지지 않습니다.
-
-| 서비스 | 포트 | DB |
-|------|-----|-----|
-| `gateway-service` | 8080 | 미사용 (WebFlux + Redis) |
-| `user-service` | 8081 | ✅ |
-| `auth-service` | 8082 | ✅ |
-| `performance-service` | 8083 | ✅ |
-| `booking-service` | 8084 | ✅ |
-| `payment-service` | 8085 | ✅ |
-| `seat-service` | 8086 | ✅ |
-| `ticket-service` | 8087 | ✅ |
-
-API 호출은 게이트웨이 **8080** 하나로 보냅니다. 나머지 서비스 포트는 게이트웨이가 내부 라우팅에 사용하는 것으로,
-직접 호출하면 게이트웨이가 주입하는 인증 헤더가 없어 동작이 달라집니다.
-
-운영 환경에서는 **Nginx의 HTTPS 443 포트만 외부 요청의 진입점으로 사용**하며, `gateway-service`의 8080과
-Actuator 관리 포트 8090은 EC2의 `127.0.0.1`에만 바인딩됩니다. 나머지 7개 도메인 서비스는 포트를 외부에 publish하지 않고
-Docker Compose 내부 네트워크에서만 통신합니다.
-
-
-`local` 프로파일에서는 더미 데이터가 자동 시딩됩니다 — 공연·배너(`performance-service`), 좌석(`seat-service`).
-데이터가 이미 있으면 건너뜁니다.
-
-### 6️⃣ 동작 확인
-
-```bash
-curl http://localhost:8080/actuator/health
-# {"status":"UP"}
-```
+변경별 배포 순서와 사전 확인 사항은 [UTC 전환 가이드](docs/utc-timestamp-rollout.md)와 [좌석맵 배포 가이드](docs/seat-map-layout-rollout.md)를 참고하세요.
 
 ---
 
-## 📈 성능 / 부하 테스트
+## 👥 팀원과 담당 역할
 
-단일 EC2(`m7i-flex.large`, 2 vCPU / 7.6 GiB) 한 대에 앱 8개와 MySQL·Redis·Kafka·관측 스택이 함께 올라간 구성에서 **회차 23개**를 측정했습니다.
-
-| 무엇을 | 전 → 후 | 회차 |
-|-----|-----|-----|
-| 좌석맵 응답 크기 (gzip) | 174,615 B → 8,405 B | #505 |
-| 좌석 집계 최대 처리량 (커버링 인덱스) | 254.84 → 396.75 rps | #529 |
-| 좌석맵 서버 응답, 80 계단 (JSON 캐싱) | 741.04 ms → 10.11 ms | #539 |
-| 예매 파이프라인 드레인율 (컨슈머 concurrency 3) | 43.0/s → 96.6/s | #598 |
-
-각 수치는 **같은 회차 안에서 얻은 전/후**이며, 서로 다른 회차의 값끼리는 잇지 않았습니다.
-회차마다 무엇이 통제됐고 무엇이 섞였는지는 리포트의 `대조 범위` 열에 적어 두었습니다.
-병목이 회선 → 컨테이너 메모리 → 호스트 CPU → 유입 제어로 옮겨간 서사와, 아직 증명하지 못한
-한계(1만 명 동시 대기 미재현·수평 확장 미검증 등)는 [performance-report.md](docs/performance-report.md)에 있습니다.
-
-이 수치들에서 거꾸로 계산한 **예상 트래픽·인프라 설계 기준**(일평균 사용자 수·피크 TPS·서버 스펙)은
-[capacity-planning.md](docs/capacity-planning.md)에 있습니다.
+|                            프로필                            | 이름  |                     GitHub                     | 담당 파트                                                              |
+|:---------------------------------------------------------:|:---:|:----------------------------------------------:|--------------------------------------------------------------------|
+|    <img src="https://github.com/50h33.png" width="80">    | 김소희 |       [@50h33](https://github.com/50h33)       | 공통 인프라 구축 · 좌석(seat) · 예매(booking) · 티켓(ticket) · 모니터링 · 부하/성능 테스트 |
+|  <img src="https://github.com/calla1102.png" width="80">  | 김민주 |   [@calla1102](https://github.com/calla1102)   | 디자인(Figma) · 공연(performance) · 결제(payment) · CI                    |
+| <img src="https://github.com/kimhyerim01.png" width="80"> | 김혜림 | [@kimhyerim01](https://github.com/kimhyerim01) | 인증(auth) · 회원(user) · 게이트웨이(gateway) · 배포(CD)                      |
 
 ---
 
-## 📖 API 문서 (Swagger)
-
-게이트웨이가 7개 서비스의 OpenAPI 문서를 **하나의 Swagger UI로 통합**합니다.
-우측 상단 드롭다운에서 서비스를 전환합니다.
-
-| 환경 | 주소 |
-|-----|-----|
-| 로컬 | http://localhost:8080/swagger-ui.html |
-| 운영 | https://api.ticketrush.store/swagger-ui.html |
-
-- `/swagger-ui.html`은 `/swagger-ui/index.html`로 리다이렉트(302)됩니다
-- 인증 없이 접근할 수 있습니다 (`/swagger-ui/**`, `/v3/api-docs/**`가 게이트웨이 허용 목록에 등록돼 있습니다)
-- 서비스별 원본 스펙은 `/v3/api-docs/{user|auth|performance|booking|payment|seat|ticket}`에서 직접 받을 수 있습니다
-- 해당 서비스가 떠 있지 않으면 그 항목만 로딩에 실패합니다 — 게이트웨이가 각 서비스로 프록시하는 구조이기 때문입니다
-
-<img src="docs/images/swagger-ui.jpg" width="700" alt="게이트웨이 통합 Swagger UI — performance-service 선택 화면">
-
-
-## 📚 Deep Dive Docs
+## 📚 상세 문서
 
 | 문서                                                            | 내용                          |
 |---------------------------------------------------------------|-----------------------------|
