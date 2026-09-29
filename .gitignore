@@ -65,7 +65,7 @@ web_modules/
 # dotenv environment variable files
 .env
 .env.*
-!.env.example
+!.env.local.example
 !deploy/.env.prod.example
 
 # 배포 번들이 EC2에 풀어놓는 관측 설정. 로컬에서 배포본 compose를 띄울 때도 여기 생긴다.
